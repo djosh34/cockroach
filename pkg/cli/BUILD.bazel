@@ -41,7 +41,6 @@ go_library(
         "log_flags.go",
         "mt.go",
         "mt_cert.go",
-        "mt_start_sql.go",
         "node.go",
         "nodelocal.go",
         "prefixer.go",
@@ -247,7 +246,6 @@ go_library(
         "@com_github_cockroachdb_redact//:redact",
         "@com_github_cockroachdb_ttycolor//:ttycolor",
         "@com_github_dustin_go_humanize//:go-humanize",
-        "@com_github_fsnotify_fsnotify//:fsnotify",
         "@com_github_gogo_protobuf//jsonpb",
         "@com_github_jackc_pgconn//:pgconn",
         "@com_github_jackc_pgtype//:pgtype",
@@ -361,7 +359,6 @@ go_test(
     deps = [
         "//pkg/base",
         "//pkg/build",
-        "//pkg/ccl/backupccl",
         "//pkg/cli/clicfg",
         "//pkg/cli/clienturl",
         "//pkg/cli/clierror",

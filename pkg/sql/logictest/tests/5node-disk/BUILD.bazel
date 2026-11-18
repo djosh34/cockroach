@@ -20,6 +20,7 @@ go_test(
     deps = [
         "//pkg/base",
         "//pkg/build/bazel",
+        "//pkg/kv/kvclient/kvtenant",
         "//pkg/security/securityassets",
         "//pkg/security/securitytest",
         "//pkg/server",

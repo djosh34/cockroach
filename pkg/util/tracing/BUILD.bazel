@@ -68,8 +68,8 @@ go_test(
     embed = [":tracing"],
     deps = [
         "//pkg/base",
-        "//pkg/ccl",
         "//pkg/kv/kvbase",
+        "//pkg/kv/kvclient/kvtenant",
         "//pkg/security/securityassets",
         "//pkg/security/securitytest",
         "//pkg/server",

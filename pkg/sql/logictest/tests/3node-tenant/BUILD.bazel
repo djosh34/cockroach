@@ -1,7 +1,7 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_test")
 
 go_test(
-    name = "multiregion-9node-3region-3azs_test",
+    name = "3node-tenant_test",
     size = "enormous",
     srcs = ["generated_test.go"],
     args = select({
@@ -13,13 +13,14 @@ go_test(
         "//pkg/sql/logictest:testdata",  # keep
     ],
     exec_properties = {"Pool": "large"},
-    shard_count = 1,
+    shard_count = 15,
     tags = [
-        "cpu:4",
+        "cpu:2",
     ],
     deps = [
         "//pkg/base",
         "//pkg/build/bazel",
+        "//pkg/kv/kvclient/kvtenant",
         "//pkg/security/securityassets",
         "//pkg/security/securitytest",
         "//pkg/server",

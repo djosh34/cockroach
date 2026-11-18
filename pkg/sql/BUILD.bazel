@@ -758,8 +758,6 @@ go_test(
     deps = [
         "//pkg/base",
         "//pkg/build/bazel",
-        "//pkg/ccl",
-        "//pkg/ccl/changefeedccl/schemafeed/schematestutils",
         "//pkg/cloud/impl:cloudimpl",
         "//pkg/clusterversion",
         "//pkg/col/coldata",
@@ -817,6 +815,7 @@ go_test(
         "//pkg/sql/catalog/catenumpb",
         "//pkg/sql/catalog/catpb",
         "//pkg/sql/catalog/colinfo",
+        "//pkg/sql/catalog/descbuilder",
         "//pkg/sql/catalog/descidgen",
         "//pkg/sql/catalog/descpb",
         "//pkg/sql/catalog/descs",

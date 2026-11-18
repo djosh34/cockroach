@@ -366,7 +366,6 @@ go_test(
     tags = ["cpu:2"],
     deps = [
         "//pkg/base",
-        "//pkg/ccl",
         "//pkg/cli/exit",
         "//pkg/clusterversion",
         "//pkg/config",
@@ -380,6 +379,7 @@ go_test(
         "//pkg/kv",
         "//pkg/kv/kvclient",
         "//pkg/kv/kvclient/kvcoord",
+        "//pkg/kv/kvclient/kvtenant",
         "//pkg/kv/kvclient/rangefeed",
         "//pkg/kv/kvclient/rangefeed/rangefeedcache",
         "//pkg/kv/kvpb",

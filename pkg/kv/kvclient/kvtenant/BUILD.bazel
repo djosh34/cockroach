@@ -30,8 +30,6 @@ go_library(
         "//pkg/server/settingswatcher",
         "//pkg/settings",
         "//pkg/spanconfig",
-        "//pkg/sql/pgwire/pgcode",
-        "//pkg/sql/pgwire/pgerror",
         "//pkg/ts/tspb",
         "//pkg/util/grpcutil",
         "//pkg/util/hlc",

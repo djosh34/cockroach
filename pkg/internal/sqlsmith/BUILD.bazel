@@ -56,7 +56,6 @@ go_test(
     embed = [":sqlsmith"],
     deps = [
         "//pkg/base",
-        "//pkg/ccl",
         "//pkg/security/securityassets",
         "//pkg/security/securitytest",
         "//pkg/server",

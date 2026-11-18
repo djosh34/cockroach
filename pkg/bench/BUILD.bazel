@@ -12,7 +12,6 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/base",
-        "//pkg/ccl",
         "//pkg/multitenant/tenantcapabilities",
         "//pkg/roachpb",
         "//pkg/testutils",
@@ -39,6 +38,7 @@ go_test(
     embed = [":bench"],
     deps = [
         "//pkg/base",
+        "//pkg/kv/kvclient/kvtenant",
         "//pkg/security/securityassets",
         "//pkg/security/securitytest",
         "//pkg/security/username",
