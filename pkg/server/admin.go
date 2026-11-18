@@ -23,7 +23,6 @@ import (
 	"time"
 
 	apd "github.com/cockroachdb/apd/v3"
-	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/config/zonepb"
 	"github.com/cockroachdb/cockroach/pkg/jobs"
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
@@ -2124,19 +2123,10 @@ func (s *adminServer) Cluster(
 		return nil, grpcstatus.Errorf(codes.Unavailable, "cluster ID not yet available")
 	}
 
-	// Check if enterprise features are enabled.  We currently test for the
-	// feature "BACKUP", although enterprise licenses do not yet distinguish
-	// between different features.
-	enterpriseEnabled := base.CheckEnterpriseEnabled(
-		s.st,
-		s.rpcContext.LogicalClusterID.Get(),
-		"BACKUP") == nil
-
 	return &serverpb.ClusterResponse{
 		// TODO(knz): Respond with the logical cluster ID as well.
-		ClusterID:         storageClusterID.String(),
-		ReportingEnabled:  logcrash.DiagnosticsReportingEnabled.Get(&s.st.SV),
-		EnterpriseEnabled: enterpriseEnabled,
+		ClusterID:        storageClusterID.String(),
+		ReportingEnabled: logcrash.DiagnosticsReportingEnabled.Get(&s.st.SV),
 	}, nil
 }
 

@@ -12,7 +12,6 @@ package cluster
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
@@ -50,10 +49,6 @@ type Settings struct {
 	// the active cluster version has a very specific, intended usage pattern.
 	// Look towards the interface itself for more commentary.
 	Version clusterversion.Handle
-
-	// Cache can be used for arbitrary caching, e.g. to cache decoded
-	// enterprises licenses for utilccl.CheckEnterpriseEnabled().
-	Cache sync.Map
 
 	// OverridesInformer can be nil.
 	OverridesInformer OverridesInformer

@@ -15,7 +15,6 @@ import { Helmet } from "react-helmet";
 import { getDataFromServer } from "src/util/dataFromServer";
 import DebugAnnotation from "src/views/shared/components/debugAnnotation";
 import InfoBox from "src/views/shared/components/infoBox";
-import LicenseType from "src/views/shared/components/licenseType";
 import {
   PanelSection,
   PanelTitle,
@@ -280,7 +279,6 @@ export default function Debug() {
         </InfoBox>
 
         <div className="debug-header__annotations">
-          <LicenseType />
           <DebugAnnotation
             label="Web server"
             value={<ProxyToNodeSelector nodeID={nodeID} />}

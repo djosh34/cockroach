@@ -32,7 +32,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/util/httputil"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
-	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 )
 
 const (
@@ -94,9 +93,6 @@ type indexHTMLArgs struct {
 	FeatureFlags     serverpb.FeatureFlags
 
 	OIDCGenerateJWTAuthTokenEnabled bool
-
-	LicenseType               string
-	SecondsUntilLicenseExpiry int64
 }
 
 // OIDCUIConf is a variable that stores data required by the
@@ -164,11 +160,6 @@ func Handler(cfg Config) http.Handler {
 	buildInfo := build.GetInfo()
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		licenseType, err := base.LicenseType(cfg.Settings)
-		if err != nil {
-			log.Errorf(context.Background(), "unable to get license type: %+v", err)
-		}
-		licenseTTL := base.GetLicenseTTL(r.Context(), cfg.Settings, timeutil.DefaultTimeSource{})
 		oidcConf := cfg.OIDC.GetOIDCConf()
 		args := indexHTMLArgs{
 			Insecure:         cfg.Insecure,
@@ -181,9 +172,6 @@ func Handler(cfg Config) http.Handler {
 			FeatureFlags:     cfg.Flags,
 
 			OIDCGenerateJWTAuthTokenEnabled: oidcConf.GenerateJWTAuthTokenEnabled,
-
-			LicenseType:               licenseType,
-			SecondsUntilLicenseExpiry: licenseTTL,
 		}
 		if cfg.NodeID != nil {
 			args.NodeID = cfg.NodeID.String()

@@ -415,13 +415,6 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 	// started via the server controller.
 	cfg.RuntimeStatSampler = runtimeSampler
 
-	appRegistry.AddMetric(metric.NewFunctionalGauge(base.LicenseTTLMetadata, func() int64 {
-		return base.GetLicenseTTL(ctx, cfg.Settings, timeutil.DefaultTimeSource{})
-	}))
-	appRegistry.AddMetric(metric.NewFunctionalGauge(base.AdditionalLicenseTTLMetadata, func() int64 {
-		return base.GetLicenseTTL(ctx, cfg.Settings, timeutil.DefaultTimeSource{})
-	}))
-
 	// Create and add KV metric rules.
 	kvserver.CreateAndAddRules(ctx, ruleRegistry)
 	// Create and add server metric rules.

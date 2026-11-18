@@ -794,13 +794,11 @@ func init() {
 		cliflagcfg.StringFlag(f, &demoCtx.NameGenOptions, cliflags.DemoNameGenOpts)
 		cliflagcfg.IntFlag(f, &demoCtx.WorkloadMaxQPS, cliflags.DemoWorkloadMaxQPS)
 		cliflagcfg.VarFlag(f, &demoCtx.Localities, cliflags.DemoNodeLocality)
-		cliflagcfg.BoolFlag(f, &demoCtx.GeoPartitionedReplicas, cliflags.DemoGeoPartitionedReplicas)
 		cliflagcfg.VarFlag(f, &demoCtx.demoNodeSQLMemSizeValue, cliflags.DemoNodeSQLMemSize)
 		cliflagcfg.VarFlag(f, &demoCtx.demoNodeCacheSizeValue, cliflags.DemoNodeCacheSize)
 		// NB: Insecure for `cockroach demo` is deprecated. See #53404.
 		cliflagcfg.BoolFlag(f, &demoCtx.Insecure, cliflags.ClientInsecure)
 
-		cliflagcfg.BoolFlag(f, &demoCtx.disableEnterpriseFeatures, cliflags.DemoNoLicense)
 		cliflagcfg.BoolFlag(f, &demoCtx.DefaultEnableRangefeeds, cliflags.DemoEnableRangefeeds)
 
 		cliflagcfg.BoolFlag(f, &demoCtx.Multitenant, cliflags.DemoMultitenant)

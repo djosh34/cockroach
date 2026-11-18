@@ -114,7 +114,6 @@ func (d *dev) lint(cmd *cobra.Command, commandLine []string) error {
 			"//pkg/cmd/cockroach-oss",
 			"//pkg/cmd/dev",
 			"//pkg/obsservice/cmd/obsservice",
-			"//pkg/cmd/roachprod",
 			"--//build/toolchains:nogo_flag",
 		}
 		if numCPUs != 0 {

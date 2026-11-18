@@ -267,13 +267,6 @@ func newTenantServer(
 	deps tenantServerDeps,
 	serviceMode mtinfopb.TenantServiceMode,
 ) (*SQLServerWrapper, error) {
-	// TODO(knz): Make the license application a per-server thing
-	// instead of a global thing.
-	err := ApplyTenantLicense()
-	if err != nil {
-		return nil, err
-	}
-
 	// Start the SQL listener early so any delay that happen from this point onward
 	// (until the server is ready) won't cause client connections to be rejected.
 	if baseCfg.SplitListenSQL && !baseCfg.DisableSQLListener {
@@ -1441,11 +1434,6 @@ func NewNoopTenantSideCostController(
 	// Return a no-op implementation.
 	return noopTenantSideCostController{}, nil
 }
-
-// ApplyTenantLicense is a hook for CCL code which enables enterprise features
-// for the tenant process if the COCKROACH_TENANT_LICENSE environment variable
-// is set.
-var ApplyTenantLicense = func() error { return nil /* no-op */ }
 
 // noopTenantSideCostController is a no-op implementation of
 // TenantSideCostController.

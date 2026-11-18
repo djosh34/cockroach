@@ -196,7 +196,6 @@ func (u *UpdateChecker) buildUpdatesURL(ctx context.Context) *url.URL {
 
 	var env diagnosticspb.Environment
 	env.Build = build.GetInfo()
-	env.LicenseType = getLicenseType(ctx, u.Settings)
 	populateHardwareInfo(ctx, &env)
 
 	sqlInfo := diagnosticspb.SQLInstanceInfo{

@@ -102,7 +102,6 @@ func addInfoToURL(
 	b := env.Build
 	q.Set("sqlid", strconv.Itoa(int(sqlInfo.SQLInstanceID)))
 	q.Set("uptime", strconv.Itoa(int(sqlInfo.Uptime)))
-	q.Set("licensetype", env.LicenseType)
 	q.Set("version", b.Tag)
 	q.Set("platform", b.Platform)
 	q.Set("uuid", clusterInfo.StorageClusterID.String())

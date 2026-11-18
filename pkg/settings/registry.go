@@ -72,7 +72,6 @@ func TestingSaveRegistry() func() {
 var systemSettingsWithPreviousApplicationClass = map[InternalKey]struct{}{
 	// Changed in v23.2.
 	"cluster.organization":                        {},
-	"enterprise.license":                          {},
 	"kv.bulk_io_write.concurrent_export_requests": {},
 	"kv.closed_timestamp.propagation_slack":       {},
 	"kv.closed_timestamp.side_transport_interval": {},

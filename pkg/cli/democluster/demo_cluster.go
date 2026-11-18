@@ -109,10 +109,6 @@ const maxNodeInitTime = 60 * time.Second
 // --multitenant=true.
 const secondaryTenantID = 2
 
-// demoOrg is the organization to use to request an evaluation
-// license.
-const demoOrg = "Cockroach Demo"
-
 // demoUsername is the name of the predefined non-root user.
 const demoUsername = "demo"
 
@@ -1685,24 +1681,7 @@ func (c *transientCluster) SetupWorkload(ctx context.Context) error {
 		if _, err := workloadsql.Setup(ctx, db, gen, l); err != nil {
 			return err
 		}
-		// Perform partitioning if requested by configuration.
-		if c.demoCtx.GeoPartitionedReplicas {
-			if c.demoCtx.IsInteractive() {
-				fmt.Println("#\n# Partitioning the demo database, please wait...")
-			}
-
-			db, err := gosql.Open("postgres", c.connURL)
-			if err != nil {
-				return err
-			}
-			defer db.Close()
-			// Based on validation done in setup, we know that this workload has a partitioning step.
-			if err := gen.(workload.Hookser).Hooks().Partition(db); err != nil {
-				return errors.Wrapf(err, "partitioning the demo database")
-			}
-		}
-
-		// Run the workload. This must occur after partitioning the database.
+		// Run the workload.
 		if c.demoCtx.RunWorkload {
 			targetServer := forSystemTenant
 			if c.demoCtx.Multitenant {
@@ -1850,21 +1829,6 @@ func (c *transientCluster) runWorkload(
 	}
 
 	return nil
-}
-
-// EnableEnterprise enables enterprise features if available in this build.
-func (c *transientCluster) EnableEnterprise(ctx context.Context) (func(), error) {
-	purl, err := c.getNetworkURLForServer(ctx, 0, true /* includeAppName */, forSystemTenant)
-	if err != nil {
-		return nil, err
-	}
-	connURL := purl.ToPQ().String()
-	db, err := gosql.Open("postgres", connURL)
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
-	return EnableEnterprise(db, demoOrg)
 }
 
 // sockForServer generates the metadata for a unix socket for the given node.

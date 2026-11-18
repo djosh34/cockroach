@@ -37,7 +37,7 @@ const testNotifications: Array<NotificationProps> = [
   },
   {
     id: 3,
-    type: "expired",
+    type: "command-commit",
     timestamp: "30 JUL 2020 13:30",
     read: false,
   },
@@ -49,7 +49,7 @@ const testNotifications: Array<NotificationProps> = [
   },
   {
     id: 5,
-    type: "expired",
+    type: "command-commit",
     timestamp: "30 JUL 2020 14:35",
     read: true,
   },

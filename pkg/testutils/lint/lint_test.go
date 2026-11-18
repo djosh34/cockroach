@@ -220,15 +220,6 @@ func TestLint(t *testing.T) {
 // licenses/APL.txt.
 `)
 
-		cclHeader := regexp.MustCompile(`// Copyright 20\d\d The Cockroach Authors.
-//
-// Licensed as a CockroachDB Enterprise file under the Cockroach Community
-// License \(the "License"\); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
-//
-//     https://github.com/cockroachdb/cockroach/blob/master/licenses/CCL.txt
-`)
-
 		apacheHeader := regexp.MustCompile(`// Copyright 20\d\d The Cockroach Authors.
 //
 // Licensed under the Apache License, Version 2.0 \(the "License"\);
@@ -283,13 +274,8 @@ func TestLint(t *testing.T) {
 			}
 			data = data[0:n]
 
-			isCCL := strings.Contains(filename, "ccl/")
 			isApache := strings.HasPrefix(filename, "obsservice")
 			switch {
-			case isCCL:
-				if cclHeader.Find(data) == nil {
-					t.Errorf("did not find expected CCL license header in %s", filename)
-				}
 			case isApache:
 				if apacheHeader.Find(data) == nil {
 					t.Errorf("did not find expected Apache license header in %s", filename)
@@ -487,14 +473,8 @@ func TestLint(t *testing.T) {
 				excludes: []string{
 					":!acceptance",
 					":!build/bazel",
-					":!ccl/acceptanceccl/backup_test.go",
-					":!ccl/backupccl/backup_cloud_test.go",
 					// KMS requires AWS credentials from environment variables.
-					":!ccl/backupccl/backup_test.go",
-					":!ccl/changefeedccl/helpers_test.go",
-					":!ccl/cloudccl",
 					":!cloud",
-					":!ccl/workloadccl/fixture_test.go",
 					":!internal/reporoot/reporoot.go",
 					":!cmd",
 					":!util/cgroups/cgroups.go",
@@ -847,7 +827,6 @@ func TestLint(t *testing.T) {
 			"--",
 			"*.go",
 			":!util/collatedstring/collatedstring.go",
-			":!ccl/changefeedccl/avro_test.go",
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -880,11 +859,9 @@ func TestLint(t *testing.T) {
 			`\btime\.(Now|Since|Unix|LoadLocation)\(`,
 			"--",
 			"*.go",
-			":!acceptance/compose/gss/psql/gss_test.go",
 			":!**/embedded.go",
 			":!util/timeutil/time.go",
 			":!util/timeutil/zoneinfo.go",
-			":!cmd/roachtest/tests/gorm_helpers.go",
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -1038,9 +1015,6 @@ func TestLint(t *testing.T) {
 			":!server/server_obs_service.go",
 			":!server/testserver.go",
 			":!util/tracing/*_test.go",
-			":!ccl/sqlproxyccl/tenantdirsvr/test_directory_svr.go",
-			":!ccl/sqlproxyccl/tenantdirsvr/test_simple_directory_svr.go",
-			":!ccl/sqlproxyccl/tenantdirsvr/test_static_directory_svr.go",
 			":!obsservice/cmd/obsservice/main.go",
 			":!obsservice/obslib/ingest/ingest_test.go",
 			":!cmd/bazci/*.go",
@@ -1189,7 +1163,6 @@ func TestLint(t *testing.T) {
 			"--",
 			"*.go",
 			":!testutils/skip/skip.go",
-			":!cmd/roachtest/*.go",
 			":!acceptance/compose/*.go",
 			":!util/syncutil/*.go",
 		)
@@ -1353,7 +1326,6 @@ func TestLint(t *testing.T) {
 			"*.go",
 			":!*.pb.go",
 			":!*.pb.gw.go",
-			":!ccl/changefeedccl/changefeedbase/errors.go",
 			":!kv/kvclient/kvcoord/lock_spans_over_budget_error.go",
 			":!spanconfig/errors.go",
 			":!kv/kvpb/replica_unavailable_error.go",
@@ -1679,7 +1651,6 @@ func TestLint(t *testing.T) {
 			stream.GrepNot(`cockroachdb/cockroach/pkg/build/bazel/util/tinystringer: errors$`),
 			stream.GrepNot(`cockroachdb/cockroach/pkg/util/grpcutil: github\.com/cockroachdb\/errors\/errbase$`),
 			stream.GrepNot(`cockroachdb/cockroach/pkg/util/future: github\.com/cockroachdb\/errors\/errbase$`),
-			stream.GrepNot(`cockroach/pkg/roachprod/install: syscall$`), // TODO: switch to sysutil
 			stream.GrepNot(`cockroach/pkg/util/log: github\.com/pkg/errors$`),
 			stream.GrepNot(`cockroach/pkg/(base|release|security|util/(log|randutil|stop)): log$`),
 			stream.GrepNot(`cockroach/pkg/(server/serverpb|ts/tspb): github\.com/golang/protobuf/proto$`),
@@ -2292,40 +2263,6 @@ func TestLint(t *testing.T) {
 			`base\.TODOTestTenantDisabled`,
 			"--",
 			"*",
-			":!ccl/backupccl/backup_test.go",
-			":!ccl/backupccl/backuprand/backup_rand_test.go",
-			":!ccl/backupccl/backuptestutils/testutils.go",
-			":!ccl/backupccl/create_scheduled_backup_test.go",
-			":!ccl/backupccl/datadriven_test.go",
-			":!ccl/backupccl/full_cluster_backup_restore_test.go",
-			":!ccl/backupccl/restore_old_versions_test.go",
-			":!ccl/backupccl/utils_test.go",
-			":!ccl/changefeedccl/alter_changefeed_test.go",
-			":!ccl/changefeedccl/changefeed_test.go",
-			":!ccl/changefeedccl/helpers_test.go",
-			":!ccl/changefeedccl/parquet_test.go",
-			":!ccl/changefeedccl/scheduled_changefeed_test.go",
-			":!ccl/importerccl/ccl_test.go",
-			":!ccl/kvccl/kvfollowerreadsccl/boundedstaleness_test.go",
-			":!ccl/kvccl/kvfollowerreadsccl/followerreads_test.go",
-			":!ccl/kvccl/kvtenantccl/upgradeccl/tenant_upgrade_test.go",
-			":!ccl/multiregionccl/cold_start_latency_test.go",
-			":!ccl/multiregionccl/datadriven_test.go",
-			":!ccl/multiregionccl/multiregionccltestutils/testutils.go",
-			":!ccl/multiregionccl/regional_by_row_test.go",
-			":!ccl/multiregionccl/unique_test.go",
-			":!ccl/partitionccl/drop_test.go",
-			":!ccl/partitionccl/partition_test.go",
-			":!ccl/partitionccl/zone_test.go",
-			":!ccl/serverccl/admin_test.go",
-			":!ccl/streamingccl/replicationtestutils/testutils.go",
-			":!ccl/streamingccl/streamclient/partitioned_stream_client_test.go",
-			":!ccl/streamingccl/streamingest/replication_random_client_test.go",
-			":!ccl/streamingccl/streamingest/stream_ingestion_job_test.go",
-			":!ccl/streamingccl/streamingest/stream_ingestion_processor_test.go",
-			":!ccl/streamingccl/streamproducer/producer_job_test.go",
-			":!ccl/streamingccl/streamproducer/replication_stream_test.go",
-			":!ccl/workloadccl/allccl/all_test.go",
 			":!cli/democluster/demo_cluster.go",
 			":!cli/democluster/demo_cluster_test.go",
 			":!server/application_api/config_test.go",
@@ -2407,9 +2344,6 @@ func TestLint(t *testing.T) {
 			`pkg/cmd/cmp-protocol/.*\.go`,
 			`pkg/cmd/cr2pg/.*\.go`,
 			`pkg/cmd/reduce/.*\.go`,
-			`pkg/cmd/roachprod-stress/.*\.go`,
-			`pkg/cmd/roachprod/.*\.go`,
-			`pkg/cmd/roachtest/.*\.go`,
 			`pkg/cmd/smithtest/.*\.go`,
 			`pkg/cmd/urlcheck/.*\.go`,
 			`pkg/cmd/zerosum/.*\.go`,
@@ -2485,8 +2419,6 @@ func TestLint(t *testing.T) {
 			// pooling, etc, then test code needs to adhere as well.
 			stream.GrepNot(nakedGoroutineExceptions + `:.*Use of go keyword not allowed`),
 			stream.GrepNot(nakedGoroutineExceptions + `:.*Illegal call to Group\.Go\(\)`),
-			// We purposefully dereference nil in this file to test panic handling
-			stream.GrepNot(`pkg/cmd/roachtest/roachtestutil/mixedversion/runner_test\.go:.*nil dereference`),
 		}
 
 		const vetTool = "roachvet"

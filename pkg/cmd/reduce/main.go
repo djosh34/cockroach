@@ -27,7 +27,6 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/cmd/reduce/reduce"
 	"github.com/cockroachdb/cockroach/pkg/cmd/reduce/reduce/reducesql"
-	"github.com/cockroachdb/cockroach/pkg/util/envutil"
 	"github.com/cockroachdb/errors"
 )
 
@@ -56,7 +55,6 @@ var (
 	unknown           = flags.Bool("unknown", false, "print unknown types during walk")
 	workers           = flags.Int("goroutines", goroutines, "number of worker goroutines (defaults to NumCPU/3")
 	chunkReductions   = flags.Int("chunk", 0, "number of consecutive chunk reduction failures allowed before halting chunk reduction (default 0)")
-	multiRegion       = flags.Bool("multi-region", false, "test with a 9-node multi-region demo cluster")
 	tlp               = flags.Bool("tlp", false, "last two statements in file are equivalent queries returning different results")
 	costfuzz          = flags.Bool("costfuzz", false, "last four statements in file are two identical queries separated by settings changes")
 	unoptimizedOracle = flags.Bool("unoptimized-query-oracle", false, "last several statements in file are two identical queries separated by settings changes")
@@ -119,7 +117,7 @@ func main() {
 	}
 	reducesql.LogUnknown = *unknown
 	out, err := reduceSQL(
-		*binary, *contains, file, *workers, *verbose, *chunkReductions, *multiRegion,
+		*binary, *contains, file, *workers, *verbose, *chunkReductions,
 		*tlp, *costfuzz, *unoptimizedOracle,
 	)
 	if err != nil {
@@ -134,15 +132,8 @@ func reduceSQL(
 	workers int,
 	verbose bool,
 	chunkReductions int,
-	multiRegion bool,
 	tlp, costfuzz, unoptimizedOracle bool,
 ) (string, error) {
-	var settings string
-	if devLicense, ok := envutil.EnvString("COCKROACH_DEV_LICENSE", 0); ok {
-		settings += "SET CLUSTER SETTING cluster.organization = 'Cockroach Labs - Production Testing';\n"
-		settings += fmt.Sprintf("SET CLUSTER SETTING enterprise.license = '%s';\n", devLicense)
-	}
-
 	const (
 		tlpFailureError      = "TLP_FAILURE"
 		costfuzzSep          = "COSTFUZZ_SEP"
@@ -285,30 +276,15 @@ SELECT '%[1]s';
 	}
 
 	isInteresting := func(ctx context.Context, sql string) (interesting bool, logOriginalHint func()) {
-		// If not multi-region, disable license generation. Do not exit on errors so
-		// the entirety of the input SQL is processed.
-		var cmd *exec.Cmd
-		if multiRegion {
-			cmd = exec.CommandContext(ctx, binary,
-				"demo",
-				"--empty",
-				"--nodes=9",
-				"--multitenant=false",
-				"--set=errexit=false",
-				"--format=tsv",
-			)
-		} else {
-			cmd = exec.CommandContext(ctx, binary,
-				"demo",
-				"--empty",
-				"--disable-demo-license",
-				"--set=errexit=false",
-				"--format=tsv",
-			)
-		}
+		// Do not exit on errors so the entirety of the input SQL is processed.
+		cmd := exec.CommandContext(ctx, binary,
+			"demo",
+			"--empty",
+			"--set=errexit=false",
+			"--format=tsv",
+		)
 		// Disable telemetry.
 		cmd.Env = []string{"COCKROACH_SKIP_ENABLING_DIAGNOSTIC_REPORTING", "true"}
-		sql = settings + sql
 		if !strings.HasSuffix(sql, ";") {
 			sql += ";"
 		}

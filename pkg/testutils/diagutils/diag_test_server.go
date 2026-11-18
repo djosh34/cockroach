@@ -46,7 +46,6 @@ type RequestData struct {
 	NodeID        string
 	SQLInstanceID string
 	Version       string
-	LicenseType   string
 	Internal      string
 	RawReportBody string
 
@@ -75,7 +74,6 @@ func NewServer() *Server {
 			NodeID:        r.URL.Query().Get("nodeid"),
 			SQLInstanceID: r.URL.Query().Get("sqlid"),
 			Version:       r.URL.Query().Get("version"),
-			LicenseType:   r.URL.Query().Get("licensetype"),
 			Internal:      r.URL.Query().Get("internal"),
 			RawReportBody: string(body),
 		}

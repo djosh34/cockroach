@@ -301,7 +301,6 @@ func (r *Reporter) populateEnvironment(
 	ctx context.Context, secret string, env *diagnosticspb.Environment,
 ) {
 	env.Build = build.GetInfo()
-	env.LicenseType = getLicenseType(ctx, r.Settings)
 	populateHardwareInfo(ctx, env)
 
 	// Add in the localities.
@@ -393,15 +392,6 @@ func (r *Reporter) buildReportingURL(report *diagnosticspb.DiagnosticReport) *ur
 		url = *r.TestingKnobs.OverrideReportingURL
 	}
 	return addInfoToURL(url, &clusterInfo, &report.Env, report.Node.NodeID, &report.SQL)
-}
-
-func getLicenseType(ctx context.Context, settings *cluster.Settings) string {
-	licenseType, err := base.LicenseType(settings)
-	if err != nil {
-		log.Errorf(ctx, "error retrieving license type: %s", err)
-		return ""
-	}
-	return licenseType
 }
 
 func anonymizeZoneConfig(dst *zonepb.ZoneConfig, src zonepb.ZoneConfig, secret string) {

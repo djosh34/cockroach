@@ -1,5 +1,10 @@
-Source code in this repository is variously licensed under the Business Source
-License 1.1 (BSL), the CockroachDB Community License (CCL), the MIT license,
-BSD-style licenses, and other licenses specified in the source code. Source
-code in a given file is licensed under the BSL and the copyright belongs to The
-Cockroach Authors unless otherwise noted at the beginning of the file.
+Source code in this repository is licensed under the Apache License, Version
+2.0 (licenses/APL.txt), unless the beginning of a file says otherwise.
+
+Files with the Business Source License 1.1 header are Apache 2.0 as well. Their
+Change Date, 2026-10-01 (licenses/BSL.txt), has passed, and their Change
+License is the Apache License, Version 2.0.
+
+Third-party code keeps the MIT, BSD-style and other licenses named in the
+source code and in the licenses folder. The copyright of the CockroachDB code
+belongs to The Cockroach Authors unless the beginning of a file says otherwise.

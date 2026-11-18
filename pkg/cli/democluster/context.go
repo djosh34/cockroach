@@ -64,11 +64,6 @@ type Context struct {
 	// by instantiated servers.
 	Localities DemoLocalityList
 
-	// GeoPartitionedReplicas requests that the executed workload
-	// partition its data across localities. Requires an enterprise
-	// license.
-	GeoPartitionedReplicas bool
-
 	// SimulateLatency requests that cross-region latencies be simulated
 	// across region localities.
 	SimulateLatency bool

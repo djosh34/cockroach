@@ -569,12 +569,6 @@ func (ex *connExecutor) execStmtInOpenState(
 				}
 			}
 		}
-
-		// Enforce license policies. Throttling can occur if there is no valid
-		// license or if it has expired.
-		if err := ex.server.cfg.LicenseEnforcer.MaybeFailIfThrottled(ctx, curOpen); err != nil {
-			return makeErrEvent(err)
-		}
 	}
 
 	// Special top-level handling for EXPLAIN ANALYZE.

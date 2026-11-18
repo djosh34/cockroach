@@ -8,7 +8,7 @@ if [ -z "$HEAD_SHA" ];then
     exit 1
 fi
 
-git diff --name-only "${BASE_SHA}..${HEAD_SHA}" -- "pkg/**/*.go" ":!*/testdata/*" ":!pkg/acceptance/compose/gss/psql/**" \
+git diff --name-only "${BASE_SHA}..${HEAD_SHA}" -- "pkg/**/*.go" ":!*/testdata/*" \
   | xargs -rn1 dirname \
   | sort -u \
   | { while read path; do if ls "$path"/*.go &>/dev/null; then echo -n "$path "; fi; done; }

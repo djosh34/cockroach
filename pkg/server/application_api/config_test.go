@@ -23,14 +23,12 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
 	"github.com/cockroachdb/cockroach/pkg/server/srvtestutils"
 	"github.com/cockroachdb/cockroach/pkg/settings"
-	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/testutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/serverutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/sqlutils"
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/safesql"
-	"github.com/cockroachdb/cockroach/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slices"
@@ -266,42 +264,28 @@ func TestClusterAPI(t *testing.T) {
 	defer s.Stopper().Stop(context.Background())
 
 	testutils.RunTrueAndFalse(t, "reportingOn", func(t *testing.T, reportingOn bool) {
-		testutils.RunTrueAndFalse(t, "enterpriseOn", func(t *testing.T, enterpriseOn bool) {
-			// Override server license check.
-			if enterpriseOn {
-				old := base.CheckEnterpriseEnabled
-				base.CheckEnterpriseEnabled = func(_ *cluster.Settings, _ uuid.UUID, _ string) error {
-					return nil
-				}
-				defer func() { base.CheckEnterpriseEnabled = old }()
-			}
+		if _, err := db.Exec(`SET CLUSTER SETTING diagnostics.reporting.enabled = $1`, reportingOn); err != nil {
+			t.Fatal(err)
+		}
 
-			if _, err := db.Exec(`SET CLUSTER SETTING diagnostics.reporting.enabled = $1`, reportingOn); err != nil {
-				t.Fatal(err)
+		// We need to retry, because the cluster ID isn't set until after
+		// bootstrapping and because setting a cluster setting isn't necessarily
+		// instantaneous.
+		//
+		// Also note that there's a migration that affects `diagnostics.reporting.enabled`,
+		// so manipulating the cluster setting var directly is a bad idea.
+		testutils.SucceedsSoon(t, func() error {
+			var resp serverpb.ClusterResponse
+			if err := srvtestutils.GetAdminJSONProto(s, "cluster", &resp); err != nil {
+				return err
 			}
-
-			// We need to retry, because the cluster ID isn't set until after
-			// bootstrapping and because setting a cluster setting isn't necessarily
-			// instantaneous.
-			//
-			// Also note that there's a migration that affects `diagnostics.reporting.enabled`,
-			// so manipulating the cluster setting var directly is a bad idea.
-			testutils.SucceedsSoon(t, func() error {
-				var resp serverpb.ClusterResponse
-				if err := srvtestutils.GetAdminJSONProto(s, "cluster", &resp); err != nil {
-					return err
-				}
-				if a, e := resp.ClusterID, s.RPCContext().StorageClusterID.String(); a != e {
-					return errors.Errorf("cluster ID %s != expected %s", a, e)
-				}
-				if a, e := resp.ReportingEnabled, reportingOn; a != e {
-					return errors.Errorf("reportingEnabled = %t, wanted %t", a, e)
-				}
-				if a, e := resp.EnterpriseEnabled, enterpriseOn; a != e {
-					return errors.Errorf("enterpriseEnabled = %t, wanted %t", a, e)
-				}
-				return nil
-			})
+			if a, e := resp.ClusterID, s.RPCContext().StorageClusterID.String(); a != e {
+				return errors.Errorf("cluster ID %s != expected %s", a, e)
+			}
+			if a, e := resp.ReportingEnabled, reportingOn; a != e {
+				return errors.Errorf("reportingEnabled = %t, wanted %t", a, e)
+			}
+			return nil
 		})
 	})
 }

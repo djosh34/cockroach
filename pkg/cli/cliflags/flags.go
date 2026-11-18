@@ -1420,21 +1420,6 @@ availability zone to 3.
 `,
 	}
 
-	DemoGeoPartitionedReplicas = FlagInfo{
-		Name: "geo-partitioned-replicas",
-		Description: fmt.Sprintf(`
-When used with the Movr dataset, create a 9 node cluster and automatically apply
-the geo-partitioned replicas topology across 3 virtual regions named us-east1,
-us-west1, and europe-west1. This command will fail with an error if an
-enterprise license could not be acquired, or if the Movr dataset is not used.
-More information about the geo-partitioned replicas topology can be found at:
-<PRE>
-
-%s
-</PRE>
-		`, docs.URL("topology-geo-partitioned-replicas.html")),
-	}
-
 	DemoMultitenant = FlagInfo{
 		Name: "multitenant",
 		Description: `
@@ -1448,12 +1433,6 @@ and the system tenant using the \connect command.`,
 		Description: `
 If set, the server controller will not be used to start secondary
 tenant servers.`,
-	}
-
-	DemoNoLicense = FlagInfo{
-		Name: "disable-demo-license",
-		Description: `
-If set, disable enterprise features.`,
 	}
 
 	DemoEnableRangefeeds = FlagInfo{

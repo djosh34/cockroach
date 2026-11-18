@@ -631,8 +631,7 @@ func setConvContextDefaults() {
 // See below for defaults.
 var demoCtx = struct {
 	democluster.Context
-	disableEnterpriseFeatures bool
-	pidFile                   string
+	pidFile string
 
 	demoNodeCacheSizeValue  bytesOrPercentageValue
 	demoNodeSQLMemSizeValue bytesOrPercentageValue
@@ -653,7 +652,6 @@ func setDemoContextDefaults() {
 	demoCtx.SimulateLatency = false
 	demoCtx.RunWorkload = false
 	demoCtx.Localities = nil
-	demoCtx.GeoPartitionedReplicas = false
 	demoCtx.DefaultKeySize = defaultKeySize
 	demoCtx.DefaultCALifetime = defaultCALifetime
 	demoCtx.DefaultCertLifetime = defaultCertLifetime
@@ -667,7 +665,6 @@ func setDemoContextDefaults() {
 	demoCtx.AutoConfigProvider = acprovider.NoTaskProvider{}
 
 	demoCtx.pidFile = ""
-	demoCtx.disableEnterpriseFeatures = false
 
 	demoCtx.demoNodeCacheSizeValue = makeBytesOrPercentageValue(
 		&demoCtx.CacheSize,

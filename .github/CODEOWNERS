@@ -389,10 +389,6 @@
 /pkg/cmd/reduce/             @cockroachdb/sql-queries-prs
 /pkg/cmd/release/            @cockroachdb/dev-inf
 /pkg/cmd/returncheck/        @cockroachdb/dev-inf
-/pkg/cmd/roachprod/          @cockroachdb/test-eng
-/pkg/cmd/roachprod/vm/azure/auth.go @cockroachdb/test-eng @cockroachdb/prodsec
-/pkg/cmd/roachprod-microbench/ @cockroachdb/test-eng
-/pkg/cmd/roachprod-stress/   @cockroachdb/test-eng
 /pkg/cmd/label-merged-pr/    @cockroachdb/dev-inf
 /pkg/cmd/roachvet/           @cockroachdb/dev-inf
 /pkg/cmd/skip-test/          @cockroachdb/test-eng
@@ -448,7 +444,6 @@
 /pkg/roachpb/string_test.go  @cockroachdb/kv-prs
 /pkg/roachpb/tenant*         @cockroachdb/kv-prs
 #!/pkg/roachpb/version*      @cockroachdb/unowned
-/pkg/roachprod/              @cockroachdb/test-eng
 /pkg/rpc/                    @cockroachdb/kv-prs
 /pkg/rpc/auth.go             @cockroachdb/kv-prs @cockroachdb/prodsec
 /pkg/rpc/auth_tenant.go      @cockroachdb/server-prs @cockroachdb/prodsec
