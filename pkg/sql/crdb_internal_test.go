@@ -1803,7 +1803,7 @@ func TestVirtualPTSTable(t *testing.T) {
 		sj := jobs.NewScheduledJob(schedEnv)
 		sj.SetOwner(username.TestUserName())
 		sj.SetScheduleLabel("test-schedule")
-		sj.SetExecutionDetails(tree.ScheduledBackupExecutor.InternalName(), jobspb.ExecutionArguments{})
+		sj.SetExecutionDetails(tree.ScheduledRowLevelTTLExecutor.InternalName(), jobspb.ExecutionArguments{})
 		sj.SetScheduleDetails(jobstest.AddDummyScheduleDetails(jobspb.ScheduleDetails{}))
 
 		err := internalDB.Txn(ctx2, func(ctx3 context.Context, txn isql.Txn) error {

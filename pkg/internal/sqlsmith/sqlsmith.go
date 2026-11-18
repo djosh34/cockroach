@@ -115,7 +115,6 @@ type Smither struct {
 
 	bulkSrv     *httptest.Server
 	bulkFiles   map[string][]byte
-	bulkBackups map[string]tree.BackupTargetList
 	bulkExports []string
 }
 

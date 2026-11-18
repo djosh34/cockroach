@@ -37,7 +37,6 @@ go_library(
         "//pkg/util/randident",
         "//pkg/util/randident/randidentcfg",
         "//pkg/util/syncutil",
-        "//pkg/util/timeutil",
         "@com_github_cockroachdb_errors//:errors",
         "@com_github_lib_pq//oid",
     ],
