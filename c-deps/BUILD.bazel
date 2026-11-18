@@ -142,6 +142,7 @@ cmake(
             "CMAKE_BUILD_TYPE": "Release",
             "CMAKE_C_FLAGS": "-fPIC",
             "CMAKE_CXX_FLAGS": "-fPIC",
+            "CMAKE_INSTALL_LIBDIR": "lib",
             "BUILD_GEOSOP": "OFF",
             "BUILD_TESTING": "OFF",
             "GEOS_BUILD_DEVELOPER": "OFF",
