@@ -5,8 +5,5 @@ go_library(
     srcs = ["statement.go"],
     importpath = "github.com/cockroachdb/cockroach/pkg/sql/parser/statements",
     visibility = ["//visibility:public"],
-    deps = [
-        "//pkg/sql/sem/plpgsqltree",
-        "//pkg/sql/sem/tree",
-    ],
+    deps = ["//pkg/sql/sem/tree"],
 )

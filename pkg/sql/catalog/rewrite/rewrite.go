@@ -27,12 +27,9 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
-	plpgsqlparser "github.com/cockroachdb/cockroach/pkg/sql/plpgsql/parser"
 	"github.com/cockroachdb/cockroach/pkg/sql/schemachanger/scpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/schemachanger/screl"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catid"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/plpgsqltree"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/plpgsqltree/utils"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
@@ -355,18 +352,6 @@ func rewriteFunctionBodyDBNames(
 		}
 		return fmtCtx.CloseAndGetString(), nil
 
-	case catpb.Function_PLPGSQL:
-		stmt, err := plpgsqlparser.Parse(fnBody)
-		if err != nil {
-			return "", err
-		}
-		fmtCtx := tree.NewFmtCtx(
-			tree.FmtParsable,
-			tree.FmtReformatTableNames(replaceFunc),
-		)
-		fmtCtx.FormatNode(stmt.AST)
-		return fmtCtx.CloseAndGetString(), nil
-
 	default:
 		return "", errors.AssertionFailedf("unexpected function language %s", lang)
 	}
@@ -416,15 +401,6 @@ func rewriteTypesInRoutine(
 			fmtCtx.WriteString(";")
 		}
 		return fmtCtx.CloseAndGetString(), nil
-
-	case catpb.Function_PLPGSQL:
-		stmt, err := plpgsqlparser.Parse(fnBody)
-		if err != nil {
-			return "", err
-		}
-		typeReplaceCtx := makeTypeReplaceFmtCtx(rewrites)
-		typeReplaceCtx.FormatNode(stmt.AST)
-		return typeReplaceCtx.CloseAndGetString(), nil
 
 	default:
 		return "", errors.AssertionFailedf("unexpected function language: %v", lang)
@@ -557,15 +533,6 @@ func rewriteSequencesInFunction(
 			fmtCtx.FormatNode(newStmt)
 			fmtCtx.WriteString(";")
 		}
-
-	case catpb.Function_PLPGSQL:
-		stmt, err := plpgsqlparser.Parse(fnBody)
-		if err != nil {
-			return "", err
-		}
-		v := utils.SQLStmtVisitor{Fn: replaceSeqFunc}
-		newStmt := plpgsqltree.Walk(&v, stmt.AST)
-		fmtCtx.FormatNode(newStmt)
 
 	default:
 		return "", errors.AssertionFailedf("unexpected function language %s", lang)

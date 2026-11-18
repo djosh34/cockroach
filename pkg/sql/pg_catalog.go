@@ -2071,7 +2071,6 @@ https://www.postgresql.org/docs/9.5/catalog-pg-inherits.html`,
 // Match the OIDs that Postgres uses for languages.
 var languageInternalOid = tree.NewDOidWithName(oid.Oid(12), types.Oid, "internal")
 var languageSqlOid = tree.NewDOidWithName(oid.Oid(14), types.Oid, "sql")
-var languagePlpgsqlOid = tree.NewDOidWithName(oid.Oid(14024), types.Oid, "plpgsql")
 
 var pgCatalogLanguageTable = virtualSchemaTable{
 	comment: `available languages
@@ -2079,14 +2078,10 @@ https://www.postgresql.org/docs/9.5/catalog-pg-language.html`,
 	schema: vtable.PGCatalogLanguage,
 	populate: func(_ context.Context, p *planner, _ catalog.DatabaseDescriptor, addRow func(...tree.Datum) error) error {
 		h := makeOidHasher()
-		for _, lang := range []*tree.DOid{languageInternalOid, languageSqlOid, languagePlpgsqlOid} {
+		for _, lang := range []*tree.DOid{languageInternalOid, languageSqlOid} {
 			isPl := tree.DBoolFalse
-			if lang == languagePlpgsqlOid {
-				isPl = tree.DBoolTrue
-			}
-
 			isTrusted := tree.DBoolFalse
-			if lang == languagePlpgsqlOid || lang == languageSqlOid {
+			if lang == languageSqlOid {
 				isTrusted = tree.DBoolTrue
 			}
 			if err := addRow(
@@ -2605,9 +2600,7 @@ func addPgProcUDFRow(
 	}
 
 	lang := languageInternalOid
-	if fnDesc.GetLanguage() == catpb.Function_PLPGSQL {
-		lang = languagePlpgsqlOid
-	} else if fnDesc.GetLanguage() == catpb.Function_SQL {
+	if fnDesc.GetLanguage() == catpb.Function_SQL {
 		lang = languageSqlOid
 	}
 	return addRow(

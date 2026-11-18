@@ -363,28 +363,6 @@ var specs = []stmtSpec{
 		unlink:  []string{"table_name"},
 	},
 	{
-		name: "alter_backup",
-		stmt: "alter_backup_stmt",
-		replace: map[string]string{
-			"'ALTER' 'BACKUP' string_or_placeholder":                   "'ALTER' 'BACKUP' ( 'LATEST' | subdirectory ) 'IN' collectionURI",
-			"'IN' string_or_placeholder":                               "",
-			"alter_backup_cmds":                                        "'ADD' 'NEW_KMS' kmsURI 'WITH' 'OLD_KMS' kmsURI",
-			"'ALTER' 'BACKUP' string_or_placeholder alter_backup_cmds": "",
-		},
-		unlink: []string{"subdirectory", "collectionURI", "kmsURI"},
-	},
-	{
-		name:    "alter_backup_schedule",
-		replace: map[string]string{"iconst64": "schedule_id", "alter_backup_schedule_cmds": "options ( ',' options )*", "options": "'SET' ( 'LABEL' schedule_label | 'INTO' collectionURI | 'WITH' option | 'RECURRING' crontab | 'FULL BACKUP' ( crontab | 'ALWAYS' ) | 'SCHEDULE OPTION' schedule_option )"},
-		unlink:  []string{"schedule_id", "options", "option", "schedule_label", "collectionURI", "crontab", "schedule_option"},
-	},
-	{
-		name:    "alter_changefeed",
-		stmt:    "alter_changefeed_stmt",
-		replace: map[string]string{"a_expr": "job_id", "alter_changefeed_cmds": "( 'ADD' target ( ( ',' target ) )* ( 'WITH' ( initial_scan | no_initial_scan ) )? | 'DROP' target ( ( ',' target ) )* | ( 'SET' | 'UNSET' ) option ( ( ',' option ) )* )+"},
-		unlink:  []string{"job_id", "target", "option", "initial_scan", "no_initial_scan"},
-	},
-	{
 		name:   "alter_column",
 		stmt:   "alter_onetable_stmt",
 		inline: []string{"alter_table_cmds", "alter_table_cmd", "opt_column", "alter_column_default", "opt_set_data", "opt_collate", "opt_alter_column_using"},
@@ -611,22 +589,6 @@ var specs = []stmtSpec{
 		name: "analyze_stmt",
 	},
 	{
-		name:   "backup",
-		stmt:   "backup_stmt",
-		inline: []string{"opt_backup_targets", "opt_with_backup_options", "opt_as_of_clause", "as_of_clause", "backup_options_list"},
-		match:  []*regexp.Regexp{regexp.MustCompile("'BACKUP' backup_targets 'INTO'")},
-		replace: map[string]string{
-			"grant_targets":                  "( | 'TABLE' table_pattern ( ( ',' table_pattern ) )* | 'DATABASE' database_name ( ( ',' database_name ) )* )",
-			"backup_targets":                 "( | 'TABLE' table_pattern ( ( ',' table_pattern ) )* | 'DATABASE' database_name ( ( ',' database_name ) )* )",
-			"string_or_placeholder_opt_list": "( collectionURI | '(' localityURI ( ',' localityURI )* ')' )",
-			"'INTO'":                         "'INTO' ( | subdirectory 'IN' | 'LATEST' 'IN')",
-			"sconst_or_placeholder":          "subdirectory",
-			"a_expr":                         "timestamp",
-		},
-		unlink:  []string{"backup_targets", "collectionURI", "destination", "timestamp", "localityURI", "subdirectory"},
-		exclude: []*regexp.Regexp{regexp.MustCompile("'IN'")},
-	},
-	{
 		name: "begin_stmt",
 		inline: []string{
 			"opt_transaction",
@@ -734,19 +696,6 @@ var specs = []stmtSpec{
 		nosplit: true,
 	},
 	{
-		name:   "create_changefeed_stmt",
-		inline: []string{"changefeed_targets", "opt_changefeed_sink", "opt_with_options", "kv_option_list", "kv_option"},
-		replace: map[string]string{
-			"table_option":                 "table_name",
-			"'INTO' string_or_placeholder": "'INTO' sink",
-			"name":                         "option",
-			"'SCONST'":                     "option",
-			"'=' string_or_placeholder":    "'=' value"},
-		exclude: []*regexp.Regexp{
-			regexp.MustCompile("'OPTIONS'")},
-		unlink: []string{"table_name", "sink", "option", "value"},
-	},
-	{
 		name:    "create_external_connection_stmt",
 		replace: map[string]string{"label_spec": "connection_name", "string_or_placeholder": "connection_URI"},
 		unlink:  []string{"connection_name", "connection_URI"},
@@ -775,28 +724,6 @@ var specs = []stmtSpec{
 			"opt_partition_by_index": "( 'PARTITION' ( 'ALL' | ) 'BY' partition_by_inner | )",
 		},
 		nosplit: true,
-	},
-	{
-		name:   "create_schedule_for_backup_stmt",
-		inline: []string{"string_or_placeholder_opt_list", "string_or_placeholder_list", "opt_with_backup_options", "cron_expr", "opt_full_backup_clause", "opt_with_schedule_options", "opt_backup_targets"},
-		replace: map[string]string{
-			"string_or_placeholder": "collectionURI",
-			"sconst_or_placeholder": "crontab",
-			"schedule_label_spec":   "( 'IF NOT EXISTS' | )  schedule_label",
-			"backup_targets":        "( | ( 'TABLE' | ) table_pattern ( ( ',' table_pattern ) )* | 'DATABASE' database_name ( ( ',' database_name ) )* )",
-			"kv_option_list":        "schedule_option"},
-		unlink: []string{"schedule_label", "collection_URI", "crontab", "schedule_option"},
-	},
-	{
-		name:   "create_schedule_for_changefeed_stmt",
-		inline: []string{"opt_with_schedule_options", "changefeed_targets", "table_pattern", "opt_where_clause", "changefeed_target_expr", "cron_expr"},
-		replace: map[string]string{
-			"schedule_label_spec":   "( 'IF NOT EXISTS' | )  schedule_label",
-			"changefeed_sink":       "( 'INTO' changefeed_sink )",
-			"sconst_or_placeholder": "crontab",
-			"kv_option_list":        "schedule_option",
-			"opt_with_options":      "( | 'WITH' changefeed_option ( ',' changefeed_option )* )"},
-		unlink: []string{"schedule_label", "schedule_option", "changefeed_sink", "changefeed_option", "crontab"},
 	},
 	{
 		name:    "create_schema_stmt",
@@ -832,7 +759,7 @@ var specs = []stmtSpec{
 		replace: map[string]string{
 			"func_as":                          "'SCONST'",
 			"'AS'":                             "'AS' routine_body_str",
-			"non_reserved_word_or_sconst":      "('SQL' | 'PLPGSQL')",
+			"non_reserved_word_or_sconst":      "'SQL'",
 			"( 'SCONST' ) ( ',' 'SCONST' |  )": "",
 			"'DEFAULT'":                        "",
 			"'='":                              "",
@@ -850,7 +777,7 @@ var specs = []stmtSpec{
 			"common_routine_opt_item":          "",
 			"'AS'":                             "'AS' routine_body_str",
 			"opt_routine_body":                 "",
-			"non_reserved_word_or_sconst":      "( 'SQL' | 'PLPGSQL' )",
+			"non_reserved_word_or_sconst":      "'SQL'",
 			"'RETURN'":                         "",
 			"( 'SCONST' ) ( ',' 'SCONST' |  )": "",
 			"'='":                              "",
@@ -1241,23 +1168,6 @@ var specs = []stmtSpec{
 		replace: map[string]string{"relation_expr": "current_name", "qualified_name": "new_name"},
 		unlink:  []string{"current_name"}, relink: map[string]string{"new_name": "name"}},
 	{
-		name:   "restore",
-		stmt:   "restore_stmt",
-		inline: []string{"opt_as_of_clause", "as_of_clause", "opt_with_restore_options"},
-		match:  []*regexp.Regexp{regexp.MustCompile("'FROM'")},
-		replace: map[string]string{
-			"a_expr": "timestamp",
-			"'WITH' 'OPTIONS' '(' kv_option_list ')'": "",
-			"backup_targets":                         "( 'TABLE' table_pattern ( ( ',' table_pattern ) )* | 'DATABASE' database_name ( ( ',' database_name ) )* )",
-			"string_or_placeholder":                  "( ( subdirectory | 'LATEST' ) )",
-			"list_of_string_or_placeholder_opt_list": "( collectionURI | '(' localityURI ( ',' localityURI )* ')' )",
-		},
-		unlink: []string{"subdirectory", "timestamp", "collectionURI", "localityURI"},
-		exclude: []*regexp.Regexp{
-			regexp.MustCompile("'REPLICATION' 'STREAM' 'FROM'"),
-		},
-	},
-	{
 		name:    "resume_job",
 		stmt:    "resume_jobs_stmt",
 		replace: map[string]string{"a_expr": "job_id"},
@@ -1438,17 +1348,6 @@ var specs = []stmtSpec{
 	{
 		name: "show_full_scans",
 		stmt: "show_full_scans_stmt",
-	},
-	{
-		name:   "show_backup",
-		stmt:   "show_backup_stmt",
-		inline: []string{"opt_with_options"},
-		replace: map[string]string{
-			"'BACKUPS' 'IN' string_or_placeholder":                      "'BACKUPS' 'IN' location",
-			"'BACKUP' string_or_placeholder 'IN' string_or_placeholder": "'BACKUP' subdirectory 'IN' location",
-			"'BACKUP' 'SCHEMAS' string_or_placeholder":                  "'BACKUP' 'SCHEMAS' location",
-		},
-		unlink: []string{"subdirectory", "location", "location_opt_list"},
 	},
 	{
 		name:    "show_jobs",
@@ -1681,14 +1580,6 @@ var specs = []stmtSpec{
 	{
 		name:   "opt_frame_clause",
 		inline: []string{"frame_extent"},
-	},
-	{
-		name:   "backup_options",
-		inline: []string{"include_all_clusters"},
-	},
-	{
-		name:   "restore_options",
-		inline: []string{"include_all_clusters", "virtual_cluster_name", "virtual_cluster_opt"},
 	},
 }
 

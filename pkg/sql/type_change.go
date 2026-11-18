@@ -34,11 +34,8 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
-	plpgsql "github.com/cockroachdb/cockroach/pkg/sql/plpgsql/parser"
 	"github.com/cockroachdb/cockroach/pkg/sql/rowenc"
 	"github.com/cockroachdb/cockroach/pkg/sql/schemachanger/scerrors"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/plpgsqltree"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/plpgsqltree/utils"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
 	"github.com/cockroachdb/cockroach/pkg/util/intsets"
@@ -772,21 +769,8 @@ func (t *typeSchemaChanger) canRemoveEnumValueFromUDF(
 					member.LogicalRepresentation, udfDesc.GetName())
 			}
 		}
-	case catpb.Function_PLPGSQL:
-		stmt, err := plpgsql.Parse(udfDesc.GetFunctionBody())
-		if err != nil {
-			return errors.Wrapf(err, "failed to parse UDF %s", udfDesc.GetName())
-		}
-		v := utils.SQLStmtVisitor{Fn: visitFunc}
-		plpgsqltree.Walk(&v, stmt.AST)
-		if v.Err != nil {
-			return errors.Wrapf(v.Err, "failed to parse UDF %s", udfDesc.GetName())
-		}
-		if foundUsage {
-			return pgerror.Newf(pgcode.DependentObjectsStillExist,
-				"could not remove enum value %q as it is being used in a UDF %q",
-				member.LogicalRepresentation, udfDesc.GetName())
-		}
+	default:
+		return errors.AssertionFailedf("unexpected function language %s", udfDesc.GetLanguage())
 	}
 	return nil
 }

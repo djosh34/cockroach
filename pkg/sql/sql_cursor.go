@@ -12,7 +12,6 @@ package sql
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/kv"
@@ -292,44 +291,6 @@ func (p *planner) CloseCursor(ctx context.Context, n *tree.CloseCursor) (planNod
 	}, nil
 }
 
-// GenUniqueCursorName implements the eval.Planner interface.
-func (p *planner) GenUniqueCursorName() tree.Name {
-	return p.sqlCursors.genUniqueName()
-}
-
-// PLpgSQLCloseCursor implements the eval.Planner interface.
-func (p *planner) PLpgSQLCloseCursor(cursorName tree.Name) error {
-	return p.sqlCursors.closeCursor(cursorName)
-}
-
-// PLpgSQLFetchCursor returns the next row from the cursor with the given name
-// after seeking past the specified number of rows. It is used to implement the
-// PLpgSQL FETCH and MOVE statements. When there are no rows left to return,
-// PLpgSQLFetchCursor returns nil.
-//
-// Note: when called with the FORWARD ALL option, PLpgSQLFetchCursor will only
-// return the last row. This is compatible with PLpgSQL, as FORWARD ALL can only
-// be used with PLpgSQL MOVE, which ignores all returned rows.
-func (p *planner) PLpgSQLFetchCursor(
-	ctx context.Context, cursorStmt *tree.CursorStmt,
-) (res tree.Datums, err error) {
-	cursor, err := p.newFetchNode(cursorStmt)
-	if err != nil {
-		return nil, err
-	}
-	if err = cursor.startInternal(); err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-	var hasNext bool
-	hasNext, err = cursor.nextInternal(ctx)
-	for err == nil && hasNext {
-		res = cursor.Values()
-		hasNext, err = cursor.nextInternal(ctx)
-	}
-	return res, err
-}
-
 type sqlCursor struct {
 	isql.Rows
 	// txn is the transaction object that the internal executor for this cursor
@@ -374,9 +335,6 @@ type sqlCursors interface {
 	addCursor(tree.Name, *sqlCursor) error
 	// list returns all open cursors in the set.
 	list() map[tree.Name]*sqlCursor
-	// genUniqueName is used to generate a name for an unnamed PLpgSQL cursor that
-	// will not conflict with other cursors currently defined on the session.
-	genUniqueName() tree.Name
 }
 
 // emptySqlCursors is the default impl used by the planner when the
@@ -405,16 +363,9 @@ func (e emptySqlCursors) list() map[tree.Name]*sqlCursor {
 	return nil
 }
 
-func (e emptySqlCursors) genUniqueName() tree.Name {
-	return ""
-}
-
 // cursorMap is a sqlCursors that's backed by an actual map.
 type cursorMap struct {
 	cursors map[tree.Name]*sqlCursor
-	// nameCounter is used to help generate unique names for unnamed PLpgSQL
-	// cursors.
-	nameCounter int
 }
 
 func (c *cursorMap) closeAll(errorOnWithHold bool) error {
@@ -459,17 +410,6 @@ func (c *cursorMap) list() map[tree.Name]*sqlCursor {
 	return c.cursors
 }
 
-func (c *cursorMap) genUniqueName() tree.Name {
-	for {
-		c.nameCounter++
-		name := tree.Name(fmt.Sprintf("<unnamed portal %d>", c.nameCounter))
-		if _, ok := c.cursors[name]; !ok {
-			// This name is unique.
-			return name
-		}
-	}
-}
-
 // connExCursorAccessor is a sqlCursors that delegates to a connExecutor's
 // extraTxnState.
 type connExCursorAccessor struct {
@@ -494,10 +434,6 @@ func (c connExCursorAccessor) addCursor(s tree.Name, cursor *sqlCursor) error {
 
 func (c connExCursorAccessor) list() map[tree.Name]*sqlCursor {
 	return c.ex.extraTxnState.sqlCursors.list()
-}
-
-func (c connExCursorAccessor) genUniqueName() tree.Name {
-	return c.ex.extraTxnState.sqlCursors.genUniqueName()
 }
 
 // checkNoConflictingCursors returns an error if the input schema changing

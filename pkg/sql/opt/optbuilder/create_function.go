@@ -23,8 +23,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
-	"github.com/cockroachdb/cockroach/pkg/sql/plpgsql"
-	plpgsqlparser "github.com/cockroachdb/cockroach/pkg/sql/plpgsql/parser"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/cast"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
@@ -125,15 +123,6 @@ func (b *Builder) buildCreateFunction(cf *tree.CreateRoutine, inScope *scope) (o
 	if !languageFound {
 		panic(pgerror.New(pgcode.InvalidFunctionDefinition, "no language specified"))
 	}
-	if language == tree.RoutineLangPLpgSQL {
-		if !activeVersion.IsActive(clusterversion.V23_2) {
-			panic(unimplemented.New("PLpgSQL", "PLpgSQL is not supported until version 23.2"))
-		}
-		if err := plpgsql.CheckClusterSupportsPLpgSQL(b.evalCtx.Settings, b.evalCtx.ClusterID); err != nil {
-			panic(err)
-		}
-	}
-
 	// Track the dependencies in the arguments, return type, and statements in
 	// the function body.
 	var deps opt.SchemaDeps
@@ -155,7 +144,6 @@ func (b *Builder) buildCreateFunction(cf *tree.CreateRoutine, inScope *scope) (o
 	// named parameters to the scope so that references to them in the body can
 	// be resolved.
 	bodyScope := b.allocScope()
-	var paramTypes tree.ParamTypes
 	for i := range cf.Params {
 		param := &cf.Params[i]
 		typ, err := tree.ResolveType(b.ctx, param.Type, b.semaCtx.TypeResolver)
@@ -173,11 +161,6 @@ func (b *Builder) buildCreateFunction(cf *tree.CreateRoutine, inScope *scope) (o
 			if language == tree.RoutineLangSQL {
 				panic(pgerror.Newf(pgcode.InvalidFunctionDefinition,
 					"SQL functions cannot have arguments of type record"))
-			} else if language == tree.RoutineLangPLpgSQL {
-				panic(unimplemented.NewWithIssueDetail(105713,
-					"PL/pgSQL functions with RECORD input arguments",
-					"PL/pgSQL functions with RECORD input arguments are not yet supported",
-				))
 			}
 		}
 
@@ -190,14 +173,6 @@ func (b *Builder) buildCreateFunction(cf *tree.CreateRoutine, inScope *scope) (o
 		typedesc.GetTypeDescriptorClosure(typ).ForEach(func(id descpb.ID) {
 			typeDeps.Add(int(id))
 		})
-
-		// Collect the parameters for PLpgSQL routines.
-		if language == tree.RoutineLangPLpgSQL {
-			paramTypes = append(paramTypes, tree.ParamType{
-				Name: param.Name.String(),
-				Typ:  typ,
-			})
-		}
 	}
 
 	// Collect the user defined type dependency of the return type.
@@ -244,33 +219,6 @@ func (b *Builder) buildCreateFunction(cf *tree.CreateRoutine, inScope *scope) (o
 			formatFuncBodyStmt(fmtCtx, stmt.AST, i > 0 /* newLine */)
 			afterBuildStmt()
 		}
-	case tree.RoutineLangPLpgSQL:
-		if cf.ReturnType.SetOf {
-			panic(unimplemented.NewWithIssueDetail(105240,
-				"set-returning PL/pgSQL functions",
-				"set-returning PL/pgSQL functions are not yet supported",
-			))
-		}
-
-		// Parse the function body.
-		stmt, err := plpgsqlparser.Parse(funcBodyStr)
-		if err != nil {
-			panic(err)
-		}
-
-		// We need to disable stable function folding because we want to catch the
-		// volatility of stable functions. If folded, we only get a scalar and lose
-		// the volatility.
-		b.factory.FoldingControl().TemporarilyDisallowStableFolds(func() {
-			var plBuilder plpgsqlBuilder
-			plBuilder.init(b, nil /* colRefs */, paramTypes, stmt.AST, funcReturnType)
-			stmtScope = plBuilder.build(stmt.AST, bodyScope)
-		})
-		checkStmtVolatility(targetVolatility, stmtScope, stmt)
-
-		// Format the statements with qualified datasource names.
-		formatFuncBodyStmt(fmtCtx, stmt.AST, false /* newLine */)
-		afterBuildStmt()
 	default:
 		panic(errors.AssertionFailedf("unexpected language: %v", language))
 	}

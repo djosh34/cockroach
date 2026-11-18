@@ -275,8 +275,6 @@ const (
 	RoutineLangUnknown RoutineLanguage = "unknown"
 	// RoutineLangSQL represents SQL language.
 	RoutineLangSQL RoutineLanguage = "SQL"
-	// RoutineLangPLpgSQL represents the PL/pgSQL procedural language.
-	RoutineLangPLpgSQL RoutineLanguage = "plpgsql"
 	// RoutineLangC represents the C language.
 	RoutineLangC RoutineLanguage = "C"
 )
@@ -294,8 +292,6 @@ func AsRoutineLanguage(lang string) (RoutineLanguage, error) {
 	switch strings.ToLower(lang) {
 	case "sql":
 		return RoutineLangSQL, nil
-	case "plpgsql":
-		return RoutineLangPLpgSQL, nil
 	case "c":
 		return RoutineLangC, nil
 	}

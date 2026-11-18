@@ -893,7 +893,7 @@ func (u *sqlSymUnion) beginTransaction() *tree.BeginTransaction {
 
 %token <str> IDENTITY
 %token <str> IF IFERROR IFNULL IGNORE_FOREIGN_KEYS ILIKE IMMEDIATE IMMUTABLE IMPORT IN INCLUDE
-%token <str> INCLUDING INCLUDE_ALL_SECONDARY_TENANTS INCLUDE_ALL_VIRTUAL_CLUSTERS INCREMENT
+%token <str> INCLUDING INCREMENT
 %token <str> INET INET_CONTAINED_BY_OR_EQUALS
 %token <str> INET_CONTAINS_OR_EQUALS INDEX INDEXES INHERITS INJECT INITIALLY
 %token <str> INDEX_BEFORE_PAREN INDEX_BEFORE_NAME_THEN_PAREN INDEX_AFTER_ORDER_BY_BEFORE_AT
@@ -1306,7 +1306,6 @@ func (u *sqlSymUnion) beginTransaction() *tree.BeginTransaction {
 %type <tree.Expr> alter_column_visible
 %type <tree.Direction> opt_asc_desc
 %type <tree.NullsOrder> opt_nulls_order
-
 
 
 %type <tree.AlterTableCmd> alter_table_cmd
@@ -3091,18 +3090,6 @@ opt_clear_data:
   }
 
 
-
-
-
-
-include_all_clusters:
-  INCLUDE_ALL_SECONDARY_TENANTS { /* SKIP DOC */ }
-| INCLUDE_ALL_VIRTUAL_CLUSTERS { }
-
-
-
-
-
 // sconst_or_placeholder matches a simple string, or a placeholder.
 sconst_or_placeholder:
   SCONST
@@ -3126,8 +3113,6 @@ label_spec:
   {
       $$.val = &tree.LabelSpec{Label: $4.expr(), IfNotExists: true}
   }
-
-
 
 
 // %Help: CREATE EXTERNAL CONNECTION - create a new external connection
@@ -3186,10 +3171,6 @@ list_of_string_or_placeholder_opt_list:
   {
     $$.val = append($1.listOfStringOrPlaceholderOptList(), $3.stringOrPlaceholderOptList())
   }
-
-
-
-
 
 
 import_format:
@@ -3822,8 +3803,6 @@ opt_like_virtual_cluster:
   {
       $$.val = &tree.LikeTenantSpec{OtherTenant: $2.tenantSpec()}
   }
-
-
 
 
 // %Help: CREATE EXTENSION - pseudo-statement for PostgreSQL compatibility
@@ -4511,18 +4490,6 @@ create_stats_option:
   }
 
 
-
-
-
-
-opt_table_prefix:
-  TABLE
-  {}
-| /* EMPTY */
-  {}
-
-
-
 // %Help: DELETE - delete rows from a table
 // %Category: DML
 // %Text:
@@ -5041,11 +5008,6 @@ explain_option_list:
   {
     $$.val = append($1.strs(), $3)
   }
-
-
-
-
-
 
 
 // %Help: SHOW VIRTUAL CLUSTER - display metadata about virtual clusters
@@ -5779,7 +5741,6 @@ alter_virtual_cluster_service_stmt:
   }
 | ALTER virtual_cluster virtual_cluster_spec START error // SHOW HELP: ALTER VIRTUAL CLUSTER SERVICE
 | ALTER virtual_cluster virtual_cluster_spec STOP error // SHOW HELP: ALTER VIRTUAL CLUSTER SERVICE
-
 
 
 // %Help: ALTER VIRTUAL CLUSTER SETTING - alter cluster setting overrides for virtual clusters
@@ -6557,7 +6518,6 @@ show_stats_stmt:
 | SHOW STATISTICS error // SHOW HELP: SHOW STATISTICS
 
 
-
 // %Help: SHOW HISTOGRAM - display histogram (experimental)
 // %Category: Experimental
 // %Text: SHOW HISTOGRAM <histogram_id>
@@ -6576,13 +6536,6 @@ show_histogram_stmt:
     $$.val = &tree.ShowHistogram{HistogramID: id}
   }
 | SHOW HISTOGRAM error // SHOW HELP: SHOW HISTOGRAM
-
-
-
-
-
-
-
 
 
 // %Help: SHOW CLUSTER SETTING - display cluster settings
@@ -15537,8 +15490,6 @@ unreserved_keyword:
 | IMPORT
 | INCLUDE
 | INCLUDING
-| INCLUDE_ALL_SECONDARY_TENANTS
-| INCLUDE_ALL_VIRTUAL_CLUSTERS
 | INCREMENT
 | INDEX
 | INDEXES
@@ -16020,8 +15971,6 @@ bare_label_keywords:
 | IMPORT
 | IN
 | INCLUDE
-| INCLUDE_ALL_SECONDARY_TENANTS
-| INCLUDE_ALL_VIRTUAL_CLUSTERS
 | INCLUDING
 | INCREMENT
 | INDEX

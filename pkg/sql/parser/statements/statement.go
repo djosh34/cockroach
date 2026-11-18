@@ -11,7 +11,6 @@
 package statements
 
 import (
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/plpgsqltree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 )
 
@@ -66,8 +65,6 @@ func IsANSIDML(stmt tree.Statement) bool {
 // Statements is a list of parsed statements.
 type Statements []Statement[tree.Statement]
 
-type PLpgStatement Statement[*plpgsqltree.Block]
-
 // String returns the AST formatted as a string.
 func (stmts Statements) String() string {
 	return stmts.StringWithFlags(tree.FmtSimple)
@@ -85,21 +82,9 @@ func (stmts Statements) StringWithFlags(flags tree.FmtFlags) string {
 	return ctx.CloseAndGetString()
 }
 
-func (stmt PLpgStatement) String() string {
-	return stmt.StringWithFlags(tree.FmtSimple)
-}
-
-// StringWithFlags returns the AST formatted as a string (with the given flags).
-func (stmt PLpgStatement) StringWithFlags(flags tree.FmtFlags) string {
-	ctx := tree.NewFmtCtx(flags)
-	stmt.AST.Format(ctx)
-	return ctx.CloseAndGetString()
-}
-
 type ParsedStmts interface {
 	String() string
 	StringWithFlags(flags tree.FmtFlags) string
 }
 
 var _ ParsedStmts = Statements{}
-var _ ParsedStmts = PLpgStatement{}
