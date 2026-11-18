@@ -31,7 +31,6 @@ import (
 const (
 	crossFlag          = "cross"
 	cockroachTargetOss = "//pkg/cmd/cockroach-oss:cockroach-oss"
-	cockroachTarget    = "//pkg/cmd/cockroach:cockroach"
 	nogoDisableFlag    = "--//build/toolchains:nogo_disable_flag"
 	geosTarget         = "//c-deps:libgeos"
 	devTarget          = "//pkg/cmd/dev:dev"
@@ -39,7 +38,7 @@ const (
 
 type buildTarget struct {
 	// fullName is the full qualified name of the Bazel build target,
-	// like //pkg/cmd/cockroach:cockroach.
+	// like //pkg/cmd/cockroach-oss:cockroach-oss.
 	fullName string
 	// kind is either the "kind" of the Bazel rule (like go_library), or the
 	// string "geos" in case fullName is //c-deps:libgeos.
@@ -58,8 +57,7 @@ func makeBuildCmd(runE func(cmd *cobra.Command, args []string) error) *cobra.Com
 		),
 		// TODO(irfansharif): Flesh out the example usage patterns.
 		Example: `
-	dev build cockroach
-	dev build cockroach-{short,oss}
+	dev build cockroach-oss
 	dev build {opt,exec}gen`,
 		Args: cobra.MinimumNArgs(0),
 		RunE: runE,
@@ -79,10 +77,9 @@ var buildTargetMapping = map[string]string{
 	"bazel-remote":         bazelRemoteTarget,
 	"buildifier":           "@com_github_bazelbuild_buildtools//buildifier:buildifier",
 	"buildozer":            "@com_github_bazelbuild_buildtools//buildozer:buildozer",
-	"cockroach":            cockroachTarget,
+	"cockroach":            cockroachTargetOss,
 	"cockroach-sql":        "//pkg/cmd/cockroach-sql:cockroach-sql",
 	"cockroach-oss":        cockroachTargetOss,
-	"cockroach-short":      "//pkg/cmd/cockroach-short:cockroach-short",
 	"crlfmt":               "@com_github_cockroachdb_crlfmt//:crlfmt",
 	"dev":                  devTarget,
 	"docgen":               "//pkg/cmd/docgen:docgen",
@@ -102,8 +99,6 @@ var buildTargetMapping = map[string]string{
 	"roachprod":            "//pkg/cmd/roachprod:roachprod",
 	"roachprod-stress":     "//pkg/cmd/roachprod-stress:roachprod-stress",
 	"roachprod-microbench": "//pkg/cmd/roachprod-microbench:roachprod-microbench",
-	"roachtest":            "//pkg/cmd/roachtest:roachtest",
-	"short":                "//pkg/cmd/cockroach-short:cockroach-short",
 	"smith":                "//pkg/cmd/smith:smith",
 	"smithcmp":             "//pkg/cmd/smithcmp:smithcmp",
 	"smithtest":            "//pkg/cmd/smithtest:smithtest",
@@ -329,9 +324,6 @@ func (d *dev) stageArtifacts(
 		// the top of the workspace; others go in the `bin` directory.
 		if strings.HasPrefix(base, "cockroach") {
 			copyPaths = append(copyPaths, filepath.Join(workspace, base))
-			if strings.HasPrefix(base, "cockroach-short") {
-				copyPaths = append(copyPaths, filepath.Join(workspace, "cockroach"))
-			}
 		} else if base == "dev" {
 			buf, err := d.os.ReadFile(filepath.Join(workspace, "dev"))
 			if err != nil {
@@ -383,7 +375,7 @@ func targetToBinBasename(target string) string {
 // order to build the given high-level targets.
 // The first string slice returned is the list of arguments (i.e. to pass to
 // `CommandContext`), and the second is the full list of targets to be built
-// (e.g. after translation, so short -> "//pkg/cmd/cockroach-short").
+// (e.g. after translation, so oss -> "//pkg/cmd/cockroach-oss").
 func (d *dev) getBasicBuildArgs(
 	ctx context.Context, targets []string,
 ) (args []string, buildTargets []buildTarget, _ error) {

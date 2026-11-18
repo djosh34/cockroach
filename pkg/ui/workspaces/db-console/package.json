@@ -5,8 +5,8 @@
   "repository": "github.com/cockroachdb/cockroach",
   "license": "MIT",
   "scripts": {
-    "lint": "eslint './{src,ccl}/**/*.{tsx,ts,js}'",
-    "lint:fix": "eslint './{src,ccl}/**/*.{tsx,ts,js}' --fix",
+    "lint": "eslint './src/**/*.{tsx,ts,js}'",
+    "lint:fix": "eslint './src/**/*.{tsx,ts,js}' --fix",
     "storybook": "start-storybook -p 9009",
     "test": "DEBUG_PRINT_LIMIT=1000000 jest"
   },

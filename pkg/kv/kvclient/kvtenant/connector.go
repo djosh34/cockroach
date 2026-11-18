@@ -36,8 +36,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/server/settingswatcher"
 	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/spanconfig"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/ts/tspb"
 	"github.com/cockroachdb/cockroach/pkg/util/grpcutil"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
@@ -305,9 +303,7 @@ func (connectorFactory) NewConnector(
 	cfg ConnectorConfig, addressConfig KVAddressConfig,
 ) (Connector, error) {
 	if addressConfig.LoopbackAddress == "" || len(addressConfig.RemoteAddresses) > 0 {
-		return nil, pgerror.WithCandidateCode(
-			errors.New(`tenant connector with remote KV addresses requires a CCL binary`),
-			pgcode.CCLRequired)
+		return nil, errors.New("tenant connector requires a loopback address and no remote KV addresses")
 	}
 	return NewConnector(cfg, []string{addressConfig.LoopbackAddress}), nil
 }

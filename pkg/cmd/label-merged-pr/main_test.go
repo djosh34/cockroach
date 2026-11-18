@@ -36,7 +36,7 @@ func TestExtractPrNumbers(t *testing.T) {
 			[]string{"69674", "69881", "69910", "69922"},
 		},
 		{
-			"c8a62f290a Merge #64957\ndiff --cc pkg/ccl/sqlproxyccl/denylist/BUILD.bazel # comment",
+			"c8a62f290a Merge #64957\ndiff --cc pkg/sql/BUILD.bazel # comment",
 			[]string{"64957"},
 		},
 		{"FAIL", nil},

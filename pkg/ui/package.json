@@ -30,11 +30,6 @@
           "protobufjs": "6.8.6"
         }
       },
-      "@cockroachlabs/crdb-protobuf-client-ccl@*": {
-        "devDependencies": {
-          "protobufjs": "6.8.6"
-        }
-      },
       "@cockroachlabs/eslint-plugin-crdb@*": {
         "devDependencies": {
           "@typescript-eslint/parser": "^5.26.0",

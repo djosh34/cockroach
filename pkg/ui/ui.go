@@ -10,8 +10,8 @@
 
 // Package ui embeds the assets for the web UI into the Cockroach binary.
 //
-// By default, it serves a stub web UI. Linking with distoss or distccl will
-// replace the stubs with the OSS UI or the CCL UI, respectively. The exported
+// By default, it serves a stub web UI. Linking with distoss will replace
+// the stubs with the web UI. The exported
 // symbols in this package are thus function pointers instead of functions so
 // that they can be mutated by init hooks.
 package ui

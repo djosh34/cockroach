@@ -34,7 +34,7 @@ func makeAcceptanceCmd(runE func(cmd *cobra.Command, args []string) error) *cobr
 
 	addCommonBuildFlags(acceptanceCmd)
 	addCommonTestFlags(acceptanceCmd)
-	acceptanceCmd.Flags().Bool(noRebuildCockroachFlag, false, "set if it is unnecessary to rebuild cockroach (artifacts/cockroach-short must already exist, e.g. after being created by a previous `dev acceptance` run)")
+	acceptanceCmd.Flags().Bool(noRebuildCockroachFlag, false, "set if it is unnecessary to rebuild cockroach (artifacts/cockroach-oss must already exist, e.g. after being created by a previous `dev acceptance` run)")
 	acceptanceCmd.Flags().String(volumeFlag, "bzlhome", "the Docker volume to use as the container home directory (only used for cross builds)")
 	acceptanceCmd.Flags().BoolP(acceptanceVerboseFlag, "v", false, "show all output")
 	return acceptanceCmd
@@ -53,7 +53,7 @@ func (d *dev) acceptance(cmd *cobra.Command, commandLine []string) error {
 
 	// First we have to build cockroach.
 	if !noRebuildCockroach {
-		crossArgs, targets, err := d.getBasicBuildArgs(ctx, []string{"//pkg/cmd/cockroach-short:cockroach-short"})
+		crossArgs, targets, err := d.getBasicBuildArgs(ctx, []string{"//pkg/cmd/cockroach-oss:cockroach-oss"})
 		if err != nil {
 			return err
 		}
@@ -73,7 +73,7 @@ func (d *dev) acceptance(cmd *cobra.Command, commandLine []string) error {
 	if err != nil {
 		return err
 	}
-	cockroachBin := filepath.Join(workspace, "artifacts", "cockroach-short")
+	cockroachBin := filepath.Join(workspace, "artifacts", "cockroach-oss")
 
 	var args []string
 	args = append(args, "test", "//pkg/acceptance:acceptance_test")

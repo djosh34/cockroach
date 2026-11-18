@@ -11,7 +11,7 @@
 const custom = require("../webpack.config");
 const path = require("path");
 
-const appConfig = custom({dist: "ccl"}, {mode: "development"});
+const appConfig = custom({dist: "oss"}, {mode: "development"});
 
 module.exports = async ({ config, mode }) => {
   return {
@@ -19,7 +19,6 @@ module.exports = async ({ config, mode }) => {
     resolve: {
       ...config.resolve,
       modules: [
-        path.resolve(__dirname, "..", "ccl"),
         path.resolve(__dirname, ".."),
         "node_modules",
       ],

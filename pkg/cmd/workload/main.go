@@ -13,9 +13,32 @@ package main
 import (
 	"os"
 
-	_ "github.com/cockroachdb/cockroach/pkg/ccl/workloadccl/allccl" // init hooks
-	_ "github.com/cockroachdb/cockroach/pkg/ccl/workloadccl/cliccl" // init hooks
+	_ "github.com/cockroachdb/cockroach/pkg/workload/bank"       // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/bulkingest" // registers workloads
 	workloadcli "github.com/cockroachdb/cockroach/pkg/workload/cli"
+	_ "github.com/cockroachdb/cockroach/pkg/workload/connectionlatency" // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/debug"             // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/examples"          // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/geospatial"        // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/indexes"           // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/insights"          // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/jsonload"          // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/kv"                // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/ledger"            // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/movr"              // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/querybench"        // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/querylog"          // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/queue"             // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/rand"              // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/schemachange"      // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/sqlsmith"          // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/tpcc"              // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/tpccchecks"        // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/tpcds"             // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/tpch"              // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/ttlbench"          // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/ttllogger"         // registers workloads
+	_ "github.com/cockroachdb/cockroach/pkg/workload/ycsb"              // registers workloads
 )
 
 func main() {

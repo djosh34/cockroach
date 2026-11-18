@@ -19,7 +19,6 @@ import (
 
 func init() {
 	cockroachCmd.AddCommand(MTCmd)
-	MTCmd.AddCommand(mtStartSQLCmd)
 
 	mtCertsCmd.AddCommand(
 		mtCreateTenantCACertCmd,

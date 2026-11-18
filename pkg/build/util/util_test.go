@@ -19,18 +19,18 @@ import (
 )
 
 func TestOutputOfBinaryRule(t *testing.T) {
-	require.Equal(t, OutputOfBinaryRule("//pkg/cmd/cockroach-short", false),
-		"pkg/cmd/cockroach-short/cockroach-short_/cockroach-short")
-	require.Equal(t, OutputOfBinaryRule("//pkg/cmd/cockroach-short", true),
-		"pkg/cmd/cockroach-short/cockroach-short_/cockroach-short.exe")
-	require.Equal(t, OutputOfBinaryRule("//pkg/cmd/cockroach-short:cockroach-short", false),
-		"pkg/cmd/cockroach-short/cockroach-short_/cockroach-short")
-	require.Equal(t, OutputOfBinaryRule("//pkg/cmd/cockroach-short:cockroach-short", true),
-		"pkg/cmd/cockroach-short/cockroach-short_/cockroach-short.exe")
-	require.Equal(t, OutputOfBinaryRule("pkg/cmd/cockroach-short", false),
-		"pkg/cmd/cockroach-short/cockroach-short_/cockroach-short")
-	require.Equal(t, OutputOfBinaryRule("pkg/cmd/cockroach-short", true),
-		"pkg/cmd/cockroach-short/cockroach-short_/cockroach-short.exe")
+	require.Equal(t, OutputOfBinaryRule("//pkg/cmd/cockroach-oss", false),
+		"pkg/cmd/cockroach-oss/cockroach-oss_/cockroach-oss")
+	require.Equal(t, OutputOfBinaryRule("//pkg/cmd/cockroach-oss", true),
+		"pkg/cmd/cockroach-oss/cockroach-oss_/cockroach-oss.exe")
+	require.Equal(t, OutputOfBinaryRule("//pkg/cmd/cockroach-oss:cockroach-oss", false),
+		"pkg/cmd/cockroach-oss/cockroach-oss_/cockroach-oss")
+	require.Equal(t, OutputOfBinaryRule("//pkg/cmd/cockroach-oss:cockroach-oss", true),
+		"pkg/cmd/cockroach-oss/cockroach-oss_/cockroach-oss.exe")
+	require.Equal(t, OutputOfBinaryRule("pkg/cmd/cockroach-oss", false),
+		"pkg/cmd/cockroach-oss/cockroach-oss_/cockroach-oss")
+	require.Equal(t, OutputOfBinaryRule("pkg/cmd/cockroach-oss", true),
+		"pkg/cmd/cockroach-oss/cockroach-oss_/cockroach-oss.exe")
 	require.Equal(t, OutputOfBinaryRule("@com_github_cockroachdb_stress//:stress", false),
 		"external/com_github_cockroachdb_stress/stress_/stress")
 	require.Equal(t, OutputOfBinaryRule("@com_github_cockroachdb_stress//:stress", true),

@@ -1,5 +1,5 @@
 exec
-dev build cockroach-short
+dev build cockroach-oss
 ----
 bazel build //pkg/cmd/cockroach-short:cockroach-short --build_event_binary_file=/tmp/path
 bazel info workspace --color=no
@@ -11,7 +11,7 @@ rm crdb-checkout/cockroach
 cp sandbox/pkg/cmd/cockroach-short/cockroach-short_/cockroach-short crdb-checkout/cockroach
 
 exec
-dev build cockroach-short --cpus=12
+dev build cockroach-oss --cpus=12
 ----
 bazel build --local_cpu_resources=12 //pkg/cmd/cockroach-short:cockroach-short --build_event_binary_file=/tmp/path
 bazel info workspace --color=no
@@ -23,7 +23,7 @@ rm crdb-checkout/cockroach
 cp sandbox/pkg/cmd/cockroach-short/cockroach-short_/cockroach-short crdb-checkout/cockroach
 
 exec
-dev build --debug short
+dev build --debug oss
 ----
 bazel build //pkg/cmd/cockroach-short:cockroach-short --build_event_binary_file=/tmp/path
 bazel info workspace --color=no
@@ -35,7 +35,7 @@ rm crdb-checkout/cockroach
 cp sandbox/pkg/cmd/cockroach-short/cockroach-short_/cockroach-short crdb-checkout/cockroach
 
 exec
-dev build short -- -s
+dev build oss -- -s
 ----
 bazel build //pkg/cmd/cockroach-short:cockroach-short -s --build_event_binary_file=/tmp/path
 bazel info workspace --color=no

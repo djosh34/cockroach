@@ -35,10 +35,6 @@ module.exports = (env, argv) => {
   const isBazelBuild = !!process.env.BAZEL_TARGET;
 
   let localRoots = [path.resolve(__dirname)];
-  if (env.dist === "ccl") {
-    // CCL modules shadow OSS modules.
-    localRoots.unshift(path.resolve(__dirname, "ccl"));
-  }
 
   let plugins = [
     new CopyWebpackPlugin([
@@ -86,9 +82,7 @@ module.exports = (env, argv) => {
       modules: modules,
       alias: {
         oss: __dirname,
-        ccl: path.resolve(__dirname, "ccl"),
         "src/js/protos": "@cockroachlabs/crdb-protobuf-client",
-        "ccl/src/js/protos": "@cockroachlabs/crdb-protobuf-client-ccl",
       },
     },
 
@@ -177,7 +171,6 @@ module.exports = (env, argv) => {
           exclude: [
             /node_modules/,
             /src\/js/,
-            /ccl\/src\/js/,
             /cluster-ui\/dist/,
           ],
           use: [
@@ -196,7 +189,6 @@ module.exports = (env, argv) => {
           exclude: [
             /node_modules/,
             /src\/js/,
-            /ccl\/src\/js/,
             /cluster-ui\/dist/,
           ],
           use: [
@@ -219,7 +211,6 @@ module.exports = (env, argv) => {
           exclude: [
             /node_modules/,
             /src\/js/,
-            /ccl\/src\/js/,
             /cluster-ui\/dist/,
           ],
         },

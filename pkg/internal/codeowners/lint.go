@@ -46,8 +46,8 @@ func LintEverythingIsOwned(
 	// check both the path relative to ./pkg (=walkDir in this example) and the
 	// base name.
 	//
-	// Example: with entries "ccl/foo.go", "generated", and "README.md", we will skip:
-	// - ./pkg/ccl/foo.go
+	// Example: with entries "sql/foo.go", "generated", and "README.md", we will skip:
+	// - ./pkg/sql/foo.go
 	// - ./pkg/asd/xyz/README.md
 	// - ./pkg/README.md
 	// - ./pkg/foo/generated (and anything within)
@@ -55,15 +55,14 @@ func LintEverythingIsOwned(
 	// - ./pkg/bar/generated (as a file)
 	// but not
 	// - ./pkg/asd/foo.go
-	// - ./pkg/ccl/bar/foo.go
+	// - ./pkg/sql/bar/foo.go
 	// - ./pkg/asd/generated.go
 	skip := map[string]struct{}{
-		filepath.Join("ccl", "ccl_init.go"): {},
-		filepath.Join("node_modules"):       {},
-		"Makefile":                          {},
-		"BUILD.bazel":                       {},
-		".gitignore":                        {},
-		"README.md":                         {},
+		filepath.Join("node_modules"): {},
+		"Makefile":                    {},
+		"BUILD.bazel":                 {},
+		".gitignore":                  {},
+		"README.md":                   {},
 	}
 	skipGlobs := []string{
 		"#*#", // editor backup files.

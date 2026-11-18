@@ -83,7 +83,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/tracing"
 	"github.com/cockroachdb/cockroach/pkg/util/version"
 	"github.com/cockroachdb/errors"
-	"github.com/kr/pretty"
 	"github.com/lib/pq"
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/stretchr/testify/require"
@@ -593,9 +592,6 @@ var (
 	// writes not holding appropriate latches for range key stats update.
 	useMVCCRangeTombstonesForPointDeletes = util.ConstantWithMetamorphicTestBool(
 		"logictest-use-mvcc-range-tombstones-for-point-deletes", false)
-
-	// BackupRestoreProbability is the environment variable for `3node-backup` config.
-	backupRestoreProbability = envutil.EnvOrDefaultFloat64("COCKROACH_LOGIC_TEST_BACKUP_RESTORE_PROBABILITY", 0.0)
 )
 
 const queryRewritePlaceholderPrefix = "__async_query_rewrite_placeholder"
@@ -665,10 +661,6 @@ type pendingQuery struct {
 func (ls *logicStatement) readSQL(
 	t *logicTest, s *logictestbase.LineScanner, allowSeparator bool,
 ) (separator bool, _ error) {
-	if err := t.maybeBackupRestore(t.rng, t.cfg); err != nil {
-		return false, err
-	}
-
 	var buf bytes.Buffer
 	hasVars := false
 	for s.Scan() {
@@ -1075,11 +1067,6 @@ type logicTest struct {
 	// declarativeCorpusCollector used to save declarative schema changer state
 	// to disk.
 	declarativeCorpusCollector *corpus.Collector
-
-	// forceBackupAndRestore is set to true if the user wants to run a cluster
-	// backup and restore before running the next SQL statement. This can be set
-	// to true using the `force-backup-restore` directive.
-	forceBackupAndRestore bool
 
 	// retry indicates if the statement or query should be retried in case of
 	// failure with exponential backoff up to some maximum duration. It is reset
@@ -1548,20 +1535,8 @@ func (t *logicTest) newCluster(
 	}
 
 	paramsPerNode := map[int]base.TestServerArgs{}
-	require.Truef(
-		t.rootT,
-		len(cfg.Localities) == 0 || len(cfg.Localities) == cfg.NumNodes,
-		"localities must be set for each node -- got %#v for %d nodes",
-		cfg.Localities,
-		cfg.NumNodes,
-	)
 	for i := 0; i < cfg.NumNodes; i++ {
 		nodeParams := params.ServerArgs
-		if locality, ok := cfg.Localities[i+1]; ok {
-			nodeParams.Locality = locality
-		} else {
-			require.Lenf(t.rootT, cfg.Localities, 0, "node %d does not have a locality set", i+1)
-		}
 		nodeParams.Settings = makeClusterSettings(true /* forSystemTenant */)
 		nodeParams.TempStorageConfig = base.DefaultTestTempStorageConfigWithSize(
 			nodeParams.Settings, tempStorageDiskLimit,
@@ -1748,14 +1723,6 @@ func (t *logicTest) newCluster(
 			}
 		}
 
-		if cfg.DisableLocalityOptimizedSearch {
-			if _, err := conn.Exec(
-				"SET CLUSTER SETTING sql.defaults.locality_optimized_partitioned_index_scan.enabled = false",
-			); err != nil {
-				t.Fatal(err)
-			}
-		}
-
 		// We disable the automatic stats collection in order to have
 		// deterministic tests.
 		//
@@ -1898,19 +1865,6 @@ func (t *logicTest) shutdownCluster() {
 		t.clients = nil
 	}
 	t.db = nil
-}
-
-// resetCluster cleans up the current cluster, and creates a fresh one.
-func (t *logicTest) resetCluster() {
-	t.traceStop()
-	t.shutdownCluster()
-	if t.serverArgs == nil {
-		// We expect the server args to be persisted to the test during test
-		// setup.
-		t.Fatal("resetting the cluster before server args were set")
-	}
-	serverArgs := *t.serverArgs
-	t.newCluster(serverArgs, t.clusterOpts, t.knobOpts, t.toa)
 }
 
 // setup creates the initial cluster for the logic test and populates the
@@ -2258,176 +2212,6 @@ func (t *logicTest) processTestFile(path string, config logictestbase.TestCluste
 			data = data[:l-1]
 		}
 		fmt.Fprint(file, data)
-	}
-
-	return nil
-}
-
-func (t *logicTest) hasOpenTxns(ctx context.Context) bool {
-	for _, userClients := range t.clients {
-		for _, user := range userClients {
-			existingTxnPriority := "NORMAL"
-			err := user.QueryRow("SHOW TRANSACTION PRIORITY").Scan(&existingTxnPriority)
-			if err != nil {
-				// If we are unable to see transaction priority assume we're in the middle
-				// of an explicit txn.
-				log.Warningf(ctx, "failed to check txn priority with %v", err)
-				return true
-			}
-			if _, err := user.Exec("SET TRANSACTION PRIORITY NORMAL;"); !testutils.IsError(err, "there is no transaction in progress") {
-				// Reset the txn priority to what it was before we checked for open txns.
-				_, err := user.Exec(fmt.Sprintf(`SET TRANSACTION PRIORITY %s`, existingTxnPriority))
-				if err != nil {
-					log.Warningf(ctx, "failed to reset txn priority with %v", err)
-				}
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// maybeBackupRestore will randomly issue a cluster backup, create a new
-// cluster, and restore that backup to the cluster before continuing the test.
-// The probability of executing a backup and restore is specified in the
-// logictest.TestClusterConfig.
-func (t *logicTest) maybeBackupRestore(
-	rng *rand.Rand, config logictestbase.TestClusterConfig,
-) error {
-	defer func() {
-		t.forceBackupAndRestore = false
-	}()
-
-	// We decide if we want to take a backup here based on a probability
-	// specified in the logic test config.
-	if rng.Float64() > config.BackupRestoreProbability && !t.forceBackupAndRestore {
-		return nil
-	}
-
-	// Check if any users have open transactions in the logictest. If they do, we
-	// do not want to teardown the cluster and create a new one as it might
-	// interfere with what the logictest is trying to test.
-	//
-	// We could perhaps make this smarter and perform the backup after the
-	// transaction is close.
-	if t.hasOpenTxns(context.Background()) {
-		return nil
-	}
-
-	oldUser := t.user
-	oldNodeIdx := t.nodeIdx
-	defer func() {
-		t.setSessionUser(oldUser, oldNodeIdx, false /* newSession */)
-	}()
-
-	log.Info(context.Background(), "Running cluster backup and restore")
-
-	// To restore the same state in for the logic test, we need to restore the
-	// data and the session state. The session state includes things like session
-	// variables that are set for every session that is open.
-	//
-	// TODO(adityamaru): A better approach might be to wipe the cluster once we
-	// have a command that enables this. That way all of the session data will not
-	// be lost in the process of creating a new cluster.
-	users := make(map[string][]int, len(t.clients))
-	userToHexSession := make(map[string]map[int]string, len(t.clients))
-	userToSessionVars := make(map[string]map[int]map[string]string, len(t.clients))
-	for user, userClients := range t.clients {
-		userToHexSession[user] = make(map[int]string)
-		userToSessionVars[user] = make(map[int]map[string]string)
-		for nodeIdx := range userClients {
-			users[user] = append(users[user], nodeIdx)
-			t.setSessionUser(user, nodeIdx, false /* newSession */)
-
-			// Serialize session variables.
-			var userSession string
-			var err error
-			if err = t.db.QueryRow(`SELECT encode(crdb_internal.serialize_session(), 'hex')`).Scan(&userSession); err == nil {
-				userToHexSession[user][nodeIdx] = userSession
-				continue
-			}
-			log.Warningf(context.Background(), "failed to serialize session: %+v", err)
-
-			// If we failed to serialize the session variables, lets save the output of
-			// `SHOW ALL`. This usually happens if the session contains prepared
-			// statements or portals that cause the `serialize_session()` to fail.
-			//
-			// Saving the session variables in this manner does not guarantee the test
-			// will succeed since there are no ordering semantics when we go to apply
-			// them. There are some session variables that need to be applied before
-			// others for them to be valid. Thus, it is strictly better to use
-			// `serialize/deserialize_session()`, this "hack" just gives the test one
-			// more chance to succeed.
-			userSessionVars := make(map[string]string)
-			existingSessionVars, err := t.db.Query("SHOW ALL")
-			if err != nil {
-				return err
-			}
-			for existingSessionVars.Next() {
-				var key, value string
-				if err := existingSessionVars.Scan(&key, &value); err != nil {
-					return errors.Wrap(err, "scanning session variables")
-				}
-				userSessionVars[key] = value
-			}
-			userToSessionVars[user][nodeIdx] = userSessionVars
-		}
-	}
-
-	bucket := testutils.BackupTestingBucket()
-	backupLocation := fmt.Sprintf("gs://%s/logic-test-backup-restore-nightly/%s?AUTH=implicit",
-		bucket, strconv.FormatInt(timeutil.Now().UnixNano(), 10))
-
-	// Perform the backup and restore as root.
-	t.setSessionUser(username.RootUser, 0 /* nodeIdx */, false /* newSession */)
-
-	if _, err := t.db.Exec(fmt.Sprintf("BACKUP INTO '%s'", backupLocation)); err != nil {
-		return errors.Wrap(err, "backing up cluster")
-	}
-
-	// Create a new cluster. Perhaps this can be updated to just wipe the exiting
-	// cluster once we have the ability to easily wipe a cluster through SQL.
-	t.resetCluster()
-
-	// Run the restore as root.
-	t.setSessionUser(username.RootUser, 0 /* nodeIdx */, false /* newSession */)
-	if _, err := t.db.Exec(fmt.Sprintf("RESTORE FROM LATEST IN '%s'", backupLocation)); err != nil {
-		return errors.Wrap(err, "restoring cluster")
-	}
-
-	// Restore the session state that was in the old cluster.
-
-	// Create new connections for the existing users, and restore the session
-	// variables that we collected.
-	for user, userNodeIdxs := range users {
-		for _, nodeIdx := range userNodeIdxs {
-			// Call setUser for every user to create the connection for that user.
-			t.setSessionUser(user, nodeIdx, false /* newSession */)
-
-			if userSession, ok := userToHexSession[user][nodeIdx]; ok {
-				if _, err := t.db.Exec(fmt.Sprintf(`SELECT crdb_internal.deserialize_session(decode('%s', 'hex'))`, userSession)); err != nil {
-					return errors.Wrapf(err, "deserializing session")
-				}
-			} else if vars, ok := userToSessionVars[user][nodeIdx]; ok {
-				// We now attempt to restore the session variables that were set on the
-				// backing up cluster. These are not included in the backup restore and so
-				// have to be restored manually.
-				for key, value := range vars {
-					// First try setting the cluster setting as a string.
-					if _, err := t.db.Exec(fmt.Sprintf("SET %s='%s'", key, value)); err != nil {
-						// If it fails, try setting the value as an int.
-						log.Infof(context.Background(), "setting session variable as string failed (err: %v), trying as int", pretty.Formatter(err))
-						if _, err := t.db.Exec(fmt.Sprintf("SET %s=%s", key, value)); err != nil {
-							// Some cluster settings can't be set at all, so ignore these errors.
-							// If a setting that we needed could not be restored, we expect the
-							// logic test to fail and let us know.
-							log.Infof(context.Background(), "setting session variable as int failed: %v (continuing anyway)", pretty.Formatter(err))
-							continue
-						}
-					}
-				}
-			}
-		}
 	}
 
 	return nil
@@ -3077,10 +2861,6 @@ func (t *logicTest) processSubtest(
 			}
 			skip.IgnoreLint(t.t(), reason)
 
-		case "force-backup-restore":
-			t.forceBackupAndRestore = true
-			continue
-
 		case "skipif":
 			if len(fields) < 2 {
 				return errors.Errorf("skipif command requires one argument, found: %v", fields)
@@ -3104,11 +2884,6 @@ func (t *logicTest) processSubtest(
 					}
 					s.SetSkip(fmt.Sprintf("unsupported configuration %s (%s)", configName, issue))
 				}
-			case "backup-restore":
-				if config.BackupRestoreProbability > 0.0 {
-					s.SetSkip("backup-restore interferes with this check")
-				}
-				continue
 			default:
 				return errors.Errorf("unimplemented test statement: %s", s.Text())
 			}
@@ -4223,11 +3998,6 @@ func RunLogicTest(
 			value := min + rowinfra.BytesLimit(rng.Intn(100<<10))
 			rowinfra.SetDefaultBatchBytesLimitForTests(value)
 		}
-	}
-	hasOverride, overriddenBackupRestoreProbability := logictestbase.ReadBackupRestoreProbabilityOverride(t, path)
-	config.BackupRestoreProbability = backupRestoreProbability
-	if hasOverride {
-		config.BackupRestoreProbability = overriddenBackupRestoreProbability
 	}
 
 	lt.setup(

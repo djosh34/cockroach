@@ -34,8 +34,6 @@ WEBPACK_SRCS = [
 
 WEBPACK_DATA_OSS = WEBPACK_DATA_COMMON
 
-WEBPACK_DATA_CCL = WEBPACK_DATA_COMMON + glob(["ccl/**"])
-
 # We want to perform only type-checking (with absolutely no files emitted).
 # The ts_project rule from rules_ts doesn't support that, and instead recommends
 # calling the generated tsc_test rule directly:
@@ -46,62 +44,10 @@ typescript_bin.tsc_test(
         "--project",
         "$(location tsconfig.linting.json)",
     ],
-    data = WEBPACK_SRCS + WEBPACK_DATA_CCL + [
+    data = WEBPACK_SRCS + WEBPACK_DATA_OSS + [
         "tsconfig.linting.json",
         ":node_modules",
     ],
-)
-
-webpack_bin.webpack_cli(
-    name = "db-console-ccl",
-    srcs = WEBPACK_SRCS + WEBPACK_DATA_CCL + [
-        ":node_modules",
-    ],
-    outs = [
-        "db-console-ccl/assets/Inconsolata-Regular.woff",
-        "db-console-ccl/assets/Inconsolata-Regular.woff2",
-        "db-console-ccl/assets/Lato-Bold.woff",
-        "db-console-ccl/assets/Lato-Bold.woff2",
-        "db-console-ccl/assets/Lato-Light.woff",
-        "db-console-ccl/assets/Lato-Light.woff2",
-        "db-console-ccl/assets/Lato-Medium.woff",
-        "db-console-ccl/assets/Lato-Medium.woff2",
-        "db-console-ccl/assets/Lato-Regular.woff",
-        "db-console-ccl/assets/Lato-Regular.woff2",
-        "db-console-ccl/assets/RobotoMono-Bold.woff",
-        "db-console-ccl/assets/RobotoMono-Bold.woff2",
-        "db-console-ccl/assets/RobotoMono-Medium.woff",
-        "db-console-ccl/assets/RobotoMono-Medium.woff2",
-        "db-console-ccl/assets/RobotoMono-Regular.woff",
-        "db-console-ccl/assets/RobotoMono-Regular.woff2",
-        "db-console-ccl/assets/SFMono-Semibold.woff",
-        "db-console-ccl/assets/SFMono-Semibold.woff2",
-        "db-console-ccl/assets/SourceSansPro-Bold.woff",
-        "db-console-ccl/assets/SourceSansPro-Bold.woff2",
-        "db-console-ccl/assets/SourceSansPro-Regular.woff",
-        "db-console-ccl/assets/SourceSansPro-Regular.woff2",
-        "db-console-ccl/assets/SourceSansPro-SemiBold.woff",
-        "db-console-ccl/assets/SourceSansPro-SemiBold.woff2",
-        "db-console-ccl/assets/bundle.js",
-        "db-console-ccl/assets/email_signup_bg.png",
-        "db-console-ccl/assets/favicon.ico",
-        "db-console-ccl/assets/heroBannerLp.png",
-        "db-console-ccl/assets/login-background.png",
-        "db-console-ccl/assets/not-found.svg",
-        "db-console-ccl/assets/questionMap.svg",
-        "db-console-ccl/assets/spinner.gif",
-    ],
-    args = [
-        "--config webpack.config.js",
-        "--env.dist=ccl",
-        "--mode production",
-        "--env.output=./db-console-ccl",
-    ],
-    chdir = package_name(),
-    env = {
-        "NODE_OPTIONS": "--max-old-space-size=5000",
-    },
-    visibility = ["//visibility:public"],
 )
 
 webpack_bin.webpack_cli(
@@ -183,7 +129,6 @@ eslint_bin.eslint_test(
         "-c",
         ".eslintrc.json",
         "src",
-        "ccl",
     ],
     chdir = package_name(),
     copy_data_to_bin = False,
@@ -193,7 +138,6 @@ eslint_bin.eslint_test(
         "node_modules",
         "prettier.config.js",
     ] + glob([
-        "ccl/**",
         "src/**",
     ]),
 )
@@ -209,11 +153,6 @@ test_suite(
 
 SRC_NOT_PROTO_CLIENT = glob(
     ["src/**"],
-    exclude = ["protos.*"],
-)
-
-CCL_NOT_PROTO_CLIENT = glob(
-    ["ccl/**"],
     exclude = ["protos.*"],
 )
 
@@ -246,7 +185,6 @@ jest_test(
         ":node_modules",
     ] + glob([
         "src/**",
-        "ccl/**",
     ]),
     env = {
         "BAZEL_TARGET": "1",

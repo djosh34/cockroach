@@ -11,17 +11,13 @@
 package cli
 
 import (
-	"context"
 	"flag"
 	"fmt"
-	"io/fs"
 	"net"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
-	"sync/atomic"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/cli/clientflags"
@@ -37,7 +33,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/log/logflags"
 	"github.com/cockroachdb/cockroach/pkg/util/netutil/addr"
 	"github.com/cockroachdb/errors"
-	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -65,7 +60,6 @@ var localityAdvertiseHosts localityList
 var startBackground bool
 var storeSpecs base.StoreSpecList
 var goMemLimit int64
-var tenantIDFile string
 
 // initPreFlagsDefaults initializes the values of the global variables
 // defined above.
@@ -96,8 +90,6 @@ func initPreFlagsDefaults() {
 	storeSpecs = base.StoreSpecList{}
 
 	goMemLimit = 0
-
-	tenantIDFile = ""
 }
 
 // AddPersistentPreRunE add 'fn' as a persistent pre-run function to 'cmd'.
@@ -289,10 +281,6 @@ func init() {
 		return extraStoreFlagInit(cmd)
 	})
 
-	AddPersistentPreRunE(mtStartSQLCmd, func(cmd *cobra.Command, _ []string) error {
-		return mtStartSQLFlagsInit(cmd)
-	})
-
 	// Map any flags registered in the standard "flag" package into the
 	// top-level cockroach command.
 	pf := cockroachCmd.PersistentFlags()
@@ -479,12 +467,7 @@ func init() {
 
 			// More server flags.
 
-			if cmd != mtStartSQLCmd {
-				// TODO(knz): SQL-only servers should probably also support per-locality server
-				// addresses, for multi-region support.
-				// See: https://github.com/cockroachdb/cockroach/issues/90172
-				cliflagcfg.VarFlag(f, &localityAdvertiseHosts, cliflags.LocalityAdvertiseAddr)
-			}
+			cliflagcfg.VarFlag(f, &localityAdvertiseHosts, cliflags.LocalityAdvertiseAddr)
 
 			cliflagcfg.VarFlag(f, &serverCfg.Locality, cliflags.Locality)
 
@@ -546,14 +529,6 @@ func init() {
 		// a shared listener. See: https://github.com/cockroachdb/cockroach/issues/84585
 		cliflagcfg.VarFlag(f, addr.NewPortRangeSetter(&baseCfg.ApplicationInternalRPCPortMin, &baseCfg.ApplicationInternalRPCPortMax), cliflags.ApplicationInternalRPCPortRange)
 		_ = f.MarkHidden(cliflags.ApplicationInternalRPCPortRange.Name)
-	}
-
-	// Multi-tenancy start-sql command flags.
-	{
-		f := mtStartSQLCmd.Flags()
-		cliflagcfg.VarFlag(f, &tenantIDWrapper{&serverCfg.SQLConfig.TenantID}, cliflags.TenantID)
-		cliflagcfg.StringFlag(f, &tenantIDFile, cliflags.TenantIDFile)
-		cliflagcfg.StringSliceFlag(f, &serverCfg.SQLConfig.TenantKVAddrs, cliflags.KVAddrs)
 	}
 
 	// Flags that apply to commands that start servers.
@@ -959,131 +934,8 @@ func init() {
 	}
 }
 
-func tenantID(s string) (roachpb.TenantID, error) {
-	tenID, err := strconv.ParseUint(s, 10, 64)
-	if err != nil {
-		return roachpb.TenantID{}, errors.Wrap(err, "invalid tenant ID")
-	}
-	return roachpb.MakeTenantID(tenID)
-}
-
 type tenantIDWrapper struct {
 	tenID *roachpb.TenantID
-}
-
-func (w *tenantIDWrapper) String() string {
-	return w.tenID.String()
-}
-func (w *tenantIDWrapper) Set(s string) error {
-	cfgTenantID, err := tenantID(s)
-	if err != nil {
-		return err
-	}
-	*w.tenID = cfgTenantID
-	return nil
-}
-
-func (w *tenantIDWrapper) Type() string {
-	return "number"
-}
-
-// tenantIDFromFile will look for the given file and read the full first
-// line of the file that should contain the `<TenantID>`.
-func tenantIDFromFile(
-	ctx context.Context,
-	fileName string,
-	watcherWaitCount *atomic.Uint32,
-	watcherEventCount *atomic.Uint32,
-	watcherReadCount *atomic.Uint32,
-) (roachpb.TenantID, error) {
-	// Start watching the file for changes as the typical case is that the file
-	// will not have yet the tenant id at startup.
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return roachpb.TenantID{}, errors.Wrapf(err, "creating new watcher")
-	}
-	defer func() { _ = watcher.Close() }()
-
-	// Watch the directory for changes instead of the file itself. This has a
-	// few benefits:
-	//   1. We can avoid needing to pre-create the file for the watcher to work.
-	//   2. We could atomically write the file via the rename(2) approach.
-	//      Watching on the file would cause the watcher to break for such an
-	//      operation.
-	if err = watcher.Add(filepath.Dir(fileName)); err != nil {
-		return roachpb.TenantID{}, errors.Wrapf(err, "adding %q to watcher", fileName)
-	}
-
-	tryReadTenantID := func() (roachpb.TenantID, error) {
-		if watcherReadCount != nil {
-			watcherReadCount.Add(1)
-		}
-		headBuf, err := os.ReadFile(fileName)
-		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return roachpb.TenantID{}, errors.Wrapf(err, "reading %q file", fileName)
-		}
-		if err == nil {
-			// Ignore everything after the first newline character. If we
-			// don't see a newline, that means we have partial writes, so
-			// we'll continue waiting.
-			if line, _, foundNewLine := strings.Cut(string(headBuf), "\n"); foundNewLine {
-				cfgTenantID, err := tenantID(line)
-				if err != nil {
-					return roachpb.TenantID{}, errors.Wrapf(err, "setting tenant id from line %q", line)
-				}
-				return cfgTenantID, nil
-			}
-		}
-		// We either have partial writes here, or that the file does not exist.
-		return roachpb.TenantID{}, nil
-	}
-
-	// Perform an initial read.
-	if tid, err := tryReadTenantID(); err != nil || tid != (roachpb.TenantID{}) {
-		return tid, err
-	}
-
-	for {
-		if ctx.Err() != nil {
-			return roachpb.TenantID{}, ctx.Err()
-		}
-
-		// Wait for file notification.
-		if watcherWaitCount != nil {
-			watcherWaitCount.Add(1)
-		}
-		select {
-		case e, ok := <-watcher.Events:
-			if watcherEventCount != nil {
-				watcherEventCount.Add(1)
-			}
-			if !ok {
-				return roachpb.TenantID{},
-					errors.Newf("fsnotify.Watcher got Events channel closed while waiting on %q", fileName)
-			}
-
-			// Since we're watching the directory of the file, it is possible to
-			// get events for files that we don't care. Omit those events.
-			if e.Name != fileName {
-				continue
-			}
-
-			// Either we get an error, or we found the tenant ID.
-			if tid, err := tryReadTenantID(); err != nil || tid != (roachpb.TenantID{}) {
-				return tid, err
-			}
-
-		case err, ok := <-watcher.Errors:
-			if !ok {
-				return roachpb.TenantID{},
-					errors.Newf("fsnotify.Watcher got Errors channel closed while waiting on %q", fileName)
-			}
-			return roachpb.TenantID{}, errors.Wrapf(err, "watcher error while waiting on %q", fileName)
-
-		case <-ctx.Done():
-			return roachpb.TenantID{}, ctx.Err()
-		}
-	}
 }
 
 // extraServerFlagInit configures the server.Config based on the command-line flags.
@@ -1103,22 +955,6 @@ func extraServerFlagInit(cmd *cobra.Command) error {
 	changed := func(set *pflag.FlagSet, name string) bool {
 		f := set.Lookup(name)
 		return f != nil && f.Changed
-	}
-
-	if cmd == mtStartSQLCmd {
-		if !changed(fs, cliflags.ListenAddr.Name) && changed(fs, cliflags.ListenSQLAddr.Name) {
-			// A special affordance for backward-compatibility with previous
-			// versions of CockroachDB.
-			//
-			// In those versions, the 'mt start-sql' command did not support
-			// --listen-addr and instead --sql-addr was controlling both the
-			// RPC and SQL ports together. To support this, we assume that
-			// if the latter is set but the former is not, the user truly
-			// wanted to control both.
-			startCtx.serverListenAddr, serverListenPort = serverSQLAddr, serverSQLPort
-			serverSQLAddr, serverSQLPort = "", ""
-			fs.Lookup(cliflags.ListenSQLAddr.Name).Changed = false
-		}
 	}
 
 	// Construct the main RPC listen address.
@@ -1326,29 +1162,6 @@ func extraClientFlagInit() error {
 	// sent.
 	if sqlConnCtx.DebugMode {
 		sqlConnCtx.Echo = true
-	}
-	return nil
-}
-
-func mtStartSQLFlagsInit(cmd *cobra.Command) error {
-	// Override default store for mt to use a per tenant store directory.
-	fs := cliflagcfg.FlagSetForCmd(cmd)
-	if !fs.Changed(cliflags.Store.Name) {
-		// We assume that we only need to change top level store as temp dir configs are
-		// initialized when start is executed and temp dirs inherit path from first store.
-		serverCfg.Stores.Specs[0].Path += fmt.Sprintf("-tenant-%d", os.Getpid())
-	}
-
-	// In standalone SQL servers, we do not generate a ballast file,
-	// unless a ballast size was specified explicitly by the user.
-	for i := range serverCfg.Stores.Specs {
-		spec := &serverCfg.Stores.Specs[i]
-		if spec.BallastSize == nil {
-			// Only override if there was no ballast size specified to start
-			// with.
-			zero := base.SizeSpec{InBytes: 0, Percent: 0}
-			spec.BallastSize = &zero
-		}
 	}
 	return nil
 }

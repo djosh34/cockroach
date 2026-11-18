@@ -104,8 +104,6 @@ func setServerContextDefaults() {
 	logcrash.SetGlobalSettings(&st.SV)
 	serverCfg.SetDefaults(context.Background(), st)
 
-	serverCfg.TenantKVAddrs = []string{"127.0.0.1:26257"}
-
 	// Attempt to default serverCfg.MemoryPoolSize to 25% if possible.
 	if bytes, _ := memoryPercentResolver(25); bytes != 0 {
 		serverCfg.SQLConfig.MemoryPoolSize = bytes

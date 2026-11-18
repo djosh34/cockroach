@@ -23,7 +23,6 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/build"
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
-	"github.com/cockroachdb/cockroach/pkg/roachpb"
 )
 
 var (
@@ -67,21 +66,9 @@ type TestClusterConfig struct {
 	// If set to "Random", the default randomization logic will be used.
 	UseSecondaryTenant TenantMode
 
-	// IsCCLConfig should be true for any config that can only be run with a CCL
-	// binary.
-	IsCCLConfig bool
-	// localities is set if nodes should be set to a particular locality.
-	// Nodes are 1-indexed.
-	Localities map[int]roachpb.Locality
-	// BackupRestoreProbability will periodically backup the cluster and restore
-	// it's state to a new cluster at random points during a logic test.
-	BackupRestoreProbability float64
 	// disableDeclarativeSchemaChanger will disable the declarative schema changer
 	// for logictest.
 	DisableDeclarativeSchemaChanger bool
-	// disableLocalityOptimizedSearch disables the cluster setting
-	// locality_optimized_partitioned_index_scan, which is enabled by default.
-	DisableLocalityOptimizedSearch bool
 	// DeclarativeCorpusCollection enables support for collecting corpuses
 	// for the declarative schema changer.
 	DeclarativeCorpusCollection bool
@@ -106,156 +93,6 @@ const (
 )
 
 const threeNodeTenantConfigName = "3node-tenant"
-
-var multiregion9node3region3azsLocalities = map[int]roachpb.Locality{
-	1: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "ap-southeast-2"},
-			{Key: "availability-zone", Value: "ap-az1"},
-		},
-	},
-	2: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "ap-southeast-2"},
-			{Key: "availability-zone", Value: "ap-az2"},
-		},
-	},
-	3: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "ap-southeast-2"},
-			{Key: "availability-zone", Value: "ap-az3"},
-		},
-	},
-	4: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "ca-central-1"},
-			{Key: "availability-zone", Value: "ca-az1"},
-		},
-	},
-	5: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "ca-central-1"},
-			{Key: "availability-zone", Value: "ca-az2"},
-		},
-	},
-	6: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "ca-central-1"},
-			{Key: "availability-zone", Value: "ca-az3"},
-		},
-	},
-	7: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "us-east-1"},
-			{Key: "availability-zone", Value: "us-az1"},
-		},
-	},
-	8: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "us-east-1"},
-			{Key: "availability-zone", Value: "us-az2"},
-		},
-	},
-	9: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "us-east-1"},
-			{Key: "availability-zone", Value: "us-az3"},
-		},
-	},
-}
-
-var multiregion15node5region3azsLocalities = map[int]roachpb.Locality{
-	1: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "ap-southeast-2"},
-			{Key: "availability-zone", Value: "ap-az1"},
-		},
-	},
-	2: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "ap-southeast-2"},
-			{Key: "availability-zone", Value: "ap-az2"},
-		},
-	},
-	3: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "ap-southeast-2"},
-			{Key: "availability-zone", Value: "ap-az3"},
-		},
-	},
-	4: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "ca-central-1"},
-			{Key: "availability-zone", Value: "ca-az1"},
-		},
-	},
-	5: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "ca-central-1"},
-			{Key: "availability-zone", Value: "ca-az2"},
-		},
-	},
-	6: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "ca-central-1"},
-			{Key: "availability-zone", Value: "ca-az3"},
-		},
-	},
-	7: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "us-east-1"},
-			{Key: "availability-zone", Value: "us-az1"},
-		},
-	},
-	8: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "us-east-1"},
-			{Key: "availability-zone", Value: "us-az2"},
-		},
-	},
-	9: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "us-east-1"},
-			{Key: "availability-zone", Value: "us-az3"},
-		},
-	},
-	10: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "us-west-1"},
-			{Key: "availability-zone", Value: "usw-az1"},
-		},
-	},
-	11: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "us-west-1"},
-			{Key: "availability-zone", Value: "usw-az2"},
-		},
-	},
-	12: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "us-west-1"},
-			{Key: "availability-zone", Value: "usw-az3"},
-		},
-	},
-	13: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "us-central-1"},
-			{Key: "availability-zone", Value: "usc-az1"},
-		},
-	},
-	14: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "us-central-1"},
-			{Key: "availability-zone", Value: "usc-az2"},
-		},
-	},
-	15: {
-		Tiers: []roachpb.Tier{
-			{Key: "region", Value: "us-central-1"},
-			{Key: "availability-zone", Value: "usc-az3"},
-		},
-	},
-}
 
 // LogicTestConfigs contains all possible cluster configs. A test file can
 // specify a list of configs to run in a file-level comment like:
@@ -341,134 +178,12 @@ var LogicTestConfigs = []TestClusterConfig{
 		SkipShort:           true,
 	},
 	{
-		// 3node-tenant is a config that runs the test as a SQL tenant. This config
-		// can only be run with a CCL binary, so is a noop if run through the normal
-		// logictest command.
-		// To run a logic test with this config as a directive, run:
-		// dev testlogic ccl --files 3node-tenant --subtest $SUBTEST
+		// 3node-tenant is a config that runs the test as a SQL tenant.
 		Name:                        threeNodeTenantConfigName,
 		NumNodes:                    3,
 		UseSecondaryTenant:          Always,
-		IsCCLConfig:                 true,
 		OverrideDistSQLMode:         "on",
 		DeclarativeCorpusCollection: true,
-	},
-	{
-		// 3node-tenant-multiregion is a config that runs the test as a SQL tenant
-		// with SQL instances and KV nodes in multiple regions. This config can only
-		// be run with a CCL binary, so is a noop if run through the normal
-		// logictest command.
-		// To run a logic test with this config as a directive, run:
-		// dev testlogic ccl --files 3node-tenant-multiregion --subtests $SUBTESTS
-		Name:                        "3node-tenant-multiregion",
-		NumNodes:                    3,
-		UseSecondaryTenant:          Always,
-		IsCCLConfig:                 true,
-		OverrideDistSQLMode:         "on",
-		DeclarativeCorpusCollection: true,
-		Localities: map[int]roachpb.Locality{
-			1: {
-				Tiers: []roachpb.Tier{
-					{Key: "region", Value: "test"},
-				},
-			},
-			2: {
-				Tiers: []roachpb.Tier{
-					{Key: "region", Value: "test1"},
-				},
-			},
-			3: {
-				Tiers: []roachpb.Tier{
-					{Key: "region", Value: "test2"},
-				},
-			},
-		},
-	},
-	// Regions and zones below are named deliberately, and contain "-"'s to be reflective
-	// of the naming convention in public clouds.  "-"'s are handled differently in SQL
-	// (they're double double quoted) so we explicitly test them here to ensure that
-	// the multi-region code handles them correctly.
-
-	{
-		Name:     "multiregion-invalid-locality",
-		NumNodes: 3,
-		Localities: map[int]roachpb.Locality{
-			1: {
-				Tiers: []roachpb.Tier{
-					{Key: "invalid-region-setup", Value: "test1"},
-					{Key: "availability-zone", Value: "test1-az1"},
-				},
-			},
-			2: {
-				Tiers: []roachpb.Tier{},
-			},
-			3: {
-				Tiers: []roachpb.Tier{
-					{Key: "region", Value: "test1"},
-					{Key: "availability-zone", Value: "test1-az3"},
-				},
-			},
-		},
-	},
-	{
-		Name:                        "multiregion-3node-3superlongregions",
-		NumNodes:                    3,
-		DeclarativeCorpusCollection: true,
-		Localities: map[int]roachpb.Locality{
-			1: {
-				Tiers: []roachpb.Tier{
-					{Key: "region", Value: "veryveryveryveryveryveryverylongregion1"},
-				},
-			},
-			2: {
-				Tiers: []roachpb.Tier{
-					{Key: "region", Value: "veryveryveryveryveryveryverylongregion2"},
-				},
-			},
-			3: {
-				Tiers: []roachpb.Tier{
-					{Key: "region", Value: "veryveryveryveryveryveryverylongregion3"},
-				},
-			},
-		},
-	},
-	{
-		Name:       "multiregion-9node-3region-3azs",
-		NumNodes:   9,
-		Localities: multiregion9node3region3azsLocalities,
-		// Need to disable the default test tenant here until we have the
-		// locality optimized search working in multi-tenant configurations.
-		// Tracked with #80678.
-		//
-		// TODO(#76378): We've fixed that issue. Review this choice. Can
-		// it be "Random" instead? Then we can merge it with the next
-		// config below.
-		UseSecondaryTenant:          Never,
-		DeclarativeCorpusCollection: true,
-	},
-	{
-		Name:                        "multiregion-9node-3region-3azs-tenant",
-		NumNodes:                    9,
-		Localities:                  multiregion9node3region3azsLocalities,
-		UseSecondaryTenant:          Always,
-		DeclarativeCorpusCollection: true,
-	},
-	{
-		Name:              "multiregion-9node-3region-3azs-vec-off",
-		NumNodes:          9,
-		Localities:        multiregion9node3region3azsLocalities,
-		OverrideVectorize: "off",
-	},
-	{
-		Name:                           "multiregion-9node-3region-3azs-no-los",
-		NumNodes:                       9,
-		Localities:                     multiregion9node3region3azsLocalities,
-		DisableLocalityOptimizedSearch: true,
-	},
-	{
-		Name:       "multiregion-15node-5region-3azs",
-		NumNodes:   15,
-		Localities: multiregion15node5region3azsLocalities,
 	},
 	{
 		// This config runs tests using 23.1 cluster version, simulating a node that
@@ -567,7 +282,6 @@ var (
 	// ThreeNodeTenantDefaultConfigNames is the list of 3 node tenant configs.
 	ThreeNodeTenantDefaultConfigNames = []string{
 		"3node-tenant",
-		"3node-tenant-multiregion",
 	}
 	// DefaultConfig is the default test configuration.
 	DefaultConfig = parseTestConfig(DefaultConfigNames)
@@ -593,52 +307,6 @@ func (l stdlogger) Fatalf(format string, args ...interface{}) {
 
 func (l stdlogger) Logf(format string, args ...interface{}) {
 	fmt.Printf(format, args...)
-}
-
-// ReadBackupRestoreProbabilityOverride reads any LogicTest directive at the
-// beginning of a test file. A line that starts with "#
-// BackupRestoreProbability:" specifies the probability with which we should run
-// a cluster backup + restore between lines of the test file.
-//
-// Example:
-//
-//	# BackupRestoreProbability: 0.8
-//
-// If the file doesn't contain a directive, the value of the environment
-// variable COCKROACH_LOGIC_TEST_BACKUP_RESTORE_PROBABILITY is used.
-func ReadBackupRestoreProbabilityOverride(
-	t logger, path string,
-) (hasOverride bool, probability float64) {
-	file, err := os.Open(path)
-	if err != nil {
-		t.Fatalf("failed open file %s", path)
-	}
-	defer file.Close()
-
-	s := NewLineScanner(file)
-	for s.Scan() {
-		fields := strings.Fields(s.Text())
-		if len(fields) == 0 {
-			continue
-		}
-		cmd := fields[0]
-		if !strings.HasPrefix(cmd, "#") {
-			// Stop at the first line that's not a comment (or empty).
-			break
-		}
-		if len(fields) > 1 && cmd == "#" && fields[1] == "BackupRestoreProbability:" {
-			if len(fields) == 2 {
-				t.Fatalf("%s: empty LogicTest directive", path)
-			}
-			probability, err := strconv.ParseFloat(fields[2], 64)
-			if err != nil {
-				t.Fatalf("failed to parse backup+restore probability: %+v", err)
-			}
-			return true, probability
-		}
-	}
-
-	return false, 0
 }
 
 // ReadTestFileConfigs reads any LogicTest directive at the beginning of a
@@ -842,7 +510,6 @@ func getDefaultConfigListNames(name string) []string {
 // ConfigCalculator is used to enumerate a map of configuration -> file.
 type ConfigCalculator struct {
 	ConfigOverrides, ConfigFilterOverrides []string
-	RunCCLConfigs                          bool
 }
 
 // Enumerate produces the list of all configuration/file pairs from the input
@@ -893,11 +560,6 @@ func (c ConfigCalculator) Enumerate(globs ...string) ([][]string, error) {
 			configName := config.Name
 			if _, ok := configFilter[configName]; configFilter != nil && !ok {
 				// Config filter present but not containing test.
-				continue
-			}
-			if config.IsCCLConfig && !c.RunCCLConfigs {
-				// Config is a CCL config and the caller specified that CCL configs
-				// should not be run.
 				continue
 			}
 			configPaths[idx] = append(configPaths[idx], path)

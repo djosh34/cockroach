@@ -68,7 +68,7 @@ pkg/kv/kvserver:kvserver_test) instead.`,
     dev test pkg/... -v
         Increase test verbosity. Shows bazel and go test process output.
 
-    dev test pkg/spanconfig/... pkg/ccl/spanconfigccl/...
+    dev test pkg/spanconfig/... pkg/sql/parser/...
         Test multiple packages recursively
 
     dev test --race --count 250 ...
@@ -178,8 +178,6 @@ func (d *dev) test(cmd *cobra.Command, commandLine []string) error {
 		// --rewrite. These can either be single directories or
 		// recursive directories ending in /...
 		extraRewritablePaths = []struct{ pkg, path string }{
-			{"pkg/ccl/logictestccl", "pkg/sql/logictest"},
-			{"pkg/ccl/logictestccl", "pkg/sql/opt/exec/execbuilder"},
 			{"pkg/sql/opt/memo", "pkg/sql/opt/testutils/opttester/testfixtures"},
 			{"pkg/sql/opt/norm", "pkg/sql/opt/testutils/opttester/testfixtures"},
 			{"pkg/sql/opt/xform", "pkg/sql/opt/testutils/opttester/testfixtures"},
@@ -188,10 +186,8 @@ func (d *dev) test(cmd *cobra.Command, commandLine []string) error {
 
 		logicTestPaths = []string{
 			"pkg/sql/logictest/tests",
-			"pkg/ccl/logictestccl/tests",
 			"pkg/sql/opt/exec/execbuilder/tests",
 			"pkg/sql/sqlitelogictest/tests",
-			"pkg/ccl/sqlitelogictestccl/tests",
 		}
 	)
 

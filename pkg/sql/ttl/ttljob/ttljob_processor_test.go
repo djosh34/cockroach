@@ -16,7 +16,7 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
-	"github.com/cockroachdb/cockroach/pkg/ccl/streamingccl/replicationtestutils"
+	"github.com/cockroachdb/cockroach/pkg/keys"
 	"github.com/cockroachdb/cockroach/pkg/kv"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
@@ -185,7 +185,7 @@ func TestSpanToQueryBounds(t *testing.T) {
 				if len(pkValue) == 0 {
 					return defaultKey
 				}
-				keyValue := replicationtestutils.EncodeKV(t, codec, tableDesc, pkValue)
+				keyValue := encodeKVs(t, codec, tableDesc, tree.NewDString(pkValue))[0]
 				key := keyValue.Key
 				if truncateKey {
 					key = key[:len(key)-3]
@@ -396,7 +396,7 @@ func TestSpanToQueryBoundsCompositeKeys(t *testing.T) {
 					dCollatedString, err := alloc.NewDCollatedString(pkValue[1], "en_US_u_ks_level2")
 					require.NoError(t, err)
 
-					keyValues := replicationtestutils.EncodeKVs(t, codec, tableDesc, dString, dCollatedString)
+					keyValues := encodeKVs(t, codec, tableDesc, dString, dCollatedString)
 					key := keyValues[0].Key
 					if truncateKey {
 						key = key[:len(key)-3]
@@ -443,4 +443,25 @@ func TestSpanToQueryBoundsCompositeKeys(t *testing.T) {
 			})
 		}
 	}
+}
+
+// encodeKVs encodes a row of the given table, whose first columns take the
+// given values, into the key-value pairs of its primary index.
+func encodeKVs(
+	t *testing.T, codec keys.SQLCodec, desc catalog.TableDescriptor, datums ...tree.Datum,
+) []roachpb.KeyValue {
+	var colMap catalog.TableColMap
+	for i, col := range desc.PublicColumns()[:len(datums)] {
+		colMap.Set(col.GetID(), i)
+	}
+	entries, err := rowenc.EncodePrimaryIndex(
+		codec, desc, desc.GetPrimaryIndex(), colMap, datums, true, /* includeEmpty */
+	)
+	require.NoError(t, err)
+	kvs := make([]roachpb.KeyValue, len(entries))
+	for i, e := range entries {
+		e.Value.InitChecksum(e.Key)
+		kvs[i] = roachpb.KeyValue{Key: e.Key, Value: e.Value}
+	}
+	return kvs
 }

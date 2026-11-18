@@ -35,7 +35,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/docs"
 	"github.com/cockroachdb/cockroach/pkg/geo/geos"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/kvstorage"
-	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/security/clientsecopts"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server"
@@ -127,11 +126,11 @@ replication disabled (replication factor = 1).
 
 // StartCmds lists the commands that start KV nodes as a server.
 // This includes 'start' and 'start-single-node' but excludes
-// the MT SQL server (not KV node) and 'demo' (not a server).
+// 'demo' (not a server).
 var StartCmds = []*cobra.Command{startCmd, startSingleNodeCmd}
 
 // serverCmds lists the commands that start servers.
-var serverCmds = append(StartCmds, mtStartSQLCmd)
+var serverCmds = StartCmds
 
 // customLoggingSetupCmds lists the commands that call setupLogging()
 // after other types of configuration.
@@ -495,14 +494,6 @@ func runStartInternal(
 			errors.New("no --join flags provided to 'cockroach start'"),
 			"Consider using 'cockroach init' or 'cockroach start-single-node' instead")
 		return err
-	}
-
-	// Check the --tenant-id-file flag.
-	if fl := cliflagcfg.FlagSetForCmd(cmd).Lookup(cliflags.TenantIDFile.Name); fl != nil && fl.Changed {
-		fileName := fl.Value.String()
-		serverCfg.DelayedSetTenantID = func(ctx context.Context) (roachpb.TenantID, error) {
-			return tenantIDFromFile(ctx, fileName, nil, nil, nil)
-		}
 	}
 
 	// Now perform additional configuration tweaks specific to the start
