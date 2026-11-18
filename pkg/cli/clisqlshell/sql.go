@@ -1278,47 +1278,6 @@ func (c *cliState) doProcessFirstLine(startState, nextState cliStateEnum) cliSta
 	return nextState
 }
 
-func (c *cliState) setupChangefeedOutput() (undo func(), err error) {
-	prevTableFmt := c.sqlExecCtx.TableDisplayFormat
-	prevByteaOutput, err := c.getSessionVarValue("bytea_output")
-	if err != nil {
-		return nil, err
-	}
-	var undoSteps []func()
-	undo = func() {
-		for _, s := range undoSteps {
-			s()
-		}
-	}
-	// The table display format, default for interactive shells,
-	// doesn't work well with changefeeds as it buffers indefinitely.
-	// Newline-delimited JSON doesn't need to buffer and can display
-	// variably-structured data.
-	if prevTableFmt == clisqlexec.TableDisplayTable {
-		c.sqlExecCtx.TableDisplayFormat = clisqlexec.TableDisplayNDJSON
-		undoSteps = append(undoSteps, func() { c.sqlExecCtx.TableDisplayFormat = prevTableFmt })
-	}
-
-	// bytea_output is defined and enforced server-side. Changefeed
-	// record values are output as bytea datums, and escaped output
-	// is much more readable than the default hex.
-	if prevByteaOutput == `hex` {
-		err := c.conn.Exec(context.Background(), `SET SESSION bytea_output=escape`)
-		if err != nil {
-			undo()
-			return nil, err
-		}
-		undoSteps = append(undoSteps, func() {
-			c.exitErr = errors.CombineErrors(
-				c.exitErr, c.conn.Exec(context.Background(), `SET SESSION bytea_output=hex`),
-			)
-		})
-	}
-
-	return undo, nil
-
-}
-
 func (c *cliState) handleDescribe(cmd []string, loopState, errState cliStateEnum) cliStateEnum {
 	title, sql, qargs, foreach, err := pgInspect(cmd)
 	if err != nil {
@@ -2077,14 +2036,6 @@ var copyToRe = regexp.MustCompile(`(?i)COPY.*TO\s+STDOUT`)
 // doRunStatements runs all the statements that have been accumulated by
 // concatLines.
 func (c *cliState) doRunStatements(nextState cliStateEnum) cliStateEnum {
-	if err := c.iCtx.maybeWrapStatement(context.Background(), c.concatLines, c); err != nil {
-		return c.cliError(nextState, err)
-	}
-	if c.iCtx.afterRun != nil {
-		defer c.iCtx.afterRun()
-		c.iCtx.afterRun = nil
-	}
-
 	// Clear the error state - the new statement will define a new error
 	// status.
 	c.exitErr = nil
@@ -2423,20 +2374,6 @@ func (c *cliState) configurePreShellDefaults(
 		}
 		c.sqlCtx.SetStmts = nil
 		c.sqlCtx.ExecStmts = append(setStmts, c.sqlCtx.ExecStmts...)
-	}
-
-	if c.sqlExecCtx.TerminalOutput {
-		c.iCtx.addStatementWrapper(statementWrapper{
-			Pattern: createSinklessChangefeed,
-			Wrapper: func(ctx context.Context, statement string, state *cliState) error {
-				undo, err := c.setupChangefeedOutput()
-				if err != nil {
-					return err
-				}
-				c.iCtx.afterRun = undo
-				return nil
-			},
-		})
 	}
 
 	return cleanupFn, nil

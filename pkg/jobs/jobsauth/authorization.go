@@ -12,11 +12,9 @@ package jobsauth
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/privilege"
@@ -36,28 +34,8 @@ const (
 	ControlAccess
 )
 
-var authorizers = make(map[jobspb.Type]Authorizer)
-
-// Authorizer is a function which returns a pgcode.InsufficientPrivilege error if
-// authorization for the job denoted by jobID and payload fails.
-type Authorizer func(
-	ctx context.Context, a AuthorizationAccessor, jobID jobspb.JobID, payload *jobspb.Payload,
-) error
-
-// RegisterAuthorizer registers a AuthorizationCheck for a certain job type.
-func RegisterAuthorizer(typ jobspb.Type, fn Authorizer) {
-	if _, ok := authorizers[typ]; ok {
-		panic(fmt.Sprintf("cannot register two authorizers for the type %s", typ))
-	}
-
-	authorizers[typ] = fn
-}
-
 // AuthorizationAccessor is an interface for checking authorization on jobs.
 type AuthorizationAccessor interface {
-	// CheckPrivilegeForTableID mirrors sql.AuthorizationAccessor.
-	CheckPrivilegeForTableID(ctx context.Context, tableID descpb.ID, privilege privilege.Kind) error
-
 	// HasPrivilege mirrors sql.AuthorizationAccessor.
 	HasPrivilege(ctx context.Context, privilegeObject privilege.Object, privilege privilege.Kind, user username.SQLUsername) (bool, error)
 
@@ -136,10 +114,6 @@ func Authorize(
 		return nil
 	}
 
-	typ := payload.Type()
-	if check, ok := authorizers[typ]; ok {
-		return check(ctx, a, jobID, payload)
-	}
 	return pgerror.Newf(pgcode.InsufficientPrivilege,
 		"user %s does not have privileges for job %d",
 		a.User(), jobID)

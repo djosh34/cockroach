@@ -21,7 +21,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
 	"github.com/cockroachdb/cockroach/pkg/keyvisualizer"
 	"github.com/cockroachdb/cockroach/pkg/kv"
-	"github.com/cockroachdb/cockroach/pkg/repstream"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
@@ -41,7 +40,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/exprutil"
 	"github.com/cockroachdb/cockroach/pkg/sql/idxusage"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
-	"github.com/cockroachdb/cockroach/pkg/sql/privilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/querycache"
 	"github.com/cockroachdb/cockroach/pkg/sql/regions"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catid"
@@ -431,7 +429,6 @@ func newInternalPlanner(
 
 	p.extendedEvalCtx = internalExtendedEvalCtx(ctx, sds, params.collection, txn, ts, ts, execCfg)
 	p.extendedEvalCtx.Planner = p
-	p.extendedEvalCtx.StreamManagerFactory = p
 	p.extendedEvalCtx.PrivilegedAccessor = p
 	p.extendedEvalCtx.SessionAccessor = p
 	p.extendedEvalCtx.ClientNoticeSender = p
@@ -718,18 +715,6 @@ func (p *planner) ResolveTableName(ctx context.Context, tn *tree.TableName) (tre
 	return tree.ID(desc.GetID()), nil
 }
 
-// CheckPrivilegeForTableID implements the AuthorizationAccessor interface.
-// Requires a valid transaction to be open.
-func (p *planner) CheckPrivilegeForTableID(
-	ctx context.Context, tableID descpb.ID, privilege privilege.Kind,
-) error {
-	desc, err := p.LookupTableByID(ctx, tableID)
-	if err != nil {
-		return err
-	}
-	return p.CheckPrivilegeForUser(ctx, desc, privilege, p.User())
-}
-
 // LookupTableByID looks up a table, by the given descriptor ID. Based on the
 // CommonLookupFlags, it could use or skip the Collection cache.
 func (p *planner) LookupTableByID(
@@ -918,18 +903,6 @@ func (p *planner) resetPlanner(
 	p.skipDescriptorCache = false
 	p.typeResolutionDbID = descpb.InvalidID
 	p.pausablePortal = nil
-}
-
-// GetReplicationStreamManager returns a ReplicationStreamManager.
-func (p *planner) GetReplicationStreamManager(
-	ctx context.Context,
-) (eval.ReplicationStreamManager, error) {
-	return repstream.GetReplicationStreamManager(ctx, p.EvalContext(), p.InternalSQLTxn(), p.ExtendedEvalContext().SessionID)
-}
-
-// GetStreamIngestManager returns a StreamIngestManager.
-func (p *planner) GetStreamIngestManager(ctx context.Context) (eval.StreamIngestManager, error) {
-	return repstream.GetStreamIngestManager(ctx, p.EvalContext(), p.InternalSQLTxn(), p.ExtendedEvalContext().SessionID)
 }
 
 // SpanStats returns a stats for the given span of keys.

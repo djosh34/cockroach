@@ -24,7 +24,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/kv/kvpb"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/concurrency/isolation"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/kvserverbase"
-	"github.com/cockroachdb/cockroach/pkg/repstream/streampb"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
@@ -155,8 +154,6 @@ type Context struct {
 	deprecatedContext context.Context
 
 	Planner Planner
-
-	StreamManagerFactory StreamManagerFactory
 
 	// Not using sql.JobExecContext type to avoid cycle dependency with sql package
 	JobExecContext interface{}
@@ -413,7 +410,6 @@ func MakeTestingEvalContextWithMon(st *cluster.Settings, monitor *mon.BytesMonit
 	monitor.Start(context.Background(), nil /* pool */, mon.NewStandaloneBudget(math.MaxInt64))
 	ctx.TestingMon = monitor
 	ctx.Planner = &fakePlannerWithMonitor{monitor: monitor}
-	ctx.StreamManagerFactory = &fakeStreamManagerFactory{}
 	ctx.deprecatedContext = context.TODO()
 	now := timeutil.Now()
 	ctx.SetTxnTimestamp(now)
@@ -460,10 +456,6 @@ func (p *fakePlannerWithMonitor) PLpgSQLFetchCursor(
 // AutoCommit is part of the eval.Planner interface.
 func (p *fakePlannerWithMonitor) AutoCommit() bool {
 	return false
-}
-
-type fakeStreamManagerFactory struct {
-	StreamManagerFactory
 }
 
 // SessionData returns the SessionData the current EvalCtx should use to eval.
@@ -820,86 +812,4 @@ func UnwrapDatum(ctx context.Context, evalCtx *Context, d tree.Datum) tree.Datum
 		return ret
 	}
 	return d
-}
-
-// StreamManagerFactory stores methods that return the streaming managers.
-type StreamManagerFactory interface {
-	GetReplicationStreamManager(ctx context.Context) (ReplicationStreamManager, error)
-	GetStreamIngestManager(ctx context.Context) (StreamIngestManager, error)
-}
-
-// ReplicationStreamManager represents a collection of APIs that streaming replication supports
-// on the production side.
-type ReplicationStreamManager interface {
-	// StartReplicationStream starts a stream replication job for the specified
-	// tenant on the producer side.
-	StartReplicationStream(ctx context.Context, tenantName roachpb.TenantName, req streampb.ReplicationProducerRequest) (streampb.ReplicationProducerSpec, error)
-
-	// SetupSpanConfigsStream creates and plans a replication stream to stream the span config updates for a specific tenant.
-	SetupSpanConfigsStream(ctx context.Context, tenantName roachpb.TenantName) (ValueGenerator, error)
-
-	// HeartbeatReplicationStream sends a heartbeat to the replication stream producer, indicating
-	// consumer has consumed until the given 'frontier' timestamp. This updates the producer job
-	// progress and extends its life, and the new producer progress will be returned.
-	// If 'frontier' is hlc.MaxTimestamp, returns the producer progress without updating it.
-	HeartbeatReplicationStream(
-		ctx context.Context,
-		streamID streampb.StreamID,
-		frontier hlc.Timestamp,
-	) (streampb.StreamReplicationStatus, error)
-
-	// StreamPartition starts streaming replication on the producer side for the partition specified
-	// by opaqueSpec which contains serialized streampb.StreamPartitionSpec protocol message and
-	// returns a value generator which yields events for the specified partition.
-	StreamPartition(
-		streamID streampb.StreamID,
-		opaqueSpec []byte,
-	) (ValueGenerator, error)
-
-	// GetReplicationStreamSpec gets a stream replication spec on the producer side.
-	GetReplicationStreamSpec(
-		ctx context.Context,
-		streamID streampb.StreamID,
-	) (*streampb.ReplicationStreamSpec, error)
-
-	// CompleteReplicationStream completes a replication stream job on the producer side.
-	// 'successfulIngestion' indicates whether the stream ingestion finished successfully and
-	// determines the fate of the producer job, succeeded or canceled.
-	CompleteReplicationStream(
-		ctx context.Context,
-		streamID streampb.StreamID,
-		successfulIngestion bool,
-	) error
-}
-
-// StreamIngestManager represents a collection of APIs that streaming replication supports
-// on the ingestion side.
-type StreamIngestManager interface {
-	// CompleteStreamIngestion signals a running stream ingestion job to complete on the consumer side.
-	CompleteStreamIngestion(
-		ctx context.Context,
-		ingestionJobID jobspb.JobID,
-		cutoverTimestamp hlc.Timestamp,
-	) error
-
-	// GetStreamIngestionStats gets a statistics summary for a stream ingestion job.
-	GetStreamIngestionStats(
-		ctx context.Context,
-		streamIngestionDetails jobspb.StreamIngestionDetails,
-		jobProgress jobspb.Progress,
-	) (*streampb.StreamIngestionStats, error)
-
-	GetReplicationStatsAndStatus(
-		ctx context.Context,
-		ingestionJobID jobspb.JobID,
-	) (*streampb.StreamIngestionStats, string, error)
-
-	// RevertTenantToTimestamp reverts the given tenant to the given
-	// timestamp. This is a non-transactional destructive operation that
-	// should be used with care.
-	RevertTenantToTimestamp(
-		ctx context.Context,
-		tenantName roachpb.TenantName,
-		revertTo hlc.Timestamp,
-	) error
 }

@@ -13,7 +13,6 @@ package sql
 import (
 	"bytes"
 
-	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/config/zonepb"
 	"github.com/cockroachdb/cockroach/pkg/keys"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
@@ -77,14 +76,6 @@ func GenerateSubzoneSpans(
 	subzones []zonepb.Subzone,
 	hasNewSubzones bool,
 ) ([]zonepb.SubzoneSpan, error) {
-	// Removing zone configs does not require a valid license.
-	if hasNewSubzones {
-		if err := base.CheckEnterpriseEnabled(st, logicalClusterID,
-			"replication zones on indexes or partitions"); err != nil {
-			return nil, err
-		}
-	}
-
 	// We already completely avoid creating subzone spans for dropped indexes.
 	// Whether this was intentional is a different story, but it turns out to be
 	// pretty sane. Dropped elements may refer to dropped types and we aren't

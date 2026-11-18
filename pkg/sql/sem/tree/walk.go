@@ -1003,57 +1003,6 @@ func (n *AlterTenantSetClusterSetting) walkStmt(v Visitor) Statement {
 	return ret
 }
 
-// copyNode makes a copy of this Statement without recursing in any child Statements.
-func (n *AlterTenantReplication) copyNode() *AlterTenantReplication {
-	stmtCopy := *n
-	if stmtCopy.Cutover != nil {
-		cutoverCopy := *stmtCopy.Cutover
-		stmtCopy.Cutover = &cutoverCopy
-	}
-	return &stmtCopy
-}
-
-// walkStmt is part of the walkableStmt interface.
-func (n *AlterTenantReplication) walkStmt(v Visitor) Statement {
-	ret := n
-	ts, changed := walkTenantSpec(v, n.TenantSpec)
-	if changed {
-		if ret == n {
-			ret = n.copyNode()
-		}
-		ret.TenantSpec = ts
-	}
-	if n.Cutover != nil && n.Cutover.Timestamp != nil {
-		e, changed := WalkExpr(v, n.Cutover.Timestamp)
-		if changed {
-			if ret == n {
-				ret = n.copyNode()
-			}
-			ret.Cutover.Timestamp = e
-		}
-	}
-	if n.Options.Retention != nil {
-		e, changed := WalkExpr(v, n.Options.Retention)
-		if changed {
-			if ret == n {
-				ret = n.copyNode()
-			}
-			ret.Options.Retention = e
-		}
-	}
-	if n.Options.ResumeTimestamp != nil {
-		e, changed := WalkExpr(v, n.Options.ResumeTimestamp)
-		if changed {
-			if ret == n {
-				ret = n.copyNode()
-			}
-			ret.Options.ResumeTimestamp = e
-		}
-	}
-
-	return ret
-}
-
 // copyNode makes a copy of this node without recursing.
 func (n *LikeTenantSpec) copyNode() *LikeTenantSpec {
 	nodeCopy := *n
@@ -1069,61 +1018,6 @@ func (n *CreateTenant) copyNode() *CreateTenant {
 // walkStmt is part of the walkableStmt interface.
 func (n *CreateTenant) walkStmt(v Visitor) Statement {
 	ret := n
-	if n.Like.OtherTenant != nil {
-		ts, changed := walkTenantSpec(v, n.TenantSpec)
-		if changed {
-			if ret == n {
-				ret = n.copyNode()
-			}
-			ret.Like = n.Like.copyNode()
-			ret.Like.OtherTenant = ts
-		}
-	}
-	return ret
-}
-
-// copyNode makes a copy of this Statement without recursing in any child Statements.
-func (n *CreateTenantFromReplication) copyNode() *CreateTenantFromReplication {
-	stmtCopy := *n
-	return &stmtCopy
-}
-
-// walkStmt is part of the walkableStmt interface.
-func (n *CreateTenantFromReplication) walkStmt(v Visitor) Statement {
-	ret := n
-	e, changed := WalkExpr(v, n.ReplicationSourceTenantName.Expr)
-	if changed {
-		if ret == n {
-			ret = n.copyNode()
-		}
-		ret.ReplicationSourceTenantName = &TenantSpec{IsName: true, Expr: e}
-	}
-	e, changed = WalkExpr(v, n.ReplicationSourceAddress)
-	if changed {
-		if ret == n {
-			ret = n.copyNode()
-		}
-		ret.ReplicationSourceAddress = e
-	}
-	if n.Options.Retention != nil {
-		e, changed := WalkExpr(v, n.Options.Retention)
-		if changed {
-			if ret == n {
-				ret = n.copyNode()
-			}
-			ret.Options.Retention = e
-		}
-	}
-	if n.Options.ResumeTimestamp != nil {
-		e, changed := WalkExpr(v, n.Options.ResumeTimestamp)
-		if changed {
-			if ret == n {
-				ret = n.copyNode()
-			}
-			ret.Options.ResumeTimestamp = e
-		}
-	}
-
 	if n.Like.OtherTenant != nil {
 		ts, changed := walkTenantSpec(v, n.TenantSpec)
 		if changed {
@@ -1217,85 +1111,6 @@ func (n *DropTenant) walkStmt(v Visitor) Statement {
 		}
 		ret.TenantSpec = ts
 	}
-	return ret
-}
-
-// copyNode makes a copy of this Statement without recursing in any child Statements.
-func (stmt *Backup) copyNode() *Backup {
-	stmtCopy := *stmt
-	stmtCopy.IncrementalFrom = append(Exprs(nil), stmt.IncrementalFrom...)
-	return &stmtCopy
-}
-
-// walkStmt is part of the walkableStmt interface.
-func (stmt *Backup) walkStmt(v Visitor) Statement {
-	ret := stmt
-	if stmt.AsOf.Expr != nil {
-		e, changed := WalkExpr(v, stmt.AsOf.Expr)
-		if changed {
-			if ret == stmt {
-				ret = stmt.copyNode()
-			}
-			ret.AsOf.Expr = e
-		}
-	}
-	for i, expr := range stmt.To {
-		e, changed := WalkExpr(v, expr)
-		if changed {
-			if ret == stmt {
-				ret = stmt.copyNode()
-			}
-			ret.To[i] = e
-		}
-	}
-	for i, expr := range stmt.IncrementalFrom {
-		e, changed := WalkExpr(v, expr)
-		if changed {
-			if ret == stmt {
-				ret = stmt.copyNode()
-			}
-			ret.IncrementalFrom[i] = e
-		}
-	}
-	if stmt.Options.EncryptionPassphrase != nil {
-		pw, changed := WalkExpr(v, stmt.Options.EncryptionPassphrase)
-		if changed {
-			if ret == stmt {
-				ret = stmt.copyNode()
-			}
-			ret.Options.EncryptionPassphrase = pw
-		}
-	}
-	if stmt.Options.CaptureRevisionHistory != nil {
-		rh, changed := WalkExpr(v, stmt.Options.CaptureRevisionHistory)
-		if changed {
-			if ret == stmt {
-				ret = stmt.copyNode()
-			}
-			ret.Options.CaptureRevisionHistory = rh
-		}
-	}
-
-	if stmt.Options.IncludeAllSecondaryTenants != nil {
-		include, changed := WalkExpr(v, stmt.Options.IncludeAllSecondaryTenants)
-		if changed {
-			if ret == stmt {
-				ret = stmt.copyNode()
-			}
-			ret.Options.IncludeAllSecondaryTenants = include
-		}
-	}
-
-	if stmt.Options.ExecutionLocality != nil {
-		rh, changed := WalkExpr(v, stmt.Options.ExecutionLocality)
-		if changed {
-			if ret == stmt {
-				ret = stmt.copyNode()
-			}
-			ret.Options.ExecutionLocality = rh
-		}
-	}
-
 	return ret
 }
 
@@ -1511,80 +1326,6 @@ func (stmt *ParenSelect) walkStmt(v Visitor) Statement {
 		return &ParenSelect{sel.(*Select)}
 	}
 	return stmt
-}
-
-// copyNode makes a copy of this Statement without recursing in any child Statements.
-func (stmt *Restore) copyNode() *Restore {
-	stmtCopy := *stmt
-	stmtCopy.From = append([]StringOrPlaceholderOptList(nil), stmt.From...)
-	return &stmtCopy
-}
-
-// walkStmt is part of the walkableStmt interface.
-func (stmt *Restore) walkStmt(v Visitor) Statement {
-	ret := stmt
-	if stmt.AsOf.Expr != nil {
-		e, changed := WalkExpr(v, stmt.AsOf.Expr)
-		if changed {
-			if ret == stmt {
-				ret = stmt.copyNode()
-			}
-			ret.AsOf.Expr = e
-		}
-	}
-	for i, backup := range stmt.From {
-		for j, expr := range backup {
-			e, changed := WalkExpr(v, expr)
-			if changed {
-				if ret == stmt {
-					ret = stmt.copyNode()
-				}
-				ret.From[i][j] = e
-			}
-		}
-	}
-
-	if stmt.Options.EncryptionPassphrase != nil {
-		pw, changed := WalkExpr(v, stmt.Options.EncryptionPassphrase)
-		if changed {
-			if ret == stmt {
-				ret = stmt.copyNode()
-			}
-			ret.Options.EncryptionPassphrase = pw
-		}
-	}
-
-	if stmt.Options.IntoDB != nil {
-		intoDB, changed := WalkExpr(v, stmt.Options.IntoDB)
-		if changed {
-			if ret == stmt {
-				ret = stmt.copyNode()
-			}
-			ret.Options.IntoDB = intoDB
-		}
-	}
-
-	if stmt.Options.IncludeAllSecondaryTenants != nil {
-		include, changed := WalkExpr(v, stmt.Options.IncludeAllSecondaryTenants)
-		if changed {
-			if ret == stmt {
-				ret = stmt.copyNode()
-			}
-			ret.Options.IncludeAllSecondaryTenants = include
-		}
-	}
-
-	if stmt.Options.ExecutionLocality != nil {
-		include, changed := WalkExpr(v, stmt.Options.ExecutionLocality)
-		if changed {
-			if ret == stmt {
-				ret = stmt.copyNode()
-			}
-			ret.Options.ExecutionLocality = include
-		}
-	}
-
-	return ret
 }
 
 // copyNode makes a copy of this Statement without recursing in any child Statements.
@@ -1988,10 +1729,8 @@ func (stmt *BeginTransaction) walkStmt(v Visitor) Statement {
 
 var _ walkableStmt = &AlterTenantCapability{}
 var _ walkableStmt = &AlterTenantRename{}
-var _ walkableStmt = &AlterTenantReplication{}
 var _ walkableStmt = &AlterTenantService{}
 var _ walkableStmt = &AlterTenantSetClusterSetting{}
-var _ walkableStmt = &Backup{}
 var _ walkableStmt = &BeginTransaction{}
 var _ walkableStmt = &CancelQueries{}
 var _ walkableStmt = &CancelSessions{}
@@ -1999,14 +1738,12 @@ var _ walkableStmt = &ControlJobs{}
 var _ walkableStmt = &ControlSchedules{}
 var _ walkableStmt = &CreateTable{}
 var _ walkableStmt = &CreateTenant{}
-var _ walkableStmt = &CreateTenantFromReplication{}
 var _ walkableStmt = &Delete{}
 var _ walkableStmt = &DropTenant{}
 var _ walkableStmt = &Explain{}
 var _ walkableStmt = &Import{}
 var _ walkableStmt = &Insert{}
 var _ walkableStmt = &ParenSelect{}
-var _ walkableStmt = &Restore{}
 var _ walkableStmt = &SelectClause{}
 var _ walkableStmt = &Select{}
 var _ walkableStmt = &SetClusterSetting{}

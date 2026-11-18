@@ -513,9 +513,6 @@ func WrapPayloadDetails(details Details) interface {
 	}
 }
 
-// ChangefeedTargets is a set of id targets with metadata.
-type ChangefeedTargets map[descpb.ID]ChangefeedTargetTable
-
 // SchemaChangeDetailsFormatVersion is the format version for
 // SchemaChangeDetails.
 type SchemaChangeDetailsFormatVersion uint32
@@ -545,20 +542,10 @@ func (Type) SafeValue() {}
 // NumJobTypes is the number of jobs types.
 const NumJobTypes = 25
 
-// ChangefeedDetailsMarshaler allows for dependency injection of
-// cloud.SanitizeExternalStorageURI to avoid the dependency from this
-// package on cloud. The value is injected in the changefeedccl package.
-var ChangefeedDetailsMarshaler func(*ChangefeedDetails, *jsonpb.Marshaler) ([]byte, error)
-
-// MarshalJSONPB implements jsonpb.JSONPBMarshaller to redact sensitive sink URI
-// parameters from ChangefeedDetails.
-func (m *ChangefeedDetails) MarshalJSONPB(marshaller *jsonpb.Marshaler) ([]byte, error) {
-	if ChangefeedDetailsMarshaler != nil {
-		return ChangefeedDetailsMarshaler(m, marshaller)
-	}
-	// if we get here, there's no injected marshaller, i.e. this could be an oss
-	// binary looking at a ccl-made job, but we need to redact, so just redact
-	// the entire struct by rendering an empty one.
+// MarshalJSONPB implements jsonpb.JSONPBMarshaller. Changefeed jobs can only
+// come from upstream data, and their sink URIs can hold credentials, so this
+// renders an empty struct.
+func (m *ChangefeedDetails) MarshalJSONPB(*jsonpb.Marshaler) ([]byte, error) {
 	return json.Marshal(ChangefeedDetails{})
 }
 

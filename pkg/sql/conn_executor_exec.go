@@ -1816,12 +1816,12 @@ func (ex *connExecutor) dispatchToExecutionEngine(
 				},
 			})
 		} else {
-			// Note that for bulk job query (IMPORT, BACKUP and RESTORE), we don't
+			// Note that for bulk job query (IMPORT), we don't
 			// use this numRows entry. We emit the number of changed rows when the job
 			// completes. (see the usages of logutil.LogJobCompletion()).
 			nonBulkJobNumRows := res.RowsAffected()
 			switch planner.stmt.AST.(type) {
-			case *tree.Import, *tree.Restore, *tree.Backup:
+			case *tree.Import:
 				bulkJobId = res.GetBulkJobId()
 			}
 			planner.maybeLogStatement(

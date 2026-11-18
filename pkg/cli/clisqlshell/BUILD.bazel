@@ -12,7 +12,6 @@ go_library(
         "editor_bimodal.go",
         "editor_bubbline.go",
         "editor_bufio.go",
-        "parser.go",
         "scan_local_cmd.go",
         "sql.go",
         "statement_diag.go",

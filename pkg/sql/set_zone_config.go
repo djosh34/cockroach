@@ -16,7 +16,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/config"
 	"github.com/cockroachdb/cockroach/pkg/config/zonepb"
 	"github.com/cockroachdb/cockroach/pkg/keys"
@@ -94,17 +93,6 @@ func init() {
 			field:        config.GlobalReads,
 			requiredType: types.Bool,
 			setter:       func(c *zonepb.ZoneConfig, d tree.Datum) { c.GlobalReads = proto.Bool(bool(tree.MustBeDBool(d))) },
-			checkAllowed: func(ctx context.Context, execCfg *ExecutorConfig, d tree.Datum) error {
-				if !tree.MustBeDBool(d) {
-					// Always allow the value to be unset.
-					return nil
-				}
-				return base.CheckEnterpriseEnabled(
-					execCfg.Settings,
-					execCfg.NodeInfo.LogicalClusterID(),
-					"global_reads",
-				)
-			},
 		},
 		{
 			field:        config.NumReplicas,

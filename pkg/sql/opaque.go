@@ -18,8 +18,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/optbuilder"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgrepl/pgrepltree"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
@@ -284,11 +282,10 @@ func planOpaque(ctx context.Context, p *planner, stmt tree.Statement) (planNode,
 		return p.Unlisten(ctx, n)
 	case *pgrepltree.IdentifySystem:
 		return p.IdentifySystem(ctx, n)
-	case tree.CCLOnlyStatement:
+	case tree.PlanHookStatement:
 		plan, err := p.maybePlanHook(ctx, stmt)
 		if plan == nil && err == nil {
-			return nil, pgerror.Newf(pgcode.CCLRequired,
-				"a CCL binary is required to use this statement type: %T", stmt)
+			return nil, errors.AssertionFailedf("no plan hook for statement type: %T", stmt)
 		}
 		return plan, err
 	default:
@@ -298,7 +295,6 @@ func planOpaque(ctx context.Context, p *planner, stmt tree.Statement) (planNode,
 
 func init() {
 	for _, stmt := range []tree.Statement{
-		&tree.AlterChangefeed{},
 		&tree.AlterDatabaseAddRegion{},
 		&tree.AlterDatabaseDropRegion{},
 		&tree.AlterDatabaseOwner{},
@@ -402,18 +398,8 @@ func init() {
 
 		&pgrepltree.IdentifySystem{},
 
-		// CCL statements (without Export which has an optimizer operator).
-		&tree.AlterBackup{},
-		&tree.AlterBackupSchedule{},
-		&tree.AlterTenantReplication{},
-		&tree.Backup{},
-		&tree.ShowBackup{},
-		&tree.Restore{},
-		&tree.CreateChangefeed{},
-		&tree.ScheduledChangefeed{},
+		// Plan hook statements (without Export which has an optimizer operator).
 		&tree.Import{},
-		&tree.ScheduledBackup{},
-		&tree.CreateTenantFromReplication{},
 	} {
 		typ := optbuilder.OpaqueReadOnly
 		if tree.CanModifySchema(stmt) {

@@ -242,7 +242,7 @@ func (r *commandResult) AddRow(ctx context.Context, row tree.Datums) error {
 		return err
 	}
 	switch r.cmdCompleteTag {
-	case tree.ImportTag, tree.RestoreTag, tree.BackupTag:
+	case tree.ImportTag:
 		r.bulkJobId = uint64(*row[JobIdColIdx].(*tree.DInt))
 	default:
 		r.rowsAffected++
@@ -256,7 +256,7 @@ func (r *commandResult) AddBatch(ctx context.Context, batch coldata.Batch) error
 		return err
 	}
 	switch r.cmdCompleteTag {
-	case tree.ImportTag, tree.RestoreTag, tree.BackupTag:
+	case tree.ImportTag:
 		r.bulkJobId = uint64(batch.ColVec(JobIdColIdx).Int64()[0])
 	default:
 		r.rowsAffected += batch.Length()

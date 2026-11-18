@@ -298,20 +298,6 @@ var TenantColumns = ResultColumns{
 	{Name: "service_mode", Typ: types.String},
 }
 
-// TenantColumnsWithReplication is appended to TenantColumns for
-// SHOW VIRTUAL CLUSTER ... WITH REPLICATION STATUS queries.
-var TenantColumnsWithReplication = ResultColumns{
-	{Name: "source_tenant_name", Typ: types.String},
-	{Name: "source_cluster_uri", Typ: types.String},
-	{Name: "replication_job_id", Typ: types.Int},
-	// The latest fully replicated time.
-	{Name: "replicated_time", Typ: types.TimestampTZ},
-	// The protected timestamp on the destination cluster, meaning we cannot
-	// cutover to before this time.
-	{Name: "retained_time", Typ: types.TimestampTZ},
-	{Name: "cutover_time", Typ: types.Decimal},
-}
-
 // TenantColumnsWithCapabilities is appended to TenantColumns for
 // SHOW VIRTUAL CLUSTER ... WITH CAPABILITIES queries.
 var TenantColumnsWithCapabilities = ResultColumns{

@@ -234,11 +234,11 @@ func (p *planner) maybeLogStatementInternal(
 		StmtPosInTxn:  uint32(stmtCount),
 	}
 
-	// Note that for bulk job query (IMPORT, BACKUP and RESTORE), we don't
+	// Note that for bulk job query (IMPORT), we don't
 	// print out the number of changed rows along with the sampled query event.
 	// We emit it when the job succeeds in a recovery_event.
 	switch p.stmt.AST.(type) {
-	case *tree.Import, *tree.Restore, *tree.Backup:
+	case *tree.Import:
 		execDetails.BulkJobId = bulkJobId
 	default:
 		execDetails.NumRows = int64(rows)

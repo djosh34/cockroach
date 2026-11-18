@@ -115,9 +115,6 @@ func runAnalyzer(pass *analysis.Pass) (interface{}, error) {
 					"github.com/cockroachdb/cockroach/pkg/multitenant/tenantcapabilities": {
 						"ID": {},
 					},
-					"github.com/cockroachdb/cockroach/pkg/repstream/streampb": {
-						"StreamID": {},
-					},
 					"github.com/cockroachdb/cockroach/pkg/roachpb": {
 						"LeaseAcquisitionType": {},
 						"LeaseSequence":        {},

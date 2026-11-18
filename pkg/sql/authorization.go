@@ -75,12 +75,6 @@ type userRoleMembership map[username.SQLUsername]bool
 
 // AuthorizationAccessor for checking authorization (e.g. desc privileges).
 type AuthorizationAccessor interface {
-	// CheckPrivilegeForTableID verifies that the user has `privilege` on the table
-	// denoted by `tableID`.
-	CheckPrivilegeForTableID(
-		ctx context.Context, tableID descpb.ID, privilege privilege.Kind,
-	) error
-
 	// HasPrivilege checks if the user has `privilege` on `descriptor`.
 	HasPrivilege(ctx context.Context, privilegeObject privilege.Object, privilege privilege.Kind, user username.SQLUsername) (bool, error)
 

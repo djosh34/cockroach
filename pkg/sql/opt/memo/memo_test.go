@@ -163,7 +163,6 @@ func TestMemoIsStale(t *testing.T) {
 	// which can handle a case of nil planner but cannot a case when the
 	// planner's GetMultiregionConfig is nil, so we nil out the planner.
 	evalCtx.Planner = nil
-	evalCtx.StreamManagerFactory = nil
 
 	var o xform.Optimizer
 	opttestutils.BuildQuery(t, &o, catalog, &evalCtx, "SELECT a, b+one() FROM abcview WHERE c='foo'")

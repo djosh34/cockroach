@@ -674,38 +674,6 @@ EXPLAIN SHOW AUTOMATIC JOBS -- literals removed
 EXPLAIN SHOW AUTOMATIC JOBS -- identifiers removed
 
 parse
-SHOW CHANGEFEED JOB 1234
-----
-SHOW CHANGEFEED JOBS VALUES (1234) -- normalized!
-SHOW CHANGEFEED JOBS VALUES ((1234)) -- fully parenthesized
-SHOW CHANGEFEED JOBS VALUES (_) -- literals removed
-SHOW CHANGEFEED JOBS VALUES (1234) -- identifiers removed
-
-parse
-EXPLAIN SHOW CHANGEFEED JOB 1234
-----
-EXPLAIN SHOW CHANGEFEED JOBS VALUES (1234) -- normalized!
-EXPLAIN SHOW CHANGEFEED JOBS VALUES ((1234)) -- fully parenthesized
-EXPLAIN SHOW CHANGEFEED JOBS VALUES (_) -- literals removed
-EXPLAIN SHOW CHANGEFEED JOBS VALUES (1234) -- identifiers removed
-
-parse
-SHOW CHANGEFEED JOBS
-----
-SHOW CHANGEFEED JOBS
-SHOW CHANGEFEED JOBS -- fully parenthesized
-SHOW CHANGEFEED JOBS -- literals removed
-SHOW CHANGEFEED JOBS -- identifiers removed
-
-parse
-EXPLAIN SHOW CHANGEFEED JOBS
-----
-EXPLAIN SHOW CHANGEFEED JOBS
-EXPLAIN SHOW CHANGEFEED JOBS -- fully parenthesized
-EXPLAIN SHOW CHANGEFEED JOBS -- literals removed
-EXPLAIN SHOW CHANGEFEED JOBS -- identifiers removed
-
-parse
 SHOW CLUSTER STATEMENTS
 ----
 SHOW CLUSTER STATEMENTS
@@ -2005,14 +1973,6 @@ SHOW VIRTUAL CLUSTER foo -- literals removed
 SHOW VIRTUAL CLUSTER _ -- identifiers removed
 
 parse
-SHOW VIRTUAL CLUSTER foo WITH REPLICATION STATUS
-----
-SHOW VIRTUAL CLUSTER foo WITH REPLICATION STATUS
-SHOW VIRTUAL CLUSTER (foo) WITH REPLICATION STATUS -- fully parenthesized
-SHOW VIRTUAL CLUSTER foo WITH REPLICATION STATUS -- literals removed
-SHOW VIRTUAL CLUSTER _ WITH REPLICATION STATUS -- identifiers removed
-
-parse
 SHOW VIRTUAL CLUSTER foo WITH CAPABILITIES
 ----
 SHOW VIRTUAL CLUSTER foo WITH CAPABILITIES
@@ -2029,60 +1989,9 @@ SHOW VIRTUAL CLUSTER ALL -- literals removed
 SHOW VIRTUAL CLUSTER ALL -- identifiers removed
 
 parse
-SHOW VIRTUAL CLUSTERS WITH REPLICATION STATUS
-----
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS -- normalized!
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS -- fully parenthesized
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS -- literals removed
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS -- identifiers removed
-
-parse
 SHOW VIRTUAL CLUSTER ALL
 ----
 SHOW VIRTUAL CLUSTER ALL
 SHOW VIRTUAL CLUSTER ALL -- fully parenthesized
 SHOW VIRTUAL CLUSTER ALL -- literals removed
 SHOW VIRTUAL CLUSTER ALL -- identifiers removed
-
-parse
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS
-----
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS -- fully parenthesized
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS -- literals removed
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS -- identifiers removed
-
-parse
-SHOW VIRTUAL CLUSTER foo WITH REPLICATION STATUS, CAPABILITIES
-----
-SHOW VIRTUAL CLUSTER foo WITH REPLICATION STATUS, CAPABILITIES
-SHOW VIRTUAL CLUSTER (foo) WITH REPLICATION STATUS, CAPABILITIES -- fully parenthesized
-SHOW VIRTUAL CLUSTER foo WITH REPLICATION STATUS, CAPABILITIES -- literals removed
-SHOW VIRTUAL CLUSTER _ WITH REPLICATION STATUS, CAPABILITIES -- identifiers removed
-
-parse
-SHOW BACKUP 'family' IN ('string', 'placeholder', 'placeholder', 'placeholder', 'string', 'placeholder', 'string', 'placeholder') WITH incremental_location = 'nullif', privileges, debug_dump_metadata_sst
-----
-SHOW BACKUP 'family' IN ('*****', '*****', '*****', '*****', '*****', '*****', '*****', '*****') WITH OPTIONS (incremental_location = '*****', privileges, debug_dump_metadata_sst) -- normalized!
-SHOW BACKUP ('family') IN (('*****'), ('*****'), ('*****'), ('*****'), ('*****'), ('*****'), ('*****'), ('*****')) WITH OPTIONS (incremental_location = ('*****'), privileges, debug_dump_metadata_sst) -- fully parenthesized
-SHOW BACKUP '_' IN ('_', '_', '_', '_', '_', '_', '_', '_') WITH OPTIONS (incremental_location = '_', privileges, debug_dump_metadata_sst) -- literals removed
-SHOW BACKUP 'family' IN ('*****', '*****', '*****', '*****', '*****', '*****', '*****', '*****') WITH OPTIONS (incremental_location = '*****', privileges, debug_dump_metadata_sst) -- identifiers removed
-SHOW BACKUP 'family' IN ('string', 'placeholder', 'placeholder', 'placeholder', 'string', 'placeholder', 'string', 'placeholder') WITH OPTIONS (incremental_location = 'nullif', privileges, debug_dump_metadata_sst) -- passwords exposed
-
-parse
-SHOW BACKUP 'abc' WITH SKIP SIZE
-----
-SHOW BACKUP '*****' WITH OPTIONS (skip size) -- normalized!
-SHOW BACKUP ('*****') WITH OPTIONS (skip size) -- fully parenthesized
-SHOW BACKUP '_' WITH OPTIONS (skip size) -- literals removed
-SHOW BACKUP '*****' WITH OPTIONS (skip size) -- identifiers removed
-SHOW BACKUP 'abc' WITH OPTIONS (skip size) -- passwords exposed
-
-parse
-SHOW BACKUP 'abc' WITH NOWAIT
-----
-SHOW BACKUP '*****' WITH OPTIONS (skip size) -- normalized!
-SHOW BACKUP ('*****') WITH OPTIONS (skip size) -- fully parenthesized
-SHOW BACKUP '_' WITH OPTIONS (skip size) -- literals removed
-SHOW BACKUP '*****' WITH OPTIONS (skip size) -- identifiers removed
-SHOW BACKUP 'abc' WITH OPTIONS (skip size) -- passwords exposed
