@@ -80,6 +80,11 @@ func TestRotateCerts(t *testing.T) {
 
 	// Client test function.
 	clientTest := func(httpClient http.Client) error {
+		// Make every request open a new TLS connection, so that it checks the
+		// certificates in use now. A reused connection would skip that check.
+		if tr, ok := httpClient.Transport.(*http.Transport); ok {
+			tr.CloseIdleConnections()
+		}
 		req, err := http.NewRequest("GET", s.AdminURL().WithPath("/_status/metrics/local").String(), nil)
 		if err != nil {
 			return errors.Wrap(err, "could not create request")
