@@ -18,7 +18,6 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvclient/kvtenant"
 	"github.com/cockroachdb/cockroach/pkg/security/securityassets"
 	"github.com/cockroachdb/cockroach/pkg/security/securitytest"
@@ -31,20 +30,12 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/randutil"
 )
 
-const configIdx = 3
+const configIdx = 1
 
 var logicTestDir string
 
 func init() {
-	if bazel.BuiltWithBazel() {
-		var err error
-		logicTestDir, err = bazel.Runfile("pkg/sql/logictest/testdata/logic_test")
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		logicTestDir = "../../../../sql/logictest/testdata/logic_test"
-	}
+	logicTestDir = "../../../../sql/logictest/testdata/logic_test"
 }
 
 func TestMain(m *testing.M) {
@@ -850,41 +841,6 @@ func TestLogic_generator_probe_ranges(
 	runLogicTest(t, "generator_probe_ranges")
 }
 
-func TestLogic_geospatial(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "geospatial")
-}
-
-func TestLogic_geospatial_index(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "geospatial_index")
-}
-
-func TestLogic_geospatial_meta(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "geospatial_meta")
-}
-
-func TestLogic_geospatial_regression(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "geospatial_regression")
-}
-
-func TestLogic_geospatial_zm(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "geospatial_zm")
-}
-
 func TestLogic_grant_database(
 	t *testing.T,
 ) {
@@ -1039,13 +995,6 @@ func TestLogic_interval(
 	runLogicTest(t, "interval")
 }
 
-func TestLogic_inverted_filter_geospatial(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "inverted_filter_geospatial")
-}
-
 func TestLogic_inverted_filter_json_array(
 	t *testing.T,
 ) {
@@ -1065,13 +1014,6 @@ func TestLogic_inverted_index_multi_column(
 ) {
 	defer leaktest.AfterTest(t)()
 	runLogicTest(t, "inverted_index_multi_column")
-}
-
-func TestLogic_inverted_join_geospatial(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "inverted_join_geospatial")
 }
 
 func TestLogic_inverted_join_json_array(

@@ -19,7 +19,6 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
-	"github.com/cockroachdb/cockroach/pkg/geo/geoindex"
 	"github.com/cockroachdb/cockroach/pkg/jobs"
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
 	"github.com/cockroachdb/cockroach/pkg/sql"
@@ -60,14 +59,14 @@ func TestIndexInterface(t *testing.T) {
 			c4 VARCHAR,
 			c5 VARCHAR,
 			c6 JSONB,
-			c7 GEOGRAPHY(GEOMETRY,4326) NULL,
+			c7 INT[] NULL,
 			CONSTRAINT pk PRIMARY KEY (c1 ASC, c2 ASC, c3 ASC),
 			INDEX s1 (c4 DESC, c5 DESC),
 			INVERTED INDEX s2 (c6),
 			INDEX s3 (c2, c3) STORING (c5, c6),
 			INDEX s4 (c5) USING HASH WITH (bucket_count=8),
 			UNIQUE INDEX s5 (c1, c4) WHERE c4 = 'x',
-			INVERTED INDEX s6 (c7) WITH (s2_level_mod=2)
+			INVERTED INDEX s6 (c7)
 		);
 	`)
 
@@ -268,7 +267,6 @@ func TestIndexInterface(t *testing.T) {
 	// Check particular index features.
 	require.Equal(t, "c4 = 'x':::STRING", s5.GetPredicate())
 	require.Equal(t, "crdb_internal_c5_shard_8", s4.GetShardColumnName())
-	require.Equal(t, int32(2), s6.GetGeoConfig().S2Geography.S2Config.LevelMod)
 	for _, idx := range indexes {
 		require.Equalf(t, idx == s5, idx.IsPartial(),
 			errMsgFmt, "IsPartial", idx.GetName())
@@ -280,8 +278,6 @@ func TestIndexInterface(t *testing.T) {
 			errMsgFmt, "GetType", idx.GetName())
 		require.Equal(t, idx == s4, idx.IsSharded(),
 			errMsgFmt, "IsSharded", idx.GetName())
-		require.Equal(t, idx == s6, !(&geoindex.Config{}).Equal(idx.GetGeoConfig()),
-			errMsgFmt, "GetGeoConfig", idx.GetName())
 		require.Equal(t, idx == s4, idx.GetShardColumnName() != "",
 			errMsgFmt, "GetShardColumnName", idx.GetName())
 		require.Equal(t, idx == s4, !(&catpb.ShardedDescriptor{}).Equal(idx.GetSharded()),

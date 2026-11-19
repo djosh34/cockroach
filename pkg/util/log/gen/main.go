@@ -218,6 +218,7 @@ import (
 
   "github.com/cockroachdb/cockroach/pkg/util/log/channel"
   "github.com/cockroachdb/cockroach/pkg/util/log/severity"
+  "github.com/cockroachdb/redact"
 )
 
 // ChannelLogger is a helper interface to ease the run-time selection
@@ -332,7 +333,7 @@ func (logger{{.Name}}) V{{with $sev}}{{.Name}}{{end}}f(ctx context.Context, leve
 //
 {{with $sev}}{{.Comment}}{{end -}}
 func (logger{{.Name}}) {{with $sev}}{{.Name}}{{end}}(ctx context.Context, msg string) {
-  logfDepth(ctx, 1, severity.{{with $sev}}{{.NAME}}{{end}}, channel.{{.NAME}}, msg)
+  logfDepth(ctx, 1, severity.{{with $sev}}{{.NAME}}{{end}}, channel.{{.NAME}}, "%s", redact.Safe(msg))
 }
 
 // {{with $sev}}{{.Name}}{{end}}fDepth logs to the {{.NAME}} channel with severity {{with $sev}}{{.NAME}}{{end}},
@@ -382,7 +383,7 @@ func V{{with $sev}}{{.Name}}{{end}}f(ctx context.Context, level Level, format st
 //
 {{with $sev}}{{.Comment}}{{end -}}
 func {{with $sev}}{{.Name}}{{end}}(ctx context.Context, msg string) {
-  logfDepth(ctx, 1, severity.{{with $sev}}{{.NAME}}{{end}}, channel.{{.NAME}}, msg)
+  logfDepth(ctx, 1, severity.{{with $sev}}{{.NAME}}{{end}}, channel.{{.NAME}}, "%s", redact.Safe(msg))
 }
 
 // {{with $sev}}{{.Name}}{{end}}fDepth logs to the {{.NAME}} channel with severity {{with $sev}}{{.NAME}}{{end}},
@@ -405,7 +406,7 @@ func {{with $sev}}{{.Name}}{{end}}fDepth(ctx context.Context, depth int, format 
 //
 {{.Comment -}}
 func (logger{{.Name}}) Shout(ctx context.Context, sev Severity, msg string) {
-  shoutfDepth(ctx, 1, sev, channel.{{.NAME}}, msg)
+  shoutfDepth(ctx, 1, sev, channel.{{.NAME}}, "%s", redact.Safe(msg))
 }
 
 // Shoutf logs to channel {{.NAME}}, and also to the real stderr if
@@ -422,7 +423,7 @@ func (logger{{.Name}}) Shoutf(ctx context.Context, sev Severity, format string, 
 // whether the specified verbosity level is active.
 {{.Comment -}}
 func (logger{{.Name}}) VEvent(ctx context.Context, level Level, msg string) {
-	vEventf(ctx, false /* isErr */, 1, level, channel.{{.NAME}}, msg)
+	vEventf(ctx, false /* isErr */, 1, level, channel.{{.NAME}}, "%s", redact.Safe(msg))
 }
 
 // VEventf either logs a message to the channel (which also outputs to the
@@ -447,7 +448,7 @@ func (logger{{.Name}}) VEventfDepth(ctx context.Context, depth int, level Level,
 //
 {{.Comment -}}
 func Shout(ctx context.Context, sev Severity, msg string) {
-  shoutfDepth(ctx, 1, sev, channel.{{.NAME}}, msg)
+  shoutfDepth(ctx, 1, sev, channel.{{.NAME}}, "%s", redact.Safe(msg))
 }
 
 // Shoutf logs to channel {{.NAME}}, and also to the real stderr if

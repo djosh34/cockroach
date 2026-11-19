@@ -818,7 +818,7 @@ func ResolveFK(
 				pgerror.Newf(pgcode.InvalidForeignKey,
 					"foreign references between databases are not allowed (see the '%s' cluster setting)",
 					allowCrossDatabaseFKsSetting),
-				crossDBReferenceDeprecationHint(),
+				"%s", crossDBReferenceDeprecationHint(),
 			)
 		}
 	}

@@ -722,7 +722,7 @@ func (s *systemStatusServer) Gossip(
 
 	nodeID, local, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 
 	if local {
@@ -750,7 +750,7 @@ func (s *systemStatusServer) EngineStats(
 
 	nodeID, local, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 
 	if !local {
@@ -793,7 +793,7 @@ func (s *systemStatusServer) Allocator(
 
 	nodeID, local, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 
 	if !local {
@@ -1022,7 +1022,7 @@ func (s *statusServer) Certificates(
 
 	nodeID, local, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 
 	if s.cfg.Insecure {
@@ -1143,7 +1143,7 @@ func (s *statusServer) Details(
 
 	nodeID, local, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 	if !local {
 		status, err := s.dialNode(ctx, nodeID)
@@ -1184,7 +1184,7 @@ func (s *statusServer) GetFiles(
 
 	nodeID, local, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 	if !local {
 		status, err := s.dialNode(ctx, nodeID)
@@ -1244,7 +1244,7 @@ func (s *statusServer) LogFilesList(
 
 	nodeID, local, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 	if !local {
 		status, err := s.dialNode(ctx, nodeID)
@@ -1279,7 +1279,7 @@ func (s *statusServer) LogFile(
 
 	nodeID, local, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 	if !local {
 		status, err := s.dialNode(ctx, nodeID)
@@ -1377,7 +1377,7 @@ func (s *statusServer) Logs(
 
 	nodeID, local, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 	if !local {
 		status, err := s.dialNode(ctx, nodeID)
@@ -1465,7 +1465,7 @@ func (s *statusServer) Stacks(
 
 	nodeID, local, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 
 	if !local {
@@ -1541,7 +1541,7 @@ func (s *statusServer) processProfileProtoGoroutines(
 	}
 
 	if err := mergedProfiles.Write(res); err != nil {
-		return nil, status.Errorf(codes.Internal, err.Error())
+		return nil, status.Errorf(codes.Internal, "%s", err.Error())
 	}
 
 	return res.Bytes(), nil
@@ -1597,7 +1597,7 @@ func (s *statusServer) processCPUProfilesFromAllNodes(
 
 	var buf bytes.Buffer
 	if err := mergedProfiles.Write(&buf); err != nil {
-		return nil, status.Errorf(codes.Internal, err.Error())
+		return nil, status.Errorf(codes.Internal, "%s", err.Error())
 	}
 	return buf.Bytes(), nil
 }
@@ -1699,7 +1699,7 @@ func (s *statusServer) Profile(
 
 	nodeID, local, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 
 	if !local {
@@ -1942,7 +1942,7 @@ func (s *statusServer) nodeStatus(
 ) (*statuspb.NodeStatus, error) {
 	nodeID, _, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 
 	key := keys.NodeStatusKey(nodeID)
@@ -2102,7 +2102,7 @@ func (s *statusServer) Metrics(
 
 	nodeID, local, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 
 	if !local {
@@ -2260,7 +2260,7 @@ func (s *systemStatusServer) rangesHelper(
 
 	nodeID, local, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, 0, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, 0, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 
 	if !local {
@@ -2439,7 +2439,7 @@ func (s *systemStatusServer) rangesHelper(
 		return nil
 	})
 	if err != nil {
-		return nil, 0, status.Errorf(codes.Internal, err.Error())
+		return nil, 0, status.Errorf(codes.Internal, "%s", err.Error())
 	}
 	var next int
 	if limit > 0 {
@@ -2518,7 +2518,7 @@ func (s *systemStatusServer) TenantRanges(
 		nodeIDString := nodeID.String()
 		_, local, err := s.parseNodeID(nodeIDString)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, err.Error())
+			return nil, status.Errorf(codes.Internal, "%s", err.Error())
 		}
 
 		nodeReq := &serverpb.RangesRequest{
@@ -2630,7 +2630,7 @@ func (s *systemStatusServer) HotRanges(
 	if len(req.NodeID) > 0 {
 		requestedNodeID, local, err := s.parseNodeID(req.NodeID)
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, err.Error())
+			return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 		}
 
 		// Only hot ranges from the local node.
@@ -3339,7 +3339,7 @@ func (s *statusServer) CancelSession(
 
 	reqUsername, err := username.MakeSQLUsernameFromPreNormalizedStringChecked(req.Username)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 
 	session, ok := s.sessionRegistry.GetSessionByID(sessionID)
@@ -3392,7 +3392,7 @@ func (s *statusServer) CancelQuery(
 
 	reqUsername, err := username.MakeSQLUsernameFromPreNormalizedStringChecked(req.Username)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 
 	session, ok := s.sessionRegistry.GetSessionByQueryID(queryID)
@@ -3590,7 +3590,7 @@ func (s *statusServer) ListExecutionInsights(
 	if len(req.NodeID) > 0 {
 		requestedNodeID, local, err := s.parseNodeID(req.NodeID)
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, err.Error())
+			return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 		}
 		if local {
 			return s.localExecutionInsights(ctx)
@@ -3681,7 +3681,7 @@ func (s *statusServer) Diagnostics(
 	ctx = s.AnnotateCtx(ctx)
 	nodeID, local, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 
 	if !local {
@@ -3710,7 +3710,7 @@ func (s *systemStatusServer) Stores(
 
 	nodeID, local, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 
 	if !local {
@@ -3825,7 +3825,7 @@ func (s *statusServer) JobRegistryStatus(
 
 	nodeID, local, err := s.parseNodeID(req.NodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 	if !local {
 		status, err := s.dialNode(ctx, nodeID)
@@ -3893,7 +3893,7 @@ func (s *statusServer) TxnIDResolution(
 
 	requestedNodeID, local, err := s.parseNodeID(req.CoordinatorID)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 	}
 	if local {
 		return s.localTxnIDResolution(req), nil
@@ -3937,7 +3937,7 @@ func (s *statusServer) TransactionContentionEvents(
 	if len(req.NodeID) > 0 {
 		requestedNodeID, local, err := s.parseNodeID(req.NodeID)
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, err.Error())
+			return nil, status.Errorf(codes.InvalidArgument, "%s", err.Error())
 		}
 		if local {
 			return s.localTransactionContentionEvents(shouldRedactContendingKey), nil

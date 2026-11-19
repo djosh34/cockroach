@@ -349,7 +349,7 @@ func TestListLogFiles(t *testing.T) {
 		}
 	}
 	if !foundExpected {
-		t.Fatalf("unexpected results: %q", results)
+		t.Fatalf("unexpected results: %v", results)
 	}
 }
 
@@ -385,7 +385,7 @@ func TestFilePermissions(t *testing.T) {
 		}
 	}
 	if !foundExpected {
-		t.Fatalf("unexpected results: %q", results)
+		t.Fatalf("unexpected results: %v", results)
 	}
 }
 

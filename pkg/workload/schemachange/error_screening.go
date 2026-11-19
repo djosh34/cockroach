@@ -859,7 +859,7 @@ func (og *operationGenerator) generateColumn(
 			str := tree.AsStringWithFlags(tree.NewDString(*val[0][0]), tree.FmtParsable)
 			return str, nil
 		}
-		return fmt.Sprintf("'" + *val[0][0] + "'::" + colInfo.typ.SQLString()), nil
+		return fmt.Sprintf("%s", "'"+*val[0][0]+"'::"+colInfo.typ.SQLString()), nil
 	}
 	return "NULL", nil
 }

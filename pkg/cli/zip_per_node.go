@@ -347,7 +347,7 @@ func (zc *debugZipContext) collectPerNodeData(
 			return err
 		}
 	} else {
-		nodePrinter.info("Skipping fetching goroutine stacks. Enable via the --" + cliflags.ZipIncludeGoroutineStacks.Name + " flag.")
+		nodePrinter.info("%s", "Skipping fetching goroutine stacks. Enable via the --"+cliflags.ZipIncludeGoroutineStacks.Name+" flag.")
 	}
 
 	var heapData []byte

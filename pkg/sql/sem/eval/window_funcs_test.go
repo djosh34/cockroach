@@ -98,7 +98,7 @@ func testStartPreceding(t *testing.T, evalCtx *Context, wfr *WindowFrameRun, off
 					if idx != frameStartIdx {
 						t.Errorf("FrameStartIdx returned wrong result on Preceding: expected %+v, found %+v", idx, frameStartIdx)
 						t.Errorf("Search for %+v when wfr.RowIdx=%+v", value, wfr.RowIdx)
-						t.Errorf(partitionToString(context.Background(), wfr.Rows))
+						t.Errorf("%s", partitionToString(context.Background(), wfr.Rows))
 						t.Fatal("")
 					}
 					break
@@ -142,7 +142,7 @@ func testStartFollowing(t *testing.T, evalCtx *Context, wfr *WindowFrameRun, off
 					if idx != frameStartIdx {
 						t.Errorf("FrameStartIdx returned wrong result on Following: expected %+v, found %+v", idx, frameStartIdx)
 						t.Errorf("Search for %+v when wfr.RowIdx=%+v", value, wfr.RowIdx)
-						t.Errorf(partitionToString(context.Background(), wfr.Rows))
+						t.Errorf("%s", partitionToString(context.Background(), wfr.Rows))
 						t.Fatal("")
 					}
 					break
@@ -155,7 +155,7 @@ func testStartFollowing(t *testing.T, evalCtx *Context, wfr *WindowFrameRun, off
 					if idx != frameStartIdx {
 						t.Errorf("FrameStartIdx returned wrong result on Following: expected %+v, found %+v", idx, frameStartIdx)
 						t.Errorf("Search for %+v when wfr.RowIdx=%+v", value, wfr.RowIdx)
-						t.Errorf(partitionToString(context.Background(), wfr.Rows))
+						t.Errorf("%s", partitionToString(context.Background(), wfr.Rows))
 						t.Fatal("")
 					}
 					break
@@ -203,7 +203,7 @@ func testEndPreceding(t *testing.T, evalCtx *Context, wfr *WindowFrameRun, offse
 					if idx+1 != frameEndIdx {
 						t.Errorf("FrameEndIdx returned wrong result on Preceding: expected %+v, found %+v", idx+1, frameEndIdx)
 						t.Errorf("Search for %+v when wfr.RowIdx=%+v", value, wfr.RowIdx)
-						t.Errorf(partitionToString(context.Background(), wfr.Rows))
+						t.Errorf("%s", partitionToString(context.Background(), wfr.Rows))
 						t.Fatal("")
 					}
 					break
@@ -251,7 +251,7 @@ func testEndFollowing(t *testing.T, evalCtx *Context, wfr *WindowFrameRun, offse
 					if idx+1 != frameEndIdx {
 						t.Errorf("FrameEndIdx returned wrong result on Following: expected %+v, found %+v", idx+1, frameEndIdx)
 						t.Errorf("Search for %+v when wfr.RowIdx=%+v", value, wfr.RowIdx)
-						t.Errorf(partitionToString(context.Background(), wfr.Rows))
+						t.Errorf("%s", partitionToString(context.Background(), wfr.Rows))
 						t.Fatal("")
 					}
 					break

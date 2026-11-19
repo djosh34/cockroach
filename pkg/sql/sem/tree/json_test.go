@@ -145,11 +145,6 @@ func testTypes(rng *rand.Rand) (typs []*types.T) {
 		// Ignore AnyTuple -- it's not very interesting; we'll generate test tuples below.
 		case types.RegClass, types.RegNamespace, types.RegProc, types.RegProcedure, types.RegRole, types.RegType:
 		// Ignore a bunch of pseudo-OID types (just want regular OID).
-		case types.Geometry, types.Geography:
-		// Ignore geometry/geography: these types are insanely inefficient;
-		// AsJson(Geo) -> MarshalGeo -> go JSON bytes ->  ParseJSON -> Go native -> json.JSON
-		// Benchmarking this generates too much noise.
-		// TODO(yevgeniy): fix this.
 		default:
 			typs = append(typs, typ)
 		}

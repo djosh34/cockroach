@@ -213,9 +213,6 @@ func TestCopyFromRandom(t *testing.T) {
 		types.Uuid,
 		types.INet,
 		types.TimestampTZ,
-		types.Geography,
-		types.Geometry,
-		types.Box2D,
 	}
 
 	var inputs [][]interface{}

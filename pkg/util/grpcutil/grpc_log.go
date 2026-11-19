@@ -20,6 +20,7 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/log/severity"
+	"github.com/cockroachdb/redact"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -130,7 +131,7 @@ func (l *grpcLogger) InfoDepth(depth int, args ...interface{}) {
 	if !l.shouldLog(severity.INFO, depth) {
 		return
 	}
-	log.InfofDepth(context.TODO(), depth, "", l.sanitize(args)...)
+	log.InfofDepth(context.TODO(), depth, "%s", redact.Sprint(l.sanitize(args)...))
 }
 
 func (l *grpcLogger) WarningDepth(depth int, args ...interface{}) {
@@ -138,7 +139,7 @@ func (l *grpcLogger) WarningDepth(depth int, args ...interface{}) {
 	if !l.shouldLog(severity.WARNING, depth) {
 		return
 	}
-	log.WarningfDepth(context.TODO(), depth, "", l.sanitize(args)...)
+	log.WarningfDepth(context.TODO(), depth, "%s", redact.Sprint(l.sanitize(args)...))
 }
 
 func (l *grpcLogger) ErrorDepth(depth int, args ...interface{}) {
@@ -146,13 +147,13 @@ func (l *grpcLogger) ErrorDepth(depth int, args ...interface{}) {
 	if !l.shouldLog(severity.ERROR, depth) {
 		return
 	}
-	log.ErrorfDepth(context.TODO(), depth, "", l.sanitize(args)...)
+	log.ErrorfDepth(context.TODO(), depth, "%s", redact.Sprint(l.sanitize(args)...))
 }
 
 func (l *grpcLogger) FatalDepth(depth int, args ...interface{}) {
 	depth += depthLoggerDelta
 	// Never suppress fatals.
-	log.FatalfDepth(context.TODO(), depth, "", l.sanitize(args)...)
+	log.FatalfDepth(context.TODO(), depth, "%s", redact.Sprint(l.sanitize(args)...))
 }
 
 func (l *grpcLogger) vDepth(i int, depth int) bool {

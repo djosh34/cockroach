@@ -33,11 +33,6 @@ func requireNotEmpty(t *testing.T, path string) {
 }
 
 func getTestdataForPackage(t *testing.T, pkg string) string {
-	if bazel.BuiltWithBazel() {
-		runfiles, err := bazel.RunfilesPath()
-		require.NoError(t, err)
-		return filepath.Join(runfiles, "pkg", "testutils", "lint", "passes", pkg, "testdata")
-	}
 	return filepath.Join("..", pkg, "testdata")
 }
 

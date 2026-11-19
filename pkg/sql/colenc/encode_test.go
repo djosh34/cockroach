@@ -86,21 +86,6 @@ func TestEncoderEqualityDatums(t *testing.T) {
 		{"i INT PRIMARY KEY, a INT ARRAY, INDEX(a DESC)", []tree.Datum{tree.NewDInt(1234), randgen.RandArray(rng, types.MakeArray(types.Int), 2)}, nil},
 		{"i INT PRIMARY KEY, b INT, a INT ARRAY, INVERTED INDEX(a ASC) ", []tree.Datum{tree.NewDInt(1234), tree.NewDInt(-1234), randgen.RandArray(rng, types.MakeArray(types.Int), 2)}, nil},
 
-		// N.B:  If you get:
-		// Received unexpected error:
-		// geos: no locations to init GEOS
-		// Wraps: (2) Ensure you have the spatial libraries installed as per the instructions in https://www.cockroachlabs.com/docs/v23.1/install-cockroachdb-mac
-		// running './dev build geos' should fix it.
-		{`id INT PRIMARY KEY,
-		geog GEOGRAPHY(geometry, 4326),
-		geom GEOMETRY(point),
-		orphan GEOGRAPHY,
-		INVERTED INDEX (geog),
-		INVERTED INDEX (geom),
-		FAMILY f (orphan)`,
-			[]tree.Datum{tree.NewDInt(1234), randgen.RandDatumSimple(rng, types.Geography), randgen.RandDatumSimple(rng, types.Geometry), randgen.RandDatumSimple(rng, types.Geography)},
-			[]string{"CREATE INDEX ON %s USING GIST(geom)"}},
-
 		// composite encoded types
 		{"d DECIMAL, PRIMARY KEY (d ASC)", []tree.Datum{compDec}, nil},
 		{"f FLOAT8, PRIMARY KEY (f ASC)", []tree.Datum{tree.NewDFloat(-0)}, nil},

@@ -661,7 +661,7 @@ func maybeAddSequenceDependencies(
 				pgerror.Newf(pgcode.FeatureNotSupported,
 					"sequence references cannot come from other databases; (see the '%s' cluster setting)",
 					allowCrossDatabaseSeqReferencesSetting),
-				crossDBReferenceDeprecationHint(),
+				"%s", crossDBReferenceDeprecationHint(),
 			)
 
 		}

@@ -241,6 +241,10 @@ var retiredSettings = map[InternalKey]struct{}{
 	"sql.multi_region.allow_abstractions_for_secondary_tenants.enabled":  {},
 	"sql.multiregion.drop_primary_region.enabled":                        {},
 	"sql.ttl.changefeed_replication.disabled":                            {},
+
+	// removed with the spatial types and the UI.
+	"sql.spatial.experimental_box2d_comparison_operators.enabled": {},
+	"ui.display_timezone": {},
 }
 
 // sqlDefaultSettings is the list of "grandfathered" existing sql.defaults
@@ -384,7 +388,6 @@ var allConsoleKeys = []InternalKey{
 	"sql.stats.automatic_collection.enabled",
 	"timeseries.storage.resolution_10s.ttl",
 	"timeseries.storage.resolution_30m.ttl",
-	"ui.display_timezone",
 	"version",
 }
 

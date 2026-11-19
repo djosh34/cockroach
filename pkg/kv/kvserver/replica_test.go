@@ -14726,7 +14726,7 @@ func TestReplayWithBumpedTimestamp(t *testing.T) {
 			return err
 		})
 		if err != nil {
-			t.Errorf(err.Error())
+			t.Errorf("%s", err.Error())
 		}
 	}()
 

@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/apache/arrow/go/v11/parquet/file"
-	"github.com/cockroachdb/cockroach/pkg/geo"
 	"github.com/cockroachdb/cockroach/pkg/sql/randgen"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
@@ -369,48 +368,6 @@ func TestBasicDatums(t *testing.T) {
 				date := tree.MakeDDate(d)
 				return [][]tree.Datum{
 					{&date, tree.DNull},
-				}, nil
-			},
-		},
-		{
-			name: "box2d",
-			sch: &colSchema{
-				columnTypes: []*types.T{types.Box2D, types.Box2D},
-				columnNames: []string{"a", "b"},
-			},
-			datums: func() ([][]tree.Datum, error) {
-				b, err := geo.ParseCartesianBoundingBox("BOX(-0.4088850532348978 -0.19224841029808887,0.9334155753101069 0.7180433951296195)")
-				require.NoError(t, err)
-				return [][]tree.Datum{
-					{tree.NewDBox2D(b), tree.DNull},
-				}, nil
-			},
-		},
-		{
-			name: "geography",
-			sch: &colSchema{
-				columnTypes: []*types.T{types.Geography, types.Geography},
-				columnNames: []string{"a", "b"},
-			},
-			datums: func() ([][]tree.Datum, error) {
-				g, err := geo.ParseGeographyFromEWKB([]byte("\x01\x01\x00\x00\x20\xe6\x10\x00\x00\x00\x00\x00\x00\x00\x00\xf0\x3f\x00\x00\x00\x00\x00\x00\xf0\x3f"))
-				require.NoError(t, err)
-				return [][]tree.Datum{
-					{&tree.DGeography{Geography: g}, tree.DNull},
-				}, nil
-			},
-		},
-		{
-			name: "geometry",
-			sch: &colSchema{
-				columnTypes: []*types.T{types.Geometry, types.Geometry},
-				columnNames: []string{"a", "b"},
-			},
-			datums: func() ([][]tree.Datum, error) {
-				g, err := geo.ParseGeometryFromEWKB([]byte("\x01\x01\x00\x00\x20\xe6\x10\x00\x00\x00\x00\x00\x00\x00\x00\xf0\x3f\x00\x00\x00\x00\x00\x00\xf0\x3f"))
-				require.NoError(t, err)
-				return [][]tree.Datum{
-					{&tree.DGeometry{Geometry: g}, tree.DNull},
 				}, nil
 			},
 		},

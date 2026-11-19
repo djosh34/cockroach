@@ -2344,9 +2344,6 @@ var regularBuiltins = map[string]builtinDefinition{
 	"strftime":              strftimeImpl(),
 	"experimental_strftime": strftimeImpl(),
 
-	"strptime":              strptimeImpl(),
-	"experimental_strptime": strptimeImpl(),
-
 	"to_char": makeBuiltin(
 		defProps(),
 		tree.Overload{
@@ -8446,30 +8443,6 @@ func strftimeImpl() builtinDefinition {
 			},
 			Info: "From `input`, extracts and formats the time as identified in `extract_format` " +
 				"using standard `strftime` notation (though not all formatting is supported).",
-			Volatility: volatility.Immutable,
-		},
-	)
-}
-
-func strptimeImpl() builtinDefinition {
-	return makeBuiltin(
-		tree.FunctionProperties{
-			Category: builtinconstants.CategoryDateAndTime,
-		},
-		tree.Overload{
-			Types:      tree.ParamTypes{{Name: "input", Typ: types.String}, {Name: "format", Typ: types.String}},
-			ReturnType: tree.FixedReturnType(types.TimestampTZ),
-			Fn: func(_ context.Context, _ *eval.Context, args tree.Datums) (tree.Datum, error) {
-				toParse := string(tree.MustBeDString(args[0]))
-				format := string(tree.MustBeDString(args[1]))
-				t, err := strtime.Strptime(toParse, format)
-				if err != nil {
-					return nil, err
-				}
-				return tree.MakeDTimestampTZ(t.UTC(), time.Microsecond)
-			},
-			Info: "Returns `input` as a timestamptz using `format` (which uses standard " +
-				"`strptime` formatting).",
 			Volatility: volatility.Immutable,
 		},
 	)

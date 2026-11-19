@@ -618,8 +618,6 @@ var builtinOidsArray = []string{
 	986:  `experimental_strftime(input: timestamp, extract_format: string) -> string`,
 	987:  `experimental_strftime(input: date, extract_format: string) -> string`,
 	988:  `experimental_strftime(input: timestamptz, extract_format: string) -> string`,
-	989:  `strptime(input: string, format: string) -> timestamptz`,
-	990:  `experimental_strptime(input: string, format: string) -> timestamptz`,
 	991:  `to_char(interval: interval) -> string`,
 	992:  `to_char(timestamp: timestamp) -> string`,
 	993:  `to_char(date: date) -> string`,

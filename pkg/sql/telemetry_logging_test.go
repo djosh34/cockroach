@@ -901,7 +901,7 @@ func TestTelemetryLoggingInternalConsoleEnabled(t *testing.T) {
 		}
 
 		if found != tc.logInternalConsole {
-			t.Errorf(tc.errorMessage)
+			t.Errorf("%s", tc.errorMessage)
 		}
 	}
 }

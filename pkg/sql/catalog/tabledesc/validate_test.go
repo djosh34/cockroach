@@ -555,6 +555,47 @@ func TestValidateTableDesc(t *testing.T) {
 				},
 				NextColumnID: 2,
 			}},
+		{err: `column "geo" has type geometry: spatial types are unsupported`,
+			desc: descpb.TableDescriptor{
+				ID:            2,
+				ParentID:      1,
+				Name:          "foo",
+				FormatVersion: descpb.InterleavedFormatVersion,
+				Columns: []descpb.ColumnDescriptor{
+					{ID: 1, Name: "geo", Type: &types.T{InternalType: types.InternalType{Family: types.GeometryFamily}}},
+				},
+				NextColumnID: 2,
+			}},
+		{err: `column "geos" has type array: spatial types are unsupported`,
+			desc: descpb.TableDescriptor{
+				ID:            2,
+				ParentID:      1,
+				Name:          "foo",
+				FormatVersion: descpb.InterleavedFormatVersion,
+				Columns: []descpb.ColumnDescriptor{
+					{ID: 1, Name: "geos", Type: &types.T{InternalType: types.InternalType{
+						Family:        types.ArrayFamily,
+						ArrayContents: &types.T{InternalType: types.InternalType{Family: types.GeographyFamily}},
+					}}},
+				},
+				NextColumnID: 2,
+			}},
+		{err: `index "primary" is a spatial index: spatial indexes are unsupported`,
+			desc: descpb.TableDescriptor{
+				ID:            2,
+				ParentID:      1,
+				Name:          "foo",
+				FormatVersion: descpb.InterleavedFormatVersion,
+				Columns: []descpb.ColumnDescriptor{
+					{ID: 1, Name: "bar", Type: types.Int},
+				},
+				PrimaryIndex: descpb.IndexDescriptor{
+					ID:        1,
+					Name:      "primary",
+					GeoConfig: catpb.GeoIndexConfig{S2Geometry: &catpb.S2GeometryConfig{}},
+				},
+				NextColumnID: 2,
+			}},
 		{err: `column "bar" cannot be hidden and inaccessible`,
 			desc: descpb.TableDescriptor{
 				ID:            2,

@@ -695,6 +695,37 @@ func validateMutation(m *descpb.DescriptorMutation) error {
 // are consistent. Use Validate to validate that cross-table references are
 // correct.
 // If version is supplied, the descriptor is checked for version incompatibilities.
+// validateNoSpatial returns an error if a column or an index of the table uses
+// the removed spatial types. Only tables from upstream CockroachDB can.
+func (desc *wrapper) validateNoSpatial() error {
+	for _, col := range desc.AllColumns() {
+		if typ := col.GetType(); typ != nil && isSpatialType(typ) {
+			return errors.Newf("column %q has type %s: spatial types are unsupported",
+				col.GetName(), typ.Family().Name())
+		}
+	}
+	for _, idx := range desc.AllIndexes() {
+		if cfg := idx.IndexDesc().GeoConfig; cfg.S2Geography != nil || cfg.S2Geometry != nil {
+			return errors.Newf("index %q is a spatial index: spatial indexes are unsupported",
+				idx.GetName())
+		}
+	}
+	return nil
+}
+
+// isSpatialType returns whether typ, or the element type of an array typ, is
+// one of the removed spatial types.
+func isSpatialType(typ *types.T) bool {
+	for typ.Family() == types.ArrayFamily {
+		typ = typ.ArrayContents()
+	}
+	switch typ.Family() {
+	case types.GeometryFamily, types.GeographyFamily, types.Box2DFamily:
+		return true
+	}
+	return false
+}
+
 func (desc *wrapper) ValidateSelf(vea catalog.ValidationErrorAccumulator) {
 	// Validate local properties of the descriptor.
 	vea.Report(catalog.ValidateName(desc))
@@ -740,6 +771,8 @@ func (desc *wrapper) ValidateSelf(vea catalog.ValidationErrorAccumulator) {
 				ref.ColumnIDs))
 		}
 	}
+
+	vea.Report(desc.validateNoSpatial())
 
 	if !desc.IsView() {
 		if len(desc.DependsOn) > 0 {

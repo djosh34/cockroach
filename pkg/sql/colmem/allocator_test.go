@@ -114,9 +114,9 @@ func TestPerformAppend(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	defer log.Scope(t).Close(t)
 
-	// Include decimal and geometry columns because PerformAppend differs from
+	// Include decimal and JSON columns because PerformAppend differs from
 	// PerformOperation for decimal and datum types.
-	var typs = []*types.T{types.Int, types.Decimal, types.Geometry}
+	var typs = []*types.T{types.Int, types.Decimal, types.Jsonb}
 	const intIdx, decimalIdx, datumIdx = 0, 1, 2
 	const maxBatchSize = 100
 	const numRows = 1000
