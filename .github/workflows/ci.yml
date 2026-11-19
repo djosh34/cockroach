@@ -21,6 +21,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -33,6 +34,7 @@ jobs:
 
   generate:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-go
@@ -44,43 +46,46 @@ jobs:
 
   lint:
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-go
       - name: go vet
         # unsafeptr runs in TestRoachVet below, which knows its exceptions.
-        run: go vet -unsafeptr=false ./pkg/...
+        # Two packages at a time keep vet within the runner's memory.
+        run: go vet -p 2 -unsafeptr=false ./pkg/...
       - name: Lint tests
         run: build/ci/lint.sh
 
   test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-go
-      - run: build/ci/test.sh test ${{ matrix.shard }} 10
+      - run: build/ci/test.sh test ${{ matrix.shard }} 11
 
   logic:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5]
+        shard: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-go
-      - run: build/ci/test.sh logic ${{ matrix.shard }} 6
+      - run: build/ci/test.sh logic ${{ matrix.shard }} 4
 
   ci-ok:
     if: always()
     needs: [build, generate, lint, test, logic]
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - name: Check that every job passed
         run: |

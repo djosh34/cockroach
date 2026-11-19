@@ -18,13 +18,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     env:
       CGO_ENABLED: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-go
-      - run: build/ci/test.sh test ${{ matrix.shard }} 10 -race -timeout 300m
+      - run: build/ci/test.sh test ${{ matrix.shard }} 11 -race -timeout 300m
 
   logic-race:
     runs-on: ubuntu-24.04
@@ -32,10 +32,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5]
+        shard: [0, 1, 2, 3]
     env:
       CGO_ENABLED: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-go
-      - run: build/ci/test.sh logic ${{ matrix.shard }} 6 -race -timeout 300m
+      - run: build/ci/test.sh logic ${{ matrix.shard }} 4 -race -timeout 300m

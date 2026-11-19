@@ -16,6 +16,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -281,6 +282,29 @@ func TestSecureHTTPRedirect(t *testing.T) {
 		} else if a, e := redirectURL.String(), expURL.String(); a != e {
 			t.Errorf("expected location %s; got %s", e, a)
 		}
+	}
+}
+
+// TestStopWithSilentHTTPClient checks that a client that opens a connection
+// to the HTTP port and sends nothing does not block server shutdown.
+func TestStopWithSilentHTTPClient(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	defer log.Scope(t).Close(t)
+	srv := serverutils.StartServerOnly(t, base.TestServerArgs{})
+
+	conn, err := net.Dial("tcp", srv.HTTPAddr())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	stopped := make(chan struct{})
+	go func() {
+		srv.Stopper().Stop(context.Background())
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+	case <-time.After(time.Minute):
+		t.Fatal("server did not stop while a silent client was connected")
 	}
 }
 

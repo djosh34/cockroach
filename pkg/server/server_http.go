@@ -13,6 +13,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"net"
 	"net/http"
 
 	"github.com/NYTimes/gziphandler"
@@ -31,6 +32,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/log/logcrash"
 	"github.com/cockroachdb/cockroach/pkg/util/netutil"
 	"github.com/cockroachdb/cockroach/pkg/util/stop"
+	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -189,6 +191,16 @@ func startHTTPService(
 	}
 	log.Eventf(ctx, "listening on http port %s", cfg.HTTPAddr)
 
+	// When TLS is on, cmux sniffs each new connection to tell plain HTTP
+	// from TLS, and its Serve waits for every sniff before it returns. A
+	// client that connects but sends nothing would block shutdown, so the
+	// connections are tracked and closed when quiescing.
+	tracker := &connTracker{Listener: httpLn}
+	tracker.mu.conns = map[*trackedConn]struct{}{}
+	if uiTLSConfig != nil {
+		httpLn = tracker
+	}
+
 	// The HTTP listener shutdown worker, which closes everything under
 	// the HTTP port when the stopper indicates we are shutting down.
 	waitQuiesce := func(ctx context.Context) {
@@ -200,6 +212,7 @@ func startHTTPService(
 		if err := httpLn.Close(); err != nil {
 			log.Ops.Warningf(ctx, "%v", err)
 		}
+		tracker.closeConns()
 	}
 	if err := stopper.RunAsyncTask(workersCtx, "wait-quiesce", waitQuiesce); err != nil {
 		waitQuiesce(workersCtx)
@@ -284,4 +297,60 @@ func (s *httpServer) baseHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	s.proxy.nodeProxyHandler(w, r, s.gzMux.ServeHTTP)
+}
+
+// connTracker is a net.Listener that remembers the connections it accepts
+// until they close, so that closeConns can close the ones still open.
+type connTracker struct {
+	net.Listener
+	mu struct {
+		syncutil.Mutex
+		closed bool
+		conns  map[*trackedConn]struct{}
+	}
+}
+
+// Accept implements net.Listener.
+func (l *connTracker) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	tc := &trackedConn{Conn: c, tracker: l}
+	l.mu.Lock()
+	closed := l.mu.closed
+	if !closed {
+		l.mu.conns[tc] = struct{}{}
+	}
+	l.mu.Unlock()
+	if closed {
+		_ = c.Close()
+	}
+	return tc, nil
+}
+
+// closeConns closes every tracked connection and any accepted later.
+func (l *connTracker) closeConns() {
+	l.mu.Lock()
+	l.mu.closed = true
+	conns := l.mu.conns
+	l.mu.conns = nil
+	l.mu.Unlock()
+	for c := range conns {
+		_ = c.Conn.Close()
+	}
+}
+
+// trackedConn is a connection accepted by a connTracker.
+type trackedConn struct {
+	net.Conn
+	tracker *connTracker
+}
+
+// Close implements net.Conn.
+func (c *trackedConn) Close() error {
+	c.tracker.mu.Lock()
+	delete(c.tracker.mu.conns, c)
+	c.tracker.mu.Unlock()
+	return c.Conn.Close()
 }

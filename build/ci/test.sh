@@ -4,15 +4,24 @@
 # Usage: build/ci/test.sh test|logic <shard> <shards> [go test flags...]
 #
 # "test" runs the Go test packages, "logic" runs the logic tests (one Go test
-# per logic test file). The items are spread over the shards by the times
-# measured on CI, listed in build/ci/times.txt (seconds per item; an item not
-# listed counts as 60 seconds): the longest item first, each to the shard with
-# the least work so far.
+# per logic test file). A package in SPLIT is cut into parts, pkg#0 to
+# pkg#N-1, which run every Nth test function of the package. The items are
+# spread over the shards by the times measured on CI, listed in
+# build/ci/times.txt (seconds per item; an item not listed counts as 60
+# seconds): the longest item first, each to the shard with the least work so
+# far.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 kind=$1 shard=$2 shards=$3
 shift 3
+
+# Packages that take too long for one shard, with the number of parts.
+declare -A SPLIT=(
+  [pkg/sql/schemachanger]=6
+  [pkg/kv/kvserver]=5
+  [pkg/sql]=3
+)
 
 LOGIC_PKGS=(
   pkg/sql/logictest/tests/local
@@ -26,7 +35,14 @@ items() {
       go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.Dir}}{{end}}' ./pkg/... |
         sed "s|^$PWD/||" |
         grep -v -e '^pkg/sql/logictest/tests/' -e '^pkg/sql/opt/exec/execbuilder/tests/' \
-          -e '^pkg/testutils/lint$'
+          -e '^pkg/testutils/lint$' |
+        while read -r p; do
+          if [[ -n ${SPLIT[$p]:-} ]]; then
+            for ((k = 0; k < SPLIT[$p]; k++)); do echo "$p#$k"; done
+          else
+            echo "$p"
+          fi
+        done
       ;;
     logic)
       local p
@@ -61,10 +77,28 @@ if [[ -z $mine ]]; then
   exit 0
 fi
 
+# part_tests prints the test functions of part k of the n parts of package p,
+# as a -run alternation.
+part_tests() {
+  local p=$1 k=$2 n=$3
+  sed -n 's/^func \(Test[A-Za-z0-9_]*\)([A-Za-z_]* \*testing\.T).*/\1/p' "$p"/*_test.go |
+    sort -u | awk -v k="$k" -v n="$n" '(NR - 1) % n == k' | paste -sd'|' -
+}
+
 case $kind in
   test)
-    # shellcheck disable=SC2046
-    go test -tags crdb_test -timeout 55m "$@" $(sed 's|^|./|' <<<"$mine")
+    status=0
+    whole=$(grep -v '#' <<<"$mine" | sed 's|^|./|' || true)
+    if [[ -n $whole ]]; then
+      # shellcheck disable=SC2086
+      go test -tags crdb_test -timeout 55m "$@" $whole || status=1
+    fi
+    while IFS='#' read -r p k; do
+      [[ -z $k ]] && continue
+      go test -tags crdb_test -timeout 55m "$@" "./$p" \
+        -run "^($(part_tests "$p" "$k" "${SPLIT[$p]}"))\$" || status=1
+    done <<<"$mine"
+    exit $status
     ;;
   logic)
     status=0
