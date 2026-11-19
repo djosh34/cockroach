@@ -305,9 +305,7 @@ An event of type `runtime_stats` is recorded every 10 seconds as server health m
 | `HeapFragmentBytes` | The amount of heap fragmentation. Expressed as bytes. | no |
 | `HeapReservedBytes` | The amount of heap reserved. Expressed as bytes. | no |
 | `HeapReleasedBytes` | The amount of heap released. Expressed as bytes. | no |
-| `CGoAllocBytes` | The memory allocated outside of Go. Expressed as bytes. | no |
-| `CGoTotalBytes` | The total memory allocated outside of Go but not released. Expressed as bytes. | no |
-| `CGoCallRate` | The total number of calls outside of Go over time. Expressed as operations per second. | no |
+| `CGoCallRate` | Fields 11 and 12 were the memory allocated by jemalloc, which is removed. The total number of calls outside of Go over time. Expressed as operations per second. | no |
 | `CPUUserPercent` | The user CPU percentage. | no |
 | `CPUSysPercent` | The system CPU percentage. | no |
 | `GCPausePercent` | The GC pause percentage. | no |

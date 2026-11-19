@@ -434,11 +434,11 @@ gen_schemachanger() {
   for kind in ImmediateMutation:immediate_mutation DeferredMutation:deferred_mutation \
     Backfill:backfill Validation:validation; do
     file=${kind#*:}
-    go run -tags generator ./$scop/generate_visitor.go scop "${kind%%:*}" \
+    go run ./$scop/generate_visitor.go scop "${kind%%:*}" \
       "$scop/$file.go" "$scop/${file}_visitor_generated.go"
   done
-  go run -tags generator ./$scpb/element_generator.go --in $scpb/elements.proto --out $scpb/elements_generated.go
-  go run -tags generator ./$scpb/element_uml_generator.go --out $scpb/uml/table.puml
+  go run ./$scpb/element_generator.go --in $scpb/elements.proto --out $scpb/elements_generated.go
+  go run ./$scpb/element_uml_generator.go --out $scpb/uml/table.puml
 
   local tests=() t
   for t in EndToEndSideEffects ExecuteWithDMLInjection GenerateSchemaChangeCorpus Pause PauseMixedVersion Rollback; do
@@ -477,7 +477,7 @@ gen_docs() {
   docgen http --protoc "$PROTOC" --gendoc "$bin/protoc-gen-doc" --out $d/http \
     --protoc-flags "-Ipkg -I$bin/proto-include -I$PROTOC_INCLUDE server/serverpb/status.proto server/serverpb/admin.proto server/status/statuspb/status.proto"
   go run ./pkg/util/log/gen pkg/util/log/logpb/log.proto logging.md $d/logging.md
-  go run -tags generator ./pkg/util/log/logconfig/gen.go <pkg/util/log/logconfig/config.go >$d/logsinks.md
+  go run ./pkg/util/log/logconfig/gen.go <pkg/util/log/logconfig/config.go >$d/logsinks.md
   go run ./pkg/util/log/eventpb/eventpbgen eventlog.md "${EVENTPB_PROTOS[@]}" >$d/eventlog.md
 }
 

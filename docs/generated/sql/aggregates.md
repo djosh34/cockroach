@@ -29,12 +29,6 @@
 </span></td><td>Immutable</td></tr>
 <tr><td><a name="array_agg"></a><code>array_agg(arg1: anyenum) &rarr; anyenum[]</code></td><td><span class="funcdesc"><p>Aggregates the selected values into an array.</p>
 </span></td><td>Immutable</td></tr>
-<tr><td><a name="array_agg"></a><code>array_agg(arg1: box2d) &rarr; box2d[]</code></td><td><span class="funcdesc"><p>Aggregates the selected values into an array.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="array_agg"></a><code>array_agg(arg1: geography) &rarr; geography[]</code></td><td><span class="funcdesc"><p>Aggregates the selected values into an array.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="array_agg"></a><code>array_agg(arg1: geometry) &rarr; geometry[]</code></td><td><span class="funcdesc"><p>Aggregates the selected values into an array.</p>
-</span></td><td>Immutable</td></tr>
 <tr><td><a name="array_agg"></a><code>array_agg(arg1: jsonb) &rarr; jsonb[]</code></td><td><span class="funcdesc"><p>Aggregates the selected values into an array.</p>
 </span></td><td>Immutable</td></tr>
 <tr><td><a name="array_agg"></a><code>array_agg(arg1: oid) &rarr; oid[]</code></td><td><span class="funcdesc"><p>Aggregates the selected values into an array.</p>
@@ -76,12 +70,6 @@
 <tr><td><a name="array_cat_agg"></a><code>array_cat_agg(arg1: <a href="uuid.html">uuid</a>[]) &rarr; <a href="uuid.html">uuid</a>[]</code></td><td><span class="funcdesc"><p>Unnests the selected arrays into elements that are then aggregated into a single array.</p>
 </span></td><td>Immutable</td></tr>
 <tr><td><a name="array_cat_agg"></a><code>array_cat_agg(arg1: anyenum[]) &rarr; anyenum[]</code></td><td><span class="funcdesc"><p>Unnests the selected arrays into elements that are then aggregated into a single array.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="array_cat_agg"></a><code>array_cat_agg(arg1: box2d[]) &rarr; box2d[]</code></td><td><span class="funcdesc"><p>Unnests the selected arrays into elements that are then aggregated into a single array.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="array_cat_agg"></a><code>array_cat_agg(arg1: geography[]) &rarr; geography[]</code></td><td><span class="funcdesc"><p>Unnests the selected arrays into elements that are then aggregated into a single array.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="array_cat_agg"></a><code>array_cat_agg(arg1: geometry[]) &rarr; geometry[]</code></td><td><span class="funcdesc"><p>Unnests the selected arrays into elements that are then aggregated into a single array.</p>
 </span></td><td>Immutable</td></tr>
 <tr><td><a name="array_cat_agg"></a><code>array_cat_agg(arg1: jsonb[]) &rarr; jsonb[]</code></td><td><span class="funcdesc"><p>Unnests the selected arrays into elements that are then aggregated into a single array.</p>
 </span></td><td>Immutable</td></tr>
@@ -217,13 +205,7 @@
 </span></td><td>Immutable</td></tr>
 <tr><td><a name="max"></a><code>max(arg1: anyenum) &rarr; anyenum</code></td><td><span class="funcdesc"><p>Identifies the maximum selected value.</p>
 </span></td><td>Immutable</td></tr>
-<tr><td><a name="max"></a><code>max(arg1: box2d) &rarr; box2d</code></td><td><span class="funcdesc"><p>Identifies the maximum selected value.</p>
-</span></td><td>Immutable</td></tr>
 <tr><td><a name="max"></a><code>max(arg1: collatedstring{*}) &rarr; collatedstring{*}</code></td><td><span class="funcdesc"><p>Identifies the maximum selected value.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="max"></a><code>max(arg1: geography) &rarr; geography</code></td><td><span class="funcdesc"><p>Identifies the maximum selected value.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="max"></a><code>max(arg1: geometry) &rarr; geometry</code></td><td><span class="funcdesc"><p>Identifies the maximum selected value.</p>
 </span></td><td>Immutable</td></tr>
 <tr><td><a name="max"></a><code>max(arg1: jsonb) &rarr; jsonb</code></td><td><span class="funcdesc"><p>Identifies the maximum selected value.</p>
 </span></td><td>Immutable</td></tr>
@@ -263,13 +245,7 @@
 </span></td><td>Immutable</td></tr>
 <tr><td><a name="min"></a><code>min(arg1: anyenum) &rarr; anyenum</code></td><td><span class="funcdesc"><p>Identifies the minimum selected value.</p>
 </span></td><td>Immutable</td></tr>
-<tr><td><a name="min"></a><code>min(arg1: box2d) &rarr; box2d</code></td><td><span class="funcdesc"><p>Identifies the minimum selected value.</p>
-</span></td><td>Immutable</td></tr>
 <tr><td><a name="min"></a><code>min(arg1: collatedstring{*}) &rarr; collatedstring{*}</code></td><td><span class="funcdesc"><p>Identifies the minimum selected value.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="min"></a><code>min(arg1: geography) &rarr; geography</code></td><td><span class="funcdesc"><p>Identifies the minimum selected value.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="min"></a><code>min(arg1: geometry) &rarr; geometry</code></td><td><span class="funcdesc"><p>Identifies the minimum selected value.</p>
 </span></td><td>Immutable</td></tr>
 <tr><td><a name="min"></a><code>min(arg1: jsonb) &rarr; jsonb</code></td><td><span class="funcdesc"><p>Identifies the minimum selected value.</p>
 </span></td><td>Immutable</td></tr>
@@ -460,18 +436,6 @@
 <tr><td><a name="sqrdiff"></a><code>sqrdiff(arg1: <a href="float.html">float</a>) &rarr; <a href="float.html">float</a></code></td><td><span class="funcdesc"><p>Calculates the sum of squared differences from the mean of the selected values.</p>
 </span></td><td>Immutable</td></tr>
 <tr><td><a name="sqrdiff"></a><code>sqrdiff(arg1: <a href="int.html">int</a>) &rarr; <a href="decimal.html">decimal</a></code></td><td><span class="funcdesc"><p>Calculates the sum of squared differences from the mean of the selected values.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="st_collect"></a><code>st_collect(arg1: geometry) &rarr; geometry</code></td><td><span class="funcdesc"><p>Collects geometries into a GeometryCollection or multi-type as appropriate.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="st_extent"></a><code>st_extent(arg1: geometry) &rarr; box2d</code></td><td><span class="funcdesc"><p>Forms a Box2D that encapsulates all provided geometries.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="st_makeline"></a><code>st_makeline(arg1: geometry) &rarr; geometry</code></td><td><span class="funcdesc"><p>Forms a LineString from Point, MultiPoint or LineStrings. Other shapes will be ignored.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="st_memcollect"></a><code>st_memcollect(arg1: geometry) &rarr; geometry</code></td><td><span class="funcdesc"><p>Collects geometries into a GeometryCollection or multi-type as appropriate.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="st_memunion"></a><code>st_memunion(arg1: geometry) &rarr; geometry</code></td><td><span class="funcdesc"><p>Applies a spatial union to the geometries provided.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="st_union"></a><code>st_union(arg1: geometry) &rarr; geometry</code></td><td><span class="funcdesc"><p>Applies a spatial union to the geometries provided.</p>
 </span></td><td>Immutable</td></tr>
 <tr><td><a name="stddev"></a><code>stddev(arg1: <a href="decimal.html">decimal</a>) &rarr; <a href="decimal.html">decimal</a></code></td><td><span class="funcdesc"><p>Calculates the standard deviation of the selected values.</p>
 </span></td><td>Immutable</td></tr>

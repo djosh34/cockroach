@@ -18,7 +18,7 @@ import (
 )
 
 // Authenticator is a component of an AuthMethod that determines if the
-// given system identity (e.g.: Kerberos or X.509 principal, plain-old
+// given system identity (e.g.: X.509 principal, plain-old
 // username, etc) is who it claims to be.
 type Authenticator = func(
 	ctx context.Context,
