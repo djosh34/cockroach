@@ -18,6 +18,37 @@ option go_package = "github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb";
 
 import "gogoproto/gogo.proto";
 
+// GeoIndexConfig is the wire definition of the configuration of the removed
+// spatial inverted indexes. Stored index descriptors may still carry it;
+// nothing reads it.
+message GeoIndexConfig {
+  option (gogoproto.equal) = true;
+  optional S2GeographyConfig s2_geography = 1;
+  optional S2GeometryConfig s2_geometry = 2;
+}
+
+message S2Config {
+  option (gogoproto.equal) = true;
+  optional int32 min_level = 1 [(gogoproto.nullable) = false];
+  optional int32 max_level = 2 [(gogoproto.nullable) = false];
+  optional int32 level_mod = 3 [(gogoproto.nullable) = false];
+  optional int32 max_cells = 4 [(gogoproto.nullable) = false];
+}
+
+message S2GeographyConfig {
+  option (gogoproto.equal) = true;
+  optional S2Config s2_config = 1;
+}
+
+message S2GeometryConfig {
+  option (gogoproto.equal) = true;
+  optional double min_x = 1 [(gogoproto.nullable) = false];
+  optional double max_x = 2 [(gogoproto.nullable) = false];
+  optional double min_y = 3 [(gogoproto.nullable) = false];
+  optional double max_y = 4 [(gogoproto.nullable) = false];
+  optional S2Config s2_config = 5;
+}
+
 // LocalityConfig is used to figure the locality of a table.
 message LocalityConfig {
   option (gogoproto.equal) = true;

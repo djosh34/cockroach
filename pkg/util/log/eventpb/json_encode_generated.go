@@ -4270,24 +4270,6 @@ func (m *RuntimeStats) AppendJSONFields(printComma bool, b redact.RedactableByte
 		b = strconv.AppendUint(b, uint64(m.HeapReleasedBytes), 10)
 	}
 
-	if m.CGoAllocBytes != 0 {
-		if printComma {
-			b = append(b, ',')
-		}
-		printComma = true
-		b = append(b, "\"CGoAllocBytes\":"...)
-		b = strconv.AppendUint(b, uint64(m.CGoAllocBytes), 10)
-	}
-
-	if m.CGoTotalBytes != 0 {
-		if printComma {
-			b = append(b, ',')
-		}
-		printComma = true
-		b = append(b, "\"CGoTotalBytes\":"...)
-		b = strconv.AppendUint(b, uint64(m.CGoTotalBytes), 10)
-	}
-
 	if m.CGoCallRate != 0 {
 		if printComma {
 			b = append(b, ',')

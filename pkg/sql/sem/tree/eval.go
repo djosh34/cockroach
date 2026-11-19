@@ -13,7 +13,6 @@ package tree
 import (
 	"fmt"
 
-	"github.com/cockroachdb/cockroach/pkg/geo"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/cast"
@@ -1537,9 +1536,6 @@ var CmpOps = cmpOpFixups(map[treecmp.ComparisonOperatorSymbol]*CmpOpOverloads{
 		// detected during type checking.
 		makeEqFn(types.AnyCollatedString, types.AnyCollatedString, volatility.Leakproof),
 		makeEqFn(types.Float, types.Float, volatility.Leakproof),
-		makeEqFn(types.Box2D, types.Box2D, volatility.Leakproof),
-		makeEqFn(types.Geography, types.Geography, volatility.Leakproof),
-		makeEqFn(types.Geometry, types.Geometry, volatility.Leakproof),
 		makeEqFn(types.INet, types.INet, volatility.Leakproof),
 		makeEqFn(types.Int, types.Int, volatility.Leakproof),
 		makeEqFn(types.Interval, types.Interval, volatility.Leakproof),
@@ -1598,9 +1594,6 @@ var CmpOps = cmpOpFixups(map[treecmp.ComparisonOperatorSymbol]*CmpOpOverloads{
 		// detected during type checking.
 		makeLtFn(types.AnyCollatedString, types.AnyCollatedString, volatility.Leakproof),
 		makeLtFn(types.Float, types.Float, volatility.Leakproof),
-		makeLtFn(types.Box2D, types.Box2D, volatility.Leakproof),
-		makeLtFn(types.Geography, types.Geography, volatility.Leakproof),
-		makeLtFn(types.Geometry, types.Geometry, volatility.Leakproof),
 		makeLtFn(types.INet, types.INet, volatility.Leakproof),
 		makeLtFn(types.Int, types.Int, volatility.Leakproof),
 		makeLtFn(types.Interval, types.Interval, volatility.Leakproof),
@@ -1657,9 +1650,6 @@ var CmpOps = cmpOpFixups(map[treecmp.ComparisonOperatorSymbol]*CmpOpOverloads{
 		// detected during type checking.
 		makeLeFn(types.AnyCollatedString, types.AnyCollatedString, volatility.Leakproof),
 		makeLeFn(types.Float, types.Float, volatility.Leakproof),
-		makeLeFn(types.Box2D, types.Box2D, volatility.Leakproof),
-		makeLeFn(types.Geography, types.Geography, volatility.Leakproof),
-		makeLeFn(types.Geometry, types.Geometry, volatility.Leakproof),
 		makeLeFn(types.INet, types.INet, volatility.Leakproof),
 		makeLeFn(types.Int, types.Int, volatility.Leakproof),
 		makeLeFn(types.Interval, types.Interval, volatility.Leakproof),
@@ -1736,9 +1726,6 @@ var CmpOps = cmpOpFixups(map[treecmp.ComparisonOperatorSymbol]*CmpOpOverloads{
 		// detected during type checking.
 		makeIsFn(types.AnyCollatedString, types.AnyCollatedString, volatility.Leakproof),
 		makeIsFn(types.Float, types.Float, volatility.Leakproof),
-		makeIsFn(types.Box2D, types.Box2D, volatility.Leakproof),
-		makeIsFn(types.Geography, types.Geography, volatility.Leakproof),
-		makeIsFn(types.Geometry, types.Geometry, volatility.Leakproof),
 		makeIsFn(types.INet, types.INet, volatility.Leakproof),
 		makeIsFn(types.Int, types.Int, volatility.Leakproof),
 		makeIsFn(types.Interval, types.Interval, volatility.Leakproof),
@@ -1804,9 +1791,6 @@ var CmpOps = cmpOpFixups(map[treecmp.ComparisonOperatorSymbol]*CmpOpOverloads{
 		makeEvalTupleIn(types.AnyCollatedString, volatility.Leakproof),
 		makeEvalTupleIn(types.AnyTuple, volatility.Leakproof),
 		makeEvalTupleIn(types.Float, volatility.Leakproof),
-		makeEvalTupleIn(types.Box2D, volatility.Leakproof),
-		makeEvalTupleIn(types.Geography, volatility.Leakproof),
-		makeEvalTupleIn(types.Geometry, volatility.Leakproof),
 		makeEvalTupleIn(types.INet, volatility.Leakproof),
 		makeEvalTupleIn(types.Int, volatility.Leakproof),
 		makeEvalTupleIn(types.Interval, volatility.Leakproof),
@@ -1850,20 +1834,14 @@ var CmpOps = cmpOpFixups(map[treecmp.ComparisonOperatorSymbol]*CmpOpOverloads{
 		},
 	}},
 
-	treecmp.RegMatch: {overloads: append([]*CmpOp{
+	treecmp.RegMatch: {overloads: []*CmpOp{
 		{
 			LeftType:   types.String,
 			RightType:  types.String,
 			EvalOp:     &MatchRegexpOp{},
 			Volatility: volatility.Immutable,
 		},
-	},
-		makeBox2DComparisonOperators(
-			func(lhs, rhs *geo.CartesianBoundingBox) bool {
-				return lhs.Covers(rhs)
-			},
-		)...,
-	)},
+	}},
 
 	treecmp.RegIMatch: {overloads: []*CmpOp{
 		{
@@ -1930,7 +1908,7 @@ var CmpOps = cmpOpFixups(map[treecmp.ComparisonOperatorSymbol]*CmpOpOverloads{
 			Volatility: volatility.Immutable,
 		},
 	}},
-	treecmp.Overlaps: {overloads: append([]*CmpOp{
+	treecmp.Overlaps: {overloads: []*CmpOp{
 		{
 			LeftType:   types.AnyArray,
 			RightType:  types.AnyArray,
@@ -1943,12 +1921,7 @@ var CmpOps = cmpOpFixups(map[treecmp.ComparisonOperatorSymbol]*CmpOpOverloads{
 			EvalOp:     &OverlapsINetOp{},
 			Volatility: volatility.Immutable,
 		},
-	}, makeBox2DComparisonOperators(
-		func(lhs, rhs *geo.CartesianBoundingBox) bool {
-			return lhs.Intersects(rhs)
-		},
-	)...),
-	},
+	}},
 	treecmp.TSMatches: {overloads: []*CmpOp{
 		{
 			LeftType:   types.TSQuery,
@@ -1964,55 +1937,6 @@ var CmpOps = cmpOpFixups(map[treecmp.ComparisonOperatorSymbol]*CmpOpOverloads{
 		},
 	}},
 })
-
-func makeBox2DComparisonOperators(op func(lhs, rhs *geo.CartesianBoundingBox) bool) []*CmpOp {
-	return []*CmpOp{
-		{
-			LeftType:  types.Box2D,
-			RightType: types.Box2D,
-			EvalOp: &CompareBox2DOp{Op: func(left, right Datum) bool {
-				return op(
-					&MustBeDBox2D(left).CartesianBoundingBox,
-					&MustBeDBox2D(right).CartesianBoundingBox,
-				)
-			}},
-			Volatility: volatility.Immutable,
-		},
-		{
-			LeftType:  types.Box2D,
-			RightType: types.Geometry,
-			EvalOp: &CompareBox2DOp{Op: func(left, right Datum) bool {
-				return op(
-					&MustBeDBox2D(left).CartesianBoundingBox,
-					MustBeDGeometry(right).CartesianBoundingBox(),
-				)
-			}},
-			Volatility: volatility.Immutable,
-		},
-		{
-			LeftType:  types.Geometry,
-			RightType: types.Box2D,
-			EvalOp: &CompareBox2DOp{Op: func(left, right Datum) bool {
-				return op(
-					MustBeDGeometry(left).CartesianBoundingBox(),
-					&MustBeDBox2D(right).CartesianBoundingBox,
-				)
-			}},
-			Volatility: volatility.Immutable,
-		},
-		{
-			LeftType:  types.Geometry,
-			RightType: types.Geometry,
-			EvalOp: &CompareBox2DOp{Op: func(left, right Datum) bool {
-				return op(
-					MustBeDGeometry(left).CartesianBoundingBox(),
-					MustBeDGeometry(right).CartesianBoundingBox(),
-				)
-			}},
-			Volatility: volatility.Immutable,
-		},
-	}
-}
 
 // This map contains the inverses for operators in the CmpOps map that have
 // inverses.

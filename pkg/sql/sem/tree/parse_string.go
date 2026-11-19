@@ -71,12 +71,6 @@ func ParseAndRequireString(
 		d, err = ParseDPGLSN(s)
 	case types.RefCursorFamily:
 		d = NewDRefCursor(s)
-	case types.Box2DFamily:
-		d, err = ParseDBox2D(s)
-	case types.GeographyFamily:
-		d, err = ParseDGeography(s)
-	case types.GeometryFamily:
-		d, err = ParseDGeometry(s)
 	case types.JsonFamily:
 		d, err = ParseDJSON(s)
 	case types.OidFamily:

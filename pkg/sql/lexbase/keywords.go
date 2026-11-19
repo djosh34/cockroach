@@ -40,7 +40,6 @@ var KeywordsCategories = map[string]string{
 "bit": "C",
 "boolean": "C",
 "both": "R",
-"box2d": "C",
 "bucket_count": "U",
 "bundle": "U",
 "by": "U",
@@ -180,15 +179,6 @@ var KeywordsCategories = map[string]string{
 "function": "U",
 "functions": "U",
 "generated": "U",
-"geography": "C",
-"geometry": "C",
-"geometrycollection": "U",
-"geometrycollectionm": "U",
-"geometrycollectionz": "U",
-"geometrycollectionzm": "U",
-"geometrym": "U",
-"geometryz": "U",
-"geometryzm": "U",
 "global": "U",
 "grant": "R",
 "grantee": "U",
@@ -263,10 +253,6 @@ var KeywordsCategories = map[string]string{
 "level": "U",
 "like": "T",
 "limit": "R",
-"linestring": "U",
-"linestringm": "U",
-"linestringz": "U",
-"linestringzm": "U",
 "list": "U",
 "local": "U",
 "locality": "U",
@@ -287,18 +273,6 @@ var KeywordsCategories = map[string]string{
 "modifysqlclustersetting": "U",
 "month": "U",
 "move": "U",
-"multilinestring": "U",
-"multilinestringm": "U",
-"multilinestringz": "U",
-"multilinestringzm": "U",
-"multipoint": "U",
-"multipointm": "U",
-"multipointz": "U",
-"multipointzm": "U",
-"multipolygon": "U",
-"multipolygonm": "U",
-"multipolygonz": "U",
-"multipolygonzm": "U",
 "names": "U",
 "nan": "U",
 "natural": "T",
@@ -365,13 +339,7 @@ var KeywordsCategories = map[string]string{
 "plan": "U",
 "plans": "U",
 "point": "C",
-"pointm": "U",
-"pointz": "U",
-"pointzm": "U",
 "polygon": "C",
-"polygonm": "U",
-"polygonz": "U",
-"polygonzm": "U",
 "position": "C",
 "preceding": "U",
 "precision": "C",
@@ -607,7 +575,6 @@ var KeywordNames = []string{
 "bit",
 "boolean",
 "both",
-"box2d",
 "bucket_count",
 "bundle",
 "by",
@@ -747,15 +714,6 @@ var KeywordNames = []string{
 "function",
 "functions",
 "generated",
-"geography",
-"geometry",
-"geometrycollection",
-"geometrycollectionm",
-"geometrycollectionz",
-"geometrycollectionzm",
-"geometrym",
-"geometryz",
-"geometryzm",
 "global",
 "grant",
 "grantee",
@@ -830,10 +788,6 @@ var KeywordNames = []string{
 "level",
 "like",
 "limit",
-"linestring",
-"linestringm",
-"linestringz",
-"linestringzm",
 "list",
 "local",
 "locality",
@@ -854,18 +808,6 @@ var KeywordNames = []string{
 "modifysqlclustersetting",
 "month",
 "move",
-"multilinestring",
-"multilinestringm",
-"multilinestringz",
-"multilinestringzm",
-"multipoint",
-"multipointm",
-"multipointz",
-"multipointzm",
-"multipolygon",
-"multipolygonm",
-"multipolygonz",
-"multipolygonzm",
 "names",
 "nan",
 "natural",
@@ -932,13 +874,7 @@ var KeywordNames = []string{
 "plan",
 "plans",
 "point",
-"pointm",
-"pointz",
-"pointzm",
 "polygon",
-"polygonm",
-"polygonz",
-"polygonzm",
 "position",
 "preceding",
 "precision",
@@ -1179,7 +1115,6 @@ func GetKeywordID(k string) int32 {
 	case "bit": return BIT
 	case "boolean": return BOOLEAN
 	case "both": return BOTH
-	case "box2d": return BOX2D
 	case "bucket_count": return BUCKET_COUNT
 	case "bundle": return BUNDLE
 	case "by": return BY
@@ -1319,15 +1254,6 @@ func GetKeywordID(k string) int32 {
 	case "function": return FUNCTION
 	case "functions": return FUNCTIONS
 	case "generated": return GENERATED
-	case "geography": return GEOGRAPHY
-	case "geometry": return GEOMETRY
-	case "geometrycollection": return GEOMETRYCOLLECTION
-	case "geometrycollectionm": return GEOMETRYCOLLECTIONM
-	case "geometrycollectionz": return GEOMETRYCOLLECTIONZ
-	case "geometrycollectionzm": return GEOMETRYCOLLECTIONZM
-	case "geometrym": return GEOMETRYM
-	case "geometryz": return GEOMETRYZ
-	case "geometryzm": return GEOMETRYZM
 	case "global": return GLOBAL
 	case "grant": return GRANT
 	case "grantee": return GRANTEE
@@ -1402,10 +1328,6 @@ func GetKeywordID(k string) int32 {
 	case "level": return LEVEL
 	case "like": return LIKE
 	case "limit": return LIMIT
-	case "linestring": return LINESTRING
-	case "linestringm": return LINESTRINGM
-	case "linestringz": return LINESTRINGZ
-	case "linestringzm": return LINESTRINGZM
 	case "list": return LIST
 	case "local": return LOCAL
 	case "locality": return LOCALITY
@@ -1426,18 +1348,6 @@ func GetKeywordID(k string) int32 {
 	case "modifysqlclustersetting": return MODIFYSQLCLUSTERSETTING
 	case "month": return MONTH
 	case "move": return MOVE
-	case "multilinestring": return MULTILINESTRING
-	case "multilinestringm": return MULTILINESTRINGM
-	case "multilinestringz": return MULTILINESTRINGZ
-	case "multilinestringzm": return MULTILINESTRINGZM
-	case "multipoint": return MULTIPOINT
-	case "multipointm": return MULTIPOINTM
-	case "multipointz": return MULTIPOINTZ
-	case "multipointzm": return MULTIPOINTZM
-	case "multipolygon": return MULTIPOLYGON
-	case "multipolygonm": return MULTIPOLYGONM
-	case "multipolygonz": return MULTIPOLYGONZ
-	case "multipolygonzm": return MULTIPOLYGONZM
 	case "names": return NAMES
 	case "nan": return NAN
 	case "natural": return NATURAL
@@ -1504,13 +1414,7 @@ func GetKeywordID(k string) int32 {
 	case "plan": return PLAN
 	case "plans": return PLANS
 	case "point": return POINT
-	case "pointm": return POINTM
-	case "pointz": return POINTZ
-	case "pointzm": return POINTZM
 	case "polygon": return POLYGON
-	case "polygonm": return POLYGONM
-	case "polygonz": return POLYGONZ
-	case "polygonzm": return POLYGONZM
 	case "position": return POSITION
 	case "preceding": return PRECEDING
 	case "precision": return PRECISION

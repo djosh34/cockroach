@@ -432,9 +432,6 @@ func (b *Builder) buildScalar(
 		to := b.buildScalar(t.TypedTo(), inScope, nil, nil, colRefs)
 		out = b.buildRangeCond(t.Not, t.Symmetric, inputFrom, from, inputTo, to)
 
-	case *sqlFnInfo:
-		out = b.buildSQLFn(t, inScope, outScope, outCol, colRefs)
-
 	case *srf:
 		if len(t.cols) == 1 {
 			if inGroupingContext {
@@ -842,13 +839,6 @@ func (b *Builder) constructComparison(
 	case treecmp.NotSimilarTo:
 		return b.factory.ConstructNotSimilarTo(left, right)
 	case treecmp.RegMatch:
-		leftFam, rightFam := cmp.Op.LeftType.Family(), cmp.Op.RightType.Family()
-		if (leftFam == types.GeometryFamily || leftFam == types.Box2DFamily) &&
-			(rightFam == types.GeometryFamily || rightFam == types.Box2DFamily) {
-			// The ~ operator means "covers" when used with geometry or bounding box
-			// operands.
-			return b.factory.ConstructBBoxCovers(left, right)
-		}
 		return b.factory.ConstructRegMatch(left, right)
 	case treecmp.NotRegMatch:
 		return b.factory.ConstructNotRegMatch(left, right)
@@ -871,13 +861,6 @@ func (b *Builder) constructComparison(
 	case treecmp.JSONSomeExists:
 		return b.factory.ConstructJsonSomeExists(left, right)
 	case treecmp.Overlaps:
-		leftFam, rightFam := cmp.Op.LeftType.Family(), cmp.Op.RightType.Family()
-		if (leftFam == types.GeometryFamily || leftFam == types.Box2DFamily) &&
-			(rightFam == types.GeometryFamily || rightFam == types.Box2DFamily) {
-			// The && operator means "intersects" when used with geometry or bounding
-			// box operands.
-			return b.factory.ConstructBBoxIntersects(left, right)
-		}
 		return b.factory.ConstructOverlaps(left, right)
 	case treecmp.TSMatches:
 		return b.factory.ConstructTSMatches(left, right)

@@ -64,7 +64,6 @@ type BinaryOpEvaluator interface {
 	EvalBitOrVarBitOp(context.Context, *BitOrVarBitOp, Datum, Datum) (Datum, error)
 	EvalBitXorIntOp(context.Context, *BitXorIntOp, Datum, Datum) (Datum, error)
 	EvalBitXorVarBitOp(context.Context, *BitXorVarBitOp, Datum, Datum) (Datum, error)
-	EvalCompareBox2DOp(context.Context, *CompareBox2DOp, Datum, Datum) (Datum, error)
 	EvalCompareScalarOp(context.Context, *CompareScalarOp, Datum, Datum) (Datum, error)
 	EvalCompareTupleOp(context.Context, *CompareTupleOp, Datum, Datum) (Datum, error)
 	EvalConcatArraysOp(context.Context, *ConcatArraysOp, Datum, Datum) (Datum, error)
@@ -288,11 +287,6 @@ func (op *BitXorIntOp) Eval(ctx context.Context, e OpEvaluator, a, b Datum) (Dat
 // Eval is part of the BinaryEvalOp interface.
 func (op *BitXorVarBitOp) Eval(ctx context.Context, e OpEvaluator, a, b Datum) (Datum, error) {
 	return e.EvalBitXorVarBitOp(ctx, op, a, b)
-}
-
-// Eval is part of the BinaryEvalOp interface.
-func (op *CompareBox2DOp) Eval(ctx context.Context, e OpEvaluator, a, b Datum) (Datum, error) {
-	return e.EvalCompareBox2DOp(ctx, op, a, b)
 }
 
 // Eval is part of the BinaryEvalOp interface.

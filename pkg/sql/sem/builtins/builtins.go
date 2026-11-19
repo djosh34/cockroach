@@ -6104,60 +6104,6 @@ SELECT
 
 	// Returns the number of distinct inverted index entries that would be
 	// generated for a value.
-	"crdb_internal.num_geo_inverted_index_entries": makeBuiltin(
-		tree.FunctionProperties{
-			Category: builtinconstants.CategorySystemInfo,
-		},
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "table_id", Typ: types.Int},
-				{Name: "index_id", Typ: types.Int},
-				{Name: "val", Typ: types.Geography},
-			},
-			ReturnType: tree.FixedReturnType(types.Int),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				if args[0] == tree.DNull || args[1] == tree.DNull || args[2] == tree.DNull {
-					return tree.DZero, nil
-				}
-				tableID := catid.DescID(tree.MustBeDInt(args[0]))
-				indexID := catid.IndexID(tree.MustBeDInt(args[1]))
-				g := tree.MustBeDGeography(args[2])
-				n, err := evalCtx.CatalogBuiltins.NumGeographyInvertedIndexEntries(ctx, tableID, indexID, g)
-				if err != nil {
-					return nil, err
-				}
-				return tree.NewDInt(tree.DInt(n)), nil
-			},
-			Info:              "This function is used only by CockroachDB's developers for testing purposes.",
-			Volatility:        volatility.Stable,
-			CalledOnNullInput: true,
-		},
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "table_id", Typ: types.Int},
-				{Name: "index_id", Typ: types.Int},
-				{Name: "val", Typ: types.Geometry},
-			},
-			ReturnType: tree.FixedReturnType(types.Int),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				if args[0] == tree.DNull || args[1] == tree.DNull || args[2] == tree.DNull {
-					return tree.DZero, nil
-				}
-				tableID := catid.DescID(tree.MustBeDInt(args[0]))
-				indexID := catid.IndexID(tree.MustBeDInt(args[1]))
-				g := tree.MustBeDGeometry(args[2])
-				n, err := evalCtx.CatalogBuiltins.NumGeometryInvertedIndexEntries(ctx, tableID, indexID, g)
-				if err != nil {
-					return nil, err
-				}
-				return tree.NewDInt(tree.DInt(n)), nil
-			},
-			Info:              "This function is used only by CockroachDB's developers for testing purposes.",
-			Volatility:        volatility.Stable,
-			CalledOnNullInput: true,
-		}),
-	// Returns the number of distinct inverted index entries that would be
-	// generated for a value.
 	"crdb_internal.num_inverted_index_entries": makeBuiltin(
 		tree.FunctionProperties{
 			Category: builtinconstants.CategorySystemInfo,
@@ -10597,9 +10543,9 @@ func asJSONBuildObjectKey(
 			tree.FmtBareStrings,
 			tree.FmtDataConversionConfig(dcc),
 		), nil
-	case *tree.DBitArray, *tree.DBool, *tree.DBox2D, *tree.DBytes, *tree.DDate,
-		*tree.DDecimal, *tree.DEnum, *tree.DFloat, *tree.DGeography,
-		*tree.DGeometry, *tree.DIPAddr, *tree.DInt, *tree.DInterval, *tree.DOid,
+	case *tree.DBitArray, *tree.DBool, *tree.DBytes, *tree.DDate,
+		*tree.DDecimal, *tree.DEnum, *tree.DFloat,
+		*tree.DIPAddr, *tree.DInt, *tree.DInterval, *tree.DOid,
 		*tree.DOidWrapper, *tree.DPGLSN, *tree.DTime, *tree.DTimeTZ, *tree.DTimestamp,
 		*tree.DTSQuery, *tree.DTSVector, *tree.DUuid, *tree.DVoid:
 		return tree.AsStringWithFlags(d, tree.FmtBareStrings), nil

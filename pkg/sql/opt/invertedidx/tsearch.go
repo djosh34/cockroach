@@ -16,7 +16,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/inverted"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/cat"
-	"github.com/cockroachdb/cockroach/pkg/sql/opt/invertedexpr"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/memo"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
@@ -39,7 +38,6 @@ func (t *tsqueryFilterPlanner) extractInvertedFilterConditionFromLeaf(
 ) (
 	invertedExpr inverted.Expression,
 	remainingFilters opt.ScalarExpr,
-	_ *invertedexpr.PreFiltererStateForInvertedFilterer,
 ) {
 	var constantVal opt.ScalarExpr
 	var left, right opt.ScalarExpr
@@ -48,7 +46,7 @@ func (t *tsqueryFilterPlanner) extractInvertedFilterConditionFromLeaf(
 		left, right = e.Left, e.Right
 	default:
 		// Only the above types are supported.
-		return inverted.NonInvertedColExpression{}, expr, nil
+		return inverted.NonInvertedColExpression{}, expr
 	}
 	if isIndexColumn(t.tabID, t.index, left, t.computedColumns) && memo.CanExtractConstDatum(right) {
 		constantVal = right
@@ -56,7 +54,7 @@ func (t *tsqueryFilterPlanner) extractInvertedFilterConditionFromLeaf(
 		constantVal = left
 	} else {
 		// Can only accelerate with a single constant value.
-		return inverted.NonInvertedColExpression{}, expr, nil
+		return inverted.NonInvertedColExpression{}, expr
 	}
 	d := memo.ExtractConstDatum(constantVal)
 	if d.ResolvedType() != types.TSQuery {
@@ -69,7 +67,7 @@ func (t *tsqueryFilterPlanner) extractInvertedFilterConditionFromLeaf(
 	invertedExpr, err = q.GetInvertedExpr()
 	if err != nil {
 		// An inverted expression could not be extracted.
-		return inverted.NonInvertedColExpression{}, expr, nil
+		return inverted.NonInvertedColExpression{}, expr
 	}
 
 	// If the extracted inverted expression is not tight then remaining filters
@@ -81,7 +79,5 @@ func (t *tsqueryFilterPlanner) extractInvertedFilterConditionFromLeaf(
 		remainingFilters = expr
 	}
 
-	// We do not currently support pre-filtering for text search indexes, so
-	// the returned pre-filter state is nil.
-	return invertedExpr, remainingFilters, nil
+	return invertedExpr, remainingFilters
 }

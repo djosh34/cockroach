@@ -17,7 +17,6 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/cockroachdb/cockroach/pkg/geo/geopb"
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
 	"github.com/cockroachdb/cockroach/pkg/sql/oidext"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
@@ -429,35 +428,6 @@ var (
 	INet = &T{InternalType: InternalType{
 		Family: INetFamily, Oid: oid.T_inet, Locale: &emptyLocale}}
 
-	// Geometry is the type of a geospatial Geometry object.
-	Geometry = &T{
-		InternalType: InternalType{
-			Family:      GeometryFamily,
-			Oid:         oidext.T_geometry,
-			Locale:      &emptyLocale,
-			GeoMetadata: &GeoMetadata{},
-		},
-	}
-
-	// Geography is the type of a geospatial Geography object.
-	Geography = &T{
-		InternalType: InternalType{
-			Family:      GeographyFamily,
-			Oid:         oidext.T_geography,
-			Locale:      &emptyLocale,
-			GeoMetadata: &GeoMetadata{},
-		},
-	}
-
-	// Box2D is the type of a geospatial box2d object.
-	Box2D = &T{
-		InternalType: InternalType{
-			Family: Box2DFamily,
-			Oid:    oidext.T_box2d,
-			Locale: &emptyLocale,
-		},
-	}
-
 	// PGLSN is the type representing a PostgreSQL LSN object.
 	PGLSN = &T{
 		InternalType: InternalType{
@@ -525,15 +495,12 @@ var (
 	//
 	Scalar = []*T{
 		Bool,
-		Box2D,
 		Int,
 		Float,
 		Decimal,
 		Date,
 		Timestamp,
 		Interval,
-		Geography,
-		Geometry,
 		String,
 		Bytes,
 		TimestampTZ,
@@ -780,7 +747,6 @@ func MakeScalar(family Family, o oid.Oid, precision, width int32, locale string)
 
 	timePrecisionIsSet := false
 	var intervalDurationField *IntervalDurationField
-	var geoMetadata *GeoMetadata
 	switch family {
 	case IntervalFamily:
 		intervalDurationField = &IntervalDurationField{}
@@ -826,10 +792,6 @@ func MakeScalar(family Family, o oid.Oid, precision, width int32, locale string)
 		}
 	case StringFamily, BytesFamily, CollatedStringFamily, BitFamily:
 		// These types can have any width.
-	case GeometryFamily:
-		geoMetadata = &GeoMetadata{}
-	case GeographyFamily:
-		geoMetadata = &GeoMetadata{}
 	default:
 		if width != 0 {
 			panic(errors.AssertionFailedf("type %s cannot have width", family))
@@ -844,7 +806,6 @@ func MakeScalar(family Family, o oid.Oid, precision, width int32, locale string)
 		Width:                 width,
 		Locale:                &locale,
 		IntervalDurationField: intervalDurationField,
-		GeoMetadata:           geoMetadata,
 	}}
 }
 
@@ -989,59 +950,6 @@ func MakeTimeTZ(precision int32) *T {
 		TimePrecisionIsSet: true,
 		Locale:             &emptyLocale,
 	}}
-}
-
-// MakeGeometry constructs a new instance of a GEOMETRY type (oid = T_geometry)
-// that has the given shape and SRID.
-func MakeGeometry(shape geopb.ShapeType, srid geopb.SRID) *T {
-	// Negative values are promoted to 0.
-	if srid < 0 {
-		srid = 0
-	}
-	return &T{InternalType: InternalType{
-		Family: GeometryFamily,
-		Oid:    oidext.T_geometry,
-		Locale: &emptyLocale,
-		GeoMetadata: &GeoMetadata{
-			ShapeType: shape,
-			SRID:      srid,
-		},
-	}}
-}
-
-// MakeGeography constructs a new instance of a geography-related type.
-func MakeGeography(shape geopb.ShapeType, srid geopb.SRID) *T {
-	// Negative values are promoted to 0.
-	if srid < 0 {
-		srid = 0
-	}
-	return &T{InternalType: InternalType{
-		Family: GeographyFamily,
-		Oid:    oidext.T_geography,
-		Locale: &emptyLocale,
-		GeoMetadata: &GeoMetadata{
-			ShapeType: shape,
-			SRID:      srid,
-		},
-	}}
-}
-
-// GeoMetadata returns the GeoMetadata of the type object if it exists.
-// This should only exist on Geometry and Geography types.
-func (t *T) GeoMetadata() (*GeoMetadata, error) {
-	if t.InternalType.GeoMetadata == nil {
-		return nil, errors.Newf("GeoMetadata does not exist on type")
-	}
-	return t.InternalType.GeoMetadata, nil
-}
-
-// GeoSRIDOrZero returns the geo SRID of the type object if it exists.
-// This should only exist on a subset of Geometry and Geography types.
-func (t *T) GeoSRIDOrZero() geopb.SRID {
-	if t.InternalType.GeoMetadata != nil {
-		return t.InternalType.GeoMetadata.SRID
-	}
-	return 0
 }
 
 var (
@@ -1472,15 +1380,12 @@ var familyNames = map[Family]redact.SafeString{
 	ArrayFamily:          "array",
 	BitFamily:            "bit",
 	BoolFamily:           "bool",
-	Box2DFamily:          "box2d",
 	BytesFamily:          "bytes",
 	CollatedStringFamily: "collatedstring",
 	DateFamily:           "date",
 	DecimalFamily:        "decimal",
 	EnumFamily:           "enum",
 	FloatFamily:          "float",
-	GeographyFamily:      "geography",
-	GeometryFamily:       "geometry",
 	INetFamily:           "inet",
 	IntFamily:            "int",
 	IntervalFamily:       "interval",
@@ -1500,6 +1405,12 @@ var familyNames = map[Family]redact.SafeString{
 	UuidFamily:           "uuid",
 	VoidFamily:           "void",
 	EncodedKeyFamily:     "encodedkey",
+
+	// The spatial types are removed. Stored descriptors that use them fail
+	// validation; the names stay so that error messages can name them.
+	Box2DFamily:     "box2d",
+	GeographyFamily: "geography",
+	GeometryFamily:  "geometry",
 }
 
 // Name returns a user-friendly word indicating the family type.
@@ -1690,8 +1601,6 @@ func (t *T) SQLStandardNameWithTypmod(haveTypmod bool, typmod int) string {
 		return buf.String()
 	case BoolFamily:
 		return "boolean"
-	case Box2DFamily:
-		return "box2d"
 	case BytesFamily:
 		return "bytea"
 	case DateFamily:
@@ -1719,8 +1628,6 @@ func (t *T) SQLStandardNameWithTypmod(haveTypmod bool, typmod int) string {
 		default:
 			panic(errors.AssertionFailedf("programming error: unknown float width: %d", t.Width()))
 		}
-	case GeometryFamily, GeographyFamily:
-		return t.Name() + t.InternalType.GeoMetadata.SQLString()
 	case INetFamily:
 		return "inet"
 	case IntFamily:
@@ -1916,8 +1823,6 @@ func (t *T) SQLString() string {
 		if t.InternalType.Precision > 0 || t.InternalType.TimePrecisionIsSet {
 			return fmt.Sprintf("%s(%d)", strings.ToUpper(t.Name()), t.Precision())
 		}
-	case GeometryFamily, GeographyFamily:
-		return strings.ToUpper(t.Name() + t.InternalType.GeoMetadata.SQLString())
 	case IntervalFamily:
 		switch t.InternalType.IntervalDurationField.DurationType {
 		case IntervalDurationType_UNSET:
@@ -2001,7 +1906,7 @@ func (t *T) SQLStringForError() redact.RedactableString {
 	case BoolFamily, IntFamily, FloatFamily, DecimalFamily, DateFamily, TimestampFamily,
 		IntervalFamily, StringFamily, BytesFamily, TimestampTZFamily, CollatedStringFamily, OidFamily,
 		UnknownFamily, UuidFamily, INetFamily, TimeFamily, JsonFamily, TimeTZFamily, BitFamily,
-		GeometryFamily, GeographyFamily, Box2DFamily, VoidFamily, EncodedKeyFamily, TSQueryFamily,
+		VoidFamily, EncodedKeyFamily, TSQueryFamily,
 		TSVectorFamily, AnyFamily, PGLSNFamily, RefCursorFamily:
 		// These types do not contain other types, and do not require redaction.
 		return redact.Sprint(redact.SafeString(t.SQLString()))
@@ -2975,28 +2880,7 @@ var postgresPredefinedTypeIssues = map[string]int{
 	"xml":           43355,
 }
 
-// SQLString outputs the GeoMetadata in a SQL-compatible string.
-func (m *GeoMetadata) SQLString() string {
-	// If SRID is available, display both shape and SRID.
-	// If shape is available but not SRID, just display shape.
-	if m.SRID != 0 {
-		shapeName := strings.ToLower(m.ShapeType.String())
-		if m.ShapeType == geopb.ShapeType_Unset {
-			shapeName = "geometry"
-		}
-		return fmt.Sprintf("(%s,%d)", shapeName, m.SRID)
-	} else if m.ShapeType != geopb.ShapeType_Unset {
-		return fmt.Sprintf("(%s)", m.ShapeType)
-	}
-	return ""
-}
-
 // Delimiter selects the correct delimiter rune based on the datum type specified.
 func (t *T) Delimiter() string {
-	switch t.Family() {
-	case Geometry.Family(), Geography.Family():
-		return ":"
-	default:
-		return ","
-	}
+	return ","
 }

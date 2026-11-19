@@ -18,7 +18,6 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
 	"github.com/cockroachdb/cockroach/pkg/docs"
-	"github.com/cockroachdb/cockroach/pkg/geo/geoindex"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catenumpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
@@ -155,9 +154,8 @@ func CreateIndex(b BuildCtx, n *tree.CreateIndex) {
 	addColumnsForSecondaryIndex(b, n, relation, &idxSpec)
 	// If necessary setup a partial predicate
 	maybeAddIndexPredicate(b, n, &idxSpec)
-	// Picks up any geoconfig parameters, hash sharded one are
-	// picked independently.
-	maybeApplyStorageParameters(b, n, &idxSpec)
+	// Hash sharded storage parameters are picked up independently.
+	validateStorageParameters(b, n)
 	// Assign the secondary constraint ID now, since we may have added a check
 	// constraint earlier.
 	if idxSpec.secondary.IsUnique {
@@ -304,25 +302,6 @@ func processColNodeType(
 			default:
 				panic(newUndefinedOpclassError(columnNode.OpClass))
 			}
-		case types.GeometryFamily:
-			if columnNode.OpClass != "" {
-				panic(newUndefinedOpclassError(columnNode.OpClass))
-			}
-			config, err := geoindex.GeometryIndexConfigForSRID(columnType.Type.GeoSRIDOrZero())
-			if err != nil {
-				panic(err)
-			}
-			indexSpec.secondary.GeoConfig = config
-			b.IncrementSchemaChangeIndexCounter("geometry_inverted")
-		case types.GeographyFamily:
-			if columnNode.OpClass != "" {
-				panic(newUndefinedOpclassError(columnNode.OpClass))
-			}
-			if columnNode.OpClass != "" {
-				panic(newUndefinedOpclassError(columnNode.OpClass))
-			}
-			indexSpec.secondary.GeoConfig = geoindex.DefaultGeographyIndexConfig()
-			b.IncrementSchemaChangeIndexCounter("geography_inverted")
 		case types.StringFamily:
 			// Check the opclass of the last column in the list, which is the column
 			// we're going to inverted index.
@@ -763,27 +742,17 @@ func maybeAddIndexPredicate(b BuildCtx, n *tree.CreateIndex, idxSpec *indexSpec)
 	}
 }
 
-// maybeApplyStorageParameters apply any storage parameters into the index spec,
-// this is only used for GeoConfig today.
-func maybeApplyStorageParameters(b BuildCtx, n *tree.CreateIndex, idxSpec *indexSpec) {
+// validateStorageParameters checks the storage parameters of the index. None
+// of them change the index spec.
+func validateStorageParameters(b BuildCtx, n *tree.CreateIndex) {
 	if len(n.StorageParams) == 0 {
 		return
 	}
-	dummyIndexDesc := &descpb.IndexDescriptor{}
-	if idxSpec.secondary.GeoConfig != nil {
-		dummyIndexDesc.GeoConfig = *idxSpec.secondary.GeoConfig
-	}
 	storageParamSetter := &indexstorageparam.Setter{
-		IndexDesc: dummyIndexDesc,
+		IndexDesc: &descpb.IndexDescriptor{},
 	}
-	err := storageparam.Set(b, b.SemaCtx(), b.EvalCtx(), n.StorageParams, storageParamSetter)
-	if err != nil {
+	if err := storageparam.Set(b, b.SemaCtx(), b.EvalCtx(), n.StorageParams, storageParamSetter); err != nil {
 		panic(err)
-	}
-	if !dummyIndexDesc.GeoConfig.IsEmpty() {
-		idxSpec.secondary.GeoConfig = &dummyIndexDesc.GeoConfig
-	} else {
-		idxSpec.secondary.GeoConfig = nil
 	}
 }
 

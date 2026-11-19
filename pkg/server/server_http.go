@@ -13,9 +13,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/NYTimes/gziphandler"
 	"github.com/cockroachdb/cmux"
@@ -25,7 +23,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/server/authserver"
 	"github.com/cockroachdb/cockroach/pkg/server/debug"
 	"github.com/cockroachdb/cockroach/pkg/server/privchecker"
-	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
 	"github.com/cockroachdb/cockroach/pkg/server/srverrors"
 	"github.com/cockroachdb/cockroach/pkg/server/status"
 	"github.com/cockroachdb/cockroach/pkg/settings"
@@ -34,7 +31,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/log/logcrash"
 	"github.com/cockroachdb/cockroach/pkg/util/netutil"
 	"github.com/cockroachdb/cockroach/pkg/util/stop"
-	"github.com/cockroachdb/errors"
 	"google.golang.org/grpc/metadata"
 )
 

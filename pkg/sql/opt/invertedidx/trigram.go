@@ -16,7 +16,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/inverted"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/cat"
-	"github.com/cockroachdb/cockroach/pkg/sql/opt/invertedexpr"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/memo"
 	"github.com/cockroachdb/cockroach/pkg/sql/rowenc"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
@@ -39,7 +38,6 @@ func (t *trigramFilterPlanner) extractInvertedFilterConditionFromLeaf(
 ) (
 	invertedExpr inverted.Expression,
 	remainingFilters opt.ScalarExpr,
-	_ *invertedexpr.PreFiltererStateForInvertedFilterer,
 ) {
 	var constantVal opt.ScalarExpr
 	var left, right opt.ScalarExpr
@@ -75,7 +73,7 @@ func (t *trigramFilterPlanner) extractInvertedFilterConditionFromLeaf(
 		// Do not generate legacy inverted constraints for similarity filters
 		// if the text similarity optimization is enabled.
 		if evalCtx.SessionData().OptimizerUseTrigramSimilarityOptimization {
-			return inverted.NonInvertedColExpression{}, expr, nil
+			return inverted.NonInvertedColExpression{}, expr
 		}
 		// If we're doing a % expression (similarity threshold), we need to
 		// construct an OR out of the spans: we need to find results that match any
@@ -87,7 +85,7 @@ func (t *trigramFilterPlanner) extractInvertedFilterConditionFromLeaf(
 		commutative = true
 	default:
 		// Only the above types are supported.
-		return inverted.NonInvertedColExpression{}, expr, nil
+		return inverted.NonInvertedColExpression{}, expr
 	}
 	if isIndexColumn(t.tabID, t.index, left, t.computedColumns) && memo.CanExtractConstDatum(right) {
 		constantVal = right
@@ -97,7 +95,7 @@ func (t *trigramFilterPlanner) extractInvertedFilterConditionFromLeaf(
 		constantVal = left
 	} else {
 		// Can only accelerate with a single constant value.
-		return inverted.NonInvertedColExpression{}, expr, nil
+		return inverted.NonInvertedColExpression{}, expr
 	}
 	d := tree.UnwrapDOidWrapper(memo.ExtractConstDatum(constantVal))
 	ds, ok := d.(*tree.DString)
@@ -111,7 +109,7 @@ func (t *trigramFilterPlanner) extractInvertedFilterConditionFromLeaf(
 	invertedExpr, err = rowenc.EncodeTrigramSpans(s, allMustMatch)
 	if err != nil {
 		// An inverted expression could not be extracted.
-		return inverted.NonInvertedColExpression{}, expr, nil
+		return inverted.NonInvertedColExpression{}, expr
 	}
 
 	// If the extracted inverted expression is not tight then remaining filters
@@ -120,7 +118,5 @@ func (t *trigramFilterPlanner) extractInvertedFilterConditionFromLeaf(
 		remainingFilters = expr
 	}
 
-	// We do not currently support pre-filtering for JSON and Array indexes, so
-	// the returned pre-filter state is nil.
-	return invertedExpr, remainingFilters, nil
+	return invertedExpr, remainingFilters
 }

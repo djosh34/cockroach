@@ -265,9 +265,9 @@ const (
 	InformationSchemaSchemataTablePrivilegesID
 	InformationSchemaSequencesID
 	InformationSchemaSessionVariables
-	InformationSchemaStGeometryColumnsTableID
-	InformationSchemaStSpatialReferenceSystemsTableID
-	InformationSchemaStUnitsOfMeasureTableID
+	_ // was information_schema.st_geometry_columns
+	_ // was information_schema.st_spatial_reference_systems
+	_ // was information_schema.st_units_of_measure
 	InformationSchemaStatisticsTableID
 	InformationSchemaTableConstraintTableID
 	InformationSchemaTableConstraintsExtensionsTableID
@@ -422,10 +422,11 @@ const (
 	PgCatalogUserTableID
 	PgCatalogViewsTableID
 	PgExtensionSchemaID
-	PgExtensionGeographyColumnsTableID
-	PgExtensionGeometryColumnsTableID
-	PgExtensionSpatialRefSysTableID
-	MinVirtualID = PgExtensionSpatialRefSysTableID
+	_ // was pg_extension.geography_columns
+	_ // was pg_extension.geometry_columns
+	// MinVirtualID is the smallest virtual ID. It was the ID of
+	// pg_extension.spatial_ref_sys.
+	MinVirtualID
 )
 
 // ConstraintType is used to identify the type of a constraint.

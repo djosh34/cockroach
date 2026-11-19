@@ -28,7 +28,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree/treecmp"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/cockroach/pkg/util/json"
-	"github.com/cockroachdb/errors"
 )
 
 type jsonOrArrayJoinPlanner struct {
@@ -298,7 +297,7 @@ func NewJSONOrArrayDatumsToInvertedExpr(
 // Convert implements the invertedexpr.DatumsToInvertedExpr interface.
 func (g *jsonOrArrayDatumsToInvertedExpr) Convert(
 	ctx context.Context, datums rowenc.EncDatumRow,
-) (*inverted.SpanExpressionProto, interface{}, error) {
+) (*inverted.SpanExpressionProto, error) {
 	g.row = datums
 	g.evalCtx.PushIVarContainer(g)
 	defer g.evalCtx.PopIVarContainer()
@@ -335,29 +334,19 @@ func (g *jsonOrArrayDatumsToInvertedExpr) Convert(
 
 	invertedExpr, err := evalInvertedExpr(g.invertedExpr, evalInvertedExprLeaf)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	if invertedExpr == nil {
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	spanExpr, ok := invertedExpr.(*inverted.SpanExpression)
 	if !ok {
-		return nil, nil, fmt.Errorf("unable to construct span expression")
+		return nil, fmt.Errorf("unable to construct span expression")
 	}
 
-	return spanExpr.ToProto(), nil, nil
-}
-
-func (g *jsonOrArrayDatumsToInvertedExpr) CanPreFilter() bool {
-	return false
-}
-
-func (g *jsonOrArrayDatumsToInvertedExpr) PreFilter(
-	enc inverted.EncVal, preFilters []interface{}, result []bool,
-) (bool, error) {
-	return false, errors.AssertionFailedf("PreFilter called on jsonOrArrayDatumsToInvertedExpr")
+	return spanExpr.ToProto(), nil
 }
 
 type jsonOrArrayFilterPlanner struct {
@@ -375,7 +364,6 @@ func (j *jsonOrArrayFilterPlanner) extractInvertedFilterConditionFromLeaf(
 ) (
 	invertedExpr inverted.Expression,
 	remainingFilters opt.ScalarExpr,
-	_ *invertedexpr.PreFiltererStateForInvertedFilterer,
 ) {
 	switch t := expr.(type) {
 	case *memo.ContainsExpr:
@@ -404,7 +392,7 @@ func (j *jsonOrArrayFilterPlanner) extractInvertedFilterConditionFromLeaf(
 
 	if invertedExpr == nil {
 		// An inverted expression could not be extracted.
-		return inverted.NonInvertedColExpression{}, expr, nil
+		return inverted.NonInvertedColExpression{}, expr
 	}
 
 	// If the extracted inverted expression is not tight then remaining filters
@@ -413,9 +401,7 @@ func (j *jsonOrArrayFilterPlanner) extractInvertedFilterConditionFromLeaf(
 		remainingFilters = expr
 	}
 
-	// We do not currently support pre-filtering for JSON and Array indexes, so
-	// the returned pre-filter state is nil.
-	return invertedExpr, remainingFilters, nil
+	return invertedExpr, remainingFilters
 }
 
 // extractJSONInCondition extracts an InvertedExpression representing

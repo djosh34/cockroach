@@ -11,7 +11,6 @@
 package indexrec
 
 import (
-	"github.com/cockroachdb/cockroach/pkg/geo/geoindex"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/colinfo"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/cat"
@@ -188,14 +187,6 @@ func (ics *indexCandidateSet) categorizeIndexCandidates(expr opt.Expr) {
 		ics.addVariableExprIndex(expr.Left, ics.overallCandidates)
 		ics.addVariableExprIndex(expr.Right, ics.overallCandidates)
 	case *memo.ContainedByExpr:
-		ics.addVariableExprIndex(expr.Left, ics.overallCandidates)
-		ics.addVariableExprIndex(expr.Right, ics.overallCandidates)
-	case *memo.FunctionExpr:
-		ics.addGeoSpatialIndexes(expr, ics.overallCandidates)
-	case *memo.BBoxCoversExpr:
-		ics.addVariableExprIndex(expr.Left, ics.overallCandidates)
-		ics.addVariableExprIndex(expr.Right, ics.overallCandidates)
-	case *memo.BBoxIntersectsExpr:
 		ics.addVariableExprIndex(expr.Left, ics.overallCandidates)
 		ics.addVariableExprIndex(expr.Right, ics.overallCandidates)
 	}
@@ -434,22 +425,4 @@ func addIndexToCandidates(
 	}
 	// Index does not exist already, so add it.
 	indexCandidates[currTable] = append(indexCandidates[currTable], newIndex)
-}
-
-// AddGeoSpatialIndexes is used to add single-column indexes to indexCandidates
-// for spatial functions that can be index-accelerated.
-func (ics *indexCandidateSet) addGeoSpatialIndexes(
-	expr *memo.FunctionExpr, indexCandidates map[cat.Table][][]cat.IndexColumn,
-) {
-	// Ensure that the function is a spatial function AND can be index-accelerated.
-	_, ok := geoindex.RelationshipMap[expr.Name]
-	if ok {
-		// Add arguments of the spatial function to inverted indexes.
-		for i, n := 0, expr.Args.ChildCount(); i < n; i++ {
-			var child = expr.Args.Child(i)
-			// Spatial Indexes should be added to inverted candidates group in
-			// addVariableExprIndex.
-			ics.addVariableExprIndex(child, indexCandidates)
-		}
-	}
 }

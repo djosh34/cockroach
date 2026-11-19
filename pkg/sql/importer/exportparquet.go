@@ -19,8 +19,6 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/cloud"
-	"github.com/cockroachdb/cockroach/pkg/geo"
-	"github.com/cockroachdb/cockroach/pkg/geo/geopb"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/colinfo"
 	"github.com/cockroachdb/cockroach/pkg/sql/execinfra"
@@ -336,42 +334,6 @@ func NewParquetColumn(typ *types.T, name string, nullable bool) (ParquetColumn, 
 		}
 		col.DecodeFn = func(x interface{}) (tree.Datum, error) {
 			return tree.NewDRefCursor(string(x.([]byte))), nil
-		}
-	case types.Box2DFamily:
-		populateLogicalStringCol(schemaEl)
-		col.encodeFn = func(d tree.Datum) (interface{}, error) {
-			return []byte(d.(*tree.DBox2D).CartesianBoundingBox.Repr()), nil
-		}
-		col.DecodeFn = func(x interface{}) (tree.Datum, error) {
-			b, err := geo.ParseCartesianBoundingBox(string(x.([]byte)))
-			if err != nil {
-				return nil, err
-			}
-			return tree.NewDBox2D(b), nil
-		}
-	case types.GeographyFamily:
-		schemaEl.Type = parquet.TypePtr(parquet.Type_BYTE_ARRAY)
-		col.encodeFn = func(d tree.Datum) (interface{}, error) {
-			return []byte(d.(*tree.DGeography).EWKB()), nil
-		}
-		col.DecodeFn = func(x interface{}) (tree.Datum, error) {
-			g, err := geo.ParseGeographyFromEWKB(geopb.EWKB(x.([]byte)))
-			if err != nil {
-				return nil, err
-			}
-			return &tree.DGeography{Geography: g}, nil
-		}
-	case types.GeometryFamily:
-		schemaEl.Type = parquet.TypePtr(parquet.Type_BYTE_ARRAY)
-		col.encodeFn = func(d tree.Datum) (interface{}, error) {
-			return []byte(d.(*tree.DGeometry).EWKB()), nil
-		}
-		col.DecodeFn = func(x interface{}) (tree.Datum, error) {
-			g, err := geo.ParseGeometryFromEWKBUnsafe(geopb.EWKB(x.([]byte)))
-			if err != nil {
-				return nil, err
-			}
-			return &tree.DGeometry{Geometry: g}, nil
 		}
 	case types.DateFamily:
 		// Even though the parquet vendor supports Dates, we export Dates as strings

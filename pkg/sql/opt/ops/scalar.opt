@@ -483,22 +483,6 @@ define Overlaps {
     Right ScalarExpr
 }
 
-# BBoxCovers is the ~ operator when used with geometry or bounding box
-# operands. It maps to tree.RegMatch.
-[Scalar, Bool, Comparison]
-define BBoxCovers {
-    Left ScalarExpr
-    Right ScalarExpr
-}
-
-# BBoxIntersects is the && operator when used with geometry or bounding box
-# operands. It maps to tree.Overlaps.
-[Scalar, Bool, Comparison]
-define BBoxIntersects {
-    Left ScalarExpr
-    Right ScalarExpr
-}
-
 # TSMatches is the @@ operator when used with tsquery/tsvector operands.
 # It maps to tree.TSMatches.
 [Scalar, Bool, Comparison]

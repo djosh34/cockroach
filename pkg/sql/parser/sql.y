@@ -30,7 +30,6 @@ import (
 
     "go/constant"
 
-    "github.com/cockroachdb/cockroach/pkg/geo/geopb"
     "github.com/cockroachdb/cockroach/pkg/security/username"
     "github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
     "github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
@@ -691,9 +690,6 @@ func (u *sqlSymUnion) labelSpec() *tree.LabelSpec {
     return u.val.(*tree.LabelSpec)
 }
 
-func (u *sqlSymUnion) geoShapeType() geopb.ShapeType {
-  return u.val.(geopb.ShapeType)
-}
 func newNameFromStr(s string) *tree.Name {
     return (*tree.Name)(&s)
 }
@@ -818,7 +814,7 @@ func (u *sqlSymUnion) beginTransaction() *tree.BeginTransaction {
 
 %token <str> BACKWARD BATCH BEFORE BEGIN BETWEEN BIGINT BIGSERIAL BINARY BIT
 %token <str> BUCKET_COUNT
-%token <str> BOOLEAN BOTH BOX2D BUNDLE BY
+%token <str> BOOLEAN BOTH BUNDLE BY
 
 %token <str> CACHE CALL CALLED CANCEL CANCELQUERY CAPABILITIES CAPABILITY CASCADE CASE CAST CBRT CHAR
 %token <str> CHARACTER CHARACTERISTICS CHECK CLOSE
@@ -846,8 +842,7 @@ func (u *sqlSymUnion) beginTransaction() *tree.BeginTransaction {
 %token <str> FORCE_NOT_NULL FORCE_NULL FORCE_QUOTE FORCE_ZIGZAG
 %token <str> FOREIGN FORMAT FORWARD FREEZE FROM FULL FUNCTION FUNCTIONS
 
-%token <str> GENERATED GEOGRAPHY GEOMETRY GEOMETRYM GEOMETRYZ GEOMETRYZM
-%token <str> GEOMETRYCOLLECTION GEOMETRYCOLLECTIONM GEOMETRYCOLLECTIONZ GEOMETRYCOLLECTIONZM
+%token <str> GENERATED
 %token <str> GLOBAL GRANT GRANTEE GRANTS GREATEST GROUP GROUPING GROUPS
 
 %token <str> HAVING HASH HEADER HIGH HISTOGRAM HOLD HOUR
@@ -867,13 +862,9 @@ func (u *sqlSymUnion) beginTransaction() *tree.BeginTransaction {
 
 %token <str> LANGUAGE LAST LATERAL LC_CTYPE LC_COLLATE
 %token <str> LEADING LEASE LEAST LEAKPROOF LEFT LESS LEVEL LIKE LIMIT
-%token <str> LINESTRING LINESTRINGM LINESTRINGZ LINESTRINGZM
 %token <str> LIST LOCAL LOCALITY LOCALTIME LOCALTIMESTAMP LOCKED LOGIN LOOKUP LOW LSHIFT
 
 %token <str> MATCH MATERIALIZED MERGE MINVALUE MAXVALUE METHOD MINUTE MODIFYCLUSTERSETTING MODIFYSQLCLUSTERSETTING MONTH MOVE
-%token <str> MULTILINESTRING MULTILINESTRINGM MULTILINESTRINGZ MULTILINESTRINGZM
-%token <str> MULTIPOINT MULTIPOINTM MULTIPOINTZ MULTIPOINTZM
-%token <str> MULTIPOLYGON MULTIPOLYGONM MULTIPOLYGONZ MULTIPOLYGONZM
 
 %token <str> NAN NAME NAMES NATURAL NEVER NEXT NO NOCANCELQUERY
 %token <str> NOCONTROLJOB NOCREATEDB NOCREATELOGIN NOCREATEROLE NOLOGIN NOMODIFYCLUSTERSETTING NOREPLICATION
@@ -886,7 +877,7 @@ func (u *sqlSymUnion) beginTransaction() *tree.BeginTransaction {
 %token <str> ORDER ORDINALITY OTHERS OUT OUTER OVER OVERLAPS OVERLAY OWNED OWNER OPERATOR
 
 %token <str> PARALLEL PARENT PARTIAL PARTITION PASSWORD PAUSE PAUSED PHYSICAL PLACING
-%token <str> PLAN PLANS POINT POINTM POINTZ POINTZM POLYGON POLYGONM POLYGONZ POLYGONZM
+%token <str> PLAN PLANS POINT POLYGON
 %token <str> POSITION PRECEDING PRECISION PREPARE PRESERVE PRIMARY PRIOR PRIORITY PRIVILEGES
 %token <str> PROCEDURAL PROCEDURE PROCEDURES PUBLIC PUBLICATION
 
@@ -1427,8 +1418,6 @@ func (u *sqlSymUnion) beginTransaction() *tree.BeginTransaction {
 %type <*types.T> const_datetime interval_type
 %type <*types.T> bit_with_length bit_without_length
 %type <*types.T> character_base
-%type <*types.T> geo_shape_type
-%type <*types.T> const_geo
 %type <str> extract_arg
 %type <bool> opt_varying
 
@@ -11702,69 +11691,6 @@ simple_typename:
 | POINT error { return unimplementedWithIssueDetail(sqllex, 21286, "point") } // needed or else it generates a syntax error.
 | POLYGON error { return unimplementedWithIssueDetail(sqllex, 21286, "polygon") } // needed or else it generates a syntax error.
 
-geo_shape_type:
-  POINT { $$.val = geopb.ShapeType_Point }
-| POINTM { $$.val = geopb.ShapeType_PointM }
-| POINTZ { $$.val = geopb.ShapeType_PointZ }
-| POINTZM { $$.val = geopb.ShapeType_PointZM }
-| LINESTRING { $$.val = geopb.ShapeType_LineString }
-| LINESTRINGM { $$.val = geopb.ShapeType_LineStringM }
-| LINESTRINGZ { $$.val = geopb.ShapeType_LineStringZ }
-| LINESTRINGZM { $$.val = geopb.ShapeType_LineStringZM }
-| POLYGON { $$.val = geopb.ShapeType_Polygon }
-| POLYGONM { $$.val = geopb.ShapeType_PolygonM }
-| POLYGONZ { $$.val = geopb.ShapeType_PolygonZ }
-| POLYGONZM { $$.val = geopb.ShapeType_PolygonZM }
-| MULTIPOINT { $$.val = geopb.ShapeType_MultiPoint }
-| MULTIPOINTM { $$.val = geopb.ShapeType_MultiPointM }
-| MULTIPOINTZ { $$.val = geopb.ShapeType_MultiPointZ }
-| MULTIPOINTZM { $$.val = geopb.ShapeType_MultiPointZM }
-| MULTILINESTRING { $$.val = geopb.ShapeType_MultiLineString }
-| MULTILINESTRINGM { $$.val = geopb.ShapeType_MultiLineStringM }
-| MULTILINESTRINGZ { $$.val = geopb.ShapeType_MultiLineStringZ }
-| MULTILINESTRINGZM { $$.val = geopb.ShapeType_MultiLineStringZM }
-| MULTIPOLYGON { $$.val = geopb.ShapeType_MultiPolygon }
-| MULTIPOLYGONM { $$.val = geopb.ShapeType_MultiPolygonM }
-| MULTIPOLYGONZ { $$.val = geopb.ShapeType_MultiPolygonZ }
-| MULTIPOLYGONZM { $$.val = geopb.ShapeType_MultiPolygonZM }
-| GEOMETRYCOLLECTION { $$.val = geopb.ShapeType_GeometryCollection }
-| GEOMETRYCOLLECTIONM { $$.val = geopb.ShapeType_GeometryCollectionM }
-| GEOMETRYCOLLECTIONZ { $$.val = geopb.ShapeType_GeometryCollectionZ }
-| GEOMETRYCOLLECTIONZM { $$.val = geopb.ShapeType_GeometryCollectionZM }
-| GEOMETRY { $$.val = geopb.ShapeType_Geometry }
-| GEOMETRYM { $$.val = geopb.ShapeType_GeometryM }
-| GEOMETRYZ { $$.val = geopb.ShapeType_GeometryZ }
-| GEOMETRYZM { $$.val = geopb.ShapeType_GeometryZM }
-
-const_geo:
-  GEOGRAPHY { $$.val = types.Geography }
-| GEOMETRY  { $$.val = types.Geometry }
-| BOX2D     { $$.val = types.Box2D }
-| GEOMETRY '(' geo_shape_type ')'
-  {
-    $$.val = types.MakeGeometry($3.geoShapeType(), 0)
-  }
-| GEOGRAPHY '(' geo_shape_type ')'
-  {
-    $$.val = types.MakeGeography($3.geoShapeType(), 0)
-  }
-| GEOMETRY '(' geo_shape_type ',' signed_iconst ')'
-  {
-    val, err := $5.numVal().AsInt32()
-    if err != nil {
-      return setErr(sqllex, err)
-    }
-    $$.val = types.MakeGeometry($3.geoShapeType(), geopb.SRID(val))
-  }
-| GEOGRAPHY '(' geo_shape_type ',' signed_iconst ')'
-  {
-    val, err := $5.numVal().AsInt32()
-    if err != nil {
-      return setErr(sqllex, err)
-    }
-    $$.val = types.MakeGeography($3.geoShapeType(), geopb.SRID(val))
-  }
-
 // We have a separate const_typename to allow defaulting fixed-length types such
 // as CHAR() and BIT() to an unspecified length. SQL9x requires that these
 // default to a length of one, but this makes no sense for constructs like CHAR
@@ -11781,7 +11707,6 @@ const_typename:
 | character_without_length
 | character_with_length
 | const_datetime
-| const_geo
 
 opt_numeric_modifiers:
   '(' iconst32 ')'
@@ -14606,13 +14531,6 @@ unreserved_keyword:
 | FUNCTION
 | FUNCTIONS
 | GENERATED
-| GEOMETRYM
-| GEOMETRYZ
-| GEOMETRYZM
-| GEOMETRYCOLLECTION
-| GEOMETRYCOLLECTIONM
-| GEOMETRYCOLLECTIONZ
-| GEOMETRYCOLLECTIONZM
 | GLOBAL
 | GRANTEE
 | GRANTS
@@ -14654,10 +14572,6 @@ unreserved_keyword:
 | LEASE
 | LESS
 | LEVEL
-| LINESTRING
-| LINESTRINGM
-| LINESTRINGZ
-| LINESTRINGZM
 | LIST
 | LOCAL
 | LOCKED
@@ -14674,18 +14588,6 @@ unreserved_keyword:
 | MINVALUE
 | MODIFYCLUSTERSETTING
 | MODIFYSQLCLUSTERSETTING
-| MULTILINESTRING
-| MULTILINESTRINGM
-| MULTILINESTRINGZ
-| MULTILINESTRINGZM
-| MULTIPOINT
-| MULTIPOINTM
-| MULTIPOINTZ
-| MULTIPOINTZM
-| MULTIPOLYGON
-| MULTIPOLYGONM
-| MULTIPOLYGONZ
-| MULTIPOLYGONZM
 | MONTH
 | MOVE
 | NAMES
@@ -14737,12 +14639,6 @@ unreserved_keyword:
 | PHYSICAL
 | PLAN
 | PLANS
-| POINTM
-| POINTZ
-| POINTZM
-| POLYGONM
-| POLYGONZ
-| POLYGONZM
 | PRECEDING
 | PREPARE
 | PRESERVE
@@ -14935,7 +14831,6 @@ bare_label_keywords:
 | BIT
 | BOOLEAN
 | BOTH
-| BOX2D
 | BUCKET_COUNT
 | BUNDLE
 | BY
@@ -15065,15 +14960,6 @@ bare_label_keywords:
 | FUNCTION
 | FUNCTIONS
 | GENERATED
-| GEOGRAPHY
-| GEOMETRY
-| GEOMETRYCOLLECTION
-| GEOMETRYCOLLECTIONM
-| GEOMETRYCOLLECTIONZ
-| GEOMETRYCOLLECTIONZM
-| GEOMETRYM
-| GEOMETRYZ
-| GEOMETRYZM
 | GLOBAL
 | GRANTEE
 | GRANTS
@@ -15140,10 +15026,6 @@ bare_label_keywords:
 | LESS
 | LEVEL
 | LIKE
-| LINESTRING
-| LINESTRINGM
-| LINESTRINGZ
-| LINESTRINGZM
 | LIST
 | LOCAL
 | LOCALITY
@@ -15162,18 +15044,6 @@ bare_label_keywords:
 | MODIFYCLUSTERSETTING
 | MODIFYSQLCLUSTERSETTING
 | MOVE
-| MULTILINESTRING
-| MULTILINESTRINGM
-| MULTILINESTRINGZ
-| MULTILINESTRINGZM
-| MULTIPOINT
-| MULTIPOINTM
-| MULTIPOINTZ
-| MULTIPOINTZM
-| MULTIPOLYGON
-| MULTIPOLYGONM
-| MULTIPOLYGONZ
-| MULTIPOLYGONZM
 | NAMES
 | NAN
 | NATURAL
@@ -15234,13 +15104,7 @@ bare_label_keywords:
 | PLAN
 | PLANS
 | POINT
-| POINTM
-| POINTZ
-| POINTZM
 | POLYGON
-| POLYGONM
-| POLYGONZ
-| POLYGONZM
 | POSITION
 | PRECEDING
 | PREPARE
@@ -15442,7 +15306,6 @@ col_name_keyword:
 | BIGINT
 | BIT
 | BOOLEAN
-| BOX2D
 | CHAR
 | CHARACTER
 | CHARACTERISTICS
@@ -15453,8 +15316,6 @@ col_name_keyword:
 | EXTRACT
 | EXTRACT_DURATION
 | FLOAT
-| GEOGRAPHY
-| GEOMETRY
 | GREATEST
 | GROUPING
 | IF

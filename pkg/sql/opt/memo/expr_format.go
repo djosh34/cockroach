@@ -546,10 +546,6 @@ func (f *ExprFmtCtx) formatRelational(e RelExpr, tp treeprinter.Node) {
 		b.WriteString(fmt.Sprintf("%d", t.InvertedColumn))
 		n := tp.Childf("inverted expression: %s", b.String())
 		t.InvertedExpression.Format(n, false /* includeSpansToRead */, f.RedactableValues)
-		if t.PreFiltererState != nil {
-			n := tp.Childf("pre-filterer expression")
-			f.formatExpr(t.PreFiltererState.Expr, n)
-		}
 
 	case *IndexJoinExpr:
 		f.formatLocking(tp, t.Locking)

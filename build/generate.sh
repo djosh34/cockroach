@@ -4,7 +4,7 @@
 # Usage: build/generate.sh [step...]
 #
 # With no arguments it runs every step, in this order: proto, parser, optgen,
-# execgen, stringer, mocks, misc, schemachanger, logictest, docs.
+# execgen, stringer, misc, mocks, schemachanger, logictest, docs.
 #
 # The Go tools come from go.mod (the tool directives, or packages of this
 # repository). protoc is downloaded once into bin/ and checked against a
@@ -391,6 +391,21 @@ gen_misc() {
   build_tool crlfmt github.com/cockroachdb/crlfmt
   build_tool go_generics github.com/mmatczuk/go_generics/cmd/go_generics
 
+  # The log and event code first: the generators below compile packages that
+  # use it.
+  local logproto=pkg/util/log/logpb/log.proto
+  go run ./pkg/util/log/gen "$logproto" log_channels.go pkg/util/log/log_channels_generated.go
+  go run ./pkg/util/log/gen "$logproto" channel.go pkg/util/log/channel/channel_generated.go
+  go run ./pkg/util/log/gen "$logproto" severity.go pkg/util/log/severity/severity_generated.go
+  awk -f pkg/util/log/eventpb/eventpbgen/extract_log_channels.awk <"$logproto" \
+    >pkg/util/log/eventpb/eventpbgen/log_channels_generated.go
+  go run ./pkg/util/log/eventpb/eventpbgen eventlog_channels_go "${EVENTPB_PROTOS[@]}" \
+    >pkg/util/log/eventpb/eventlog_channels_generated.go
+  go run ./pkg/util/log/eventpb/eventpbgen --excluded-events=CommonEventDetails json_encode_go \
+    "${EVENTPB_PROTOS[@]}" >pkg/util/log/eventpb/json_encode_generated.go
+  go run ./pkg/util/log/eventpb/eventpbgen --package=logpb json_encode_go \
+    pkg/util/log/logpb/event.proto >pkg/util/log/logpb/json_encode_generated.go
+
   go run ./pkg/kv/kvpb/gen --filename pkg/kv/kvpb/batch_generated.go pkg/kv/kvpb/*.pb.go
 
   (cd pkg/kv/kvserver/concurrency && ../../../util/interval/generic/gen.sh '*keyLocks' concurrency)
@@ -408,19 +423,6 @@ gen_misc() {
       -output "$out" pkg/testutils/serverutils/api.go "${iface%%:*}"
     goimports -w "$out"
   done
-
-  local logproto=pkg/util/log/logpb/log.proto
-  go run ./pkg/util/log/gen "$logproto" log_channels.go pkg/util/log/log_channels_generated.go
-  go run ./pkg/util/log/gen "$logproto" channel.go pkg/util/log/channel/channel_generated.go
-  go run ./pkg/util/log/gen "$logproto" severity.go pkg/util/log/severity/severity_generated.go
-  awk -f pkg/util/log/eventpb/eventpbgen/extract_log_channels.awk <"$logproto" \
-    >pkg/util/log/eventpb/eventpbgen/log_channels_generated.go
-  go run ./pkg/util/log/eventpb/eventpbgen eventlog_channels_go "${EVENTPB_PROTOS[@]}" \
-    >pkg/util/log/eventpb/eventlog_channels_generated.go
-  go run ./pkg/util/log/eventpb/eventpbgen --excluded-events=CommonEventDetails json_encode_go \
-    "${EVENTPB_PROTOS[@]}" >pkg/util/log/eventpb/json_encode_generated.go
-  go run ./pkg/util/log/eventpb/eventpbgen --package=logpb json_encode_go \
-    pkg/util/log/logpb/event.proto >pkg/util/log/logpb/json_encode_generated.go
 
   go run ./pkg/util/timeutil/gen --filename=pkg/util/timeutil/lowercase_timezones_generated.go \
     --zoneinfo="$(go env GOROOT)/lib/time/zoneinfo.zip" --crlfmt="$bin/crlfmt"
@@ -481,7 +483,7 @@ gen_docs() {
 
 steps=("$@")
 if [[ ${#steps[@]} -eq 0 ]]; then
-  steps=(proto parser optgen execgen stringer mocks misc schemachanger logictest docs)
+  steps=(proto parser optgen execgen stringer misc mocks schemachanger logictest docs)
 fi
 for step in "${steps[@]}"; do
   "gen_$step"

@@ -11,7 +11,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/constraint"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/exec"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
-	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/errors"
 )
 
@@ -65,16 +64,12 @@ func (f *PlanGistFactory) ConstructFilter(
 func (f *PlanGistFactory) ConstructInvertedFilter(
 	input exec.Node,
 	invFilter *inverted.SpanExpression,
-	preFiltererExpr tree.TypedExpr,
-	preFiltererType *types.T,
 	invColumn exec.NodeColumnOrdinal,
 ) (exec.Node, error) {
 	f.encodeOperator(invertedFilterOp)
 	node, err := f.wrappedFactory.ConstructInvertedFilter(
 		input,
 		invFilter,
-		preFiltererExpr,
-		preFiltererType,
 		invColumn,
 	)
 	return node, err

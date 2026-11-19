@@ -29,11 +29,8 @@ func _() {
 	_ = x[BitArray-17]
 	_ = x[BitArrayDesc-18]
 	_ = x[TimeTZ-19]
-	_ = x[Geo-20]
-	_ = x[GeoDesc-21]
 	_ = x[ArrayKeyAsc-22]
 	_ = x[ArrayKeyDesc-23]
-	_ = x[Box2D-24]
 	_ = x[Void-25]
 	_ = x[TSQuery-26]
 	_ = x[TSVector-27]
@@ -97,16 +94,10 @@ func (i Type) String() string {
 		return "BitArrayDesc"
 	case TimeTZ:
 		return "TimeTZ"
-	case Geo:
-		return "Geo"
-	case GeoDesc:
-		return "GeoDesc"
 	case ArrayKeyAsc:
 		return "ArrayKeyAsc"
 	case ArrayKeyDesc:
 		return "ArrayKeyDesc"
-	case Box2D:
-		return "Box2D"
 	case Void:
 		return "Void"
 	case TSQuery:

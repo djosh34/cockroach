@@ -344,8 +344,6 @@ func (e *distSQLSpecExecFactory) ConstructFilter(
 func (e *distSQLSpecExecFactory) ConstructInvertedFilter(
 	n exec.Node,
 	invFilter *inverted.SpanExpression,
-	preFiltererExpr tree.TypedExpr,
-	preFiltererType *types.T,
 	invColumn exec.NodeColumnOrdinal,
 ) (exec.Node, error) {
 	return nil, unimplemented.NewWithIssue(

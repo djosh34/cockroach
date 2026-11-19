@@ -13,7 +13,6 @@ package tree
 import (
 	"time"
 
-	"github.com/cockroachdb/cockroach/pkg/geo"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/cockroach/pkg/util/duration"
 	"github.com/cockroachdb/cockroach/pkg/util/timeofday"
@@ -85,13 +84,6 @@ func SampleDatum(t *types.T) Datum {
 		return NewDPGLSN(0x1000000100)
 	case types.RefCursorFamily:
 		return NewDRefCursor("Wheezer")
-	case types.Box2DFamily:
-		b := geo.NewCartesianBoundingBox().AddPoint(1, 2).AddPoint(3, 4)
-		return NewDBox2D(*b)
-	case types.GeographyFamily:
-		return NewDGeography(geo.MustParseGeographyFromEWKB([]byte("\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0\x3f\x00\x00\x00\x00\x00\x00\xf0\x3f")))
-	case types.GeometryFamily:
-		return NewDGeometry(geo.MustParseGeometryFromEWKB([]byte("\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0\x3f\x00\x00\x00\x00\x00\x00\xf0\x3f")))
 	default:
 		panic(errors.AssertionFailedf("SampleDatum not implemented for %s", t))
 	}

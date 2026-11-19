@@ -218,21 +218,6 @@ func writeTextDatumNotNull(
 		b.putInt32(int32(len(s)))
 		b.write([]byte(s))
 
-	case *tree.DBox2D:
-		s := v.Repr()
-		b.putInt32(int32(len(s)))
-		b.write([]byte(s))
-
-	case *tree.DGeography:
-		s := v.Geography.EWKBHex()
-		b.putInt32(int32(len(s)))
-		b.write([]byte(s))
-
-	case *tree.DGeometry:
-		s := v.Geometry.EWKBHex()
-		b.putInt32(int32(len(s)))
-		b.write([]byte(s))
-
 	case *tree.DTimestamp:
 		writeTextTimestamp(b, v.Time)
 
@@ -733,21 +718,6 @@ func writeBinaryDatumNotNull(
 	case *tree.DPGLSN:
 		b.putInt32(8)
 		b.putInt64(int64(v.LSN))
-
-	case *tree.DBox2D:
-		b.putInt32(32)
-		b.putInt64(int64(math.Float64bits(v.LoX)))
-		b.putInt64(int64(math.Float64bits(v.HiX)))
-		b.putInt64(int64(math.Float64bits(v.LoY)))
-		b.putInt64(int64(math.Float64bits(v.HiY)))
-
-	case *tree.DGeography:
-		b.putInt32(int32(len(v.EWKB())))
-		b.write(v.EWKB())
-
-	case *tree.DGeometry:
-		b.putInt32(int32(len(v.EWKB())))
-		b.write(v.EWKB())
 
 	case *tree.DTSQuery:
 		initialLen := b.Len()

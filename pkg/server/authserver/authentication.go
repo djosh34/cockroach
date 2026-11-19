@@ -37,7 +37,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/protoutil"
 	"github.com/cockroachdb/errors"
-	"github.com/cockroachdb/logtags"
 	gwruntime "github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -54,7 +53,6 @@ const (
 
 	// secretLength is the number of random bytes generated for session secrets.
 	secretLength = 16
-
 )
 
 // WebSessionTimeout is the cluster setting for web session TTL.

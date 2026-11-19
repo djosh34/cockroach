@@ -17808,138 +17808,6 @@ SKIP_RULES:
 	return expr
 }
 
-// ConstructBBoxCovers constructs an expression for the BBoxCovers operator.
-// BBoxCovers is the ~ operator when used with geometry or bounding box
-// operands. It maps to tree.RegMatch.
-func (_f *Factory) ConstructBBoxCovers(
-	left opt.ScalarExpr,
-	right opt.ScalarExpr,
-) opt.ScalarExpr {
-	opt.MaybeInjectOptimizerTestingPanic(_f.ctx, _f.evalCtx)
-	_f.constructorStackDepth++
-	if _f.constructorStackDepth > maxConstructorStackDepth {
-		// If the constructor call stack depth exceeds the limit, call
-		// onMaxConstructorStackDepthExceeded and skip all rules.
-		_f.onMaxConstructorStackDepthExceeded()
-		goto SKIP_RULES
-	}
-
-	// [FoldComparison]
-	{
-		if _f.funcs.IsConstValueOrGroupOfConstValues(left) {
-			if _f.funcs.IsConstValueOrGroupOfConstValues(right) {
-				result, ok := _f.funcs.FoldComparison(opt.BBoxCoversOp, left, right)
-				if ok {
-					if _f.matchedRule == nil || _f.matchedRule(opt.FoldComparison) {
-						_expr := result.(opt.ScalarExpr)
-						if _f.appliedRule != nil {
-							_f.appliedRule(opt.FoldComparison, nil, _expr)
-						}
-						_f.constructorStackDepth--
-						return _expr
-					}
-				}
-			}
-		}
-	}
-
-	// [UnifyComparisonTypes]
-	{
-		_variable, _ := left.(*memo.VariableExpr)
-		if _variable != nil {
-			_const, _ := right.(*memo.ConstExpr)
-			if _const != nil {
-				result, ok := _f.funcs.UnifyComparison(_variable, _const)
-				if ok {
-					if _f.matchedRule == nil || _f.matchedRule(opt.UnifyComparisonTypes) {
-						_expr := _f.ConstructBBoxCovers(
-							_variable,
-							result,
-						)
-						if _f.appliedRule != nil {
-							_f.appliedRule(opt.UnifyComparisonTypes, nil, _expr)
-						}
-						_f.constructorStackDepth--
-						return _expr
-					}
-				}
-			}
-		}
-	}
-
-SKIP_RULES:
-	e := _f.mem.MemoizeBBoxCovers(left, right)
-	expr := _f.onConstructScalar(e)
-	_f.constructorStackDepth--
-	return expr
-}
-
-// ConstructBBoxIntersects constructs an expression for the BBoxIntersects operator.
-// BBoxIntersects is the && operator when used with geometry or bounding box
-// operands. It maps to tree.Overlaps.
-func (_f *Factory) ConstructBBoxIntersects(
-	left opt.ScalarExpr,
-	right opt.ScalarExpr,
-) opt.ScalarExpr {
-	opt.MaybeInjectOptimizerTestingPanic(_f.ctx, _f.evalCtx)
-	_f.constructorStackDepth++
-	if _f.constructorStackDepth > maxConstructorStackDepth {
-		// If the constructor call stack depth exceeds the limit, call
-		// onMaxConstructorStackDepthExceeded and skip all rules.
-		_f.onMaxConstructorStackDepthExceeded()
-		goto SKIP_RULES
-	}
-
-	// [FoldComparison]
-	{
-		if _f.funcs.IsConstValueOrGroupOfConstValues(left) {
-			if _f.funcs.IsConstValueOrGroupOfConstValues(right) {
-				result, ok := _f.funcs.FoldComparison(opt.BBoxIntersectsOp, left, right)
-				if ok {
-					if _f.matchedRule == nil || _f.matchedRule(opt.FoldComparison) {
-						_expr := result.(opt.ScalarExpr)
-						if _f.appliedRule != nil {
-							_f.appliedRule(opt.FoldComparison, nil, _expr)
-						}
-						_f.constructorStackDepth--
-						return _expr
-					}
-				}
-			}
-		}
-	}
-
-	// [UnifyComparisonTypes]
-	{
-		_variable, _ := left.(*memo.VariableExpr)
-		if _variable != nil {
-			_const, _ := right.(*memo.ConstExpr)
-			if _const != nil {
-				result, ok := _f.funcs.UnifyComparison(_variable, _const)
-				if ok {
-					if _f.matchedRule == nil || _f.matchedRule(opt.UnifyComparisonTypes) {
-						_expr := _f.ConstructBBoxIntersects(
-							_variable,
-							result,
-						)
-						if _f.appliedRule != nil {
-							_f.appliedRule(opt.UnifyComparisonTypes, nil, _expr)
-						}
-						_f.constructorStackDepth--
-						return _expr
-					}
-				}
-			}
-		}
-	}
-
-SKIP_RULES:
-	e := _f.mem.MemoizeBBoxIntersects(left, right)
-	expr := _f.onConstructScalar(e)
-	_f.constructorStackDepth--
-	return expr
-}
-
 // ConstructTSMatches constructs an expression for the TSMatches operator.
 // TSMatches is the @@ operator when used with tsquery/tsvector operands.
 // It maps to tree.TSMatches.
@@ -23356,22 +23224,6 @@ func (f *Factory) Replace(e opt.Expr, replace ReplaceFunc) opt.Expr {
 		}
 		return t
 
-	case *memo.BBoxCoversExpr:
-		left := replace(t.Left).(opt.ScalarExpr)
-		right := replace(t.Right).(opt.ScalarExpr)
-		if left != t.Left || right != t.Right {
-			return f.ConstructBBoxCovers(left, right)
-		}
-		return t
-
-	case *memo.BBoxIntersectsExpr:
-		left := replace(t.Left).(opt.ScalarExpr)
-		right := replace(t.Right).(opt.ScalarExpr)
-		if left != t.Left || right != t.Right {
-			return f.ConstructBBoxIntersects(left, right)
-		}
-		return t
-
 	case *memo.TSMatchesExpr:
 		left := replace(t.Left).(opt.ScalarExpr)
 		right := replace(t.Right).(opt.ScalarExpr)
@@ -25085,18 +24937,6 @@ func (f *Factory) CopyAndReplaceDefault(src opt.Expr, replace ReplaceFunc) (dst 
 			f.invokeReplace(t.Right, replace).(opt.ScalarExpr),
 		)
 
-	case *memo.BBoxCoversExpr:
-		return f.ConstructBBoxCovers(
-			f.invokeReplace(t.Left, replace).(opt.ScalarExpr),
-			f.invokeReplace(t.Right, replace).(opt.ScalarExpr),
-		)
-
-	case *memo.BBoxIntersectsExpr:
-		return f.ConstructBBoxIntersects(
-			f.invokeReplace(t.Left, replace).(opt.ScalarExpr),
-			f.invokeReplace(t.Right, replace).(opt.ScalarExpr),
-		)
-
 	case *memo.TSMatchesExpr:
 		return f.ConstructTSMatches(
 			f.invokeReplace(t.Left, replace).(opt.ScalarExpr),
@@ -26441,16 +26281,6 @@ func (f *Factory) DynamicConstruct(op opt.Operator, args ...interface{}) opt.Exp
 		)
 	case opt.OverlapsOp:
 		return f.ConstructOverlaps(
-			args[0].(opt.ScalarExpr),
-			args[1].(opt.ScalarExpr),
-		)
-	case opt.BBoxCoversOp:
-		return f.ConstructBBoxCovers(
-			args[0].(opt.ScalarExpr),
-			args[1].(opt.ScalarExpr),
-		)
-	case opt.BBoxIntersectsOp:
-		return f.ConstructBBoxIntersects(
 			args[0].(opt.ScalarExpr),
 			args[1].(opt.ScalarExpr),
 		)

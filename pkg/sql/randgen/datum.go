@@ -19,9 +19,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/cockroachdb/cockroach/pkg/geo"
-	"github.com/cockroachdb/cockroach/pkg/geo/geogen"
-	"github.com/cockroachdb/cockroach/pkg/geo/geopb"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgrepl/lsn"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
@@ -37,7 +34,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
 	"github.com/lib/pq/oid"
-	"github.com/twpayne/go-geom"
 )
 
 // RandDatum generates a random Datum of the given type.
@@ -124,9 +120,6 @@ func RandDatumWithNullChance(
 		default:
 			panic(errors.AssertionFailedf("float with an unexpected width %d", typ.Width()))
 		}
-	case types.Box2DFamily:
-		b := geo.NewCartesianBoundingBox().AddPoint(rng.NormFloat64(), rng.NormFloat64()).AddPoint(rng.NormFloat64(), rng.NormFloat64())
-		return tree.NewDBox2D(*b)
 	case types.PGLSNFamily:
 		return tree.NewDPGLSN(lsn.LSN(rng.Uint64()))
 	case types.RefCursorFamily:
@@ -135,56 +128,6 @@ func RandDatumWithNullChance(
 			p[i] = byte(1 + rng.Intn(127))
 		}
 		return tree.NewDRefCursor(string(p))
-	case types.GeographyFamily:
-		gm, err := typ.GeoMetadata()
-		if err != nil {
-			panic(err)
-		}
-		srid := gm.SRID
-		if srid == 0 {
-			srid = geopb.DefaultGeographySRID
-		}
-		// Limit the maximum geometry size to 16 megabytes.
-		const maxSize = uintptr(1024 * 1024 * 16)
-		maxRetries := 5
-		// Retry until we get a geography below the target size.
-		for maxRetries > 0 {
-			newGeo := tree.NewDGeography(geogen.RandomGeography(rng, srid))
-			if newGeo.Size() < maxSize {
-				return newGeo
-			}
-			maxRetries -= 1
-		}
-		// Otherwise, pick a simple random polygon.
-		geog, err := geo.MakeGeographyFromGeomT(geogen.RandomPolygon(rng, geogen.MakeRandomGeomBoundsForGeography(), gm.SRID, geom.NoLayout))
-		if err != nil {
-			panic(err)
-		}
-		dgm := tree.NewDGeography(geog)
-		return dgm
-	case types.GeometryFamily:
-		gm, err := typ.GeoMetadata()
-		if err != nil {
-			panic(err)
-		}
-		// Limit the maximum geometry size to 16 megabytes.
-		const maxSize = uintptr(1024 * 1024 * 16)
-		maxRetries := 5
-		// Retry until we get a geography below the target size.
-		for maxRetries > 0 {
-			newGeom := tree.NewDGeometry(geogen.RandomGeometry(rng, gm.SRID))
-			if newGeom.Size() < maxSize {
-				return newGeom
-			}
-			maxRetries -= 1
-		}
-		// Otherwise, pick a simple random polygon.
-		geom, err := geo.MakeGeometryFromGeomT(geogen.RandomPolygon(rng, geogen.MakeRandomGeomBounds(), gm.SRID, geom.NoLayout))
-		if err != nil {
-			panic(err)
-		}
-		dgm := tree.NewDGeometry(geom)
-		return dgm
 	case types.DecimalFamily:
 		d := &tree.DDecimal{}
 		// int64(rng.Uint64()) to get negative numbers, too
@@ -434,15 +377,7 @@ func adjustDatum(datum tree.Datum, typ *types.T) tree.Datum {
 // pays attention to the width of the requested type for Int and Float type
 // families.
 func randCommonDatum(rng *rand.Rand, typ *types.T) tree.Datum {
-	var dataSet []tree.Datum
-	var ok bool
-	typeFamily := typ.Family()
-	switch typeFamily {
-	case types.GeographyFamily, types.GeometryFamily:
-		dataSet, ok = randInterestingDatums[typeFamily]
-	default:
-		dataSet, ok = randCommonDatums[typeFamily]
-	}
+	dataSet, ok := randCommonDatums[typ.Family()]
 
 	if !ok || len(dataSet) == 0 {
 		for _, sc := range types.Scalar {
@@ -658,77 +593,6 @@ var (
 			&tree.DInterval{Duration: duration.MakeDuration(1, 1, 1)},
 			// TODO(mjibson): fix intervals to stop overflowing then this can be larger.
 			&tree.DInterval{Duration: duration.MakeDuration(0, 0, 290*12)},
-		},
-		types.Box2DFamily: {
-			&tree.DBox2D{CartesianBoundingBox: geo.CartesianBoundingBox{BoundingBox: geopb.BoundingBox{LoX: -10, HiX: 10, LoY: -10, HiY: 10}}},
-		},
-		types.GeographyFamily: {
-			// NOTE(otan): we cannot use WKT here because roachtests do not have geos uploaded.
-			// If we parse WKT ourselves or upload GEOS on every roachtest, we may be able to avoid this.
-			// POINT(1.0 1.0)
-			&tree.DGeography{Geography: geo.MustParseGeography("0101000000000000000000F03F000000000000F03F")},
-			// LINESTRING(1.0 1.0, 2.0 2.0)
-			&tree.DGeography{Geography: geo.MustParseGeography("010200000002000000000000000000F03F000000000000F03F00000000000000400000000000000040")},
-			// POLYGON((0.0 0.0, 1.0 0.0, 1.0 1.0, 0.0 1.0, 0.0 0.0))
-			&tree.DGeography{Geography: geo.MustParseGeography("0103000000010000000500000000000000000000000000000000000000000000000000F03F0000000000000000000000000000F03F000000000000F03F0000000000000000000000000000F03F00000000000000000000000000000000")},
-			// POLYGON((0.0 0.0, 1.0 0.0, 1.0 1.0, 0.0 1.0, 0.0 0.0), (0.2 0.2, 0.2 0.4, 0.4 0.4, 0.4 0.2, 0.2 0.2))
-			&tree.DGeography{Geography: geo.MustParseGeography("0103000000020000000500000000000000000000000000000000000000000000000000F03F0000000000000000000000000000F03F000000000000F03F0000000000000000000000000000F03F00000000000000000000000000000000050000009A9999999999C93F9A9999999999C93F9A9999999999C93F9A9999999999D93F9A9999999999D93F9A9999999999D93F9A9999999999D93F9A9999999999C93F9A9999999999C93F9A9999999999C93F")},
-			// MULTIPOINT ((10 40), (40 30), (20 20), (30 10))
-			&tree.DGeography{Geography: geo.MustParseGeography("010400000004000000010100000000000000000024400000000000004440010100000000000000000044400000000000003E4001010000000000000000003440000000000000344001010000000000000000003E400000000000002440")},
-			// MULTILINESTRING ((10 10, 20 20, 10 40), (40 40, 30 30, 40 20, 30 10))
-			&tree.DGeography{Geography: geo.MustParseGeography("010500000002000000010200000003000000000000000000244000000000000024400000000000003440000000000000344000000000000024400000000000004440010200000004000000000000000000444000000000000044400000000000003E400000000000003E40000000000000444000000000000034400000000000003E400000000000002440")},
-			// MULTIPOLYGON (((40 40, 20 45, 45 30, 40 40)),((20 35, 10 30, 10 10, 30 5, 45 20, 20 35),(30 20, 20 15, 20 25, 30 20)))
-			&tree.DGeography{Geography: geo.MustParseGeography("01060000000200000001030000000100000004000000000000000000444000000000000044400000000000003440000000000080464000000000008046400000000000003E4000000000000044400000000000004440010300000002000000060000000000000000003440000000000080414000000000000024400000000000003E40000000000000244000000000000024400000000000003E4000000000000014400000000000804640000000000000344000000000000034400000000000804140040000000000000000003E40000000000000344000000000000034400000000000002E40000000000000344000000000000039400000000000003E400000000000003440")},
-			// GEOMETRYCOLLECTION (POINT (40 10),LINESTRING (10 10, 20 20, 10 40),POLYGON ((40 40, 20 45, 45 30, 40 40)))
-			&tree.DGeography{Geography: geo.MustParseGeography("01070000000300000001010000000000000000004440000000000000244001020000000300000000000000000024400000000000002440000000000000344000000000000034400000000000002440000000000000444001030000000100000004000000000000000000444000000000000044400000000000003440000000000080464000000000008046400000000000003E4000000000000044400000000000004440")},
-			// POINT EMPTY
-			&tree.DGeography{Geography: geo.MustParseGeography("0101000000000000000000F87F000000000000F87F")},
-			// LINESTRING EMPTY
-			&tree.DGeography{Geography: geo.MustParseGeography("010200000000000000")},
-			// POLYGON EMPTY
-			&tree.DGeography{Geography: geo.MustParseGeography("010300000000000000")},
-			// MULTIPOINT EMPTY
-			&tree.DGeography{Geography: geo.MustParseGeography("010400000000000000")},
-			// MULTILINESTRING EMPTY
-			&tree.DGeography{Geography: geo.MustParseGeography("010500000000000000")},
-			// MULTIPOLYGON EMPTY
-			&tree.DGeography{Geography: geo.MustParseGeography("010600000000000000")},
-			// GEOMETRYCOLLECTION EMPTY
-			&tree.DGeography{Geography: geo.MustParseGeography("010700000000000000")},
-		},
-		types.GeometryFamily: {
-			// NOTE(otan): we cannot use WKT here because roachtests do not have geos uploaded.
-			// If we parse WKT ourselves or upload GEOS on every roachtest, we may be able to avoid this.
-			// POINT(1.0 1.0)
-			&tree.DGeometry{Geometry: geo.MustParseGeometry("0101000000000000000000F03F000000000000F03F")},
-			// LINESTRING(1.0 1.0, 2.0 2.0)
-			&tree.DGeometry{Geometry: geo.MustParseGeometry("010200000002000000000000000000F03F000000000000F03F00000000000000400000000000000040")},
-			// POLYGON((0.0 0.0, 1.0 0.0, 1.0 1.0, 0.0 1.0, 0.0 0.0))
-			&tree.DGeometry{Geometry: geo.MustParseGeometry("0103000000010000000500000000000000000000000000000000000000000000000000F03F0000000000000000000000000000F03F000000000000F03F0000000000000000000000000000F03F00000000000000000000000000000000")},
-			// POLYGON((0.0 0.0, 1.0 0.0, 1.0 1.0, 0.0 1.0, 0.0 0.0), (0.2 0.2, 0.2 0.4, 0.4 0.4, 0.4 0.2, 0.2 0.2))
-			&tree.DGeometry{Geometry: geo.MustParseGeometry("0103000000020000000500000000000000000000000000000000000000000000000000F03F0000000000000000000000000000F03F000000000000F03F0000000000000000000000000000F03F00000000000000000000000000000000050000009A9999999999C93F9A9999999999C93F9A9999999999C93F9A9999999999D93F9A9999999999D93F9A9999999999D93F9A9999999999D93F9A9999999999C93F9A9999999999C93F9A9999999999C93F")},
-			// MULTIPOINT ((10 40), (40 30), (20 20), (30 10))
-			&tree.DGeometry{Geometry: geo.MustParseGeometry("010400000004000000010100000000000000000024400000000000004440010100000000000000000044400000000000003E4001010000000000000000003440000000000000344001010000000000000000003E400000000000002440")},
-			// MULTILINESTRING ((10 10, 20 20, 10 40), (40 40, 30 30, 40 20, 30 10))
-			&tree.DGeometry{Geometry: geo.MustParseGeometry("010500000002000000010200000003000000000000000000244000000000000024400000000000003440000000000000344000000000000024400000000000004440010200000004000000000000000000444000000000000044400000000000003E400000000000003E40000000000000444000000000000034400000000000003E400000000000002440")},
-			// MULTIPOLYGON (((40 40, 20 45, 45 30, 40 40)),((20 35, 10 30, 10 10, 30 5, 45 20, 20 35),(30 20, 20 15, 20 25, 30 20)))
-			&tree.DGeometry{Geometry: geo.MustParseGeometry("01060000000200000001030000000100000004000000000000000000444000000000000044400000000000003440000000000080464000000000008046400000000000003E4000000000000044400000000000004440010300000002000000060000000000000000003440000000000080414000000000000024400000000000003E40000000000000244000000000000024400000000000003E4000000000000014400000000000804640000000000000344000000000000034400000000000804140040000000000000000003E40000000000000344000000000000034400000000000002E40000000000000344000000000000039400000000000003E400000000000003440")},
-			// GEOMETRYCOLLECTION (POINT (40 10),LINESTRING (10 10, 20 20, 10 40),POLYGON ((40 40, 20 45, 45 30, 40 40)))
-			&tree.DGeometry{Geometry: geo.MustParseGeometry("01070000000300000001010000000000000000004440000000000000244001020000000300000000000000000024400000000000002440000000000000344000000000000034400000000000002440000000000000444001030000000100000004000000000000000000444000000000000044400000000000003440000000000080464000000000008046400000000000003E4000000000000044400000000000004440")},
-			// POINT EMPTY
-			&tree.DGeometry{Geometry: geo.MustParseGeometry("0101000000000000000000F87F000000000000F87F")},
-			// LINESTRING EMPTY
-			&tree.DGeometry{Geometry: geo.MustParseGeometry("010200000000000000")},
-			// POLYGON EMPTY
-			&tree.DGeometry{Geometry: geo.MustParseGeometry("010300000000000000")},
-			// MULTIPOINT EMPTY
-			&tree.DGeometry{Geometry: geo.MustParseGeometry("010400000000000000")},
-			// MULTILINESTRING EMPTY
-			&tree.DGeometry{Geometry: geo.MustParseGeometry("010500000000000000")},
-			// MULTIPOLYGON EMPTY
-			&tree.DGeometry{Geometry: geo.MustParseGeometry("010600000000000000")},
-			// GEOMETRYCOLLECTION EMPTY
-			&tree.DGeometry{Geometry: geo.MustParseGeometry("010700000000000000")},
 		},
 		types.StringFamily: {
 			tree.NewDString(""),
@@ -973,32 +837,6 @@ var (
 						0, 1, 12, 200 * 12,
 					} {
 						d := &tree.DInterval{Duration: duration.MakeDuration(nanos, days, months)}
-						res = append(res, d)
-					}
-				}
-			}
-			return res
-		}(),
-		types.Box2DFamily: func() []tree.Datum {
-			var res []tree.Datum
-			for _, lowX := range []float64{
-				-1, 0.44, 10.999, 100000,
-			} {
-				for _, lowY := range []float64{
-					-9.99, 1.1, 15,
-				} {
-					for _, deltas := range []struct {
-						xDelta float64
-						yDelta float64
-					}{
-						{1.234e-10, 9.234e-10},
-						{1.0, 1.0},
-						{10.00000001, 100.000001},
-						{9.99e10, 8.88e10},
-						{300, 400},
-					} {
-						d := &tree.DBox2D{CartesianBoundingBox: geo.CartesianBoundingBox{
-							BoundingBox: geopb.BoundingBox{LoX: lowX, HiX: lowX + deltas.xDelta, LoY: lowY, HiY: lowY + deltas.yDelta}}}
 						res = append(res, d)
 					}
 				}

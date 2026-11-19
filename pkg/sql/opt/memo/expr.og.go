@@ -9,7 +9,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/cat"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/constraint"
-	"github.com/cockroachdb/cockroach/pkg/sql/opt/invertedexpr"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/props"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/props/physical"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
@@ -2861,9 +2860,6 @@ type InvertedFilterPrivate struct {
 	// SpanExpression, but this InvertedExpression serves to filter the rows
 	// further by applying set operations on the primary key columns.
 	InvertedExpression *inverted.SpanExpression
-
-	// PreFiltererState represents the optional pre-filtering state.
-	PreFiltererState *invertedexpr.PreFiltererStateForInvertedFilterer
 
 	// The InvertedColumn is the id of the inverted column in the input. It is
 	// used during execution to map rows from the input to their corresponding
@@ -11507,124 +11503,6 @@ func (e *OverlapsExpr) SetChild(nth int, child opt.Expr) {
 }
 
 func (e *OverlapsExpr) DataType() *types.T {
-	return types.Bool
-}
-
-// BBoxCoversExpr is the ~ operator when used with geometry or bounding box
-// operands. It maps to tree.RegMatch.
-type BBoxCoversExpr struct {
-	Left  opt.ScalarExpr
-	Right opt.ScalarExpr
-
-	rank opt.ScalarRank
-}
-
-var _ opt.ScalarExpr = &BBoxCoversExpr{}
-
-func (e *BBoxCoversExpr) Rank() opt.ScalarRank {
-	return e.rank
-}
-
-func (e *BBoxCoversExpr) Op() opt.Operator {
-	return opt.BBoxCoversOp
-}
-
-func (e *BBoxCoversExpr) ChildCount() int {
-	return 2
-}
-
-func (e *BBoxCoversExpr) Child(nth int) opt.Expr {
-	switch nth {
-	case 0:
-		return e.Left
-	case 1:
-		return e.Right
-	}
-	panic(errors.AssertionFailedf("child index out of range"))
-}
-
-func (e *BBoxCoversExpr) Private() interface{} {
-	return nil
-}
-
-func (e *BBoxCoversExpr) String() string {
-	f := makeExprFmtCtxForString(ExprFmtHideQualifications, nil, nil)
-	f.FormatExpr(e)
-	return f.Buffer.String()
-}
-
-func (e *BBoxCoversExpr) SetChild(nth int, child opt.Expr) {
-	switch nth {
-	case 0:
-		e.Left = child.(opt.ScalarExpr)
-		return
-	case 1:
-		e.Right = child.(opt.ScalarExpr)
-		return
-	}
-	panic(errors.AssertionFailedf("child index out of range"))
-}
-
-func (e *BBoxCoversExpr) DataType() *types.T {
-	return types.Bool
-}
-
-// BBoxIntersectsExpr is the && operator when used with geometry or bounding box
-// operands. It maps to tree.Overlaps.
-type BBoxIntersectsExpr struct {
-	Left  opt.ScalarExpr
-	Right opt.ScalarExpr
-
-	rank opt.ScalarRank
-}
-
-var _ opt.ScalarExpr = &BBoxIntersectsExpr{}
-
-func (e *BBoxIntersectsExpr) Rank() opt.ScalarRank {
-	return e.rank
-}
-
-func (e *BBoxIntersectsExpr) Op() opt.Operator {
-	return opt.BBoxIntersectsOp
-}
-
-func (e *BBoxIntersectsExpr) ChildCount() int {
-	return 2
-}
-
-func (e *BBoxIntersectsExpr) Child(nth int) opt.Expr {
-	switch nth {
-	case 0:
-		return e.Left
-	case 1:
-		return e.Right
-	}
-	panic(errors.AssertionFailedf("child index out of range"))
-}
-
-func (e *BBoxIntersectsExpr) Private() interface{} {
-	return nil
-}
-
-func (e *BBoxIntersectsExpr) String() string {
-	f := makeExprFmtCtxForString(ExprFmtHideQualifications, nil, nil)
-	f.FormatExpr(e)
-	return f.Buffer.String()
-}
-
-func (e *BBoxIntersectsExpr) SetChild(nth int, child opt.Expr) {
-	switch nth {
-	case 0:
-		e.Left = child.(opt.ScalarExpr)
-		return
-	case 1:
-		e.Right = child.(opt.ScalarExpr)
-		return
-	}
-	panic(errors.AssertionFailedf("child index out of range"))
-}
-
-func (e *BBoxIntersectsExpr) DataType() *types.T {
 	return types.Bool
 }
 
@@ -22543,48 +22421,6 @@ func (m *Memo) MemoizeOverlaps(
 	return interned
 }
 
-func (m *Memo) MemoizeBBoxCovers(
-	left opt.ScalarExpr,
-	right opt.ScalarExpr,
-) *BBoxCoversExpr {
-	const size = int64(unsafe.Sizeof(BBoxCoversExpr{}))
-	e := &BBoxCoversExpr{
-		Left:  left,
-		Right: right,
-		rank:  m.NextRank(),
-	}
-	interned := m.interner.InternBBoxCovers(e)
-	if interned == e {
-		if m.newGroupFn != nil {
-			m.newGroupFn(e)
-		}
-		m.memEstimate += size
-		m.CheckExpr(e)
-	}
-	return interned
-}
-
-func (m *Memo) MemoizeBBoxIntersects(
-	left opt.ScalarExpr,
-	right opt.ScalarExpr,
-) *BBoxIntersectsExpr {
-	const size = int64(unsafe.Sizeof(BBoxIntersectsExpr{}))
-	e := &BBoxIntersectsExpr{
-		Left:  left,
-		Right: right,
-		rank:  m.NextRank(),
-	}
-	interned := m.interner.InternBBoxIntersects(e)
-	if interned == e {
-		if m.newGroupFn != nil {
-			m.newGroupFn(e)
-		}
-		m.memEstimate += size
-		m.CheckExpr(e)
-	}
-	return interned
-}
-
 func (m *Memo) MemoizeTSMatches(
 	left opt.ScalarExpr,
 	right opt.ScalarExpr,
@@ -26416,10 +26252,6 @@ func (in *interner) InternExpr(e opt.Expr) opt.Expr {
 		return in.InternJsonSomeExists(t)
 	case *OverlapsExpr:
 		return in.InternOverlaps(t)
-	case *BBoxCoversExpr:
-		return in.InternBBoxCovers(t)
-	case *BBoxIntersectsExpr:
-		return in.InternBBoxIntersects(t)
 	case *TSMatchesExpr:
 		return in.InternTSMatches(t)
 	case *AnyScalarExpr:
@@ -27272,7 +27104,6 @@ func (in *interner) InternInvertedFilter(val *InvertedFilterExpr) *InvertedFilte
 	in.hasher.HashOperator(opt.InvertedFilterOp)
 	in.hasher.HashRelExpr(val.Input)
 	in.hasher.HashPointer(unsafe.Pointer(val.InvertedExpression))
-	in.hasher.HashPointer(unsafe.Pointer(val.PreFiltererState))
 	in.hasher.HashColumnID(val.InvertedColumn)
 
 	in.cache.Start(in.hasher.hash)
@@ -27280,7 +27111,6 @@ func (in *interner) InternInvertedFilter(val *InvertedFilterExpr) *InvertedFilte
 		if existing, ok := in.cache.Item().(*InvertedFilterExpr); ok {
 			if in.hasher.IsRelExprEqual(val.Input, existing.Input) &&
 				in.hasher.IsPointerEqual(unsafe.Pointer(val.InvertedExpression), unsafe.Pointer(existing.InvertedExpression)) &&
-				in.hasher.IsPointerEqual(unsafe.Pointer(val.PreFiltererState), unsafe.Pointer(existing.PreFiltererState)) &&
 				in.hasher.IsColumnIDEqual(val.InvertedColumn, existing.InvertedColumn) {
 				return existing
 			}
@@ -29354,46 +29184,6 @@ func (in *interner) InternOverlaps(val *OverlapsExpr) *OverlapsExpr {
 	in.cache.Start(in.hasher.hash)
 	for in.cache.Next() {
 		if existing, ok := in.cache.Item().(*OverlapsExpr); ok {
-			if in.hasher.IsScalarExprEqual(val.Left, existing.Left) &&
-				in.hasher.IsScalarExprEqual(val.Right, existing.Right) {
-				return existing
-			}
-		}
-	}
-
-	in.cache.Add(val)
-	return val
-}
-
-func (in *interner) InternBBoxCovers(val *BBoxCoversExpr) *BBoxCoversExpr {
-	in.hasher.Init()
-	in.hasher.HashOperator(opt.BBoxCoversOp)
-	in.hasher.HashScalarExpr(val.Left)
-	in.hasher.HashScalarExpr(val.Right)
-
-	in.cache.Start(in.hasher.hash)
-	for in.cache.Next() {
-		if existing, ok := in.cache.Item().(*BBoxCoversExpr); ok {
-			if in.hasher.IsScalarExprEqual(val.Left, existing.Left) &&
-				in.hasher.IsScalarExprEqual(val.Right, existing.Right) {
-				return existing
-			}
-		}
-	}
-
-	in.cache.Add(val)
-	return val
-}
-
-func (in *interner) InternBBoxIntersects(val *BBoxIntersectsExpr) *BBoxIntersectsExpr {
-	in.hasher.Init()
-	in.hasher.HashOperator(opt.BBoxIntersectsOp)
-	in.hasher.HashScalarExpr(val.Left)
-	in.hasher.HashScalarExpr(val.Right)
-
-	in.cache.Start(in.hasher.hash)
-	for in.cache.Next() {
-		if existing, ok := in.cache.Item().(*BBoxIntersectsExpr); ok {
 			if in.hasher.IsScalarExprEqual(val.Left, existing.Left) &&
 				in.hasher.IsScalarExprEqual(val.Right, existing.Right) {
 				return existing

@@ -27,11 +27,6 @@ type CompareScalarOp struct {
 	treecmp.ComparisonOperator
 }
 
-// CompareBox2DOp is a BinaryEvalOp.
-type CompareBox2DOp struct {
-	Op func(left, right Datum) bool
-}
-
 // InTupleOp is a BinaryEvalOp.
 type InTupleOp struct{}
 

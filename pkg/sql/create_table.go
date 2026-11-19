@@ -1820,14 +1820,6 @@ func NewTableDesc(
 		}
 		if idx.GetType() == descpb.IndexDescriptor_INVERTED {
 			telemetry.Inc(sqltelemetry.InvertedIndexCounter)
-			geoConfig := idx.GetGeoConfig()
-			if !geoConfig.IsEmpty() {
-				if geoConfig.IsGeography() {
-					telemetry.Inc(sqltelemetry.GeographyInvertedIndexCounter)
-				} else if geoConfig.IsGeometry() {
-					telemetry.Inc(sqltelemetry.GeometryInvertedIndexCounter)
-				}
-			}
 			if idx.InvertedColumnKind() == catpb.InvertedIndexColumnKind_TRIGRAM {
 				telemetry.Inc(sqltelemetry.TrigramInvertedIndexCounter)
 			}

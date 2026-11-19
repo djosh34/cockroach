@@ -15,7 +15,6 @@ import (
 	gosql "database/sql"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -35,7 +34,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/security/certnames"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server"
-	"github.com/cockroachdb/cockroach/pkg/server/authserver"
 	"github.com/cockroachdb/cockroach/pkg/server/pgurl"
 	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
 	"github.com/cockroachdb/cockroach/pkg/server/status"
@@ -526,16 +524,16 @@ func (c *transientCluster) startTenantService(
 	if c.demoCtx.DisableServerController {
 		tenantStopper = stop.NewStopper()
 		args := base.TestTenantArgs{
-			DisableCreateTenant:     !createTenant,
-			TenantName:              demoTenantName,
-			TenantID:                roachpb.MustMakeTenantID(secondaryTenantID),
-			Stopper:                 tenantStopper,
-			ForceInsecure:           c.demoCtx.Insecure,
-			SSLCertsDir:             c.demoDir,
-			DisableTLSForHTTP:       true,
-			StartingRPCAndSQLPort:   c.demoCtx.sqlPort(serverIdx, true) - secondaryTenantID,
-			StartingHTTPPort:        c.demoCtx.httpPort(serverIdx, true) - secondaryTenantID,
-			Locality:                c.demoCtx.Localities[serverIdx],
+			DisableCreateTenant:   !createTenant,
+			TenantName:            demoTenantName,
+			TenantID:              roachpb.MustMakeTenantID(secondaryTenantID),
+			Stopper:               tenantStopper,
+			ForceInsecure:         c.demoCtx.Insecure,
+			SSLCertsDir:           c.demoDir,
+			DisableTLSForHTTP:     true,
+			StartingRPCAndSQLPort: c.demoCtx.sqlPort(serverIdx, true) - secondaryTenantID,
+			StartingHTTPPort:      c.demoCtx.httpPort(serverIdx, true) - secondaryTenantID,
+			Locality:              c.demoCtx.Localities[serverIdx],
 			TestingKnobs: base.TestingKnobs{
 				Server: &server.TestingKnobs{
 					ContextTestingKnobs: rpc.ContextTestingKnobs{

@@ -29,12 +29,11 @@ import (
 const TimeFormat = "2006/01/02 15:04:05"
 
 var (
-	// These variables are initialized by Bazel via the linker -X flag
-	// when compiling release binaries.
+	// These variables are initialized via the linker -X flag when compiling
+	// release binaries.
 	utcTime          string // Build time in UTC (year/month/day hour:min:sec)
 	rev              string // SHA-1 of this build (git rev-parse)
 	buildTagOverride string
-	cgoCompiler      = cgoVersion()
 	cgoTargetTriple  string
 	platform         = fmt.Sprintf("%s %s", runtime.GOOS, runtime.GOARCH)
 	// Distribution is always "OSS".
@@ -127,7 +126,6 @@ func (b Info) Long() string {
 	}
 	fmt.Fprintln(tw)
 	fmt.Fprintf(tw, "Go Version:       %s\n", b.GoVersion)
-	fmt.Fprintf(tw, "C Compiler:       %s\n", b.CgoCompiler)
 	fmt.Fprintf(tw, "Build Commit ID:  %s\n", b.Revision)
 	fmt.Fprintf(tw, "Build Type:       %s\n", b.Type)
 	fmt.Fprintf(tw, "Enabled Assertions: %t", b.EnabledAssertions) // No final newline: cobra prints one for us.
@@ -164,7 +162,6 @@ func GetInfo() Info {
 		Tag:               binaryVersion,
 		Time:              utcTime,
 		Revision:          rev,
-		CgoCompiler:       cgoCompiler,
 		CgoTargetTriple:   cgoTargetTriple,
 		Platform:          platform,
 		Distribution:      Distribution,

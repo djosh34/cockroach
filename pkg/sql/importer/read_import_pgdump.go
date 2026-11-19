@@ -772,14 +772,13 @@ func readPostgresStmt(
 			return unsupportedStmtLogger.log(stmt.String(), false /* isParseError */)
 		}
 		return wrapErrorWithUnsupportedHint(errors.Errorf("unsupported %T statement: %s", stmt, stmt))
-	// Some SELECT statements mutate schema. Search for those here.
+	// Function calls in SELECT statements are unsupported.
 	case *tree.Select:
 		switch sel := stmt.Select.(type) {
 		case *tree.SelectClause:
 			for _, selExpr := range sel.Exprs {
 				switch expr := selExpr.Expr.(type) {
 				case *tree.FuncExpr:
-					// Look for function calls that mutate schema (this is actually a thing).
 					semaCtx := tree.MakeSemaContext()
 					semaCtx.Properties.Require("pg_dump function arguments", tree.RejectSubqueries)
 					if _, err := expr.TypeCheck(ctx, &semaCtx, nil /* desired */); err != nil {
@@ -792,55 +791,16 @@ func readPostgresStmt(
 						}
 						return err
 					}
-					ov := expr.ResolvedOverload()
-					// Search for a SQLFn, which returns a SQL string to execute.
-					fn, ok := ov.SQLFn.(eval.SQLFnOverload)
-					if !ok {
-						err := errors.Errorf("unsupported function call: %s in stmt: %s",
-							expr.Func.String(), stmt.String())
-						if ignoreUnsupportedStmts {
-							err := unsupportedStmtLogger.log(err.Error(), false /* isParseError */)
-							if err != nil {
-								return err
-							}
-							continue
+					err := errors.Errorf("unsupported function call: %s in stmt: %s",
+						expr.Func.String(), stmt.String())
+					if ignoreUnsupportedStmts {
+						err := unsupportedStmtLogger.log(err.Error(), false /* isParseError */)
+						if err != nil {
+							return err
 						}
-						return wrapErrorWithUnsupportedHint(err)
+						continue
 					}
-					// Attempt to convert all func exprs to datums.
-					datums := make(tree.Datums, len(expr.Exprs))
-					for i, ex := range expr.Exprs {
-						d, ok := ex.(tree.Datum)
-						if !ok {
-							// We got something that wasn't a datum so we can't call the
-							// overload. Since this is a SQLFn and the user would have
-							// expected us to execute it, we have to error.
-							return errors.Errorf("unsupported statement: %s", stmt)
-						}
-						datums[i] = d
-					}
-					// Now that we have all of the datums, we can execute the overload.
-					fnSQL, err := fn(ctx, evalCtx, datums)
-					if err != nil {
-						return err
-					}
-					// We have some sql. Parse and process it.
-					fnStmts, err := parser.Parse(fnSQL)
-					if err != nil {
-						return err
-					}
-					for _, fnStmt := range fnStmts {
-						switch ast := fnStmt.AST.(type) {
-						case *tree.AlterTable:
-							if err := readPostgresStmt(ctx, evalCtx, match, fks, schemaObjects, ast, p,
-								parentID, unsupportedStmtLogger); err != nil {
-								return err
-							}
-						default:
-							// We only support ALTER statements returned from a SQLFn.
-							return errors.Errorf("unsupported statement: %s", stmt)
-						}
-					}
+					return wrapErrorWithUnsupportedHint(err)
 				default:
 					err := errors.Errorf("unsupported %T SELECT expr: %s", expr, expr)
 					if ignoreUnsupportedStmts {
@@ -1400,8 +1360,6 @@ func (m *pgDumpReader) readFile(
 				m.kvCh <- row.KVBatch{
 					Source: inputIdx, KVs: []roachpb.KeyValue{kv}, Progress: input.ReadFraction(),
 				}
-			case "addgeometrycolumn":
-				// handled during schema extraction.
 			default:
 				err := errors.Errorf("unsupported function %s in stmt %s", funcName, i.Select.String())
 				if m.unsupportedStmtLogger.ignoreUnsupported {

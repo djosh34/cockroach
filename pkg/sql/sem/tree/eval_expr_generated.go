@@ -137,11 +137,6 @@ func (node *DBool) Eval(ctx context.Context, v ExprEvaluator) (Datum, error) {
 }
 
 // Eval is part of the TypedExpr interface.
-func (node *DBox2D) Eval(ctx context.Context, v ExprEvaluator) (Datum, error) {
-	return node, nil
-}
-
-// Eval is part of the TypedExpr interface.
 func (node *DBytes) Eval(ctx context.Context, v ExprEvaluator) (Datum, error) {
 	return node, nil
 }
@@ -173,16 +168,6 @@ func (node *DEnum) Eval(ctx context.Context, v ExprEvaluator) (Datum, error) {
 
 // Eval is part of the TypedExpr interface.
 func (node *DFloat) Eval(ctx context.Context, v ExprEvaluator) (Datum, error) {
-	return node, nil
-}
-
-// Eval is part of the TypedExpr interface.
-func (node *DGeography) Eval(ctx context.Context, v ExprEvaluator) (Datum, error) {
-	return node, nil
-}
-
-// Eval is part of the TypedExpr interface.
-func (node *DGeometry) Eval(ctx context.Context, v ExprEvaluator) (Datum, error) {
 	return node, nil
 }
 

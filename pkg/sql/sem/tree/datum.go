@@ -24,7 +24,6 @@ import (
 	"unsafe"
 
 	"github.com/cockroachdb/apd/v3"
-	"github.com/cockroachdb/cockroach/pkg/geo"
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
 	"github.com/cockroachdb/cockroach/pkg/sql/lexbase"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgrepl/lsn"
@@ -3414,250 +3413,6 @@ func (d *DInterval) Size() uintptr {
 	return unsafe.Sizeof(*d)
 }
 
-// DGeography is the Geometry Datum.
-type DGeography struct {
-	geo.Geography
-}
-
-// NewDGeography returns a new Geography Datum.
-func NewDGeography(g geo.Geography) *DGeography {
-	return &DGeography{Geography: g}
-}
-
-// AsDGeography attempts to retrieve a *DGeography from an Expr, returning a
-// *DGeography and a flag signifying whether the assertion was successful. The
-// function should be used instead of direct type assertions wherever a
-// *DGeography wrapped by a *DOidWrapper is possible.
-func AsDGeography(e Expr) (*DGeography, bool) {
-	switch t := e.(type) {
-	case *DGeography:
-		return t, true
-	case *DOidWrapper:
-		return AsDGeography(t.Wrapped)
-	}
-	return nil, false
-}
-
-// MustBeDGeography attempts to retrieve a *DGeography from an Expr, panicking
-// if the assertion fails.
-func MustBeDGeography(e Expr) *DGeography {
-	i, ok := AsDGeography(e)
-	if !ok {
-		panic(errors.AssertionFailedf("expected *DGeography, found %T", e))
-	}
-	return i
-}
-
-// ParseDGeography attempts to pass `str` as a Geography type.
-func ParseDGeography(str string) (*DGeography, error) {
-	g, err := geo.ParseGeography(str)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not parse geography")
-	}
-	return &DGeography{Geography: g}, nil
-}
-
-// ResolvedType implements the TypedExpr interface.
-func (*DGeography) ResolvedType() *types.T {
-	return types.Geography
-}
-
-// Compare implements the Datum interface.
-func (d *DGeography) Compare(ctx CompareContext, other Datum) int {
-	res, err := d.CompareError(ctx, other)
-	if err != nil {
-		panic(err)
-	}
-	return res
-}
-
-// CompareError implements the Datum interface.
-func (d *DGeography) CompareError(ctx CompareContext, other Datum) (int, error) {
-	if other == DNull {
-		// NULL is less than any non-NULL value.
-		return 1, nil
-	}
-	v, ok := ctx.UnwrapDatum(other).(*DGeography)
-	if !ok {
-		return 0, makeUnsupportedComparisonMessage(d, other)
-	}
-	res := d.Geography.Compare(v.Geography)
-	return res, nil
-}
-
-// Prev implements the Datum interface.
-func (d *DGeography) Prev(ctx CompareContext) (Datum, bool) {
-	return nil, false
-}
-
-// Next implements the Datum interface.
-func (d *DGeography) Next(ctx CompareContext) (Datum, bool) {
-	return nil, false
-}
-
-// IsMax implements the Datum interface.
-func (d *DGeography) IsMax(ctx CompareContext) bool {
-	return false
-}
-
-// IsMin implements the Datum interface.
-func (d *DGeography) IsMin(ctx CompareContext) bool {
-	return false
-}
-
-// Max implements the Datum interface.
-func (d *DGeography) Max(ctx CompareContext) (Datum, bool) {
-	return nil, false
-}
-
-// Min implements the Datum interface.
-func (d *DGeography) Min(ctx CompareContext) (Datum, bool) {
-	return nil, false
-}
-
-// AmbiguousFormat implements the Datum interface.
-func (*DGeography) AmbiguousFormat() bool { return true }
-
-// Format implements the NodeFormatter interface.
-func (d *DGeography) Format(ctx *FmtCtx) {
-	f := ctx.flags
-	bareStrings := f.HasFlags(FmtFlags(lexbase.EncBareStrings))
-	if !bareStrings {
-		ctx.WriteByte('\'')
-	}
-	ctx.WriteString(d.Geography.EWKBHex())
-	if !bareStrings {
-		ctx.WriteByte('\'')
-	}
-}
-
-// Size implements the Datum interface.
-func (d *DGeography) Size() uintptr {
-	return d.Geography.SpatialObjectRef().MemSize()
-}
-
-// DGeometry is the Geometry Datum.
-type DGeometry struct {
-	geo.Geometry
-}
-
-// NewDGeometry returns a new Geometry Datum.
-func NewDGeometry(g geo.Geometry) *DGeometry {
-	return &DGeometry{Geometry: g}
-}
-
-// AsDGeometry attempts to retrieve a *DGeometry from an Expr, returning a
-// *DGeometry and a flag signifying whether the assertion was successful. The
-// function should be used instead of direct type assertions wherever a
-// *DGeometry wrapped by a *DOidWrapper is possible.
-func AsDGeometry(e Expr) (*DGeometry, bool) {
-	switch t := e.(type) {
-	case *DGeometry:
-		return t, true
-	case *DOidWrapper:
-		return AsDGeometry(t.Wrapped)
-	}
-	return nil, false
-}
-
-// MustBeDGeometry attempts to retrieve a *DGeometry from an Expr, panicking
-// if the assertion fails.
-func MustBeDGeometry(e Expr) *DGeometry {
-	i, ok := AsDGeometry(e)
-	if !ok {
-		panic(errors.AssertionFailedf("expected *DGeometry, found %T", e))
-	}
-	return i
-}
-
-// ParseDGeometry attempts to pass `str` as a Geometry type.
-func ParseDGeometry(str string) (*DGeometry, error) {
-	g, err := geo.ParseGeometry(str)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not parse geometry")
-	}
-	return &DGeometry{Geometry: g}, nil
-}
-
-// ResolvedType implements the TypedExpr interface.
-func (*DGeometry) ResolvedType() *types.T {
-	return types.Geometry
-}
-
-// Compare implements the Datum interface.
-func (d *DGeometry) Compare(ctx CompareContext, other Datum) int {
-	res, err := d.CompareError(ctx, other)
-	if err != nil {
-		panic(err)
-	}
-	return res
-}
-
-// CompareError implements the Datum interface.
-func (d *DGeometry) CompareError(ctx CompareContext, other Datum) (int, error) {
-	if other == DNull {
-		// NULL is less than any non-NULL value.
-		return 1, nil
-	}
-	v, ok := ctx.UnwrapDatum(other).(*DGeometry)
-	if !ok {
-		return 0, makeUnsupportedComparisonMessage(d, other)
-	}
-	res := d.Geometry.Compare(v.Geometry)
-	return res, nil
-}
-
-// Prev implements the Datum interface.
-func (d *DGeometry) Prev(ctx CompareContext) (Datum, bool) {
-	return nil, false
-}
-
-// Next implements the Datum interface.
-func (d *DGeometry) Next(ctx CompareContext) (Datum, bool) {
-	return nil, false
-}
-
-// IsMax implements the Datum interface.
-func (d *DGeometry) IsMax(ctx CompareContext) bool {
-	return false
-}
-
-// IsMin implements the Datum interface.
-func (d *DGeometry) IsMin(ctx CompareContext) bool {
-	return false
-}
-
-// Max implements the Datum interface.
-func (d *DGeometry) Max(ctx CompareContext) (Datum, bool) {
-	return nil, false
-}
-
-// Min implements the Datum interface.
-func (d *DGeometry) Min(ctx CompareContext) (Datum, bool) {
-	return nil, false
-}
-
-// AmbiguousFormat implements the Datum interface.
-func (*DGeometry) AmbiguousFormat() bool { return true }
-
-// Format implements the NodeFormatter interface.
-func (d *DGeometry) Format(ctx *FmtCtx) {
-	f := ctx.flags
-	bareStrings := f.HasFlags(FmtFlags(lexbase.EncBareStrings))
-	if !bareStrings {
-		ctx.WriteByte('\'')
-	}
-	ctx.WriteString(d.Geometry.EWKBHex())
-	if !bareStrings {
-		ctx.WriteByte('\'')
-	}
-}
-
-// Size implements the Datum interface.
-func (d *DGeometry) Size() uintptr {
-	return d.Geometry.SpatialObjectRef().MemSize()
-}
-
 type DPGLSN struct {
 	lsn.LSN
 }
@@ -3784,128 +3539,6 @@ func (d *DPGLSN) Format(ctx *FmtCtx) {
 // Size implements the Datum interface.
 func (d *DPGLSN) Size() uintptr {
 	return unsafe.Sizeof(*d)
-}
-
-// DBox2D is the Datum representation of the Box2D type.
-type DBox2D struct {
-	geo.CartesianBoundingBox
-}
-
-// NewDBox2D returns a new Box2D Datum.
-func NewDBox2D(b geo.CartesianBoundingBox) *DBox2D {
-	return &DBox2D{CartesianBoundingBox: b}
-}
-
-// ParseDBox2D attempts to pass `str` as a Box2D type.
-func ParseDBox2D(str string) (*DBox2D, error) {
-	b, err := geo.ParseCartesianBoundingBox(str)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not parse geometry")
-	}
-	return &DBox2D{CartesianBoundingBox: b}, nil
-}
-
-// AsDBox2D attempts to retrieve a *DBox2D from an Expr, returning a
-// *DBox2D and a flag signifying whether the assertion was successful. The
-// function should be used instead of direct type assertions wherever a
-// *DBox2D wrapped by a *DOidWrapper is possible.
-func AsDBox2D(e Expr) (*DBox2D, bool) {
-	switch t := e.(type) {
-	case *DBox2D:
-		return t, true
-	case *DOidWrapper:
-		return AsDBox2D(t.Wrapped)
-	}
-	return nil, false
-}
-
-// MustBeDBox2D attempts to retrieve a *DBox2D from an Expr, panicking
-// if the assertion fails.
-func MustBeDBox2D(e Expr) *DBox2D {
-	i, ok := AsDBox2D(e)
-	if !ok {
-		panic(errors.AssertionFailedf("expected *DBox2D, found %T", e))
-	}
-	return i
-}
-
-// ResolvedType implements the TypedExpr interface.
-func (*DBox2D) ResolvedType() *types.T {
-	return types.Box2D
-}
-
-// Compare implements the Datum interface.
-func (d *DBox2D) Compare(ctx CompareContext, other Datum) int {
-	res, err := d.CompareError(ctx, other)
-	if err != nil {
-		panic(err)
-	}
-	return res
-}
-
-// CompareError implements the Datum interface.
-func (d *DBox2D) CompareError(ctx CompareContext, other Datum) (int, error) {
-	if other == DNull {
-		// NULL is less than any non-NULL value.
-		return 1, nil
-	}
-	v, ok := ctx.UnwrapDatum(other).(*DBox2D)
-	if !ok {
-		return 0, makeUnsupportedComparisonMessage(d, other)
-	}
-	res := d.CartesianBoundingBox.Compare(&v.CartesianBoundingBox)
-	return res, nil
-}
-
-// Prev implements the Datum interface.
-func (d *DBox2D) Prev(ctx CompareContext) (Datum, bool) {
-	return nil, false
-}
-
-// Next implements the Datum interface.
-func (d *DBox2D) Next(ctx CompareContext) (Datum, bool) {
-	return nil, false
-}
-
-// IsMax implements the Datum interface.
-func (d *DBox2D) IsMax(ctx CompareContext) bool {
-	return false
-}
-
-// IsMin implements the Datum interface.
-func (d *DBox2D) IsMin(ctx CompareContext) bool {
-	return false
-}
-
-// Max implements the Datum interface.
-func (d *DBox2D) Max(ctx CompareContext) (Datum, bool) {
-	return nil, false
-}
-
-// Min implements the Datum interface.
-func (d *DBox2D) Min(ctx CompareContext) (Datum, bool) {
-	return nil, false
-}
-
-// AmbiguousFormat implements the Datum interface.
-func (*DBox2D) AmbiguousFormat() bool { return true }
-
-// Format implements the NodeFormatter interface.
-func (d *DBox2D) Format(ctx *FmtCtx) {
-	f := ctx.flags
-	bareStrings := f.HasFlags(FmtFlags(lexbase.EncBareStrings))
-	if !bareStrings {
-		ctx.WriteByte('\'')
-	}
-	ctx.Write(d.CartesianBoundingBox.AppendFormat(ctx.scratch[:0]))
-	if !bareStrings {
-		ctx.WriteByte('\'')
-	}
-}
-
-// Size implements the Datum interface.
-func (d *DBox2D) Size() uintptr {
-	return unsafe.Sizeof(*d) + unsafe.Sizeof(d.CartesianBoundingBox)
 }
 
 // DJSON is the JSON Datum.
@@ -4068,15 +3701,11 @@ func AsJSON(
 	case *DTimestamp:
 		// This is RFC3339Nano, but without the TZ fields.
 		return json.FromString(formatTime(t.UTC(), "2006-01-02T15:04:05.999999999")), nil
-	case *DDate, *DUuid, *DOid, *DInterval, *DBytes, *DIPAddr, *DTime, *DTimeTZ, *DBitArray, *DBox2D,
+	case *DDate, *DUuid, *DOid, *DInterval, *DBytes, *DIPAddr, *DTime, *DTimeTZ, *DBitArray,
 		*DTSVector, *DTSQuery, *DPGLSN:
 		return json.FromString(
 			AsStringWithFlags(t, FmtBareStrings, FmtDataConversionConfig(dcc), FmtLocation(loc)),
 		), nil
-	case *DGeometry:
-		return json.FromSpatialObject(t.Geometry.SpatialObject(), geo.FullPrecisionGeoJSON)
-	case *DGeography:
-		return json.FromSpatialObject(t.Geography.SpatialObject(), geo.FullPrecisionGeoJSON)
 	case *DVoid:
 		return json.FromString(AsStringWithFlags(t, fmtRawStrings)), nil
 	default:
@@ -6044,14 +5673,6 @@ func NewDefaultDatum(collationEnv *CollationEnvironment, t *types.T) (d Datum, e
 		return dNullJSON, nil
 	case types.TimeTZFamily:
 		return dZeroTimeTZ, nil
-	case types.GeometryFamily, types.GeographyFamily, types.Box2DFamily:
-		// TODO(otan): force Geometry/Geography to not allow `NOT NULL` columns to
-		// make this impossible.
-		return nil, pgerror.Newf(
-			pgcode.FeatureNotSupported,
-			"%s must be set or be NULL",
-			t.Name(),
-		)
 	case types.TupleFamily:
 		contents := t.TupleContents()
 		datums := make([]Datum, len(contents))
@@ -6160,7 +5781,6 @@ var baseDatumTypeSizes = map[types.Family]struct {
 }{
 	types.UnknownFamily:        {unsafe.Sizeof(dNull{}), fixedSize},
 	types.BoolFamily:           {unsafe.Sizeof(DBool(false)), fixedSize},
-	types.Box2DFamily:          {unsafe.Sizeof(DBox2D{CartesianBoundingBox: geo.CartesianBoundingBox{}}), fixedSize},
 	types.BitFamily:            {unsafe.Sizeof(DBitArray{}), variableSize},
 	types.IntFamily:            {unsafe.Sizeof(DInt(0)), fixedSize},
 	types.FloatFamily:          {unsafe.Sizeof(DFloat(0.0)), fixedSize},
@@ -6170,8 +5790,6 @@ var baseDatumTypeSizes = map[types.Family]struct {
 	types.BytesFamily:          {unsafe.Sizeof(DBytes("")), variableSize},
 	types.EncodedKeyFamily:     {unsafe.Sizeof(DBytes("")), variableSize},
 	types.DateFamily:           {unsafe.Sizeof(DDate{}), fixedSize},
-	types.GeographyFamily:      {unsafe.Sizeof(DGeography{}), variableSize},
-	types.GeometryFamily:       {unsafe.Sizeof(DGeometry{}), variableSize},
 	types.PGLSNFamily:          {unsafe.Sizeof(DPGLSN{}), fixedSize},
 	types.RefCursorFamily:      {unsafe.Sizeof(DString("")), variableSize},
 	types.TimeFamily:           {unsafe.Sizeof(DTime(0)), fixedSize},
@@ -6317,8 +5935,7 @@ func InferTypes(vals []string) []types.Family {
 }
 
 // AdjustValueToType checks that the width (for strings, byte arrays, and bit
-// strings) and scale (decimal). and, shape/srid (for geospatial types) fits the
-// specified column type.
+// strings) and scale (decimal) fits the specified column type.
 //
 // Additionally, some precision truncation may occur for the specified column type.
 //
@@ -6329,9 +5946,6 @@ func InferTypes(vals []string) []types.Family {
 //
 // In the case of time, it can truncate fractional digits of time datums
 // to its relevant rounding for the given type definition.
-//
-// In the case of geospatial types, it will check whether the SRID and Shape in the
-// datum matches the type definition.
 //
 // This method is used by casts and parsing. It is important to note that this
 // function will error if the given value is too wide for the given type. For
@@ -6478,26 +6092,6 @@ func AdjustValueToType(typ *types.T, inVal Datum) (outVal Datum, err error) {
 			}
 			return NewDInterval(in.Duration, itm), nil
 		}
-	case types.GeometryFamily:
-		if in, ok := inVal.(*DGeometry); ok {
-			if err := geo.SpatialObjectFitsColumnMetadata(
-				in.Geometry.SpatialObject(),
-				typ.InternalType.GeoMetadata.SRID,
-				typ.InternalType.GeoMetadata.ShapeType,
-			); err != nil {
-				return nil, err
-			}
-		}
-	case types.GeographyFamily:
-		if in, ok := inVal.(*DGeography); ok {
-			if err := geo.SpatialObjectFitsColumnMetadata(
-				in.Geography.SpatialObject(),
-				typ.InternalType.GeoMetadata.SRID,
-				typ.InternalType.GeoMetadata.ShapeType,
-			); err != nil {
-				return nil, err
-			}
-		}
 	}
 	return inVal, nil
 }
@@ -6557,8 +6151,8 @@ func DatumPrev(
 		return NewDInterval(prev, types.DefaultIntervalTypeMetadata), true
 	default:
 		// TODO(yuzefovich): consider adding support for other datums that don't
-		// have Datum.Prev implementation (DCollatedString, DBitArray,
-		// DGeography, DGeometry, DBox2D, DJSON, DArray).
+		// have Datum.Prev implementation (DCollatedString, DBitArray, DJSON,
+		// DArray).
 		return datum.Prev(cmpCtx)
 	}
 }
@@ -6592,8 +6186,7 @@ func DatumNext(
 		return NewDInterval(next, types.DefaultIntervalTypeMetadata), true
 	default:
 		// TODO(yuzefovich): consider adding support for other datums that don't
-		// have Datum.Next implementation (DCollatedString, DGeography,
-		// DGeometry, DBox2D, DJSON).
+		// have Datum.Next implementation (DCollatedString, DJSON).
 		return datum.Next(cmpCtx)
 	}
 }

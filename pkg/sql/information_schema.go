@@ -133,9 +133,6 @@ var informationSchema = virtualSchema{
 		catconstants.InformationSchemaSchemataTablePrivilegesID:           informationSchemaSchemataTablePrivileges,
 		catconstants.InformationSchemaSequencesID:                         informationSchemaSequences,
 		catconstants.InformationSchemaSessionVariables:                    informationSchemaSessionVariables,
-		catconstants.InformationSchemaStGeometryColumnsTableID:            informationSchemaStGeometryColumnsTable,
-		catconstants.InformationSchemaStSpatialReferenceSystemsTableID:    informationSchemaStSpatialReferenceSystemsTable,
-		catconstants.InformationSchemaStUnitsOfMeasureTableID:             informationSchemaStUnitsOfMeasureTable,
 		catconstants.InformationSchemaStatisticsTableID:                   informationSchemaStatisticsTable,
 		catconstants.InformationSchemaTableConstraintTableID:              informationSchemaTableConstraintTable,
 		catconstants.InformationSchemaTableConstraintsExtensionsTableID:   informationSchemaTableConstraintsExtensionsTable,
@@ -2114,15 +2111,6 @@ var informationSchemaForeignServerOptionsTable = virtualSchemaTable{
 	unimplemented: true,
 }
 
-var informationSchemaStUnitsOfMeasureTable = virtualSchemaTable{
-	comment: "st_units_of_measure was created for compatibility and is currently unimplemented",
-	schema:  vtable.InformationSchemaStUnitsOfMeasure,
-	populate: func(ctx context.Context, p *planner, _ catalog.DatabaseDescriptor, addRow func(...tree.Datum) error) error {
-		return nil
-	},
-	unimplemented: true,
-}
-
 var informationSchemaSchemataExtensionsTable = virtualSchemaTable{
 	comment: "schemata_extensions was created for compatibility and is currently unimplemented",
 	schema:  vtable.InformationSchemaSchemataExtensions,
@@ -2285,15 +2273,6 @@ var informationSchemaSQLFeaturesTable = virtualSchemaTable{
 	unimplemented: true,
 }
 
-var informationSchemaStGeometryColumnsTable = virtualSchemaTable{
-	comment: "st_geometry_columns was created for compatibility and is currently unimplemented",
-	schema:  vtable.InformationSchemaStGeometryColumns,
-	populate: func(ctx context.Context, p *planner, _ catalog.DatabaseDescriptor, addRow func(...tree.Datum) error) error {
-		return nil
-	},
-	unimplemented: true,
-}
-
 var informationSchemaSQLPartsTable = virtualSchemaTable{
 	comment: "sql_parts was created for compatibility and is currently unimplemented",
 	schema:  vtable.InformationSchemaSQLParts,
@@ -2306,15 +2285,6 @@ var informationSchemaSQLPartsTable = virtualSchemaTable{
 var informationSchemaPluginsTable = virtualSchemaTable{
 	comment: "plugins was created for compatibility and is currently unimplemented",
 	schema:  vtable.InformationSchemaPlugins,
-	populate: func(ctx context.Context, p *planner, _ catalog.DatabaseDescriptor, addRow func(...tree.Datum) error) error {
-		return nil
-	},
-	unimplemented: true,
-}
-
-var informationSchemaStSpatialReferenceSystemsTable = virtualSchemaTable{
-	comment: "st_spatial_reference_systems was created for compatibility and is currently unimplemented",
-	schema:  vtable.InformationSchemaStSpatialReferenceSystems,
 	populate: func(ctx context.Context, p *planner, _ catalog.DatabaseDescriptor, addRow func(...tree.Datum) error) error {
 		return nil
 	},

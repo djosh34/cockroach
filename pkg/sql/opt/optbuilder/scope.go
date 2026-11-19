@@ -1081,11 +1081,6 @@ func (s *scope) VisitPre(expr tree.Expr) (recurse bool, newExpr tree.Expr) {
 			break
 		}
 
-		if isSQLFn(def) {
-			expr = s.replaceSQLFn(t, def)
-			break
-		}
-
 	case *tree.ArrayFlatten:
 		if sub, ok := t.Subquery.(*tree.Subquery); ok {
 			// Copy the ArrayFlatten expression so that the tree isn't mutated.
@@ -1417,43 +1412,6 @@ func (s *scope) replaceWindowFn(f *tree.FuncExpr, def *tree.ResolvedFunctionDefi
 
 	s.windows = append(s.windows, *info.col)
 
-	return &info
-}
-
-// replaceSQLFn replaces a tree.SQLClass function with a sqlFnInfo struct. See
-// comments above tree.SQLClass and sqlFnInfo for details.
-func (s *scope) replaceSQLFn(f *tree.FuncExpr, def *tree.ResolvedFunctionDefinition) tree.Expr {
-	// We need to save and restore the previous value of the field in
-	// semaCtx in case we are recursively called within a subquery
-	// context.
-	defer s.builder.semaCtx.Properties.Restore(s.builder.semaCtx.Properties)
-
-	s.builder.semaCtx.Properties.Require("SQL function", tree.RejectSpecial)
-
-	expr := f.Walk(s)
-	typedFunc, err := tree.TypeCheck(s.builder.ctx, expr, s.builder.semaCtx, types.Any)
-	if err != nil {
-		panic(err)
-	}
-	if typedFunc == tree.DNull {
-		return tree.DNull
-	}
-
-	f = typedFunc.(*tree.FuncExpr)
-	args := make(memo.ScalarListExpr, len(f.Exprs))
-	for i, arg := range f.Exprs {
-		args[i] = s.builder.buildScalar(arg.(tree.TypedExpr), s, nil, nil, nil)
-	}
-
-	info := sqlFnInfo{
-		FuncExpr: f,
-		def: memo.FunctionPrivate{
-			Name:       def.Name,
-			Properties: &f.ResolvedOverload().FunctionProperties,
-			Overload:   f.ResolvedOverload(),
-		},
-		args: args,
-	}
 	return &info
 }
 

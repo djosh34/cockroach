@@ -133,15 +133,6 @@ func (e *evaluator) EvalBitXorVarBitOp(
 	}, nil
 }
 
-func (e *evaluator) EvalCompareBox2DOp(
-	ctx context.Context, op *tree.CompareBox2DOp, left, right tree.Datum,
-) (tree.Datum, error) {
-	if err := checkExperimentalBox2DComparisonOperatorEnabled(e.Settings); err != nil {
-		return nil, err
-	}
-	return tree.MakeDBool(tree.DBool(op.Op(left, right))), nil
-}
-
 func (e *evaluator) EvalCompareScalarOp(
 	ctx context.Context, op *tree.CompareScalarOp, left, right tree.Datum,
 ) (tree.Datum, error) {

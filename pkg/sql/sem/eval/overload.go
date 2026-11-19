@@ -68,12 +68,6 @@ type FnWithExprsOverload func(context.Context, *Context, tree.Exprs) (tree.Datum
 // tree.FnWithExprsOverload.
 func (fo FnWithExprsOverload) FnWithExprs() {}
 
-// SQLFnOverload is the concrete type for the tree.Overload.SQLFn field.
-type SQLFnOverload func(context.Context, *Context, tree.Datums) (string, error)
-
-// SQLFn is a marker to indicate that this is a tree.SQLFnOverload.
-func (so SQLFnOverload) SQLFn() {}
-
 // GeneratorOverload is the type of constructor functions for
 // ValueGenerator objects.
 type GeneratorOverload func(ctx context.Context, evalCtx *Context, args tree.Datums) (ValueGenerator, error)
@@ -129,9 +123,6 @@ func init() {
 			if fn.GeneratorWithExprs != nil {
 				numSet++
 			}
-			if fn.SQLFn != nil {
-				numSet++
-			}
 			if fn.Body != "" {
 				numSet++
 			}
@@ -172,14 +163,6 @@ func init() {
 				// Generator builtins have Fn and FnWithExprs set to
 				// implementations that return assertion errors.
 				numSetExpected = 3
-
-			case tree.SQLClass:
-				if fn.Fn == nil || fn.SQLFn == nil {
-					panic(errors.AssertionFailedf(
-						"%s: SQL builtins should have Fn and SQLFn set: %v", name, fn,
-					))
-				}
-				numSetExpected = 2
 
 			default:
 				panic(errors.AssertionFailedf("%s: unexpected class %d: %v", name, fn.Class, fn))

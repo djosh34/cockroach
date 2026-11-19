@@ -55,8 +55,9 @@ const (
 	ValueType_DELIMITED_DECIMAL ValueType = 9
 	ValueType_DURATION          ValueType = 6
 	ValueType_TIMETZ            ValueType = 12
-	ValueType_GEO               ValueType = 13
-	ValueType_BOX2D             ValueType = 14
+	// GEO and BOX2D were the removed spatial types.
+	ValueType_GEO   ValueType = 13
+	ValueType_BOX2D ValueType = 14
 	// TUPLE represents a DTuple, encoded as repeated pairs of varint field number
 	// followed by a value encoded Datum.
 	ValueType_TUPLE    ValueType = 10
