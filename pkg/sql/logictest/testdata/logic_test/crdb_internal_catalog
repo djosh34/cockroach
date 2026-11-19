@@ -1,7 +1,6 @@
 # Legacy schema changer is skipped because test results depend on
 # declarative schema changer behavior.
 #
-# LogicTest: !3node-tenant-default-configs !local-legacy-schema-changer
 
 statement ok
 CREATE DATABASE db
@@ -100,8 +99,6 @@ SELECT
 	)
 $$;
 
-skipif config local-mixed-23.1
-skipif config local-mixed-23.2
 query IT
 SELECT id, strip_volatile(descriptor) FROM crdb_internal.kv_catalog_descriptor ORDER BY id
 ----

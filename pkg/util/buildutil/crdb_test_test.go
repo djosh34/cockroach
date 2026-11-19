@@ -13,14 +13,11 @@ package buildutil
 import (
 	"testing"
 
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCrdbTestOn(t *testing.T) {
-	// Sanity-check: make sure CrdbTestBuild is set. This should be true for
-	// any test built with bazel.
-	if bazel.BuiltWithBazel() {
-		require.True(t, CrdbTestBuild)
-	}
+	// Sanity-check: make sure CrdbTestBuild is set. Tests run with
+	// -tags crdb_test.
+	require.True(t, CrdbTestBuild)
 }

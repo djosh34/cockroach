@@ -210,10 +210,6 @@ type BaseConfig struct {
 	// auth but no auth in HTTP.
 	TestingInsecureWebAccess bool
 
-	// EnableDemoLoginEndpoint enables the HTTP GET endpoint for user logins,
-	// which a feature unique to the demo shell.
-	EnableDemoLoginEndpoint bool
-
 	// ReadyFn is called when the server has started listening on its
 	// sockets.
 	//

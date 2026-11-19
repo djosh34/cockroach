@@ -1,5 +1,3 @@
-# LogicTest: !3node-tenant-default-configs !local-mixed-23.1
-
 query IBIT colnames
 SELECT id, active, length(info), name FROM system.tenants ORDER BY id
 ----

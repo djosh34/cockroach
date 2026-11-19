@@ -1,4 +1,4 @@
-# LogicTest: local 3node-tenant
+# LogicTest: local
 
 # This test depends on table ID's being stable, so add new tests at the bottom
 # of the file.
@@ -16,13 +16,6 @@ let $tableid
 SELECT id FROM system.namespace WHERE name = 't'
 
 # wait until split happens on secondary tenant's end key or list_sql_keys_in_range will fail
-onlyif config 3node-tenant
-query TT rowsort
-SELECT start_key, end_key FROM [SHOW RANGES]
-----
-/Tenant/10                /Tenant/10/Table/106/1/0
-/Tenant/10/Table/106/1/0  /Tenant/11
-
 # Without any data in the table, there shouldn't be any keys in the range.
 query T
 SELECT key FROM crdb_internal.list_sql_keys_in_range($rangeid)
@@ -41,13 +34,6 @@ SELECT key FROM crdb_internal.list_sql_keys_in_range($rangeid)
 /Table/106/1/1/0
 /Table/106/1/2/0
 
-onlyif config 3node-tenant
-query T rowsort
-SELECT key FROM crdb_internal.list_sql_keys_in_range($rangeid)
-----
-/Tenant/10/Table/106/1/1/0
-/Tenant/10/Table/106/1/2/0
-
 # List out all of the keys in this range. The values themselves are
 # different on each run of the test due to metadata stored in the value.
 onlyif config local
@@ -56,13 +42,6 @@ SELECT crdb_internal.pretty_key(key, 0) FROM crdb_internal.scan(crdb_internal.ta
 ----
 /106/1/1/0
 /106/1/2/0
-
-onlyif config 3node-tenant
-query T rowsort
-SELECT crdb_internal.pretty_key(key, 0) FROM crdb_internal.scan(crdb_internal.table_span($tableid))
-----
-/10/Table/106/1/1/0
-/10/Table/106/1/2/0
 
 # Regression test for a panic when the end key was equal to the Next() key of the last key returned.
 statement ok
@@ -112,8 +91,4 @@ SELECT count(key), count(DISTINCT key) FROM crdb_internal.scan(crdb_internal.tab
 # error in Start() (#87248).
 onlyif config local
 statement error failed to verify keys for Scan
-SELECT crdb_internal.scan('\xff':::BYTES, '\x3f5918':::BYTES);
-
-onlyif config 3node-tenant
-statement error not fully contained in tenant keyspace
 SELECT crdb_internal.scan('\xff':::BYTES, '\x3f5918':::BYTES);

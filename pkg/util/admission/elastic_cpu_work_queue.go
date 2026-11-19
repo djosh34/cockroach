@@ -17,6 +17,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
+	"github.com/cockroachdb/cockroach/pkg/util/grunning"
 )
 
 const (
@@ -34,7 +35,9 @@ var (
 		settings.SystemOnly,
 		"admission.elastic_cpu.enabled",
 		"when true, elastic work (like backups) performed by the KV layer is subject to admission control",
-		true,
+		// Elastic admission needs per-goroutine CPU time. Stock Go does not
+		// provide it, so the default is off there (see grunning.Supported).
+		grunning.Supported(),
 	)
 )
 

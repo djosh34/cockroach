@@ -27,7 +27,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 	"github.com/cockroachdb/cockroach/pkg/internal/codeowners"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/builtins"
 	"github.com/cockroachdb/cockroach/pkg/testutils/datapathutils"
@@ -43,18 +42,6 @@ const cockroachDB = "github.com/cockroachdb/cockroach"
 
 //go:embed gcassert_paths.txt
 var rawGcassertPaths string
-
-func init() {
-	if bazel.BuiltWithBazel() {
-		gobin, err := bazel.Runfile("bin/go")
-		if err != nil {
-			panic(err)
-		}
-		if err := os.Setenv("PATH", fmt.Sprintf("%s%c%s", filepath.Dir(gobin), os.PathListSeparator, os.Getenv("PATH"))); err != nil {
-			panic(err)
-		}
-	}
-}
 
 func dirCmd(
 	dir string, name string, args ...string,
@@ -1738,9 +1725,6 @@ func TestLint(t *testing.T) {
 	// https://github.com/dominikh/go-tools/issues/57 is fixed.
 	t.Run("TestErrCheck", func(t *testing.T) {
 		skip.UnderShort(t)
-		if bazel.BuiltWithBazel() {
-			skip.IgnoreLint(t, "the errcheck tests are run during the bazel build")
-		}
 		excludesPath, err := filepath.Abs(datapathutils.TestDataPath(t, "errcheck_excludes.txt"))
 		if err != nil {
 			t.Fatal(err)
@@ -1776,9 +1760,6 @@ func TestLint(t *testing.T) {
 
 	t.Run("TestReturnCheck", func(t *testing.T) {
 		skip.UnderShort(t)
-		if bazel.BuiltWithBazel() {
-			skip.IgnoreLint(t, "the returncheck tests are run during the bazel build")
-		}
 		// returncheck uses 2GB of ram (as of 2017-07-13), so don't parallelize it.
 		cmd, stderr, filter, err := dirCmd(crdbDir, "returncheck", pkgScope)
 		if err != nil {
@@ -1805,15 +1786,8 @@ func TestLint(t *testing.T) {
 	t.Run("TestStaticCheck", func(t *testing.T) {
 		// staticcheck uses 2.4GB of ram (as of 2019-05-10), so don't parallelize it.
 		skip.UnderShort(t)
-		// If run outside of Bazel, we assume this binary must be in the PATH.
+		// We assume this binary is in the PATH.
 		staticcheck := "staticcheck"
-		if bazel.BuiltWithBazel() {
-			var err error
-			staticcheck, err = bazel.Runfile("external/co_honnef_go_tools/cmd/staticcheck/staticcheck_/staticcheck")
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
 
 		// Determine the list of files to exclude."
 
@@ -2311,9 +2285,6 @@ func TestLint(t *testing.T) {
 	// See pkg/cmd/roachvet.
 	t.Run("TestRoachVet", func(t *testing.T) {
 		skip.UnderShort(t)
-		if bazel.BuiltWithBazel() {
-			skip.IgnoreLint(t, "the roachvet tests are run during the bazel build")
-		}
 		// The -printfuncs functionality is interesting and
 		// under-documented. It checks two things:
 		//

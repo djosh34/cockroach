@@ -804,10 +804,6 @@ func (s *SQLServerWrapper) PreStart(ctx context.Context) error {
 			sqlServer:        s.sqlServer,
 			db:               s.db,
 		}), /* apiServer */
-		serverpb.FeatureFlags{
-			CanViewKvMetricDashboards:   s.rpcContext.TenantID.Equal(roachpb.SystemTenantID),
-			DisableKvLevelAdvancedDebug: true,
-		},
 	); err != nil {
 		return err
 	}

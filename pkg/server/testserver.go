@@ -257,9 +257,6 @@ func makeTestConfigFromParams(params base.TestServerArgs) Config {
 	}
 	cfg.DisableTLSForHTTP = params.DisableTLSForHTTP
 	cfg.TestingInsecureWebAccess = params.InsecureWebAccess
-	if params.EnableDemoLoginEndpoint {
-		cfg.EnableDemoLoginEndpoint = true
-	}
 	if params.SnapshotApplyLimit != 0 {
 		cfg.SnapshotApplyLimit = params.SnapshotApplyLimit
 	}
@@ -1703,7 +1700,6 @@ func (ts *testServer) StartTenant(
 	baseCfg.ClusterName = ts.Cfg.ClusterName
 	baseCfg.StartDiagnosticsReporting = params.StartDiagnosticsReporting
 	baseCfg.DisableTLSForHTTP = params.DisableTLSForHTTP
-	baseCfg.EnableDemoLoginEndpoint = params.EnableDemoLoginEndpoint
 	baseCfg.TestingInsecureWebAccess = ts.Cfg.TestingInsecureWebAccess
 	baseCfg.DefaultZoneConfig = ts.Cfg.DefaultZoneConfig
 	baseCfg.HeapProfileDirName = ts.Cfg.BaseConfig.HeapProfileDirName

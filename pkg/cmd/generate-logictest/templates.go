@@ -32,7 +32,6 @@ const templateText = `
 {{- define "declareTestdataPaths" }}
 {{- if .LogicTest }}var logicTestDir string
 {{ end }}{{ if .ExecBuildLogicTest }}var execBuildLogicTestDir string
-{{ end }}{{ if .SqliteLogicTest }}var sqliteLogicTestDir string
 {{ end }}
 {{- end }}
 
@@ -62,58 +61,18 @@ func runExecBuildLogicTest(t *testing.T, file string) {
 {{ end }}
 {{- end }}
 
-{{- define "runSqliteLogicTest" }}
-{{- if .SqliteLogicTest -}}
-func runSqliteLogicTest(t *testing.T, file string) {
-	skip.UnderDeadlock(t, "times out and/or hangs")
-	if !*logictest.Bigtest {
-		skip.IgnoreLint(t, "-bigtest flag must be specified to run this test")
-	}
-	// SQLLite logic tests can be very memory intensive, so we give them larger
-	// limit than other logic tests get. Also some of the 'delete' files become
-	// extremely slow when MVCC range tombstones are enabled for point deletes,
-	// so we disable that.
-	serverArgs := logictest.TestServerArgs{
-		MaxSQLMemoryLimit: 512 << 20, // 512 MiB
-		DisableUseMVCCRangeTombstonesForPointDeletes: true,
-		// Some sqlite tests with very low bytes limit value are too slow, so
-		// ensure 3 KiB lower bound.
-		BatchBytesLimitLowerBound: 3 << 10, // 3 KiB
-	}
-	logictest.RunLogicTest(t, serverArgs, configIdx, filepath.Join(sqliteLogicTestDir, file))
-}
-{{ end }}
-{{- end }}
-
 {{- define "declareTestdataSetupFunctions" }}
 {{- template "runLogicTest" . }}
 {{- template "runExecBuildLogicTest" . }}
-{{- template "runSqliteLogicTest" . }}
 {{- end }}
 
 {{- define "initLogicTest" }}
-{{ if .LogicTest }}	if bazel.BuiltWithBazel() {
-		var err error
-		logicTestDir, err = bazel.Runfile("pkg/sql/logictest/testdata/logic_test")
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		logicTestDir = "{{ .RelDir }}/sql/logictest/testdata/logic_test"
-	}
+{{ if .LogicTest }}	logicTestDir = "{{ .RelDir }}/sql/logictest/testdata/logic_test"
 {{ end }}
 {{- end }}
 
 {{- define "initExecBuildLogicTest" }}
-{{- if .ExecBuildLogicTest }}	if bazel.BuiltWithBazel() {
-		var err error
-		execBuildLogicTestDir, err = bazel.Runfile("pkg/sql/opt/exec/execbuilder/testdata")
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		execBuildLogicTestDir = "{{ .RelDir }}/sql/opt/exec/execbuilder/testdata"
-	}
+{{- if .ExecBuildLogicTest }}	execBuildLogicTestDir = "{{ .RelDir }}/sql/opt/exec/execbuilder/testdata"
 {{ end }}
 {{- end }}
 
@@ -130,21 +89,18 @@ func init() {
 
 package test{{ .Package }}
 
-import ({{ if .SqliteLogicTest }}
-	"flag"{{ end }}
+import (
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvclient/kvtenant"
 	"github.com/cockroachdb/cockroach/pkg/security/securityassets"
 	"github.com/cockroachdb/cockroach/pkg/security/securitytest"
 	"github.com/cockroachdb/cockroach/pkg/server"{{ if .ExecBuildLogicTest }}
 	"github.com/cockroachdb/cockroach/pkg/sql"{{ end }}
-	"github.com/cockroachdb/cockroach/pkg/sql/logictest"{{ if .SqliteLogicTest }}
-	"github.com/cockroachdb/cockroach/pkg/sql/sqlitelogictest"{{ end }}
+	"github.com/cockroachdb/cockroach/pkg/sql/logictest"
 	"github.com/cockroachdb/cockroach/pkg/testutils/serverutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/skip"
 	"github.com/cockroachdb/cockroach/pkg/testutils/testcluster"
@@ -158,23 +114,7 @@ const configIdx = {{ .ConfigIdx }}
 {{- template "initFunc" . }}
 
 func TestMain(m *testing.M) {
-{{ if .SqliteLogicTest }}	flag.Parse()
-	if *logictest.Bigtest {
-		if bazel.BuiltWithBazel() {
-			var err error
-			sqliteLogicTestDir, err = bazel.Runfile("external/com_github_cockroachdb_sqllogictest")
-			if err != nil {
-				panic(err)
-			}
-		} else {
-			var err error
-			sqliteLogicTestDir, err = sqlitelogictest.FindLocalLogicTestClone()
-			if err != nil {
-				panic(err)
-			}
-		}
-	}
-{{ end }}	securityassets.SetLoader(securitytest.EmbeddedAssets)
+	securityassets.SetLoader(securitytest.EmbeddedAssets)
 	randutil.SeedForTests()
 	serverutils.InitTestServerFactory(server.TestServerFactory)
 	serverutils.InitTestClusterFactory(testcluster.TestClusterFactory)
@@ -187,7 +127,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-{{ template "declareTestdataSetupFunctions" . }}{{- if not .SqliteLogicTest }}
+{{ template "declareTestdataSetupFunctions" . }}
 // TestLogic_tmp runs any tests that are prefixed with "_", in which a dedicated
 // test is not generated for. This allows developers to create and run temporary
 // test files that are not checked into the repository, without repeatedly
@@ -210,55 +150,6 @@ func TestLogic_tmp(t *testing.T) {
 	logictest.RunLogicTests(t, serverArgs, configIdx, glob)
 	{{- end }}
 }
-{{ end }}`
-
-// There is probably room for optimization here. Among other things:
-// some tests may declare a testdata dependency they don't actually need, and
-// the sizes for some of these tests can probably be smaller than "enormous".
-const buildFileTemplate = `load("@io_bazel_rules_go//go:def.bzl", "go_test")
-
-go_test(
-    name = "{{ .TestRuleName }}_test",
-    size = "enormous",
-    srcs = ["generated_test.go"],{{ if .SqliteLogicTest }}
-    args = ["-test.timeout=7195s"],{{ else }}
-    args = select({
-        "//build/toolchains:use_ci_timeouts": ["-test.timeout=895s"],
-        "//conditions:default": ["-test.timeout=3595s"],
-    }),{{ end }}
-    data = [
-        "//c-deps:libgeos",  # keep{{ if .SqliteLogicTest }}
-        "@com_github_cockroachdb_sqllogictest//:testfiles",  # keep{{ end }}{{ if .CockroachGoTestserverTest }}
-        "//pkg/cmd/cockroach-oss",  # keep
-        "//pkg/sql/logictest:cockroach_predecessor_version",  # keep{{ end }}{{ if .LogicTest }}
-        "//pkg/sql/logictest:testdata",  # keep{{ end }}{{ if .ExecBuildLogicTest }}
-        "//pkg/sql/opt/exec/execbuilder:testdata",  # keep{{ end }}
-    ],
-    exec_properties = {"Pool": "large"},
-    shard_count = {{ if gt .TestCount 48 }}48{{ else }}{{ .TestCount }}{{end}},
-    tags = [
-        "cpu:{{ if gt .NumCPU 4 }}4{{ else }}{{ .NumCPU }}{{ end }}",
-    ],
-    deps = [
-        "//pkg/base",
-        "//pkg/build/bazel",
-        "//pkg/kv/kvclient/kvtenant",
-        "//pkg/security/securityassets",
-        "//pkg/security/securitytest",
-        "//pkg/server",{{ if .ExecBuildLogicTest }}
-        "//pkg/sql",{{ end }}
-        "//pkg/sql/logictest",{{ if .SqliteLogicTest }}
-        "//pkg/sql/sqlitelogictest",{{ end }}
-        "//pkg/testutils/serverutils",
-        "//pkg/testutils/skip",
-        "//pkg/testutils/testcluster",
-        "//pkg/util/leaktest",
-        "//pkg/util/randutil",
-    ],
-)
 `
 
-var (
-	testFileTpl  = template.Must(template.New("source").Parse(templateText))
-	buildFileTpl = template.Must(template.New("source").Parse(buildFileTemplate))
-)
+var testFileTpl = template.Must(template.New("source").Parse(templateText))

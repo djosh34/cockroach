@@ -1005,7 +1005,6 @@ statement ok
 DROP TABLE a
 
 # Check proper GC job description formatting when removing FK back-references when dropping a table (#59221).
-skipif config local-legacy-schema-changer
 query TT
 SELECT job_type, description FROM [SHOW JOBS] WHERE job_type = 'SCHEMA CHANGE GC' AND
  description LIKE 'GC for DROP TABLE test.public.a';
@@ -4140,7 +4139,6 @@ SET CLUSTER SETTING jobs.debug.pausepoints = 'schemachanger.before.exec'
 
 # See issue #87266, this table prevents the legacy schema changer from dropping
 # the database, which is unexpected
-skipif config local-legacy-schema-changer
 statement error job .* was paused before it completed with reason: pause point "schemachanger.before.exec" hit
 CREATE TABLE grandchild80828 (parent_id INT NOT NULL REFERENCES child80828(pid) ON DELETE CASCADE);
 

@@ -99,12 +99,7 @@ users       users_pkey  false       3             title        title       N/A  
 
 user testuser
 
-skipif config local-legacy-schema-changer
 statement error must be owner of table users or have CREATE privilege on table users
-DROP INDEX users@bar
-
-onlyif config local-legacy-schema-changer
-statement error user testuser does not have CREATE privilege on relation users
 DROP INDEX users@bar
 
 user root

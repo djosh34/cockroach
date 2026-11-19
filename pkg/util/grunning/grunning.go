@@ -9,9 +9,9 @@
 // licenses/APL.txt.
 
 // Package grunning is a library that's able to retrieve on-CPU running time for
-// individual goroutines. It relies on using a patched Go and provides a
-// primitive for fine-grained CPU attribution and control. See #82356 for more
-// details.
+// individual goroutines. It needs a patched Go runtime, which this build does
+// not use: stock Go has no per-goroutine running time, so Supported returns
+// false and Time returns 0. Callers fall back to other signals.
 package grunning
 
 import "time"
@@ -49,8 +49,7 @@ func Elapsed(start, end time.Duration) time.Duration {
 }
 
 // Supported returns true iff per-goroutine running time is available in this
-// build. We use a patched Go runtime for all platforms officially supported for
-// CRDB when built using Bazel.
+// build. It is always false on stock Go.
 func Supported() bool {
 	return supported()
 }

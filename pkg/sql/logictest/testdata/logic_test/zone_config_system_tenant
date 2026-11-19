@@ -1,4 +1,3 @@
-# LogicTest: !3node-tenant-default-configs
 # Zone config logic tests that are only meant to work for the system tenant.
 
 statement ok

@@ -18,8 +18,6 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
-
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 )
 
 var outFile = flag.String("out-file", "",
@@ -32,11 +30,8 @@ func main() {
 		Files []string
 	}
 
-	logicTestDir, err := bazel.Runfile("pkg/sql/logictest/testdata/logic_test")
-	if err != nil {
-		panic(err)
-	}
-
+	// Run from the root of the repository.
+	const logicTestDir = "pkg/sql/logictest/testdata/logic_test"
 	if err := filepath.WalkDir(logicTestDir, func(filePath string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || strings.HasPrefix(path.Base(filePath), "_") {
 			return err

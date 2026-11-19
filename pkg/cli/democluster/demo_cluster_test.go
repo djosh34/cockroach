@@ -81,7 +81,6 @@ func TestTestServerArgsForTransientCluster(t *testing.T) {
 				SQLMemoryPoolSize:             2 << 10,
 				CacheSize:                     1 << 10,
 				NoAutoInitializeCluster:       true,
-				EnableDemoLoginEndpoint:       true,
 				Knobs: base.TestingKnobs{
 					Server: &server.TestingKnobs{
 						StickyVFSRegistry: stickyVFSRegistry,
@@ -107,7 +106,6 @@ func TestTestServerArgsForTransientCluster(t *testing.T) {
 				SQLMemoryPoolSize:             4 << 10,
 				CacheSize:                     4 << 10,
 				NoAutoInitializeCluster:       true,
-				EnableDemoLoginEndpoint:       true,
 				Knobs: base.TestingKnobs{
 					Server: &server.TestingKnobs{
 						StickyVFSRegistry: stickyVFSRegistry,

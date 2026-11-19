@@ -17,7 +17,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 	"github.com/cockroachdb/cockroach/pkg/internal/rsg"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
@@ -560,17 +559,7 @@ func TestFormatNodeSummary(t *testing.T) {
 // 1000 random statements.
 func BenchmarkFormatRandomStatements(b *testing.B) {
 	// Generate a bunch of random statements.
-	var runfile string
-	if bazel.BuiltWithBazel() {
-		var err error
-		runfile, err = bazel.Runfile("pkg/sql/parser/sql.y")
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		runfile = filepath.Join("..", "..", "parser", "sql.y")
-	}
-	yBytes, err := os.ReadFile(runfile)
+	yBytes, err := os.ReadFile(filepath.Join("..", "..", "parser", "sql.y"))
 	if err != nil {
 		b.Fatalf("error reading grammar: %v", err)
 	}

@@ -55,8 +55,6 @@ const (
 	// secretLength is the number of random bytes generated for session secrets.
 	secretLength = 16
 
-	// DemoLoginPath is the demo shell auto-login URL.
-	DemoLoginPath = "/demologin"
 )
 
 // WebSessionTimeout is the cluster setting for web session TTL.
@@ -136,68 +134,6 @@ func (s *authenticationServer) UserLogin(
 	}
 
 	return &serverpb.UserLoginResponse{}, nil
-}
-
-// DemoLogin is the same as UserLogin but using the GET method.
-// It is only available for 'cockroach demo' and test clusters.
-func (s *authenticationServer) DemoLogin(w http.ResponseWriter, req *http.Request) {
-	ctx := context.Background()
-	ctx = logtags.AddTag(ctx, "client", log.SafeOperational(req.RemoteAddr))
-	ctx = logtags.AddTag(ctx, "demologin", nil)
-
-	fail := func(err error) {
-		w.WriteHeader(500)
-		_, _ = w.Write([]byte(fmt.Sprintf("invalid request: %v", err)))
-	}
-
-	if err := req.ParseForm(); err != nil {
-		fail(err)
-		return
-	}
-
-	var userInput, password string
-	if len(req.Form["username"]) != 1 {
-		fail(errors.New("username not passed right"))
-		return
-	}
-	if len(req.Form["password"]) != 1 {
-		fail(errors.New("password not passed right"))
-		return
-	}
-	userInput = req.Form["username"][0]
-	password = req.Form["password"][0]
-
-	// In CockroachDB SQL, unlike in PostgreSQL, usernames are
-	// case-insensitive. Therefore we need to normalize the username
-	// here, so that the normalized username is retained in the session
-	// table: the APIs extract the username from the session table
-	// without further normalization.
-	username, _ := username.MakeSQLUsernameFromUserInput(userInput, username.PurposeValidation)
-	// Verify the provided username/password pair.
-	verified, expired, err := s.VerifyPasswordDBConsole(ctx, username, password)
-	if err != nil {
-		fail(err)
-		return
-	}
-	if expired {
-		fail(errors.New("password expired"))
-		return
-	}
-	if !verified {
-		fail(errors.New("password invalid"))
-		return
-	}
-
-	cookie, err := s.createSessionFor(ctx, username)
-	if err != nil {
-		fail(err)
-		return
-	}
-
-	w.Header()["Set-Cookie"] = []string{cookie.String()}
-	w.Header()["Location"] = []string{"/"}
-	w.WriteHeader(http.StatusTemporaryRedirect)
-	_, _ = w.Write([]byte("you can use the UI now"))
 }
 
 var errWebAuthenticationFailure = status.Errorf(

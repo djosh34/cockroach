@@ -336,13 +336,11 @@ SELECT get_fn_depended_on_by($fn_id);
     }
 ]
 
-skipif config local-legacy-schema-changer
 statement ok
 SET use_declarative_schema_changer = 'unsafe_always';
 
 # In legacy schema changer, constraints are formally dropped in jobs.
 # So by the point we do DROP FUNCTION, constraints are still there.
-skipif config local-legacy-schema-changer
 statement ok
 BEGIN;
 ALTER TABLE t1 DROP CONSTRAINT check_b;
@@ -352,7 +350,6 @@ END;
 statement ok
 DROP TABLE t1;
 
-skipif config local-legacy-schema-changer
 statement ok
 SET use_declarative_schema_changer = 'on';
 

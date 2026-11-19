@@ -13,7 +13,6 @@ package loopvarcapture_test
 import (
 	"testing"
 
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 	"github.com/cockroachdb/cockroach/pkg/testutils/datapathutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/lint/passes/loopvarcapture"
 	"github.com/cockroachdb/cockroach/pkg/testutils/skip"
@@ -25,12 +24,6 @@ var extraGoRoutineFunctions = []loopvarcapture.Function{
 	{Pkg: "example.org/concurrency", Name: "Go"},                // test a package-level function
 	{Pkg: "example.org/concurrency", Name: "GoWithError"},       // test a function with a return value
 	{Pkg: "p", Type: "Monitor", Name: "Go"},                     // test an interface method
-}
-
-func init() {
-	if bazel.BuiltWithBazel() {
-		bazel.SetGoEnv()
-	}
 }
 
 func TestAnalyzer(t *testing.T) {

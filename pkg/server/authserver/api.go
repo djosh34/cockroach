@@ -37,10 +37,6 @@ type Server interface {
 	// UserLogout allows a user to terminate their currently active session.
 	UserLogout(ctx context.Context, req *serverpb.UserLogoutRequest) (*serverpb.UserLogoutResponse, error)
 
-	// DemoLogin is the same as UserLogin but using the GET method.
-	// It is only available for 'cockroach demo' and test clusters.
-	DemoLogin(w http.ResponseWriter, req *http.Request)
-
 	// NewAuthSession attempts to create a new authentication session for
 	// the given user. If successful, returns the ID and secret value for
 	// the new session.

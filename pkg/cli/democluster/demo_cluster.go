@@ -533,7 +533,6 @@ func (c *transientCluster) startTenantService(
 			ForceInsecure:           c.demoCtx.Insecure,
 			SSLCertsDir:             c.demoDir,
 			DisableTLSForHTTP:       true,
-			EnableDemoLoginEndpoint: true,
 			StartingRPCAndSQLPort:   c.demoCtx.sqlPort(serverIdx, true) - secondaryTenantID,
 			StartingHTTPPort:        c.demoCtx.httpPort(serverIdx, true) - secondaryTenantID,
 			Locality:                c.demoCtx.Localities[serverIdx],
@@ -920,7 +919,6 @@ func (demoCtx *Context) testServerArgsForTransientCluster(
 		CacheSize:               demoCtx.CacheSize,
 		AutoConfigProvider:      demoCtx.AutoConfigProvider,
 		NoAutoInitializeCluster: true,
-		EnableDemoLoginEndpoint: true,
 		// Demo clusters by default will create their own tenants, so we
 		// don't need to create them here.
 		DefaultTestTenant: base.TODOTestTenantDisabled,
@@ -1906,34 +1904,22 @@ func (c *transientCluster) ListDemoNodes(w, ew io.Writer, justOne, verbose bool)
 			fmt.Fprintf(w, "node %d:\n", nodeID)
 		}
 		if c.demoCtx.Multitenant {
-			if !c.demoCtx.DisableServerController {
-				// When using the server controller, we have a single web UI
-				// URL for both tenants. The demologin link does an
-				// auto-login for both.
-				uiURL := c.addDemoLoginToURL(s.AdminURL().URL, false /* includeTenantName */)
-				fmt.Fprintln(w, "   (webui)   ", uiURL)
-			}
 			if verbose {
 				fmt.Fprintln(w)
 				fmt.Fprintln(w, "  Application tenant:")
 			}
 
 			rpcAddr := c.tenantServers[i].RPCAddr()
-			tenantUiURL := c.tenantServers[i].AdminURL()
 			tenantSqlURL, err := c.getNetworkURLForServer(context.Background(), i,
 				false /* includeAppName */, forSecondaryTenant)
 			if err != nil {
 				fmt.Fprintln(ew, errors.Wrap(err, "retrieving network URL for tenant server"))
 			} else {
-				// Only include a separate HTTP URL if there's no server
-				// controller.
-				includeHTTP := !c.demoCtx.Multitenant || c.demoCtx.DisableServerController
-
 				socketDetails, err := c.sockForServer(i, forSecondaryTenant)
 				if err != nil {
 					fmt.Fprintln(ew, errors.Wrap(err, "retrieving socket URL for tenant server"))
 				}
-				c.printURLs(w, ew, tenantSqlURL, tenantUiURL.URL, socketDetails, rpcAddr, verbose, includeHTTP)
+				c.printURLs(w, ew, tenantSqlURL, socketDetails, rpcAddr, verbose)
 			}
 			fmt.Fprintln(w)
 			if verbose {
@@ -1942,25 +1928,16 @@ func (c *transientCluster) ListDemoNodes(w, ew io.Writer, justOne, verbose bool)
 		}
 		if !c.demoCtx.Multitenant || verbose {
 			// Connection parameters for the system tenant follow.
-			uiURL := s.AdminURL().URL
-			if q := uiURL.Query(); c.demoCtx.Multitenant && !c.demoCtx.DisableServerController && !q.Has(server.ClusterNameParamInQueryURL) {
-				q.Add(server.ClusterNameParamInQueryURL, catconstants.SystemTenantName)
-				uiURL.RawQuery = q.Encode()
-			}
-
 			sqlURL, err := c.getNetworkURLForServer(context.Background(), i,
 				false /* includeAppName */, forSystemTenant)
 			if err != nil {
 				fmt.Fprintln(ew, errors.Wrap(err, "retrieving network URL"))
 			} else {
-				// Only include a separate HTTP URL if there's no server
-				// controller.
-				includeHTTP := !c.demoCtx.Multitenant || c.demoCtx.DisableServerController
 				socketDetails, err := c.sockForServer(i, forSystemTenant)
 				if err != nil {
 					fmt.Fprintln(ew, errors.Wrap(err, "retrieving socket URL for system tenant server"))
 				}
-				c.printURLs(w, ew, sqlURL, uiURL, socketDetails, s.AdvRPCAddr(), verbose, includeHTTP)
+				c.printURLs(w, ew, sqlURL, socketDetails, s.AdvRPCAddr(), verbose)
 			}
 			fmt.Fprintln(w)
 		}
@@ -1977,16 +1954,10 @@ func (c *transientCluster) ListDemoNodes(w, ew io.Writer, justOne, verbose bool)
 func (c *transientCluster) printURLs(
 	w, ew io.Writer,
 	sqlURL *pgurl.URL,
-	uiURL *url.URL,
 	socket unixSocketDetails,
 	rpcAddr string,
-	verbose, includeHTTP bool,
+	verbose bool,
 ) {
-	if includeHTTP {
-		uiURL = c.addDemoLoginToURL(uiURL, true /* includeTenantName */)
-		fmt.Fprintln(w, "   (webui)   ", uiURL)
-	}
-
 	_, _, port := sqlURL.GetNetworking()
 	portArg := ""
 	if port != fmt.Sprint(base.DefaultPort) {
@@ -2010,27 +1981,6 @@ func (c *transientCluster) printURLs(
 		}
 		fmt.Fprintln(w, "   (rpc)     ", rpcAddr)
 	}
-}
-
-// addDemoLoginToURL generates an "autologin" URL from the
-// server-generated URL.
-func (c *transientCluster) addDemoLoginToURL(uiURL *url.URL, includeTenantName bool) *url.URL {
-	q := uiURL.Query()
-	if !c.demoCtx.Insecure {
-		// Print web UI URL. Embed the autologin feature inside the URL.
-		// We avoid printing those when insecure, as the autologin path is not available
-		// in that case.
-		q.Add("username", c.adminUser.Normalized())
-		q.Add("password", c.adminPassword)
-		uiURL.Path = authserver.DemoLoginPath
-	}
-
-	if !includeTenantName {
-		q.Del(server.ClusterNameParamInQueryURL)
-	}
-
-	uiURL.RawQuery = q.Encode()
-	return uiURL
 }
 
 // genDemoPassword generates a password that prevents accidental

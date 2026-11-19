@@ -20,17 +20,10 @@ package nilness_test
 import (
 	"testing"
 
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 	"github.com/cockroachdb/cockroach/pkg/testutils/datapathutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/lint/passes/nilness"
 	"golang.org/x/tools/go/analysis/analysistest"
 )
-
-func init() {
-	if bazel.BuiltWithBazel() {
-		bazel.SetGoEnv()
-	}
-}
 
 func Test(t *testing.T) {
 	testdata := datapathutils.TestDataPath(t)

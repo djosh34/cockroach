@@ -17,7 +17,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 	"github.com/cockroachdb/cockroach/pkg/sql/schemachanger/sctest"
 	"github.com/cockroachdb/cockroach/pkg/testutils/skip"
 	"github.com/cockroachdb/cockroach/pkg/util/envutil"
@@ -44,14 +43,7 @@ func (ss *staticSQLStmtLineProvider) NextLine() string {
 
 func runSchemaChangeComparatorTest(t *testing.T, logicTestFile string) {
 	defer log.Scope(t).Close(t)
-	var path string
-	if bazel.BuiltWithBazel() {
-		var err error
-		path, err = bazel.Runfile(logicTestFile)
-		require.NoError(t, err)
-	} else {
-		path = "../../../" + logicTestFile
-	}
+	path := "../../../" + logicTestFile
 	basename := filepath.Base(path)
 
 	var skipComparatorTest = envutil.EnvOrDefaultBool("COCKROACH_SCHEMA_CHANGE_COMPARATOR_SKIP", true)

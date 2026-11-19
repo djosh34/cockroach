@@ -1,5 +1,3 @@
-# LogicTest: !3node-tenant-default-configs
-
 subtest check_consistency
 
 # Without explicit keys, scans all ranges (we don't test this too precisely to

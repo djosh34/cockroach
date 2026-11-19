@@ -14,7 +14,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 	// Needed for the -verbosity flag on circleci tests.
 	_ "github.com/cockroachdb/cockroach/pkg/util/log"
 )
@@ -22,15 +21,7 @@ import (
 var sqlYPath string
 
 func init() {
-	if bazel.BuiltWithBazel() {
-		runfile, err := bazel.Runfile("pkg/sql/parser/sql.y")
-		if err != nil {
-			panic(err)
-		}
-		sqlYPath = runfile
-	} else {
-		sqlYPath = "../../../sql/parser/sql.y"
-	}
+	sqlYPath = "../../../sql/parser/sql.y"
 }
 
 func TestLex(t *testing.T) {

@@ -2,27 +2,18 @@
 
 subtest tenant_span_0_arg
 
-skipif config 3node-tenant-default-configs
 query T
 SELECT crdb_internal.tenant_span()
 ----
 {"\\x","\\xffff"}
 
-onlyif config 3node-tenant-default-configs
-query T
-SELECT crdb_internal.tenant_span()
-----
-{"\\xfe92","\\xfe93"}
-
 subtest end
 
 subtest tenant_span_name_arg
 
-skipif config 3node-tenant-default-configs
 statement ok
 CREATE TENANT "foo-bar";
 
-skipif config 3node-tenant-default-configs
 query T
 SELECT crdb_internal.tenant_span('foo-bar')
 ----
