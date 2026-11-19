@@ -149,7 +149,7 @@ const (
 	sqlColPackagesPrefix   = "github.com/cockroachdb/cockroach/pkg/sql/col"
 	sqlRowPackagesPrefix   = "github.com/cockroachdb/cockroach/pkg/sql/row"
 	sqlSemPackagesPrefix   = "github.com/cockroachdb/cockroach/pkg/sql/sem"
-	// When running BenchmarkCatchVectorizedRuntimeError under bazel, the
+	// When BenchmarkCatchVectorizedRuntimeError runs with -trimpath, the
 	// repository prefix is missing.
 	testSqlColPackagesPrefix = "pkg/sql/col"
 )

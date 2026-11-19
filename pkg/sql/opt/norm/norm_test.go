@@ -36,8 +36,8 @@ import (
 //
 // Rules files can be run separately like this:
 //
-//	./dev test pkg/sql/opt/norm -f TestNormRules/bool
-//	./dev test pkg/sql/opt/norm -f TestNormRules/comp
+//	go test ./pkg/sql/opt/norm -run TestNormRules/bool
+//	go test ./pkg/sql/opt/norm -run TestNormRules/comp
 //	...
 func TestNormRules(t *testing.T) {
 	defer leaktest.AfterTest(t)()
@@ -58,7 +58,7 @@ func TestNormRules(t *testing.T) {
 
 // TestRuleProps files can be run separately like this:
 //
-//	./dev test pkg/sql/opt/norm -f TestNormRuleProps/orderings
+//	go test ./pkg/sql/opt/norm -run TestNormRuleProps/orderings
 //	...
 func TestNormRuleProps(t *testing.T) {
 	defer leaktest.AfterTest(t)()

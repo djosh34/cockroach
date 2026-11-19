@@ -139,7 +139,7 @@ func BenchmarkMVCCExportToSST(b *testing.B) {
 
 	// To run and compare on range keys:
 	//
-	//     go test ./pkg/storage -run - -count 5 -bench BenchmarkMVCCExportToSST -timeout 500m 2>&1 | tee bench.txt
+	//     go test ./pkg/storage -run - -count 5 -bench BenchmarkMVCCExportToSST -timeout 500m 2>&1 |go test ./pkg/storage -run - -bench BenchmarkMVCCExportToSST/useElasticCPUHandle -count 10 -timeout 20m -v 2>&1 | tee bench.txt
 	//     for flavor in numRangeKeys=0 numRangeKeys=1 numRangeKeys=100; do grep -E "${flavor}[^0-9]+" bench.txt | sed -E "s/${flavor}+/X/" > $flavor.txt; done
 	//     benchstat numRangeKeys\={0,1}.txt
 	//     benchstat numRangeKeys\={0,100}.txt
@@ -184,7 +184,7 @@ func BenchmarkMVCCExportToSST(b *testing.B) {
 	// excessive (this benchmark is already very long), so handle it specially
 	// and hard code the other parameters. To run and compare:
 	//
-	//     dev bench pkg/storage --filter BenchmarkMVCCExportToSST/useElasticCPUHandle --count 10 --timeout 20m -v --stream-output --ignore-cache 2>&1 | tee bench.txt
+	//     go test ./pkg/storage -run - -bench BenchmarkMVCCExportToSST/useElasticCPUHandle -count 10 -timeout 20m -v 2>&1 | tee bench.txt| tee bench.txt
 	//     for flavor in useElasticCPUHandle=true useElasticCPUHandle=false; do grep -E "${flavor}[^0-9]+" bench.txt | sed -E "s/${flavor}+/X/" > $flavor.txt; done
 	//     benchstat useElasticCPUHandle\={false,true}.txt
 	//

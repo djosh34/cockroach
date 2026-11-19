@@ -44,7 +44,7 @@ names=($OLDNAME $NEWNAME)
 
 benchtime=${T:-}
 if [[ benchtime ]]; then
-   benchtime="--bench-time=$benchtime"
+   benchtime="-benchtime=$benchtime"
 fi
 
 for (( i=0; i<${#shas[@]}; i+=1 )); do
@@ -52,7 +52,7 @@ for (( i=0; i<${#shas[@]}; i+=1 )); do
   sha=${shas[i]}
   echo "Switching to $name"
   git checkout -q "$sha"
-  (set -x; ./dev bench ${PKG} --timeout=${BENCHTIMEOUT:-5m} --filter=${BENCHES} --count=${N:-10} $benchtime --bench-mem -v --stream-output --ignore-cache | tee "${dest}/bench.${name}" 2> "${dest}/log.txt")
+  (set -x; go test ${PKG} -run - -timeout=${BENCHTIMEOUT:-5m} -bench=${BENCHES} -count=${N:-10} $benchtime -benchmem -v | tee "${dest}/bench.${name}" 2> "${dest}/log.txt")
 done
 
 benchstat "${dest}/bench.$OLDNAME" "${dest}/bench.$NEWNAME"

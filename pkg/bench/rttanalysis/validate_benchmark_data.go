@@ -74,7 +74,7 @@ func runBenchmarkExpectationTests(t *testing.T, r *Registry) {
 	defer func() {
 		if t.Failed() {
 			t.Log("see the -rewrite flag to re-run the benchmarks and adjust the expectations")
-			t.Log("usage: ./dev test --rewrite pkg/bench/rttanalysis -f=TestBenchmarkExpectation/ --test-args '-rewrite-iterations=N'")
+			t.Log("usage: go test ./pkg/bench/rttanalysis -run TestBenchmarkExpectation/ -rewrite -rewrite-iterations=N")
 		}
 	}()
 

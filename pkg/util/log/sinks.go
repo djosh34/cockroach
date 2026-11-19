@@ -18,8 +18,8 @@ import "github.com/cockroachdb/cockroach/pkg/cli/exit"
 // This is painful, but it seems to be the only way, for the moment, to
 // generate this mock.
 //
-// The reason is that there's no way to inject build tags into the current
-// bazel rules for gomock.
+// The reason is that mockgen's reflect mode cannot see unexported
+// interfaces.
 type TestingLogSink = logSink
 
 // sinkOutputOptions provides various options for a logSink.output call.

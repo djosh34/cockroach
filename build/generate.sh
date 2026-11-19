@@ -477,7 +477,7 @@ gen_docs() {
   docgen http --protoc "$PROTOC" --gendoc "$bin/protoc-gen-doc" --out $d/http \
     --protoc-flags "-Ipkg -I$bin/proto-include -I$PROTOC_INCLUDE server/serverpb/status.proto server/serverpb/admin.proto server/status/statuspb/status.proto"
   go run ./pkg/util/log/gen pkg/util/log/logpb/log.proto logging.md $d/logging.md
-  go run ./pkg/util/log/logconfig/gen <pkg/util/log/logconfig/config.go >$d/logsinks.md
+  go run -tags generator ./pkg/util/log/logconfig/gen.go <pkg/util/log/logconfig/config.go >$d/logsinks.md
   go run ./pkg/util/log/eventpb/eventpbgen eventlog.md "${EVENTPB_PROTOS[@]}" >$d/eventlog.md
 }
 
