@@ -1778,7 +1778,6 @@ GO_TARGETS = [
     "//pkg/sql/sem/asof:asof",
     "//pkg/sql/sem/builtins/builtinconstants:builtinconstants",
     "//pkg/sql/sem/builtins/builtinsregistry:builtinsregistry",
-    "//pkg/sql/sem/builtins/pgcrypto:pgcrypto",
     "//pkg/sql/sem/builtins/pgformat:pgformat",
     "//pkg/sql/sem/builtins/pgformat:pgformat_test",
     "//pkg/sql/sem/builtins:builtins",
