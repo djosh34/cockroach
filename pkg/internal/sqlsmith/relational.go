@@ -683,9 +683,6 @@ func (s *Smither) makeSelectClause(
 			// the where and order by exprs are not correct.
 			var groupByRefs colRefs
 			for _, r := range fromRefs {
-				if s.postgres && r.typ.Family() == types.Box2DFamily {
-					continue
-				}
 				groupByRefs = append(groupByRefs, r)
 			}
 			s.rnd.Shuffle(len(groupByRefs), func(i, j int) {
@@ -1592,8 +1589,7 @@ func (s *Smither) makeHaving(refs colRefs) *tree.Where {
 
 func (s *Smither) isOrderable(typ *types.T) bool {
 	if s.postgres {
-		// PostGIS cannot order box2d types.
-		return typ.Family() != types.Box2DFamily
+		return true
 	}
 	switch typ.Family() {
 	case types.TSQueryFamily, types.TSVectorFamily:

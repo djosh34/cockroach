@@ -107,7 +107,7 @@ func ValidateColumnDefType(ctx context.Context, version clusterversion.Handle, t
 	case types.BitFamily, types.IntFamily, types.FloatFamily, types.BoolFamily, types.BytesFamily, types.DateFamily,
 		types.INetFamily, types.IntervalFamily, types.JsonFamily, types.OidFamily, types.TimeFamily,
 		types.TimestampFamily, types.TimestampTZFamily, types.UuidFamily, types.TimeTZFamily,
-		types.GeographyFamily, types.GeometryFamily, types.EnumFamily, types.Box2DFamily:
+		types.EnumFamily:
 	// These types are OK.
 
 	case types.TupleFamily:
@@ -189,8 +189,6 @@ func ColumnTypeIsOnlyInvertedIndexable(t *types.T) bool {
 		t = t.ArrayContents()
 	}
 	switch t.Family() {
-	case types.GeographyFamily:
-	case types.GeometryFamily:
 	case types.TSVectorFamily:
 	default:
 		return false
@@ -209,7 +207,7 @@ func MustBeValueEncoded(semanticType *types.T) bool {
 		default:
 			return MustBeValueEncoded(semanticType.ArrayContents())
 		}
-	case types.TupleFamily, types.GeographyFamily, types.GeometryFamily:
+	case types.TupleFamily:
 		return true
 	case types.TSVectorFamily, types.TSQueryFamily:
 		return true
