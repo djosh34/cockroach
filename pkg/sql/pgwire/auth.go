@@ -90,19 +90,19 @@ type authOptions struct {
 // if different from the one given initially.
 func (c *conn) handleAuthentication(
 	ctx context.Context, ac AuthConn, authOpt authOptions, execCfg *sql.ExecutorConfig,
-) (connClose func(), _ error) {
+) error {
 	if authOpt.testingSkipAuth {
-		return nil, nil
+		return nil
 	}
 	if authOpt.testingAuthHook != nil {
-		return nil, authOpt.testingAuthHook(ctx)
+		return authOpt.testingAuthHook(ctx)
 	}
 
 	// Retrieve the authentication method.
 	tlsState, hbaEntry, authMethod, err := c.findAuthenticationMethod(authOpt)
 	if err != nil {
 		ac.LogAuthFailed(ctx, eventpb.AuthFailReason_METHOD_NOT_FOUND, err)
-		return nil, c.sendError(ctx, pgerror.WithCandidateCode(err, pgcode.InvalidAuthorizationSpecification))
+		return c.sendError(ctx, pgerror.WithCandidateCode(err, pgcode.InvalidAuthorizationSpecification))
 	}
 
 	ac.SetAuthMethod(hbaEntry.Method.String())
@@ -112,10 +112,9 @@ func (c *conn) handleAuthentication(
 	// can compose the next layer of behaviors that we're going to apply
 	// to the incoming connection.
 	behaviors, err := authMethod(ctx, ac, tlsState, execCfg, hbaEntry, authOpt.identMap)
-	connClose = behaviors.ConnClose
 	if err != nil {
 		ac.LogAuthFailed(ctx, eventpb.AuthFailReason_UNKNOWN, err)
-		return connClose, c.sendError(ctx, pgerror.WithCandidateCode(err, pgcode.InvalidAuthorizationSpecification))
+		return c.sendError(ctx, pgerror.WithCandidateCode(err, pgcode.InvalidAuthorizationSpecification))
 	}
 
 	// Choose the system identity that we'll use below for mapping
@@ -140,7 +139,7 @@ func (c *conn) handleAuthentication(
 	if err := c.checkClientUsernameMatchesMapping(ctx, ac, behaviors.MapRole, systemIdentity); err != nil {
 		log.Warningf(ctx, "unable to map incoming identity %q to any database user: %+v", systemIdentity, err)
 		ac.LogAuthFailed(ctx, eventpb.AuthFailReason_USER_NOT_FOUND, err)
-		return connClose, c.sendError(ctx, pgerror.WithCandidateCode(err, pgcode.InvalidAuthorizationSpecification))
+		return c.sendError(ctx, pgerror.WithCandidateCode(err, pgcode.InvalidAuthorizationSpecification))
 	}
 
 	// Once chooseDbRole() returns, we know that the actual DB username
@@ -159,7 +158,7 @@ func (c *conn) handleAuthentication(
 	if err != nil {
 		log.Warningf(ctx, "user retrieval failed for user=%q: %+v", dbUser, err)
 		ac.LogAuthFailed(ctx, eventpb.AuthFailReason_USER_RETRIEVAL_ERROR, err)
-		return connClose, c.sendError(ctx, pgerror.WithCandidateCode(err, pgcode.InvalidAuthorizationSpecification))
+		return c.sendError(ctx, pgerror.WithCandidateCode(err, pgcode.InvalidAuthorizationSpecification))
 	}
 	c.sessionArgs.IsSuperuser = isSuperuser
 
@@ -168,12 +167,12 @@ func (c *conn) handleAuthentication(
 		// If the user does not exist, we show the same error used for invalid
 		// passwords, to make it harder for an attacker to determine if a user
 		// exists.
-		return connClose, c.sendError(ctx, pgerror.WithCandidateCode(security.NewErrPasswordUserAuthFailed(dbUser), pgcode.InvalidPassword))
+		return c.sendError(ctx, pgerror.WithCandidateCode(security.NewErrPasswordUserAuthFailed(dbUser), pgcode.InvalidPassword))
 	}
 
 	if !canLoginSQL {
 		ac.LogAuthFailed(ctx, eventpb.AuthFailReason_LOGIN_DISABLED, nil)
-		return connClose, c.sendError(ctx, pgerror.Newf(pgcode.InvalidAuthorizationSpecification, "%s does not have login privilege", dbUser))
+		return c.sendError(ctx, pgerror.Newf(pgcode.InvalidAuthorizationSpecification, "%s does not have login privilege", dbUser))
 	}
 
 	// At this point, we know that the requested user exists and is
@@ -186,7 +185,7 @@ func (c *conn) handleAuthentication(
 		} else {
 			err = pgerror.WithCandidateCode(err, pgcode.InvalidAuthorizationSpecification)
 		}
-		return connClose, c.sendError(ctx, err)
+		return c.sendError(ctx, err)
 	}
 
 	// Add all the defaults to this session's defaults. If there is an
@@ -217,7 +216,7 @@ func (c *conn) handleAuthentication(
 		m, err := sql.ReplicationModeFromString(c.sessionArgs.SessionDefaults["replication"])
 		if err == nil && m != sessiondatapb.ReplicationMode_REPLICATION_MODE_DISABLED && !canUseReplicationMode {
 			ac.LogAuthFailed(ctx, eventpb.AuthFailReason_NO_REPLICATION_ROLEOPTION, nil)
-			return connClose, c.sendError(
+			return c.sendError(
 				ctx,
 				pgerror.Newf(
 					pgcode.InsufficientPrivilege,
@@ -227,7 +226,7 @@ func (c *conn) handleAuthentication(
 		}
 	}
 
-	return connClose, nil
+	return nil
 }
 
 func (c *conn) authOKMessage() error {
@@ -278,19 +277,6 @@ func (c *conn) findAuthenticationMethod(
 		hbaEntry = &insecureEntry
 		return
 	}
-	if c.sessionArgs.SessionRevivalToken != nil {
-		methodFn = authSessionRevivalToken(c.sessionArgs.SessionRevivalToken)
-		c.sessionArgs.SessionRevivalToken = nil
-		hbaEntry = &sessionRevivalEntry
-		return
-	}
-
-	if c.sessionArgs.JWTAuthEnabled {
-		methodFn = authJwtToken
-		hbaEntry = &jwtAuthEntry
-		return
-	}
-
 	// Look up the method from the HBA configuration.
 	var mi methodInfo
 	mi, hbaEntry, err = c.lookupAuthenticationMethodUsingRules(authOpt.connType, authOpt.auth)

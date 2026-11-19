@@ -97,23 +97,6 @@ to trust the certificate presented by CockroachDB.`)
 	}
 }
 
-// We define our own copy of this struct that also exists in
-// pkg/server/authentication.go because we don't want to import that
-// package. This struct is used to define a null OIDC configuration for
-// the UI Config. DB Console uses information present here to show
-// different login UI when OIDC is present.
-type noOIDCConfigured struct{}
-
-var _ ui.OIDCUI = &noOIDCConfigured{}
-
-// GetOIDCConf implements the `ui.OIDCUI` interface with a configuration
-// that disables OIDC login options for the UI server.
-func (c *noOIDCConfigured) GetOIDCConf() ui.OIDCUIConf {
-	return ui.OIDCUIConf{
-		Enabled: false,
-	}
-}
-
 // CRDBProxyPaths is the list of path prefixes that are proxied to the
 // underlying CRDB cluster.
 var CRDBProxyPaths = []string{"/_admin/", "/_status/", "/ts/", "/api/v2/"}
@@ -140,7 +123,6 @@ func (p *ReverseHTTPProxy) Start(ctx context.Context, stop *stop.Stopper) {
 			u := "Observability Service"
 			return &u
 		},
-		OIDC: &noOIDCConfigured{},
 		Flags: serverpb.FeatureFlags{
 			IsObservabilityService: true,
 			// TODO(obs-infra): make conditional once obsservice becomes tenant-aware.

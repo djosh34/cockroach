@@ -12,7 +12,6 @@ package pgwire
 
 import (
 	"context"
-	"encoding/base64"
 	"net"
 	"regexp"
 	"strconv"
@@ -105,16 +104,6 @@ func parseClientProvidedSessionParameters(
 				return args, err
 			}
 
-		case "crdb:session_revival_token_base64":
-			token, err := base64.StdEncoding.DecodeString(value)
-			if err != nil {
-				return args, pgerror.Wrapf(
-					err, pgcode.ProtocolViolation,
-					"%s", key,
-				)
-			}
-			args.SessionRevivalToken = token
-
 		case "results_buffer_size":
 			if args.ConnResultsBufferSize, err = humanizeutil.ParseBytes(value); err != nil {
 				return args, errors.WithSecondaryError(
@@ -164,17 +153,7 @@ func parseClientProvidedSessionParameters(
 				if len(values) > 0 {
 					optvalue = values[0]
 				}
-				// crdb:jwt_auth_enabled must be passed as an option in order for us to support non-CRDB
-				// clients. jwt_auth_enabled is not a session variable. We extract it separately here.
 				switch strings.ToLower(opt) {
-				case "crdb:jwt_auth_enabled":
-					b, err := strconv.ParseBool(optvalue)
-					if err != nil {
-						return args, pgerror.Wrapf(err, pgcode.InvalidParameterValue, "crdb:jwt_auth_enabled")
-					}
-					args.JWTAuthEnabled = b
-					continue
-
 				case "system_identity":
 					if !acceptSystemIdentityOption {
 						return args, pgerror.Newf(pgcode.InvalidParameterValue,

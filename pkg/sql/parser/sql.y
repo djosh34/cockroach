@@ -948,7 +948,7 @@ func (u *sqlSymUnion) beginTransaction() *tree.BeginTransaction {
 
 %token <str> TABLE TABLES TABLESPACE TEMP TEMPLATE TEMPORARY TENANT TENANTS TESTING_RELOCATE TEXT THEN
 %token <str> TIES TIME TIMETZ TIMESTAMP TIMESTAMPTZ TO THROTTLING TRAILING TRACE
-%token <str> TRANSACTION TRANSACTIONS TRANSFER TRANSFORM TREAT TRIGGER TRIM TRUE
+%token <str> TRANSACTION TRANSACTIONS TRANSFORM TREAT TRIGGER TRIM TRUE
 %token <str> TRUNCATE TRUSTED TYPE TYPES
 %token <str> TRACING
 
@@ -1250,7 +1250,6 @@ func (u *sqlSymUnion) beginTransaction() *tree.BeginTransaction {
 %type <tree.Statement> show_trace_stmt
 %type <tree.Statement> show_transaction_stmt
 %type <tree.Statement> show_transactions_stmt
-%type <tree.Statement> show_transfer_stmt
 %type <tree.Statement> show_types_stmt
 %type <tree.Statement> show_users_stmt
 %type <tree.Statement> show_zone_stmt
@@ -6143,7 +6142,7 @@ zone_value:
 // SHOW STATEMENTS, SHOW RANGE, SHOW RANGES, SHOW REGIONS, SHOW SURVIVAL GOAL,
 // SHOW ROLES, SHOW SCHEMAS, SHOW SEQUENCES, SHOW SESSION, SHOW SESSIONS,
 // SHOW STATISTICS, SHOW SYNTAX, SHOW TABLES, SHOW TRACE, SHOW TRANSACTION,
-// SHOW TRANSACTIONS, SHOW TRANSFER, SHOW TYPES, SHOW USERS, SHOW LAST QUERY STATISTICS,
+// SHOW TRANSACTIONS, SHOW TYPES, SHOW USERS, SHOW LAST QUERY STATISTICS,
 // SHOW SCHEDULES, SHOW LOCALITY, SHOW ZONE CONFIGURATION, SHOW COMMIT TIMESTAMP,
 // SHOW FULL TABLE SCANS, SHOW CREATE EXTERNAL CONNECTIONS
 show_stmt:
@@ -6184,7 +6183,6 @@ show_stmt:
 | show_trace_stmt            // EXTEND WITH HELP: SHOW TRACE
 | show_transaction_stmt      // EXTEND WITH HELP: SHOW TRANSACTION
 | show_transactions_stmt     // EXTEND WITH HELP: SHOW TRANSACTIONS
-| show_transfer_stmt         // EXTEND WITH HELP: SHOW TRANSFER
 | show_users_stmt            // EXTEND WITH HELP: SHOW USERS
 | show_zone_stmt             // EXTEND WITH HELP: SHOW ZONE CONFIGURATION
 | SHOW error                 // SHOW HELP: SHOW
@@ -7225,20 +7223,6 @@ show_transaction_stmt:
     $$.val = &tree.ShowTransactionStatus{}
   }
 | SHOW TRANSACTION error // SHOW HELP: SHOW TRANSACTION
-
-// %Help: SHOW TRANSFER - display session state for connection migration
-// %Category: Misc
-// %Text: SHOW TRANSFER STATE [ WITH '<transfer_key>' ]
-show_transfer_stmt:
-  SHOW TRANSFER STATE WITH SCONST
-  {
-     $$.val = &tree.ShowTransferState{TransferKey: tree.NewStrVal($5)}
-  }
-| SHOW TRANSFER STATE
-  {
-     $$.val = &tree.ShowTransferState{}
-  }
-| SHOW TRANSFER error // SHOW HELP: SHOW TRANSFER
 
 // %Help: SHOW CREATE - display the CREATE statement for a table, sequence, view, or database
 // %Category: DDL
@@ -15727,7 +15711,6 @@ unreserved_keyword:
 | TRACING
 | TRANSACTION
 | TRANSACTIONS
-| TRANSFER
 | TRANSFORM
 | TRIGGER
 | TRUNCATE
@@ -16261,7 +16244,6 @@ bare_label_keywords:
 | TRAILING
 | TRANSACTION
 | TRANSACTIONS
-| TRANSFER
 | TRANSFORM
 | TREAT
 | TRIGGER

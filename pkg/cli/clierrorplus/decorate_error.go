@@ -239,13 +239,6 @@ func MaybeDecorateError(
 			return errors.Errorf(format, err)
 		}
 
-		// Does the server require GSSAPI authentication?
-		if strings.Contains(err.Error(), "pq: unknown authentication response: 7") {
-			return fmt.Errorf(
-				"server requires GSSAPI authentication for this user.\n" +
-					"The CockroachDB CLI does not support GSSAPI authentication; use 'psql' instead")
-		}
-
 		// Are we trying to re-initialize an initialized cluster?
 		if strings.Contains(err.Error(), server.ErrClusterInitialized.Error()) {
 			// We really want to use errors.Is() here but this would require

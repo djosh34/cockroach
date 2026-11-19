@@ -146,7 +146,6 @@ func (p *planner) maybeLogStatement(
 	statsCollector *sslocal.StatsCollector,
 	shouldLogToTelemetry bool,
 ) {
-	p.maybeAuditRoleBasedAuditEvent(ctx, execType)
 	p.maybeLogStatementInternal(ctx, execType, numRetries, txnCounter,
 		rows, stmtCount, bulkJobId, err, queryReceived, hasAdminRoleCache,
 		telemetryLoggingMetrics, stmtFingerprintID, queryStats, statsCollector,

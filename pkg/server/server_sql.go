@@ -73,7 +73,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/spanconfig/spanconfigsqltranslator"
 	"github.com/cockroachdb/cockroach/pkg/spanconfig/spanconfigsqlwatcher"
 	"github.com/cockroachdb/cockroach/pkg/sql"
-	"github.com/cockroachdb/cockroach/pkg/sql/auditlogging"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catalogkeys"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catsessiondata"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descidgen"
@@ -386,7 +385,6 @@ type sqlServerArgs struct {
 	tenantStatusServer serverpb.TenantStatusServer
 
 	// Used for multi-tenant cost control (on the storage cluster side).
-	tenantUsageServer multitenant.TenantUsageServer
 
 	// Used for multi-tenant cost control (on the tenant side).
 	costController multitenant.TenantSideCostController
@@ -974,9 +972,6 @@ func newSQLServer(ctx context.Context, cfg sqlServerArgs) (*SQLServer, error) {
 		SessionInitCache: sessioninit.NewCache(
 			serverCacheMemoryMonitor.MakeBoundAccount(), cfg.stopper,
 		),
-		AuditConfig: &auditlogging.AuditConfigLock{
-			Config: auditlogging.EmptyAuditConfig(),
-		},
 		RootMemoryMonitor:           rootSQLMemoryMonitor,
 		TestingKnobs:                sqlExecutorTestingKnobs,
 		CompactEngineSpanFunc:       storageEngineClient.CompactEngineSpan,
@@ -984,7 +979,6 @@ func newSQLServer(ctx context.Context, cfg sqlServerArgs) (*SQLServer, error) {
 		GetTableMetricsFunc:         storageEngineClient.GetTableMetrics,
 		ScanStorageInternalKeysFunc: storageEngineClient.ScanStorageInternalKeys,
 		TraceCollector:              traceCollector,
-		TenantUsageServer:           cfg.tenantUsageServer,
 		KVStoresIterator:            cfg.kvStoresIterator,
 		InspectzServer:              cfg.inspectzServer,
 		RangeDescIteratorFactory:    cfg.rangeDescIteratorFactory,
@@ -1376,8 +1370,6 @@ func newSQLServer(ctx context.Context, cfg sqlServerArgs) (*SQLServer, error) {
 	}
 	vmoduleSetting.SetOnChange(&cfg.Settings.SV, fn)
 	fn(ctx)
-
-	auditlogging.ConfigureRoleBasedAuditClusterSettings(ctx, execCfg.AuditConfig, execCfg.Settings, &execCfg.Settings.SV)
 
 	return &SQLServer{
 		ambientCtx:                     cfg.BaseConfig.AmbientCtx,

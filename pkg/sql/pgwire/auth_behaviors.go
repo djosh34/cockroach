@@ -19,13 +19,8 @@ import (
 
 // AuthBehaviors encapsulates the per-connection behaviors that may be
 // configured. This type is returned by AuthMethod implementations.
-//
-// Callers should call the AuthBehaviors.ConnClose method once the
-// associated network connection has been terminated to allow external
-// resources to be released.
 type AuthBehaviors struct {
 	authenticator       Authenticator
-	connClose           func()
 	replacementIdentity username.SQLUsername
 	replacedIdentity    bool
 	roleMapper          RoleMapper
@@ -33,15 +28,7 @@ type AuthBehaviors struct {
 
 // Ensure that an AuthBehaviors is easily composable with itself.
 var _ Authenticator = (*AuthBehaviors)(nil).Authenticate
-var _ func() = (*AuthBehaviors)(nil).ConnClose
 var _ RoleMapper = (*AuthBehaviors)(nil).MapRole
-
-// This is a hack for the unused-symbols linter. These two functions
-// are, at present, only called by the GSSAPI integration. The code
-// is guarded by a build tag, which is ignored by the linter.
-// TODO(#dev-inf): Update the linter to include the "gss" build tag.
-var _ = (*AuthBehaviors)(nil).SetConnClose
-var _ = (*AuthBehaviors)(nil).SetReplacementIdentity
 
 // Authenticate delegates to the Authenticator passed to
 // SetAuthenticator or returns an error if SetAuthenticator has not been
@@ -63,24 +50,10 @@ func (b *AuthBehaviors) SetAuthenticator(a Authenticator) {
 	b.authenticator = a
 }
 
-// ConnClose delegates to the function passed to SetConnClose to release
-// any resources associated with the connection. This method is a no-op
-// if SetConnClose has not been called or was called with nil.
-func (b *AuthBehaviors) ConnClose() {
-	if fn := b.connClose; fn != nil {
-		fn()
-	}
-}
-
-// SetConnClose updates the connection-close callback.
-func (b *AuthBehaviors) SetConnClose(fn func()) {
-	b.connClose = fn
-}
-
 // ReplacementIdentity returns an optional replacement for the
 // client-provided identity when validating the incoming connection.
-// This allows "ambient" authentication mechanisms, such as GSSAPI, to
-// provide replacement values. This method will return ok==false if
+// The cert method uses this to replace it with the certificate's common
+// name. This method will return ok==false if
 // SetReplacementIdentity has not been called.
 func (b *AuthBehaviors) ReplacementIdentity() (_ username.SQLUsername, ok bool) {
 	return b.replacementIdentity, b.replacedIdentity

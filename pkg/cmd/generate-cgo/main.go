@@ -103,9 +103,6 @@ func generateCgo() error {
 		return errors.New("--workspace and --bazel-bin are required")
 	}
 	args := []string{"build", "//build/bazelutil:test_force_build_cdeps", "//c-deps:libjemalloc", "//c-deps:libproj"}
-	if runtime.GOOS == "linux" {
-		args = append(args, "//c-deps:libkrb5")
-	}
 	logCommand("bazel", args...)
 	cmd := exec.Command("bazel", args...)
 	var outBuf, errBuf strings.Builder
@@ -130,7 +127,7 @@ import "C"
 		return err
 	}
 	// Figure out where to find the c-deps libraries.
-	var jemallocDir, projDir, krbDir string
+	var jemallocDir, projDir string
 	if archived != "" {
 		execRoot, err := getBazelInfo("execution_root")
 		if err != nil {
@@ -138,36 +135,22 @@ import "C"
 		}
 		jemallocDir = filepath.Join(execRoot, "external", fmt.Sprintf("archived_cdep_libjemalloc_%s", archived))
 		projDir = filepath.Join(execRoot, "external", fmt.Sprintf("archived_cdep_libproj_%s", archived))
-		if runtime.GOOS == "linux" {
-			krbDir = filepath.Join(execRoot, "external", fmt.Sprintf("archived_cdep_libkrb5_%s", archived))
-		}
 	} else {
 		jemallocDir = filepath.Join(bazelBin, "c-deps/libjemalloc_foreign")
 		projDir = filepath.Join(bazelBin, "c-deps/libproj_foreign")
-		if runtime.GOOS == "linux" {
-			krbDir = filepath.Join(bazelBin, "c-deps/libkrb5_foreign")
-		}
 	}
 
-	srcToPersistentDirs := make(map[string]string, 3)
+	srcToPersistentDirs := make(map[string]string, 2)
 	srcToPersistentDirs[jemallocDir] = filepath.Join(workspace, "bin", "c-deps", filepath.Base(jemallocDir))
 	srcToPersistentDirs[projDir] = filepath.Join(workspace, "bin", "c-deps", filepath.Base(projDir))
-	if krbDir != "" {
-		srcToPersistentDirs[krbDir] = filepath.Join(workspace, "bin", "c-deps", filepath.Base(krbDir))
-	}
 
 	cppFlags := fmt.Sprintf("-I%s", filepath.Join(srcToPersistentDirs[jemallocDir], "include"))
 	ldFlags := fmt.Sprintf("-L%s -L%s", filepath.Join(srcToPersistentDirs[jemallocDir], "lib"), filepath.Join(srcToPersistentDirs[projDir], "lib"))
-	if krbDir != "" {
-		cppFlags += fmt.Sprintf(" -I%s", filepath.Join(srcToPersistentDirs[krbDir], "include"))
-		ldFlags += fmt.Sprintf(" -L%s", filepath.Join(srcToPersistentDirs[krbDir], "lib"))
-	}
 
 	cgoPkgs := []string{
 		"pkg/cli",
 		"pkg/cli/clisqlshell",
 		"pkg/server/status",
-		"pkg/ccl/gssapiccl",
 		"pkg/geo/geoproj",
 	}
 
@@ -186,7 +169,7 @@ import "C"
 		}
 	}
 
-	// Copy jemallocDir, projDir, and krbDir to a persistent location (//bin/c-deps).
+	// Copy jemallocDir and projDir to a persistent location (//bin/c-deps).
 	if err := os.MkdirAll(filepath.Join(workspace, "bin", "c-deps"), 0755); err != nil {
 		return err
 	}

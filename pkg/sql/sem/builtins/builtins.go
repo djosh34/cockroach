@@ -6789,90 +6789,6 @@ Parameters:` + randgencfg.ConfigDoc,
 		},
 	),
 
-	// Used to configure the tenant token bucket. See UpdateTenantResourceLimits.
-	"crdb_internal.update_tenant_resource_limits": makeBuiltin(
-		tree.FunctionProperties{
-			Category:     builtinconstants.CategoryMultiTenancy,
-			Undocumented: true,
-		},
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "tenant_id", Typ: types.Int},
-				{Name: "available_request_units", Typ: types.Float},
-				{Name: "refill_rate", Typ: types.Float},
-				{Name: "max_burst_request_units", Typ: types.Float},
-				{Name: "as_of", Typ: types.Timestamp},
-				{Name: "as_of_consumed_request_units", Typ: types.Float},
-			},
-			ReturnType: tree.FixedReturnType(types.Int),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				sTenID, err := mustBeDIntInTenantRange(args[0])
-				if err != nil {
-					return nil, err
-				}
-				availableRU := float64(tree.MustBeDFloat(args[1]))
-				refillRate := float64(tree.MustBeDFloat(args[2]))
-				maxBurstRU := float64(tree.MustBeDFloat(args[3]))
-				asOf := tree.MustBeDTimestamp(args[4]).Time
-				asOfConsumed := float64(tree.MustBeDFloat(args[5]))
-
-				if err := evalCtx.Tenant.UpdateTenantResourceLimits(
-					ctx,
-					uint64(sTenID),
-					availableRU,
-					refillRate,
-					maxBurstRU,
-					asOf,
-					asOfConsumed,
-				); err != nil {
-					return nil, err
-				}
-				return args[0], nil
-			},
-			Info:       "Updates resource limits for the tenant with the provided ID. Must be run by the System tenant.",
-			Volatility: volatility.Volatile,
-		},
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "tenant_name", Typ: types.String},
-				{Name: "available_request_units", Typ: types.Float},
-				{Name: "refill_rate", Typ: types.Float},
-				{Name: "max_burst_request_units", Typ: types.Float},
-				{Name: "as_of", Typ: types.Timestamp},
-				{Name: "as_of_consumed_request_units", Typ: types.Float},
-			},
-			ReturnType: tree.FixedReturnType(types.Int),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				tenantName := roachpb.TenantName(tree.MustBeDString(args[0]))
-				tenantID, err := evalCtx.Tenant.LookupTenantID(ctx, tenantName)
-				if err != nil {
-					return nil, err
-				}
-
-				availableRU := float64(tree.MustBeDFloat(args[1]))
-				refillRate := float64(tree.MustBeDFloat(args[2]))
-				maxBurstRU := float64(tree.MustBeDFloat(args[3]))
-				asOf := tree.MustBeDTimestamp(args[4]).Time
-				asOfConsumed := float64(tree.MustBeDFloat(args[5]))
-
-				if err := evalCtx.Tenant.UpdateTenantResourceLimits(
-					ctx,
-					tenantID.ToUint64(),
-					availableRU,
-					refillRate,
-					maxBurstRU,
-					asOf,
-					asOfConsumed,
-				); err != nil {
-					return nil, err
-				}
-				return tree.NewDInt(tree.DInt((tenantID.ToUint64()))), nil
-			},
-			Info:       "Updates resource limits for the tenant with the provided name. Must be run by the System tenant.",
-			Volatility: volatility.Volatile,
-		},
-	),
-
 	"crdb_internal.compact_engine_span": makeBuiltin(
 		tree.FunctionProperties{
 			Category:         builtinconstants.CategorySystemRepair,
@@ -7356,36 +7272,6 @@ table's zone configuration this will return NULL.`,
 				return evalCtx.Planner.DeserializeSessionState(ctx, tree.NewDBytes(state))
 			},
 			Info:       `This function deserializes the serialized variables into the current session.`,
-			Volatility: volatility.Volatile,
-		},
-	),
-
-	"crdb_internal.create_session_revival_token": makeBuiltin(
-		tree.FunctionProperties{
-			Category: builtinconstants.CategorySystemInfo,
-		},
-		tree.Overload{
-			Types:      tree.ParamTypes{},
-			ReturnType: tree.FixedReturnType(types.Bytes),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				return evalCtx.Planner.CreateSessionRevivalToken()
-			},
-			Info:       `Generate a token that can be used to create a new session for the current user.`,
-			Volatility: volatility.Volatile,
-		},
-	),
-	"crdb_internal.validate_session_revival_token": makeBuiltin(
-		tree.FunctionProperties{
-			Category: builtinconstants.CategorySystemInfo,
-		},
-		tree.Overload{
-			Types:      tree.ParamTypes{{Name: "token", Typ: types.Bytes}},
-			ReturnType: tree.FixedReturnType(types.Bool),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				token := tree.MustBeDBytes(args[0])
-				return evalCtx.Planner.ValidateSessionRevivalToken(&token)
-			},
-			Info:       `Validate a token that was created by create_session_revival_token. Intended for testing.`,
 			Volatility: volatility.Volatile,
 		},
 	),

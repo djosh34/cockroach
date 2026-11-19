@@ -46,7 +46,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/kv/kvpb"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/kvserverbase"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/protectedts"
-	"github.com/cockroachdb/cockroach/pkg/multitenant"
 	"github.com/cockroachdb/cockroach/pkg/multitenant/tenantcapabilities"
 	"github.com/cockroachdb/cockroach/pkg/obs"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
@@ -61,7 +60,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/spanconfig"
 	"github.com/cockroachdb/cockroach/pkg/sql/appstatspb"
-	"github.com/cockroachdb/cockroach/pkg/sql/auditlogging"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/lease"
@@ -1356,10 +1354,6 @@ type ExecutorConfig struct {
 	// and per-role default settings.
 	SessionInitCache *sessioninit.Cache
 
-	// AuditConfig is the cluster's audit configuration. See the
-	// 'sql.log.user_audit' cluster setting to see how this is configured.
-	AuditConfig *auditlogging.AuditConfigLock
-
 	// ProtectedTimestampProvider encapsulates the protected timestamp subsystem.
 	ProtectedTimestampProvider protectedts.Provider
 
@@ -1425,10 +1419,6 @@ type ExecutorConfig struct {
 	// TraceCollector is used to contact all live nodes in the cluster, and
 	// collect trace spans from their inflight node registries.
 	TraceCollector *collector.TraceCollector
-
-	// TenantUsageServer is used to implement configuration APIs for tenant cost
-	// control.
-	TenantUsageServer multitenant.TenantUsageServer
 
 	// KVStoresIterator is used by various crdb_internal builtins to directly
 	// access stores on this node.
@@ -2266,14 +2256,6 @@ type SessionArgs struct {
 	// client.
 	RemoteAddr            net.Addr
 	ConnResultsBufferSize int64
-	// SessionRevivalToken may contain a token generated from a different session
-	// that can be used to authenticate this session. If it is set, all other
-	// authentication is skipped. Once the token is used to authenticate, this
-	// value should be zeroed out.
-	SessionRevivalToken []byte
-	// JWTAuthEnabled indicates if the customer is passing a JWT token in the
-	// password field.
-	JWTAuthEnabled bool
 }
 
 // SessionRegistry stores a set of all sessions on this node.

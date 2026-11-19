@@ -164,7 +164,6 @@ func (c *conn) processCommands(
 	var retErr error
 	var connHandler sql.ConnectionHandler
 	var authOK bool
-	var connCloseAuthHandler func()
 	defer func() {
 		// Release resources, if we still own them.
 		if reservedOwned {
@@ -198,13 +197,10 @@ func (c *conn) processCommands(
 		if !authOK {
 			ac.AuthFail(retErr)
 		}
-		if connCloseAuthHandler != nil {
-			connCloseAuthHandler()
-		}
 	}()
 
 	// Authenticate the connection.
-	if connCloseAuthHandler, retErr = c.handleAuthentication(
+	if retErr = c.handleAuthentication(
 		ctx, ac, authOpt, sqlServer.GetExecutorConfig(),
 	); retErr != nil {
 		// Auth failed or some other error.

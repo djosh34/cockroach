@@ -610,13 +610,6 @@ func fmtErr(err error) string {
 			}
 			if pqErr.Hint != "" {
 				hint := strings.Replace(pqErr.Hint, stdstrings.IssueReferral, "<STANDARD REFERRAL>", 1)
-				if strings.Contains(hint, "Supported methods:") {
-					// Depending on whether the test is running on linux or not
-					// (or, more specifically, whether gss build tag is set),
-					// "gss" method might not be included, so we remove it here
-					// and not include into the expected output.
-					hint = strings.Replace(hint, "gss, ", "", 1)
-				}
 				errStr += "\nHINT: " + hint
 			}
 			if pqErr.Detail != "" {

@@ -7,7 +7,6 @@ go_library(
         "cost_controller.go",
         "doc.go",
         "tenant_config.go",
-        "tenant_usage.go",
     ],
     importpath = "github.com/cockroachdb/cockroach/pkg/multitenant",
     visibility = ["//visibility:public"],

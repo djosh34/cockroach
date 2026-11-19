@@ -379,7 +379,7 @@ func (d *dev) test(cmd *cobra.Command, commandLine []string) error {
 	}
 
 	if len(goTags) > 0 {
-		args = append(args, "--define", "gotags=bazel,gss,"+strings.Join(goTags, ","))
+		args = append(args, "--define", "gotags=bazel,"+strings.Join(goTags, ","))
 	}
 	args = append(args, d.getTestOutputArgs(verbose, showLogs, streamOutput)...)
 	args = append(args, additionalBazelArgs...)

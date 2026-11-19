@@ -578,13 +578,6 @@ error     at or near "foo": syntax error
 file      lexer.go
 function  Error
 
-# Test the SHOW TRANSFER STATE statement.
-statement error pgcode 0A000 cannot use SHOW TRANSFER STATE as a statement source
-SELECT * FROM [SHOW TRANSFER STATE]
-
-statement error pgcode 0A000 cannot use SHOW TRANSFER STATE as a statement source
-SELECT * FROM [SHOW TRANSFER STATE WITH 'foo-bar']
-
 # Test the SHOW INDEXES FROM DATABASE COMMAND
 statement ok
 CREATE DATABASE showdbindexestest;

@@ -900,9 +900,6 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 		updates.TestingKnobs = &cfg.TestingKnobs.Server.(*TestingKnobs).DiagnosticsTestingKnobs
 	}
 
-	tenantUsage := NewTenantUsageServer(st, db, insqlDB)
-	nodeRegistry.AddMetricStruct(tenantUsage.Metrics())
-
 	tenantSettingsWatcher := tenantsettingswatcher.New(
 		clock, rangeFeedFactory, stopper, st,
 	)
@@ -918,7 +915,6 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 		gcoords.Regular.GetWorkQueue(admission.KVWork),
 		gcoords.Elastic,
 		gcoords.Stores,
-		tenantUsage,
 		tenantSettingsWatcher,
 		tenantCapabilitiesWatcher,
 		spanConfig.kvAccessor,
@@ -1151,7 +1147,6 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 		rangeFeedFactory:         rangeFeedFactory,
 		sqlStatusServer:          sStatus,
 		tenantStatusServer:       sStatus,
-		tenantUsageServer:        tenantUsage,
 		monitorAndMetrics:        sqlMonitorAndMetrics,
 		settingsStorage:          settingsWriter,
 		eventsExporter:           eventsExporter,

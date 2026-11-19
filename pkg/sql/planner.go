@@ -25,7 +25,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
 	"github.com/cockroachdb/cockroach/pkg/spanconfig"
-	"github.com/cockroachdb/cockroach/pkg/sql/auditlogging"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catsessiondata"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/colinfo"
@@ -271,8 +270,6 @@ type planner struct {
 
 	// trackDependency is used to track circular dependencies when dropping views.
 	trackDependency map[catid.DescID]bool
-
-	reducedAuditConfig *auditlogging.ReducedAuditConfig
 }
 
 // hasFlowForPausablePortal returns true if the planner is for re-executing a
@@ -624,10 +621,6 @@ func (p *planner) GetOrInitSequenceCache() sessiondatapb.SequenceCache {
 
 func (p *planner) LeaseMgr() *lease.Manager {
 	return p.execCfg.LeaseManager
-}
-
-func (p *planner) AuditConfig() *auditlogging.AuditConfigLock {
-	return p.execCfg.AuditConfig
 }
 
 func (p *planner) Txn() *kv.Txn {

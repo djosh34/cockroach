@@ -16,8 +16,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/deprecatedshowranges"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/cat"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/util/errorutil/unimplemented"
@@ -185,13 +183,6 @@ func TryDelegate(
 	case *tree.ShowSavepointStatus:
 		return nil, unimplemented.NewWithIssue(
 			47333, "cannot use SHOW SAVEPOINT STATUS as a statement source")
-
-	// SHOW TRANSFER STATE cannot be rewritten as a low-level query due to
-	// the format of its output (e.g. transfer key echoed back, and errors are
-	// returned in the form of a SQL value).
-	case *tree.ShowTransferState:
-		return nil, pgerror.Newf(pgcode.FeatureNotSupported,
-			"cannot use SHOW TRANSFER STATE as a statement source")
 
 	default:
 		return nil, nil

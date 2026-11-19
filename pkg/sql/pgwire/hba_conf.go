@@ -260,20 +260,6 @@ var insecureEntry = hba.Entry{
 	Method:   rulebasedscanner.String{Value: "--insecure"},
 }
 
-var sessionRevivalEntry = hba.Entry{
-	ConnType: hba.ConnHostAny,
-	User:     []rulebasedscanner.String{{Value: "all", Quoted: false}},
-	Address:  hba.AnyAddr{},
-	Method:   rulebasedscanner.String{Value: "session_revival_token"},
-}
-
-var jwtAuthEntry = hba.Entry{
-	ConnType: hba.ConnHostAny,
-	User:     []rulebasedscanner.String{{Value: "all", Quoted: false}},
-	Address:  hba.AnyAddr{},
-	Method:   rulebasedscanner.String{Value: "jwt_token"},
-}
-
 var rootEntry = hba.Entry{
 	ConnType: hba.ConnHostAny,
 	User:     []rulebasedscanner.String{{Value: username.RootUser, Quoted: false}},

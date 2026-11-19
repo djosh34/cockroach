@@ -33,7 +33,7 @@ build:nonogo --nolintonbuild
 build:test --crdb_test
 
 # Basic settings.
-build --define gotags=bazel,gss
+build --define gotags=bazel
 build --experimental_proto_descriptor_sets_include_source_info
 build --incompatible_strict_action_env --incompatible_enable_cc_toolchain_resolution
 build --symlink_prefix=_bazel/

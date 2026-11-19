@@ -13,7 +13,6 @@ package faketreeeval
 
 import (
 	"context"
-	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
@@ -253,16 +252,6 @@ func (*DummyEvalPlanner) SerializeSessionState() (*tree.DBytes, error) {
 func (*DummyEvalPlanner) DeserializeSessionState(
 	ctx context.Context, token *tree.DBytes,
 ) (*tree.DBool, error) {
-	return nil, errors.WithStack(errEvalPlanner)
-}
-
-// CreateSessionRevivalToken is part of the Planner interface.
-func (*DummyEvalPlanner) CreateSessionRevivalToken() (*tree.DBytes, error) {
-	return nil, errors.WithStack(errEvalPlanner)
-}
-
-// ValidateSessionRevivalToken is part of the Planner interface.
-func (*DummyEvalPlanner) ValidateSessionRevivalToken(token *tree.DBytes) (*tree.DBool, error) {
 	return nil, errors.WithStack(errEvalPlanner)
 }
 
@@ -633,19 +622,6 @@ func (c *DummyTenantOperator) DropTenantByID(
 
 // GCTenant is part of the tree.TenantOperator interface.
 func (c *DummyTenantOperator) GCTenant(_ context.Context, _ uint64) error {
-	return errors.WithStack(errEvalTenant)
-}
-
-// UpdateTenantResourceLimits is part of the tree.TenantOperator interface.
-func (c *DummyTenantOperator) UpdateTenantResourceLimits(
-	_ context.Context,
-	tenantID uint64,
-	availableRU float64,
-	refillRate float64,
-	maxBurstRU float64,
-	asOf time.Time,
-	asOfConsumedRequestUnits float64,
-) error {
 	return errors.WithStack(errEvalTenant)
 }
 

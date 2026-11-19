@@ -311,14 +311,6 @@ type Planner interface {
 	// into the current session.
 	DeserializeSessionState(ctx context.Context, state *tree.DBytes) (*tree.DBool, error)
 
-	// CreateSessionRevivalToken creates a token that can be used to log in
-	// as the current user, in bytes form.
-	CreateSessionRevivalToken() (*tree.DBytes, error)
-
-	// ValidateSessionRevivalToken checks if the given bytes are a valid
-	// session revival token.
-	ValidateSessionRevivalToken(token *tree.DBytes) (*tree.DBool, error)
-
 	// RevalidateUniqueConstraintsInCurrentDB verifies that all unique constraints
 	// defined on tables in the current database are valid. In other words, it
 	// verifies that for every table in the database with one or more unique
@@ -647,18 +639,6 @@ type TenantOperator interface {
 
 	// LookupTenantID returns the ID for the given tenant name.o
 	LookupTenantID(ctx context.Context, tenantName roachpb.TenantName) (roachpb.TenantID, error)
-
-	// UpdateTenantResourceLimits reconfigures the tenant resource limits.
-	// See multitenant.TenantUsageServer for more details on the arguments.
-	UpdateTenantResourceLimits(
-		ctx context.Context,
-		tenantID uint64,
-		availableRU float64,
-		refillRate float64,
-		maxBurstRU float64,
-		asOf time.Time,
-		asOfConsumedRequestUnits float64,
-	) error
 }
 
 // JoinTokenCreator is capable of creating and persisting join tokens, allowing

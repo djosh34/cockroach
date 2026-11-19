@@ -39,7 +39,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/kvadmission"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/kvstorage"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/liveness/livenesspb"
-	"github.com/cockroachdb/cockroach/pkg/multitenant"
 	"github.com/cockroachdb/cockroach/pkg/multitenant/tenantcapabilities"
 	"github.com/cockroachdb/cockroach/pkg/multitenant/tenantcapabilities/tenantcapabilitieswatcher"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
@@ -51,7 +50,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/spanconfig"
 	"github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/bootstrap"
-	"github.com/cockroachdb/cockroach/pkg/sql/isql"
 	"github.com/cockroachdb/cockroach/pkg/storage"
 	"github.com/cockroachdb/cockroach/pkg/util"
 	"github.com/cockroachdb/cockroach/pkg/util/admission"
@@ -387,8 +385,6 @@ type Node struct {
 
 	perReplicaServer kvserver.Server
 
-	tenantUsage multitenant.TenantUsageServer
-
 	tenantSettingsWatcher *tenantsettingswatcher.Watcher
 	tenantInfoWatcher     *tenantcapabilitieswatcher.Watcher
 
@@ -556,7 +552,6 @@ func NewNode(
 	kvAdmissionQ *admission.WorkQueue,
 	elasticCPUGrantCoord *admission.ElasticCPUGrantCoordinator,
 	storeGrantCoords *admission.StoreGrantCoordinators,
-	tenantUsage multitenant.TenantUsageServer,
 	tenantSettingsWatcher *tenantsettingswatcher.Watcher,
 	tenantInfoWatcher *tenantcapabilitieswatcher.Watcher,
 	spanConfigAccessor spanconfig.KVAccessor,
@@ -571,7 +566,6 @@ func NewNode(
 		txnMetrics:            txnMetrics,
 		execCfg:               nil, // filled in later by InitLogger()
 		clusterID:             clusterID,
-		tenantUsage:           tenantUsage,
 		tenantSettingsWatcher: tenantSettingsWatcher,
 		tenantInfoWatcher:     tenantInfoWatcher,
 		spanConfigAccessor:    spanConfigAccessor,
@@ -2491,59 +2485,9 @@ func (n *Node) Join(
 func (n *Node) TokenBucket(
 	ctx context.Context, in *kvpb.TokenBucketRequest,
 ) (*kvpb.TokenBucketResponse, error) {
-	// Check tenant ID. Note that in production configuration, the tenant ID has
-	// already been checked in the RPC layer (see rpc.tenantAuthorizer).
-	if in.TenantID == 0 || in.TenantID == roachpb.SystemTenantID.ToUint64() {
-		return &kvpb.TokenBucketResponse{
-			Error: errors.EncodeError(ctx, errors.Errorf(
-				"token bucket request with invalid tenant ID %d", in.TenantID,
-			)),
-		}, nil
-	}
-	tenantID := roachpb.MustMakeTenantID(in.TenantID)
-	return n.tenantUsage.TokenBucketRequest(ctx, tenantID, in), nil
-}
-
-// NewTenantUsageServer is a hook for CCL code which implements the tenant usage
-// server.
-var NewTenantUsageServer = func(
-	settings *cluster.Settings,
-	db *kv.DB,
-	ief isql.DB,
-) multitenant.TenantUsageServer {
-	return dummyTenantUsageServer{}
-}
-
-// dummyTenantUsageServer is a stub implementation of TenantUsageServer that
-// errors out on all APIs.
-type dummyTenantUsageServer struct{}
-
-// TokenBucketRequest is defined in the TenantUsageServer interface.
-func (dummyTenantUsageServer) TokenBucketRequest(
-	ctx context.Context, tenantID roachpb.TenantID, in *kvpb.TokenBucketRequest,
-) *kvpb.TokenBucketResponse {
 	return &kvpb.TokenBucketResponse{
-		Error: errors.EncodeError(ctx, errors.New("tenant usage requires a CCL binary")),
-	}
-}
-
-// ReconfigureTokenBucket is defined in the TenantUsageServer interface.
-func (dummyTenantUsageServer) ReconfigureTokenBucket(
-	ctx context.Context,
-	txn isql.Txn,
-	tenantID roachpb.TenantID,
-	availableRU float64,
-	refillRate float64,
-	maxBurstRU float64,
-	asOf time.Time,
-	asOfConsumedRequestUnits float64,
-) error {
-	return errors.Errorf("tenant resource limits require a CCL binary")
-}
-
-// Metrics is defined in the TenantUsageServer interface.
-func (dummyTenantUsageServer) Metrics() metric.Struct {
-	return emptyMetricStruct{}
+		Error: errors.EncodeError(ctx, errors.New("tenant cost control is not supported")),
+	}, nil
 }
 
 type emptyMetricStruct struct{}
