@@ -188,9 +188,7 @@ func storedPartitionSpans(
 // newID. Subzone span keys are relative to the table prefix, so they start
 // with the encoded index ID. It returns false if the span is not inside the
 // old index.
-func moveSpanToIndex(
-	s zonepb.SubzoneSpan, oldID, newID descpb.IndexID,
-) (zonepb.SubzoneSpan, bool) {
+func moveSpanToIndex(s zonepb.SubzoneSpan, oldID, newID descpb.IndexID) (zonepb.SubzoneSpan, bool) {
 	oldPrefix := roachpb.Key(encoding.EncodeUvarintAscending(nil, uint64(oldID)))
 	newPrefix := roachpb.Key(encoding.EncodeUvarintAscending(nil, uint64(newID)))
 	if !bytes.HasPrefix(s.Key, oldPrefix) {
