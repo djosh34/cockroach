@@ -22,7 +22,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/jobs"
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
-
 	// Import for the side effect of registering the MVCC statistics update job.
 	_ "github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/systemschema"

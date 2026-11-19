@@ -1198,9 +1198,7 @@ func (p *PhysicalPlan) AddDistinctSetOpStage(
 // same node. A fix for that is much more complicated, requiring remembering
 // extra state in the PhysicalPlan.
 func (p *PhysicalPlan) EnsureSingleStreamPerNode(
-	ctx context.Context,
-	forceSerialization bool,
-	post execinfrapb.PostProcessSpec,
+	ctx context.Context, forceSerialization bool, post execinfrapb.PostProcessSpec,
 ) {
 	// Fast path - check if we need to do anything.
 	var nodes intsets.Fast

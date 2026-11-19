@@ -444,6 +444,7 @@
 /pkg/roachpb/string_test.go  @cockroachdb/kv-prs
 /pkg/roachpb/tenant*         @cockroachdb/kv-prs
 #!/pkg/roachpb/version*      @cockroachdb/unowned
+/pkg/roachprod/logger/       @cockroachdb/test-eng
 /pkg/rpc/                    @cockroachdb/kv-prs
 /pkg/rpc/auth.go             @cockroachdb/kv-prs @cockroachdb/prodsec
 /pkg/rpc/auth_tenant.go      @cockroachdb/server-prs @cockroachdb/prodsec

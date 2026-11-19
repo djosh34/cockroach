@@ -10,9 +10,7 @@
 
 package statements
 
-import (
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
-)
+import "github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 
 type AST interface {
 }

@@ -74,10 +74,7 @@ func resolveFuncType(
 
 // Eval evaluates the timestamp argument to an AS OF SYSTEM TIME query.
 func Eval(
-	ctx context.Context,
-	asOf tree.AsOfClause,
-	semaCtx *tree.SemaContext,
-	evalCtx *eval.Context,
+	ctx context.Context, asOf tree.AsOfClause, semaCtx *tree.SemaContext, evalCtx *eval.Context,
 ) (eval.AsOfSystemTime, error) {
 	newInvalidExprError := func() error {
 		return errors.Errorf(

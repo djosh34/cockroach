@@ -57,9 +57,7 @@ func (s *SerialUnorderedSynchronizer) Child(nth int, verbose bool) execopnode.Op
 
 // NewSerialUnorderedSynchronizer creates a new SerialUnorderedSynchronizer.
 func NewSerialUnorderedSynchronizer(
-	flowCtx *execinfra.FlowCtx,
-	processorID int32,
-	inputs []colexecargs.OpWithMetaInfo,
+	flowCtx *execinfra.FlowCtx, processorID int32, inputs []colexecargs.OpWithMetaInfo,
 ) *SerialUnorderedSynchronizer {
 	return &SerialUnorderedSynchronizer{
 		flowCtx:     flowCtx,

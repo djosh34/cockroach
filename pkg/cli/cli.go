@@ -31,7 +31,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/log/logcrash"
 	"github.com/cockroachdb/cockroach/pkg/util/log/severity"
-
 	// intentionally not all the workloads that pkg/cmd/workload registers
 	_ "github.com/cockroachdb/cockroach/pkg/workload/bank"       // registers workloads
 	_ "github.com/cockroachdb/cockroach/pkg/workload/bulkingest" // registers workloads

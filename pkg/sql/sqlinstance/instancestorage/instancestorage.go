@@ -553,10 +553,7 @@ func (s *Storage) getInstanceRows(
 // RunInstanceIDReclaimLoop runs a background task that allocates available
 // instance IDs and reclaim expired ones within the sql_instances table.
 func (s *Storage) RunInstanceIDReclaimLoop(
-	ctx context.Context,
-	stopper *stop.Stopper,
-	ts timeutil.TimeSource,
-	session sqlliveness.Session,
+	ctx context.Context, stopper *stop.Stopper, ts timeutil.TimeSource, session sqlliveness.Session,
 ) error {
 	// The system database has a single region, so every instance row uses
 	// the default region prefix.

@@ -431,9 +431,7 @@ func (u *serialUnorderedSynchronizer) ConsumerClosed() {
 // sources should be consumed in index order (which is useful when you intend to
 // fuse the synchronizer and its inputs later; see FuseAggressively).
 func makeSerialSync(
-	ordering colinfo.ColumnOrdering,
-	evalCtx *eval.Context,
-	sources []execinfra.RowSource,
+	ordering colinfo.ColumnOrdering, evalCtx *eval.Context, sources []execinfra.RowSource,
 ) (execinfra.RowSource, error) {
 	if len(sources) < 2 {
 		return nil, errors.Errorf("only %d sources for serial synchronizer", len(sources))

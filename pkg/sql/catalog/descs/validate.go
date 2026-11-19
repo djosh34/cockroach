@@ -51,9 +51,7 @@ func (tc *Collection) Validate(
 // descriptor set. We purposefully avoid using leased descriptors as those may
 // be one version behind, in which case it's possible (and legitimate) that
 // those are missing back-references which would cause validation to fail.
-func (tc *Collection) ValidateUncommittedDescriptors(
-	ctx context.Context, txn *kv.Txn,
-) (err error) {
+func (tc *Collection) ValidateUncommittedDescriptors(ctx context.Context, txn *kv.Txn) (err error) {
 	if tc.skipValidationOnWrite || !tc.validationModeProvider.ValidateDescriptorsOnWrite() {
 		return nil
 	}

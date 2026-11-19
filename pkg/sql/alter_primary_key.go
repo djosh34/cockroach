@@ -33,9 +33,7 @@ import (
 )
 
 func (p *planner) AlterPrimaryKey(
-	ctx context.Context,
-	tableDesc *tabledesc.Mutable,
-	alterPKNode tree.AlterTableAlterPrimaryKey,
+	ctx context.Context, tableDesc *tabledesc.Mutable, alterPKNode tree.AlterTableAlterPrimaryKey,
 ) error {
 	if err := paramparse.ValidateUniqueConstraintParams(
 		alterPKNode.StorageParams,
@@ -401,9 +399,7 @@ func (p *planner) AlterPrimaryKey(
 // equivalent and if any index creation operations are needed
 // by comparing properties.
 func (p *planner) shouldCreateIndexes(
-	ctx context.Context,
-	desc *tabledesc.Mutable,
-	alterPKNode *tree.AlterTableAlterPrimaryKey,
+	ctx context.Context, desc *tabledesc.Mutable, alterPKNode *tree.AlterTableAlterPrimaryKey,
 ) (requiresIndexChange bool, err error) {
 	oldPK := desc.GetPrimaryIndex()
 
@@ -458,10 +454,7 @@ func (p *planner) shouldCreateIndexes(
 //   - The new primary key isn't the same set of columns and directions
 //     other than hash sharding.
 //   - There is no existing secondary index on the old primary key columns.
-func shouldCopyPrimaryKey(
-	desc *tabledesc.Mutable,
-	newPK *descpb.IndexDescriptor,
-) bool {
+func shouldCopyPrimaryKey(desc *tabledesc.Mutable, newPK *descpb.IndexDescriptor) bool {
 
 	columnIDsAndDirsWithoutSharded := func(idx *descpb.IndexDescriptor) (
 		columnIDs descpb.ColumnIDs,

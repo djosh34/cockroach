@@ -499,10 +499,7 @@ func randComputedColumnTableDef(
 // subset of the given columns and a random direction. If unsuccessful, ok=false
 // is returned.
 func randIndexTableDefFromCols(
-	rng *rand.Rand,
-	columnTableDefs []*tree.ColumnTableDef,
-	tableName string,
-	isPrimaryIndex bool,
+	rng *rand.Rand, columnTableDefs []*tree.ColumnTableDef, tableName string, isPrimaryIndex bool,
 ) (def tree.IndexTableDef, ok bool) {
 	cpy := make([]*tree.ColumnTableDef, len(columnTableDefs))
 	copy(cpy, columnTableDefs)

@@ -926,9 +926,7 @@ func accumulateNewUniqueConstraints(currentZone, newZone *zonepb.ZoneConfig) []z
 // allowed to set non-locality attributes in their constraints. Their regions
 // come from the tenant status server.
 func validateZoneAttrsAndLocalities(
-	ctx context.Context,
-	execCfg *ExecutorConfig,
-	currentZone, newZone *zonepb.ZoneConfig,
+	ctx context.Context, execCfg *ExecutorConfig, currentZone, newZone *zonepb.ZoneConfig,
 ) error {
 	// Avoid RPCs to the Node/Region server if we don't have anything to validate.
 	if len(newZone.Constraints) == 0 && len(newZone.VoterConstraints) == 0 && len(newZone.LeasePreferences) == 0 {
