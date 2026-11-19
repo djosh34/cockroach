@@ -96,7 +96,10 @@ func vetJSONCmd(
 
 	var lines []string
 	for _, l := range strings.Split(stderr.String(), "\n") {
-		if strings.TrimSpace(l) != "" && !strings.HasPrefix(l, "#") {
+		// Lines starting with # name packages, and the go command reports
+		// module downloads; neither is a finding.
+		if strings.TrimSpace(l) != "" && !strings.HasPrefix(l, "#") &&
+			!strings.HasPrefix(l, "go: downloading ") {
 			lines = append(lines, l)
 		}
 	}

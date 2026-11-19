@@ -35,7 +35,10 @@ build_tool() {
   fi
 }
 
+# module_dir prints the directory of a module, downloading it first: go list
+# prints nothing for a module that is not in the module cache.
 module_dir() {
+  go mod download "$1"
   go list -m -f '{{.Dir}}' "$1"
 }
 
