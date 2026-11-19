@@ -17,11 +17,12 @@ import (
 	"strings"
 	"text/template"
 
+	"slices"
+
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
-	"golang.org/x/exp/slices"
 )
 
 // ErrCaseNotPossible is a sentinel indicating that an elected case could not
@@ -183,11 +184,16 @@ func Generate[T tree.Statement](
 
 	// Prioritize cases that will succeed but pushing them to the front of our
 	// slice. If no successful case is possible, we'll fallback to error cases.
-	slices.SortStableFunc(compiledCases, func(a, b compiledCase) bool {
+	slices.SortStableFunc(compiledCases, func(a, b compiledCase) int {
 		aIsSuccess := a.Code == pgcode.SuccessfulCompletion
 		bIsSuccess := b.Code == pgcode.SuccessfulCompletion
-
-		return aIsSuccess && !bIsSuccess
+		switch {
+		case aIsSuccess && !bIsSuccess:
+			return -1
+		case !aIsSuccess && bIsSuccess:
+			return 1
+		}
+		return 0
 	})
 
 	for _, c := range compiledCases {
