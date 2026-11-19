@@ -497,7 +497,6 @@ var builtinOidsArray = []string{
 	467:  `json_to_recordset(input: jsonb) -> tuple`,
 	468:  `jsonb_to_record(input: jsonb) -> tuple`,
 	469:  `jsonb_to_recordset(input: jsonb) -> tuple`,
-	470:  `crdb_internal.to_json_as_changefeed_with_flags(tuple, string...) -> bytes`,
 	474:  `st_asbinary(geometry: geometry) -> bytes`,
 	475:  `st_asbinary(geography: geography) -> bytes`,
 	476:  `st_asbinary(geometry: geometry, xdr_or_ndr: string) -> bytes`,

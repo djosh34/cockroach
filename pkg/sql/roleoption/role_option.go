@@ -47,8 +47,6 @@ const (
 	VALIDUNTIL // VALID UNTIL
 	CONTROLJOB
 	NOCONTROLJOB
-	CONTROLCHANGEFEED
-	NOCONTROLCHANGEFEED
 	CREATEDB
 	NOCREATEDB
 	CREATELOGIN
@@ -74,13 +72,6 @@ const (
 	NOVIEWCLUSTERSETTING
 )
 
-// ControlChangefeedDeprecationNoticeMsg is a user friendly notice which should be shown when CONTROLCHANGEFEED is used
-//
-// TODO(#94757): remove CONTROLCHANGEFEED entirely
-const ControlChangefeedDeprecationNoticeMsg = "The role option CONTROLCHANGEFEED will be removed in a future release," +
-	" please switch to using the CHANGEFEED privilege for target tables instead:" +
-	" https://www.cockroachlabs.com/docs/stable/create-changefeed.html#required-privileges"
-
 // toSQLStmts is a map of Kind -> SQL statement string for applying the
 // option to the role.
 var toSQLStmts = map[Option]string{
@@ -91,8 +82,6 @@ var toSQLStmts = map[Option]string{
 	VALIDUNTIL:             `UPSERT INTO system.role_options (username, option, value, user_id) VALUES ($1, 'VALID UNTIL', $2::timestamptz::string, $3)`,
 	CONTROLJOB:             `INSERT INTO system.role_options (username, option, user_id) VALUES ($1, 'CONTROLJOB', $2) ON CONFLICT DO NOTHING`,
 	NOCONTROLJOB:           `DELETE FROM system.role_options WHERE username = $1 AND user_id = $2 AND option = 'CONTROLJOB'`,
-	CONTROLCHANGEFEED:      `INSERT INTO system.role_options (username, option, user_id) VALUES ($1, 'CONTROLCHANGEFEED', $2) ON CONFLICT DO NOTHING`,
-	NOCONTROLCHANGEFEED:    `DELETE FROM system.role_options WHERE username = $1 AND user_id = $2 AND option = 'CONTROLCHANGEFEED'`,
 	CREATEDB:               `INSERT INTO system.role_options (username, option, user_id) VALUES ($1, 'CREATEDB', $2) ON CONFLICT DO NOTHING`,
 	NOCREATEDB:             `DELETE FROM system.role_options WHERE username = $1 AND user_id = $2 AND option = 'CREATEDB'`,
 	CREATELOGIN:            `INSERT INTO system.role_options (username, option, user_id) VALUES ($1, 'CREATELOGIN', $2) ON CONFLICT DO NOTHING`,
@@ -128,8 +117,6 @@ var ByName = map[string]Option{
 	"VALID UNTIL":            VALIDUNTIL,
 	"CONTROLJOB":             CONTROLJOB,
 	"NOCONTROLJOB":           NOCONTROLJOB,
-	"CONTROLCHANGEFEED":      CONTROLCHANGEFEED,
-	"NOCONTROLCHANGEFEED":    NOCONTROLCHANGEFEED,
 	"CREATEDB":               CREATEDB,
 	"NOCREATEDB":             NOCREATEDB,
 	"CREATELOGIN":            CREATELOGIN,
@@ -278,8 +265,6 @@ func (rol List) CheckRoleOptionConflicts() error {
 			roleOptionBits&NOLOGIN.Mask() != 0) ||
 		(roleOptionBits&CONTROLJOB.Mask() != 0 &&
 			roleOptionBits&NOCONTROLJOB.Mask() != 0) ||
-		(roleOptionBits&CONTROLCHANGEFEED.Mask() != 0 &&
-			roleOptionBits&NOCONTROLCHANGEFEED.Mask() != 0) ||
 		(roleOptionBits&CREATEDB.Mask() != 0 &&
 			roleOptionBits&NOCREATEDB.Mask() != 0) ||
 		(roleOptionBits&CREATELOGIN.Mask() != 0 &&

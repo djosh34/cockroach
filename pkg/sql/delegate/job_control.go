@@ -31,10 +31,9 @@ type ControlJobsDelegate struct {
 // protoNameForType maps job types to the matching protobuf names for Payload.details in jobs.proto
 // This is also used to enumerate the types of jobs that we actually handle
 var protobufNameForType = map[string]string{
-	"changefeed": "changefeed",
-	"backup":     "backup",
-	"import":     "import",
-	"restore":    "restore",
+	"backup":  "backup",
+	"import":  "import",
+	"restore": "restore",
 }
 
 func (d *delegator) delegateJobControl(stmt ControlJobsDelegate) (tree.Statement, error) {

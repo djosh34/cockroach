@@ -281,9 +281,6 @@ type TestingKnobs struct {
 	// to incoming flows to register.
 	DrainFast bool
 
-	// Changefeed contains testing knobs specific to the changefeed system.
-	Changefeed base.ModuleTestingKnobs
-
 	// Export contains testing knobs for `EXPORT INTO ...`.
 	Export base.ModuleTestingKnobs
 

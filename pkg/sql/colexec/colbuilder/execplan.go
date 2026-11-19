@@ -233,10 +233,7 @@ func supportedNatively(core *execinfrapb.ProcessorCoreUnion) error {
 var (
 	errCoreUnsupportedNatively        = errors.New("unsupported processor core")
 	errLocalPlanNodeWrap              = errors.New("LocalPlanNode core needs to be wrapped")
-	errChangeAggregatorWrap           = errors.New("core.ChangeAggregator is not supported")
-	errChangeFrontierWrap             = errors.New("core.ChangeFrontier is not supported")
 	errReadImportWrap                 = errors.New("core.ReadImport is not supported")
-	errBackupDataWrap                 = errors.New("core.BackupData is not supported")
 	errBackfillerWrap                 = errors.New("core.Backfiller is not supported (not an execinfra.RowSource)")
 	errExporterWrap                   = errors.New("core.Exporter is not supported (not an execinfra.RowSource)")
 	errSamplerWrap                    = errors.New("core.Sampler is not supported (not an execinfra.RowSource)")
@@ -249,7 +246,6 @@ var (
 	errNonInnerMergeJoinWithOnExpr    = errors.New("can't plan vectorized non-inner merge joins with ON expressions")
 	errWindowFunctionFilterClause     = errors.New("window functions with FILTER clause are not supported")
 	errDefaultAggregateWindowFunction = errors.New("default aggregate window functions not supported")
-	errStreamIngestionWrap            = errors.New("core.StreamIngestion{Data,Frontier} is not supported because of #55758")
 )
 
 func canWrap(mode sessiondatapb.VectorizeExecMode, core *execinfrapb.ProcessorCoreUnion) error {
@@ -280,26 +276,11 @@ func canWrap(mode sessiondatapb.VectorizeExecMode, core *execinfrapb.ProcessorCo
 	case core.ProjectSet != nil:
 	case core.Windower != nil:
 	case core.LocalPlanNode != nil:
-	case core.ChangeAggregator != nil:
-		// Currently, there is an issue with cleaning up the changefeed flows
-		// (#55408), so we fallback to the row-by-row engine.
-		return errChangeAggregatorWrap
-	case core.ChangeFrontier != nil:
-		// Currently, there is an issue with cleaning up the changefeed flows
-		// (#55408), so we fallback to the row-by-row engine.
-		return errChangeFrontierWrap
 	case core.Ordinality != nil:
 	case core.BulkRowWriter != nil:
 	case core.InvertedFilterer != nil:
 	case core.InvertedJoiner != nil:
-	case core.BackupData != nil:
-		return errBackupDataWrap
-	case core.RestoreData != nil:
 	case core.Filterer != nil:
-	case core.StreamIngestionData != nil:
-		return errStreamIngestionWrap
-	case core.StreamIngestionFrontier != nil:
-		return errStreamIngestionWrap
 	case core.HashGroupJoiner != nil:
 	default:
 		return errors.AssertionFailedf("unexpected processor core %q", core)

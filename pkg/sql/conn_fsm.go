@@ -124,7 +124,6 @@ type eventTxnStartPayload struct {
 	// any new Txn started using this payload.
 	qualityOfService sessiondatapb.QoSLevel
 	isoLevel         isolation.Level
-	omitInRangefeeds bool
 }
 
 // makeEventTxnStartPayload creates an eventTxnStartPayload.
@@ -136,7 +135,6 @@ func makeEventTxnStartPayload(
 	tranCtx transitionCtx,
 	qualityOfService sessiondatapb.QoSLevel,
 	isoLevel isolation.Level,
-	omitInRangefeeds bool,
 ) eventTxnStartPayload {
 	return eventTxnStartPayload{
 		pri:                 pri,
@@ -146,7 +144,6 @@ func makeEventTxnStartPayload(
 		tranCtx:             tranCtx,
 		qualityOfService:    qualityOfService,
 		isoLevel:            isoLevel,
-		omitInRangefeeds:    omitInRangefeeds,
 	}
 }
 
@@ -517,7 +514,6 @@ func noTxnToOpen(args fsm.Args) error {
 		payload.tranCtx,
 		payload.qualityOfService,
 		payload.isoLevel,
-		payload.omitInRangefeeds,
 	)
 	ts.setAdvanceInfo(
 		advCode,

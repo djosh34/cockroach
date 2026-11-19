@@ -951,14 +951,6 @@ func TestZipJobTrace(t *testing.T) {
 	defer cleanupFn()
 	zipName := filepath.Join(dir, "test.zip")
 
-	// Run a backup that completes, we should not see a trace for this job.
-	runner.Exec(t, `CREATE TABLE foo (id INT)`)
-	runner.Exec(t, `BACKUP TABLE foo INTO 'userfile:///completes'`)
-
-	// Run a restore that completes, we should not see a trace for this job.
-	runner.Exec(t, `CREATE DATABASE test`)
-	runner.Exec(t, `RESTORE TABLE foo FROM LATEST IN 'userfile:///completes' WITH into_db = 'test'`)
-
 	triggerJobAndWaitForRun := func(jobQuery string) jobspb.JobID {
 		var jobID jobspb.JobID
 		runner.QueryRow(t, jobQuery).Scan(&jobID)

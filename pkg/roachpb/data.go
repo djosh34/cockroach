@@ -983,8 +983,7 @@ func MakeTransaction(
 		// When set to true OmitInRangefeeds indicates that none of the
 		// transaction's writes will appear in rangefeeds. Should be set to false
 		// for all transactions that write to internal system tables and most other
-		// transactions unless specifically stated otherwise (e.g. by the
-		// disable_changefeed_replication session variable).
+		// transactions.
 		OmitInRangefeeds: omitInRangefeeds,
 	}
 }

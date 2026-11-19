@@ -1360,14 +1360,10 @@ func (ex *connExecutor) resetTransactionOnSchemaChangeRetry(ctx context.Context)
 	ex.state.mu.Lock()
 	defer ex.state.mu.Unlock()
 	userPriority := ex.state.mu.txn.UserPriority()
-	omitInRangefeeds := ex.state.mu.txn.GetOmitInRangefeeds()
 	newTxn := kv.NewTxnWithSteppingEnabled(ctx, ex.transitionCtx.db,
 		ex.transitionCtx.nodeIDOrZero, ex.QualityOfService())
 	if err := newTxn.SetUserPriority(userPriority); err != nil {
 		return err
-	}
-	if omitInRangefeeds {
-		newTxn.SetOmitInRangefeeds()
 	}
 	ex.state.mu.txn = newTxn
 	return nil
@@ -2536,7 +2532,6 @@ func (ex *connExecutor) execStmtInNoTxnState(
 				ex.transitionCtx,
 				ex.QualityOfService(),
 				ex.txnIsolationLevelToKV(ctx, s.Modes.Isolation),
-				ex.omitInRangefeeds(),
 			)
 	case *tree.ShowCommitTimestamp:
 		return ex.execShowCommitTimestampInNoTxnState(ctx, s, res)
@@ -2563,7 +2558,6 @@ func (ex *connExecutor) execStmtInNoTxnState(
 				ex.transitionCtx,
 				ex.QualityOfService(),
 				ex.txnIsolationLevelToKV(ctx, tree.UnspecifiedIsolation),
-				ex.omitInRangefeeds(),
 			)
 	}
 }
@@ -2596,7 +2590,6 @@ func (ex *connExecutor) beginImplicitTxn(
 			ex.transitionCtx,
 			qos,
 			ex.txnIsolationLevelToKV(ctx, tree.UnspecifiedIsolation),
-			ex.omitInRangefeeds(),
 		)
 }
 

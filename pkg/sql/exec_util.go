@@ -3770,10 +3770,6 @@ func (m *sessionDataMutator) SetOptimizerUseProvidedOrderingFix(val bool) {
 	m.data.OptimizerUseProvidedOrderingFix = val
 }
 
-func (m *sessionDataMutator) SetDisableChangefeedReplication(val bool) {
-	m.data.DisableChangefeedReplication = val
-}
-
 func (m *sessionDataMutator) SetDistSQLPlanGatewayBias(val int64) {
 	m.data.DistsqlPlanGatewayBias = val
 }

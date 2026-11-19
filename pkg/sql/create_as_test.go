@@ -205,9 +205,6 @@ func TestCreateAsShow(t *testing.T) {
 			sql: "SHOW JOBS",
 		},
 		{
-			sql: "SHOW CHANGEFEED JOBS",
-		},
-		{
 			sql: "SHOW ALL CLUSTER STATEMENTS",
 		},
 		{

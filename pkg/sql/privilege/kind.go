@@ -55,22 +55,25 @@ const (
 	BACKUP                   Kind = 23
 	RESTORE                  Kind = 24
 	EXTERNALIOIMPLICITACCESS Kind = 25
-	CHANGEFEED               Kind = 26
-	VIEWJOB                  Kind = 27
-	MODIFYSQLCLUSTERSETTING  Kind = 28
-	REPLICATION              Kind = 29
-	MANAGEVIRTUALCLUSTER     Kind = 30
-	VIEWSYSTEMTABLE          Kind = 31
-	CREATEROLE               Kind = 32
-	CREATELOGIN              Kind = 33
-	CREATEDB                 Kind = 34
-	CONTROLJOB               Kind = 35
-	REPAIRCLUSTERMETADATA    Kind = 36
-	largestKind                   = REPAIRCLUSTERMETADATA
+	// This is a placeholder to make sure that 26 is not reused. It was the
+	// CHANGEFEED privilege.
+	_                       Kind = 26
+	VIEWJOB                 Kind = 27
+	MODIFYSQLCLUSTERSETTING Kind = 28
+	REPLICATION             Kind = 29
+	MANAGEVIRTUALCLUSTER    Kind = 30
+	VIEWSYSTEMTABLE         Kind = 31
+	CREATEROLE              Kind = 32
+	CREATELOGIN             Kind = 33
+	CREATEDB                Kind = 34
+	CONTROLJOB              Kind = 35
+	REPAIRCLUSTERMETADATA   Kind = 36
+	largestKind                  = REPAIRCLUSTERMETADATA
 )
 
 var isDeprecatedKind = map[Kind]bool{
-	4: true,
+	4:  true,
+	26: true,
 }
 
 // KindInternalKey is the value stored in system tables, etc, that represent the
@@ -127,8 +130,6 @@ func (k Kind) InternalKey() KindInternalKey {
 		return "RESTORE"
 	case EXTERNALIOIMPLICITACCESS:
 		return "EXTERNALIOIMPLICITACCESS"
-	case CHANGEFEED:
-		return "CHANGEFEED"
 	case VIEWJOB:
 		return "VIEWJOB"
 	case MODIFYSQLCLUSTERSETTING:

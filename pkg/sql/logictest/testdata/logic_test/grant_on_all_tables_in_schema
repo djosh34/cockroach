@@ -59,7 +59,6 @@ SHOW GRANTS FOR testuser, testuser2
 ----
 database_name  schema_name  object_name  object_type  grantee    privilege_type  is_grantable
 test           s            t            table        testuser   BACKUP          false
-test           s            t            table        testuser   CHANGEFEED      false
 test           s            t            table        testuser   CREATE          false
 test           s            t            table        testuser   DELETE          false
 test           s            t            table        testuser   DROP            false
@@ -67,7 +66,6 @@ test           s            t            table        testuser   INSERT         
 test           s            t            table        testuser   UPDATE          false
 test           s            t            table        testuser   ZONECONFIG      false
 test           s            t            table        testuser2  BACKUP          false
-test           s            t            table        testuser2  CHANGEFEED      false
 test           s            t            table        testuser2  CREATE          false
 test           s            t            table        testuser2  DELETE          false
 test           s            t            table        testuser2  DROP            false
@@ -75,7 +73,6 @@ test           s            t            table        testuser2  INSERT         
 test           s            t            table        testuser2  UPDATE          false
 test           s            t            table        testuser2  ZONECONFIG      false
 test           s2           t            table        testuser   BACKUP          false
-test           s2           t            table        testuser   CHANGEFEED      false
 test           s2           t            table        testuser   CREATE          false
 test           s2           t            table        testuser   DELETE          false
 test           s2           t            table        testuser   DROP            false
@@ -83,7 +80,6 @@ test           s2           t            table        testuser   INSERT         
 test           s2           t            table        testuser   UPDATE          false
 test           s2           t            table        testuser   ZONECONFIG      false
 test           s2           t            table        testuser2  BACKUP          false
-test           s2           t            table        testuser2  CHANGEFEED      false
 test           s2           t            table        testuser2  CREATE          false
 test           s2           t            table        testuser2  DELETE          false
 test           s2           t            table        testuser2  DROP            false

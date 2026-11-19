@@ -299,9 +299,6 @@ statement ok
 CREATE TABLE t97362 (i INT, j INT)
 
 statement error pq: WITH clause "alias_0" does not return any columns
-SHOW CHANGEFEED JOBS WITH alias_0 AS MATERIALIZED (CREATE TYPE "int" AS ENUM ()) SELECT * FROM alias_0
-
-statement error pq: WITH clause "alias_0" does not return any columns
 WITH alias_0 AS MATERIALIZED (DELETE FROM t97362 WHERE i=1) SELECT * FROM alias_0
 
 query I
