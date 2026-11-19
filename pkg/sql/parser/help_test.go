@@ -123,8 +123,6 @@ func TestContextualHelp(t *testing.T) {
 		{`ALTER RANGE foo CONFIGURE ??`, `ALTER RANGE`},
 		{`ALTER RANGE ??`, `ALTER RANGE`},
 
-		{`ALTER PARTITION ??`, `ALTER PARTITION`},
-		{`ALTER PARTITION p OF INDEX tbl@idx ??`, `ALTER PARTITION`},
 
 		{`ALTER DEFAULT PRIVILEGES ??`, `ALTER DEFAULT PRIVILEGES`},
 
@@ -434,9 +432,7 @@ func TestContextualHelp(t *testing.T) {
 		{`SHOW INDEXES FROM ??`, `SHOW INDEXES`},
 		{`SHOW INDEXES FROM blah ??`, `SHOW INDEXES`},
 
-		{`SHOW PARTITIONS FROM ??`, `SHOW PARTITIONS`},
 
-		{`SHOW REGIONS ??`, `SHOW REGIONS`},
 
 		{`SHOW ROLES ??`, `SHOW ROLES`},
 
@@ -460,7 +456,6 @@ func TestContextualHelp(t *testing.T) {
 		{`SHOW SYNTAX 'foo' ??`, `SHOW SYNTAX`},
 		{`SHOW SAVEPOINT STATUS ??`, `SHOW SAVEPOINT`},
 
-		{`SHOW TRANSFER ??`, `SHOW TRANSFER`},
 
 		{`SHOW RANGE ??`, `SHOW RANGE`},
 

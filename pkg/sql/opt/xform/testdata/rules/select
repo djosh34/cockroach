@@ -2641,35 +2641,6 @@ index-join e
       ├── key: (1)
       └── fd: (1)-->(2,4)
 
-# Regression test for #86168. Selecting from a table with a partitioned
-# primary and secondary index, where the primary index is partitioned by
-# region and the secondary index is partitioned by another column, should
-# not cause an error.
-exec-ddl
-CREATE TYPE region_enum AS ENUM ('AP_SOUTHEAST', 'CA_CENTRAL', 'US_EAST');
-----
-
-opt locality=(region=ap-southeast-2)
-SELECT *
-FROM "user"
-WHERE region = 'AP_SOUTHEAST';
-----
-project
- ├── columns: region:1!null id:2!null col1:3!null col2:4!null
- ├── immutable
- ├── key: (2)
- ├── fd: ()-->(1), (2)-->(4), (4)-->(3)
- ├── distribution: ap-southeast-2
- ├── scan user
- │    ├── columns: region:1!null id:2!null col2:4!null
- │    ├── constraint: /1/2: [/'AP_SOUTHEAST' - /'AP_SOUTHEAST']
- │    ├── immutable
- │    ├── key: (2)
- │    ├── fd: ()-->(1), (2)-->(4)
- │    └── distribution: ap-southeast-2
- └── projections
-      └── col2:4::INT2 [as=col1:3, outer=(4), immutable]
-
 # Regression test for #114250 - don't generate a trivial constrained scan that
 # scans the whole table using the table's check constraints.
 exec-ddl

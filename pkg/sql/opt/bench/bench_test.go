@@ -722,7 +722,6 @@ func newHarness(tb testing.TB, query benchQuery, schemas []string) *harness {
 	h.evalCtx.SessionData().ZigzagJoinEnabled = true
 	h.evalCtx.SessionData().OptimizerUseForecasts = true
 	h.evalCtx.SessionData().OptimizerUseHistograms = true
-	h.evalCtx.SessionData().LocalityOptimizedSearch = true
 	h.evalCtx.SessionData().ReorderJoinsLimit = opt.DefaultJoinOrderLimit
 	h.evalCtx.SessionData().InsertFastPath = true
 	h.evalCtx.SessionData().OptSplitScanLimit = tabledesc.MaxBucketAllowed

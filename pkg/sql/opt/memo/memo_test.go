@@ -235,12 +235,6 @@ func TestMemoIsStale(t *testing.T) {
 	evalCtx.SessionData().OptimizerUseNotVisibleIndexes = false
 	notStale()
 
-	// Stale locality optimized search enable.
-	evalCtx.SessionData().LocalityOptimizedSearch = true
-	stale()
-	evalCtx.SessionData().LocalityOptimizedSearch = false
-	notStale()
-
 	// Stale safe updates.
 	evalCtx.SessionData().SafeUpdates = true
 	stale()
