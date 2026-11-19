@@ -35,10 +35,7 @@ import (
 
 // NewDatumsToInvertedExpr returns a new DatumsToInvertedExpr.
 func NewDatumsToInvertedExpr(
-	ctx context.Context,
-	evalCtx *eval.Context,
-	colTypes []*types.T,
-	expr tree.TypedExpr,
+	ctx context.Context, evalCtx *eval.Context, colTypes []*types.T, expr tree.TypedExpr,
 ) (invertedexpr.DatumsToInvertedExpr, error) {
 	return NewJSONOrArrayDatumsToInvertedExpr(ctx, evalCtx, colTypes, expr)
 }
@@ -692,10 +689,7 @@ func extractInvertedFilterCondition(
 	factory *norm.Factory,
 	filterCond opt.ScalarExpr,
 	filterPlanner invertedFilterPlanner,
-) (
-	invertedExpr inverted.Expression,
-	remainingFilters opt.ScalarExpr,
-) {
+) (invertedExpr inverted.Expression, remainingFilters opt.ScalarExpr) {
 	switch t := filterCond.(type) {
 	case *memo.AndExpr:
 		l, remLeft := extractInvertedFilterCondition(ctx, evalCtx, factory, t.Left, filterPlanner)

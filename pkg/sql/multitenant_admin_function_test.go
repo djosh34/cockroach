@@ -403,7 +403,7 @@ func (te tenantExpected) validate(
 				}
 			}
 		} else {
-			require.Errorf(t, err, message)
+			require.Errorf(t, err, "%s", message)
 			require.Containsf(t, err.Error(), expectedErrorMessage, message)
 		}
 		return nil

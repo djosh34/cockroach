@@ -317,28 +317,46 @@ func (l *connTracker) Accept() (net.Conn, error) {
 		return nil, err
 	}
 	tc := &trackedConn{Conn: c, tracker: l}
-	l.mu.Lock()
-	closed := l.mu.closed
-	if !closed {
-		l.mu.conns[tc] = struct{}{}
-	}
-	l.mu.Unlock()
-	if closed {
+	if !l.add(tc) {
+		// The tracker is closed: the server is shutting down.
 		_ = c.Close()
 	}
 	return tc, nil
 }
 
+// add starts tracking c. It returns false if the tracker is closed.
+func (l *connTracker) add(c *trackedConn) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.mu.closed {
+		return false
+	}
+	l.mu.conns[c] = struct{}{}
+	return true
+}
+
+// remove stops tracking c.
+func (l *connTracker) remove(c *trackedConn) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.mu.conns, c)
+}
+
 // closeConns closes every tracked connection and any accepted later.
 func (l *connTracker) closeConns() {
+	for c := range l.takeAll() {
+		_ = c.Conn.Close()
+	}
+}
+
+// takeAll closes the tracker and returns the tracked connections.
+func (l *connTracker) takeAll() map[*trackedConn]struct{} {
 	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.mu.closed = true
 	conns := l.mu.conns
 	l.mu.conns = nil
-	l.mu.Unlock()
-	for c := range conns {
-		_ = c.Conn.Close()
-	}
+	return conns
 }
 
 // trackedConn is a connection accepted by a connTracker.
@@ -349,8 +367,6 @@ type trackedConn struct {
 
 // Close implements net.Conn.
 func (c *trackedConn) Close() error {
-	c.tracker.mu.Lock()
-	delete(c.tracker.mu.conns, c)
-	c.tracker.mu.Unlock()
+	c.tracker.remove(c)
 	return c.Conn.Close()
 }

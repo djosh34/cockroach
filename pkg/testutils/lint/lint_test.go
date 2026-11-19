@@ -14,11 +14,11 @@
 package lint
 
 import (
-	"bufio"
 	"bytes"
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -55,32 +55,90 @@ func dirCmd(
 	return cmd, stderr, stream.ReadLines(stdout), nil
 }
 
-// vetCmd executes commands like dirCmd, but stderr is used as the output
-// instead of stdout, as produced by programs like `go vet`.
-func vetCmd(t *testing.T, dir, name string, args []string, filters []stream.Filter) {
-	cmd := exec.Command(name, args...)
-	cmd.Dir = dir
-	var b bytes.Buffer
-	cmd.Stdout = &b
-	cmd.Stderr = &b
-	switch err := cmd.Run(); err.(type) {
-	case nil:
-	case *exec.ExitError:
-		// Non-zero exit is expected.
-	default:
-		t.Fatal(err)
+// generatedCodeHeader matches the comment that marks generated Go files.
+var generatedCodeHeader = regexp.MustCompile(`(?m)^// Code generated .* DO NOT EDIT\.$`)
+
+// isGeneratedFile reports whether the file at path starts with the comment
+// that marks generated Go files.
+func isGeneratedFile(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
 	}
-	filters = append([]stream.Filter{
-		stream.FilterFunc(func(arg stream.Arg) error {
-			scanner := bufio.NewScanner(&b)
-			for scanner.Scan() {
-				if s := scanner.Text(); strings.TrimSpace(s) != "" {
-					arg.Out <- s
+	defer f.Close()
+	data := make([]byte, 1024)
+	n, _ := f.Read(data)
+	return generatedCodeHeader.Match(data[:n])
+}
+
+// vetJSONCmd runs go vet with the given arguments and -json. It reports each
+// diagnostic as "file:line:col: message", unless analyzers.json excludes the
+// file for the analyzer that reported it, and passes the lines through
+// filters. Output on stderr, such as build errors, is reported as well.
+func vetJSONCmd(
+	t *testing.T,
+	dir string,
+	args []string,
+	excludes map[string][]*regexp.Regexp,
+	filters []stream.Filter,
+) {
+	cmd := exec.Command("go", append([]string{"vet", "-json"}, args...)...)
+	cmd.Dir = dir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			t.Fatal(err)
+		}
+	}
+
+	var lines []string
+	for _, l := range strings.Split(stderr.String(), "\n") {
+		if strings.TrimSpace(l) != "" && !strings.HasPrefix(l, "#") {
+			lines = append(lines, l)
+		}
+	}
+	dec := json.NewDecoder(&stdout)
+	for {
+		var pkgs map[string]map[string]json.RawMessage
+		if err := dec.Decode(&pkgs); err != nil {
+			if !errors.Is(err, io.EOF) {
+				t.Fatalf("parsing the output of go vet: %v", err)
+			}
+			break
+		}
+		for _, analyzers := range pkgs {
+			for name, raw := range analyzers {
+				var diags []struct {
+					Posn    string `json:"posn"`
+					Message string `json:"message"`
+				}
+				if err := json.Unmarshal(raw, &diags); err != nil {
+					// A failed analyzer reports an object with an error.
+					lines = append(lines, fmt.Sprintf("%s: %s", name, raw))
+					continue
+				}
+			diagLoop:
+				for _, d := range diags {
+					posn := strings.TrimPrefix(d.Posn, dir+"/")
+					file := posn
+					if i := strings.Index(posn, ".go:"); i >= 0 {
+						file = posn[:i+len(".go")]
+					}
+					for _, re := range excludes[name] {
+						if re.MatchString(file) {
+							continue diagLoop
+						}
+					}
+					lines = append(lines, fmt.Sprintf("%s: %s", posn, d.Message))
 				}
 			}
-			return scanner.Err()
-		})}, filters...)
+		}
+	}
 
+	filters = append([]stream.Filter{stream.Items(lines...)}, filters...)
 	var msgs strings.Builder
 	if err := stream.ForEach(stream.Sequence(filters...), func(s string) {
 		fmt.Fprintln(&msgs, s)
@@ -254,6 +312,11 @@ func TestLint(t *testing.T) {
 				t.Errorf("reading start of %s: %s", filename, err)
 			}
 			data = data[0:n]
+
+			// Generated files carry no license header.
+			if generatedCodeHeader.Match(data) {
+				return
+			}
 
 			isApache := strings.HasPrefix(filename, "obsservice")
 			switch {
@@ -944,7 +1007,6 @@ func TestLint(t *testing.T) {
 			":!*_test.go",
 			":!cli/debug_synctest.go",
 			":!cmd/**",
-			":!roachprod", // TODO: switch to timeutil
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -1169,7 +1231,8 @@ func TestLint(t *testing.T) {
 			`\.Marshal\(`,
 			"--",
 			"*.go",
-			":!sql/*.pb.go",
+			// Generated protobuf code marshals messages without a Marshal method.
+			":!*.pb.go",
 			":!util/protoutil/marshal.go",
 			":!util/protoutil/marshaler.go",
 			":!rpc/codec.go",
@@ -1191,7 +1254,7 @@ func TestLint(t *testing.T) {
 
 		if err := stream.ForEach(stream.Sequence(
 			filter,
-			stream.GrepNot(`(json|jsonpb|yaml|protoutil|xml|\.Field|ewkb|wkb|wkt)\.Marshal\(`),
+			stream.GrepNot(`(json|jsonpb|yaml|protoutil|xml|\.Field)\.Marshal\(`),
 		), func(s string) {
 			t.Errorf("\n%s <- forbidden; use 'protoutil.Marshal' instead", s)
 		}); err != nil {
@@ -1236,7 +1299,7 @@ func TestLint(t *testing.T) {
 
 		if err := stream.ForEach(stream.Sequence(
 			filter,
-			stream.GrepNot(`(json|jsonpb|yaml|xml|protoutil|toml|Codec|ewkb|wkb|wkt)\.Unmarshal\(`),
+			stream.GrepNot(`(json|jsonpb|yaml|xml|protoutil|toml|Codec)\.Unmarshal\(`),
 		), func(s string) {
 			t.Errorf("\n%s <- forbidden; use 'protoutil.Unmarshal' instead", s)
 		}); err != nil {
@@ -1457,6 +1520,15 @@ func TestLint(t *testing.T) {
 				filter,
 				stream.Map(func(s string) string {
 					return filepath.Join(pkgDir, s)
+				}),
+				// Generated files are formatted by their generators.
+				stream.FilterFunc(func(arg stream.Arg) error {
+					for path := range arg.In {
+						if !isGeneratedFile(path) {
+							arg.Out <- path
+						}
+					}
+					return nil
 				}),
 				stream.Xargs("gofmt", "-s", "-d", "-l"),
 			), func(s string) {
@@ -2311,9 +2383,6 @@ func TestLint(t *testing.T) {
 			// instead of ...interface{}.
 			stream.GrepNot(`pkg/util/log/channels\.go:\d+:\d+: logfDepth\(\): format argument is not a constant expression`),
 			stream.GrepNot(`pkg/util/log/channels\.go:\d+:\d+: logfDepthInternal\(\): format argument is not a constant expression`),
-			// roachprod/logger is not collecting redactable logs so we don't care
-			// about printf hygiene there as much.
-			stream.GrepNot(`pkg/roachprod/logger/log\.go:.*format argument is not a constant expression`),
 			// We purposefully produce nil dereferences in this file to test crash conditions
 			stream.GrepNot(`pkg/util/log/logcrash/crash_reporting_test\.go:.*nil dereference in type assertion`),
 			// Temporarily copied code from google-cloud-go's retry predicate.
@@ -2336,10 +2405,20 @@ func TestLint(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		vetCmd(t, crdbDir, "go",
-			[]string{"vet", "-vettool", vetToolPath, "-all", "-printf.funcs", printfuncs,
+		// analyzers.json lists, per analyzer, the files whose findings are
+		// ignored.
+		excludes := map[string][]*regexp.Regexp{}
+		for name, config := range analyzerConfig {
+			excludeFiles, _ := config.(map[string]any)["exclude_files"].(map[string]any)
+			for re := range excludeFiles {
+				excludes[name] = append(excludes[name],
+					regexp.MustCompile(strings.TrimPrefix(re, "cockroach/")))
+			}
+		}
+		vetJSONCmd(t, crdbDir,
+			[]string{"-vettool", vetToolPath, "-all", "-printf.funcs", printfuncs,
 				"-errcheck.exclude", excludesPath, pkgScope},
-			filters)
+			excludes, filters)
 
 	})
 }

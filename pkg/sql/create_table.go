@@ -2314,14 +2314,6 @@ func incTelemetryForNewColumn(def *tree.ColumnTableDef, desc *descpb.ColumnDescr
 	}
 }
 
-func regionalByRowRegionDefaultExpr(oid oid.Oid, region tree.Name) tree.Expr {
-	return &tree.CastExpr{
-		Expr:       tree.NewDString(string(region)),
-		Type:       &tree.OIDTypeReference{OID: oid},
-		SyntaxMode: tree.CastShort,
-	}
-}
-
 // setSequenceOwner adds sequence id to the sequence id list owned by a column
 // and set ownership values of sequence options.
 func setSequenceOwner(

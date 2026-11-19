@@ -449,7 +449,12 @@
       "pkg/sql/schema_changer.go$": "temporary exclusion until deprecatedContext is removed from eval.Context",
       "pkg/sql/schemachanger/scbuild/tree_context_builder.go$": "temporary exclusion until deprecatedContext is removed from eval.Context",
       "pkg/util/bulk/tracing_aggregator.go$": "temporary exclusion until #100438 is resolved",
-      "pkg/util/log/file_api.go$": "excluded until all uses of io/ioutil are replaced"
+      "pkg/util/log/file_api.go$": "excluded until all uses of io/ioutil are replaced",
+      "pkg/sql/ttl/ttljob/ttljob\\.go$": "sets the deprecated AOST field for mixed-version clusters",
+      "pkg/testutils/lint/passes/errcmp/errcmp\\.go$": "uses go/ast.Object to resolve identifiers",
+      "pkg/testutils/lint/passes/loopvarcapture/loopvarcapture\\.go$": "uses go/ast.Object to resolve identifiers",
+      "pkg/util/netutil/net\\.go$": "http2.ConfigureServer keeps the HTTP/2 setup of the server unchanged",
+      "pkg/util/timeutil/gen/main\\.go$": "runtime.GOROOT is only the default of a generator flag"
     }
   },
   "SA1020": {
@@ -1420,7 +1425,8 @@
   },
   "unsafeptr": {
     "exclude_files": {
-      "pkg/sql/colexec/colexechash/hash\\.go$": "re-implements runtime.noescape for efficient hashing"
+      "pkg/sql/colexec/colexechash/hash\\.go$": "re-implements runtime.noescape for efficient hashing",
+      "pkg/sql/execinfrapb/processors\\.go$": "re-implements runtime.noescape"
     }
   }
 }

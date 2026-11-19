@@ -1447,7 +1447,6 @@ func (r *rng) String() string {
 		if i < len(r.replicas)-1 {
 			builder.WriteString(",")
 		}
-		i++
 	}
 	builder.WriteString(")")
 

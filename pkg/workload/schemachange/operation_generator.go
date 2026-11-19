@@ -405,10 +405,6 @@ func (og *operationGenerator) addUniqueConstraint(ctx context.Context, tx pgx.Tx
 	return stmt, nil
 }
 
-func (og *operationGenerator) getDatabase(ctx context.Context, tx pgx.Tx) (string, error) {
-	return Scan[string](ctx, og, tx, `SHOW DATABASE`)
-}
-
 func (og *operationGenerator) addForeignKeyConstraint(
 	ctx context.Context, tx pgx.Tx,
 ) (*opStmt, error) {
@@ -3344,10 +3340,6 @@ func (og *operationGenerator) pctExisting(shouldAlreadyExist bool) int {
 		return 100 - og.params.errorRate
 	}
 	return og.params.errorRate
-}
-
-func (og *operationGenerator) alwaysExisting() int {
-	return 100
 }
 
 func (og *operationGenerator) produceError() bool {

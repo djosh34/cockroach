@@ -9202,23 +9202,6 @@ func setProps(props tree.FunctionProperties, d builtinDefinition) builtinDefinit
 	return d
 }
 
-func jsonOverload1(
-	f func(context.Context, *eval.Context, json.JSON) (tree.Datum, error),
-	returnType *types.T,
-	info string,
-	volatility volatility.V,
-) tree.Overload {
-	return tree.Overload{
-		Types:      tree.ParamTypes{{Name: "val", Typ: types.Jsonb}},
-		ReturnType: tree.FixedReturnType(returnType),
-		Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-			return f(ctx, evalCtx, tree.MustBeDJSON(args[0]).JSON)
-		},
-		Info:       info,
-		Volatility: volatility,
-	}
-}
-
 func stringOverload1(
 	f func(context.Context, *eval.Context, string) (tree.Datum, error),
 	returnType *types.T,

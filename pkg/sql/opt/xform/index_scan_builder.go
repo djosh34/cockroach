@@ -90,8 +90,7 @@ func (b *indexScanBuilder) AddConstProjections(proj memo.ProjectionsExpr) {
 // AddInvertedFilter wraps the input expression with an InvertedFilter
 // expression having the given span expression.
 func (b *indexScanBuilder) AddInvertedFilter(
-	spanExpr *inverted.SpanExpression,
-	invertedCol opt.ColumnID,
+	spanExpr *inverted.SpanExpression, invertedCol opt.ColumnID,
 ) {
 	if spanExpr != nil {
 		if b.hasInvertedFilter() {

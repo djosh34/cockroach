@@ -10,9 +10,7 @@
 
 package tree
 
-import (
-	"github.com/cockroachdb/cockroach/pkg/util"
-)
+import "github.com/cockroachdb/cockroach/pkg/util"
 
 // DatumAlloc provides batch allocation of datum pointers, amortizing the cost
 // of the allocations.

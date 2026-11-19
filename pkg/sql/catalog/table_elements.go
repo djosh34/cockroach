@@ -1074,7 +1074,7 @@ func ColumnNamesForIDs(tbl TableDescriptor, ids descpb.ColumnIDs) ([]string, err
 			}
 		}
 		if names[i] == "" {
-			return nil, errors.AssertionFailedf("no column with ID %d found in table %q (%q)",
+			return nil, errors.AssertionFailedf("no column with ID %d found in table %q (%d)",
 				id, tbl.GetName(), tbl.GetID())
 		}
 	}

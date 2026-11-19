@@ -577,7 +577,7 @@ func TestTransactionActivityMetadata(t *testing.T) {
 
 	// Ensure that the metadata column contains the populated 'stmtFingerprintIDs' field.
 	var metadata struct {
-		StmtFingerprintIDs []string `json:"stmtFingerprintIDs,"`
+		StmtFingerprintIDs []string `json:"stmtFingerprintIDs"`
 	}
 
 	require.NoError(t, updater.TransferStatsToActivity(ctx))
@@ -649,7 +649,7 @@ func TestActivityStatusCombineAPI(t *testing.T) {
 
 	// Ensure that the metadata column contains the populated 'stmtFingerprintIDs' field.
 	var metadata struct {
-		StmtFingerprintIDs []string `json:"stmtFingerprintIDs,"`
+		StmtFingerprintIDs []string `json:"stmtFingerprintIDs"`
 	}
 
 	require.NoError(t, updater.TransferStatsToActivity(ctx))

@@ -11,9 +11,7 @@
 // cockroach-oss is the entry point for the CockroachDB binary.
 package main
 
-import (
-	"github.com/cockroachdb/cockroach/pkg/cli"
-)
+import "github.com/cockroachdb/cockroach/pkg/cli"
 
 func main() {
 	cli.Main()

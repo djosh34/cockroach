@@ -148,7 +148,7 @@ func TestLivenessAPI(t *testing.T) {
 			}
 			if sl.Expiration.WallTime < startTime {
 				return errors.Errorf(
-					"expected node %d liveness to expire in future (after %d), expiration was %d",
+					"expected node %d liveness to expire in future (after %d), expiration was %s",
 					s.NodeID(),
 					startTime,
 					sl.Expiration,

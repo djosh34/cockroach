@@ -1950,11 +1950,7 @@ func (c *transientCluster) ListDemoNodes(w, ew io.Writer, justOne, verbose bool)
 }
 
 func (c *transientCluster) printURLs(
-	w, ew io.Writer,
-	sqlURL *pgurl.URL,
-	socket unixSocketDetails,
-	rpcAddr string,
-	verbose bool,
+	w, ew io.Writer, sqlURL *pgurl.URL, socket unixSocketDetails, rpcAddr string, verbose bool,
 ) {
 	_, _, port := sqlURL.GetNetworking()
 	portArg := ""

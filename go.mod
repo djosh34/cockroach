@@ -74,7 +74,7 @@ require (
 	github.com/jackc/pgx/v5 v5.4.2
 	github.com/jaegertracing/jaeger v1.18.1
 	github.com/jordanlewis/gcassert v0.0.0-20230505190637-fed79d91cd5f
-	github.com/kisielk/errcheck v1.6.1-0.20210625163953-8ddee489636a
+	github.com/kisielk/errcheck v1.9.0
 	github.com/kisielk/gotool v1.0.0
 	github.com/klauspost/compress v1.17.4
 	github.com/knz/bubbline v0.0.0-20230422210153-e176cdfe1c43
@@ -291,7 +291,6 @@ replace go.etcd.io/raft/v3 => github.com/cockroachdb/raft/v3 v3.0.0-202406121436
 tool (
 	github.com/cockroachdb/crlfmt
 	github.com/cockroachdb/gostdlib/x/tools/cmd/goimports
-	github.com/cockroachdb/returncheck
 	github.com/golang/mock/mockgen
 	github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
 	github.com/mmatczuk/go_generics/cmd/go_generics

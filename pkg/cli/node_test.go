@@ -226,7 +226,6 @@ func checkNodeStatus(t *testing.T, c TestCLI, output string, start time.Time) {
 		testcases = append(testcases,
 			testCase{"gossiped_replicas", baseIdx},
 		)
-		baseIdx++
 	}
 
 	for _, tc := range testcases {

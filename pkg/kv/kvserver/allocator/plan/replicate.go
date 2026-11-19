@@ -248,13 +248,6 @@ func (rp ReplicaPlanner) PlanOneChange(
 	canTransferLeaseFrom CanTransferLeaseFrom,
 	scatter bool,
 ) (change ReplicateChange, _ error) {
-	// Initially set the change to be a no-op, it is then modified below if a
-	// step may be taken for this replica.
-	change = ReplicateChange{
-		Action:  allocatorimpl.AllocatorNoop,
-		Op:      AllocationNoop{},
-		Replica: repl,
-	}
 	log.KvDistribution.VEventf(ctx, 6,
 		"planning range change desc=%s config=%s",
 		desc, conf.String())

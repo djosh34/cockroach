@@ -681,10 +681,7 @@ func (s *Smither) makeSelectClause(
 			// either reference a group by column or a non-group by
 			// column in an aggregate function. It's also possible
 			// the where and order by exprs are not correct.
-			var groupByRefs colRefs
-			for _, r := range fromRefs {
-				groupByRefs = append(groupByRefs, r)
-			}
+			groupByRefs := append(colRefs(nil), fromRefs...)
 			s.rnd.Shuffle(len(groupByRefs), func(i, j int) {
 				groupByRefs[i], groupByRefs[j] = groupByRefs[j], groupByRefs[i]
 			})

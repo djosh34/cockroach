@@ -924,10 +924,6 @@ func init() {
 	}
 }
 
-type tenantIDWrapper struct {
-	tenID *roachpb.TenantID
-}
-
 // extraServerFlagInit configures the server.Config based on the command-line flags.
 // It is only called when the command being ran is one of the start commands.
 func extraServerFlagInit(cmd *cobra.Command) error {

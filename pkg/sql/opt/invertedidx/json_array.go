@@ -361,10 +361,7 @@ var _ invertedFilterPlanner = &jsonOrArrayFilterPlanner{}
 // interface.
 func (j *jsonOrArrayFilterPlanner) extractInvertedFilterConditionFromLeaf(
 	ctx context.Context, evalCtx *eval.Context, expr opt.ScalarExpr,
-) (
-	invertedExpr inverted.Expression,
-	remainingFilters opt.ScalarExpr,
-) {
+) (invertedExpr inverted.Expression, remainingFilters opt.ScalarExpr) {
 	switch t := expr.(type) {
 	case *memo.ContainsExpr:
 		invertedExpr = j.extractJSONOrArrayContainsCondition(ctx, evalCtx, t.Left, t.Right, false /* containedBy */)

@@ -859,7 +859,7 @@ func (og *operationGenerator) generateColumn(
 			str := tree.AsStringWithFlags(tree.NewDString(*val[0][0]), tree.FmtParsable)
 			return str, nil
 		}
-		return fmt.Sprintf("%s", "'"+*val[0][0]+"'::"+colInfo.typ.SQLString()), nil
+		return "'" + *val[0][0] + "'::" + colInfo.typ.SQLString(), nil
 	}
 	return "NULL", nil
 }
@@ -1474,66 +1474,6 @@ SELECT EXISTS(
            AND "parentSchemaID" NOT IN (SELECT id FROM schema_id)
            AND id NOT IN (SELECT id FROM dependent)
        );`, schemaName)
-}
-
-// enumMemberPresent determines whether val is a member of the enum.
-// This includes non-public members.
-func (og *operationGenerator) enumMemberPresent(
-	ctx context.Context, tx pgx.Tx, enum string, val string,
-) (bool, error) {
-	return og.scanBool(ctx, tx, `
-WITH enum_members AS (
-	SELECT
-				json_array_elements(
-						crdb_internal.pb_to_json(
-								'cockroach.sql.sqlbase.Descriptor',
-								descriptor
-						)->'type'->'enumMembers'
-				)->>'logicalRepresentation'
-				AS v
-		FROM
-				system.descriptor
-		WHERE
-				id = ($1::REGTYPE::INT8 - 100000)
-)
-SELECT
-	CASE WHEN EXISTS (
-		SELECT v FROM enum_members WHERE v = $2::string
-	) THEN true
-	ELSE false
-	END AS exists
-`,
-		enum,
-		val,
-	)
-}
-
-// tableHasOngoingSchemaChanges returns whether the table has any mutations lined up.
-func (og *operationGenerator) tableHasOngoingSchemaChanges(
-	ctx context.Context, tx pgx.Tx, tableName *tree.TableName,
-) (bool, error) {
-	return og.scanBool(
-		ctx,
-		tx,
-		`
-SELECT
-	json_array_length(
-		COALESCE(
-			crdb_internal.pb_to_json(
-				'cockroach.sql.sqlbase.Descriptor',
-				descriptor
-			)->'table'->'mutations',
-			'[]'
-		)
-	)
-	> 0
-FROM
-	system.descriptor
-WHERE
-	id = $1::REGCLASS;
-		`,
-		tableName.String(),
-	)
 }
 
 // tableHasOngoingAlterPKSchemaChanges checks whether a given table has an ALTER

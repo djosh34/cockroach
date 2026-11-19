@@ -22,9 +22,10 @@ bin=$PWD/bin/lint
 mkdir -p "$bin"
 go build -o "$bin" \
   github.com/cockroachdb/crlfmt \
-  github.com/cockroachdb/returncheck \
   honnef.co/go/tools/cmd/staticcheck \
-  ./pkg/cmd/roachvet
+  ./pkg/cmd/returncheck \
+  ./pkg/cmd/roachvet \
+  ./pkg/sql/opt/optgen/cmd/optfmt
 export PATH=$bin:$PATH
 
 heavy='TestRoachVet|TestStaticCheck|TestReturnCheck'

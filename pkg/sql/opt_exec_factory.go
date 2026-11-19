@@ -242,9 +242,7 @@ func (ef *execFactory) ConstructFilter(
 
 // ConstructInvertedFilter is part of the exec.Factory interface.
 func (ef *execFactory) ConstructInvertedFilter(
-	n exec.Node,
-	invFilter *inverted.SpanExpression,
-	invColumn exec.NodeColumnOrdinal,
+	n exec.Node, invFilter *inverted.SpanExpression, invColumn exec.NodeColumnOrdinal,
 ) (exec.Node, error) {
 	inputCols := planColumns(n.(planNode))
 	columns := make(colinfo.ResultColumns, len(inputCols))

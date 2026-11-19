@@ -223,36 +223,3 @@ func (d *delegator) resolveAndModifyUnresolvedObjectName(
 	}
 	return dataSource, resName, nil
 }
-
-// resolveAndModifyTableIndexName may modify the name input
-// if d.qualifyDataSourceNamesInAST == true
-func (d *delegator) resolveAndModifyTableIndexName(
-	name *tree.TableIndexName,
-) (cat.DataSource, cat.DataSourceName, error) {
-
-	tn := name.Table
-	dataSource, resName, err := d.catalog.ResolveDataSource(d.ctx, resolveFlags, &tn)
-	if err != nil {
-		return nil, cat.DataSourceName{}, err
-	}
-
-	if err := d.catalog.CheckAnyPrivilege(d.ctx, dataSource); err != nil {
-		return nil, cat.DataSourceName{}, err
-	}
-
-	// Force resolution of the index.
-	_, _, err = cat.ResolveTableIndex(d.ctx, d.catalog, resolveFlags, name)
-	if err != nil {
-		return nil, cat.DataSourceName{}, err
-	}
-
-	// Use qualifyDataSourceNamesInAST similarly to the Builder so that
-	// CREATE TABLE AS can source from a delegated expression.
-	// For example: CREATE TABLE t2 AS SELECT * FROM [SHOW PARTITIONS FROM INDEX t1@t1_pkey];
-	if d.qualifyDataSourceNamesInAST {
-		resName.ExplicitSchema = true
-		resName.ExplicitCatalog = true
-		(*name).Table = resName.ToUnresolvedObjectName().ToTableName()
-	}
-	return dataSource, resName, nil
-}

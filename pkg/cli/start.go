@@ -580,7 +580,6 @@ If problems persist, please see %s.`
 		}
 	}
 
-
 	// Beyond this point, the configuration is set and the server is
 	// ready to start.
 

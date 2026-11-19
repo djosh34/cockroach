@@ -13,10 +13,8 @@ package xform
 import (
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/cat"
-	"github.com/cockroachdb/cockroach/pkg/sql/opt/constraint"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/memo"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/props/physical"
-	"github.com/cockroachdb/cockroach/pkg/util/intsets"
 	"github.com/cockroachdb/errors"
 )
 
@@ -98,43 +96,6 @@ func (c *CustomFuncs) GenerateIndexScans(
 		sb.AddIndexJoin(scanPrivate.Cols)
 		sb.Build(grp)
 	})
-}
-
-// makeColMap builds a map used to remap column IDs that are in the OutputCols
-// of `src` to refer to corresponding column IDs in `dst`. `src` and `dst` must
-// refer to the same underlying table.
-func (c *CustomFuncs) makeColMap(src, dst *memo.ScanPrivate) (colMap opt.ColMap) {
-	for srcCol, ok := src.Cols.Next(0); ok; srcCol, ok = src.Cols.Next(srcCol + 1) {
-		ord := src.Table.ColumnOrdinal(srcCol)
-		dstCol := dst.Table.ColumnID(ord)
-		colMap.Set(int(srcCol), int(dstCol))
-	}
-	return colMap
-}
-
-// splitSpans splits the original constraint into a local and remote constraint
-// by putting the spans at positions identified by localSpanOrds into the local
-// constraint, and the remaining spans into the remote constraint.
-func (c *CustomFuncs) splitSpans(
-	origConstraint *constraint.Constraint, localSpanOrds intsets.Fast,
-) (localConstraint, remoteConstraint constraint.Constraint) {
-	allSpansCount := origConstraint.Spans.Count()
-	localSpansCount := localSpanOrds.Len()
-	var localSpans, remoteSpans constraint.Spans
-	localSpans.Alloc(localSpansCount)
-	remoteSpans.Alloc(allSpansCount - localSpansCount)
-	for i := 0; i < allSpansCount; i++ {
-		span := origConstraint.Spans.Get(i)
-		if localSpanOrds.Contains(i) {
-			localSpans.Append(span)
-		} else {
-			remoteSpans.Append(span)
-		}
-	}
-	keyCtx := constraint.MakeKeyContext(&origConstraint.Columns, c.e.evalCtx)
-	localConstraint.Init(&keyCtx, &localSpans)
-	remoteConstraint.Init(&keyCtx, &remoteSpans)
-	return localConstraint, remoteConstraint
 }
 
 // ScanPrivateCols returns the ColSet of a ScanPrivate.

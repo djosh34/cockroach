@@ -342,9 +342,7 @@ func (e *distSQLSpecExecFactory) ConstructFilter(
 
 // ConstructInvertedFilter is part of the exec.Factory interface.
 func (e *distSQLSpecExecFactory) ConstructInvertedFilter(
-	n exec.Node,
-	invFilter *inverted.SpanExpression,
-	invColumn exec.NodeColumnOrdinal,
+	n exec.Node, invFilter *inverted.SpanExpression, invColumn exec.NodeColumnOrdinal,
 ) (exec.Node, error) {
 	return nil, unimplemented.NewWithIssue(
 		47473, "experimental opt-driven distsql planning: inverted filter")

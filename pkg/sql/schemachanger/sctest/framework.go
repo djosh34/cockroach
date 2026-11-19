@@ -938,14 +938,6 @@ func waitForSchemaChangesToFinish(t *testing.T, tdb *sqlutils.SQLRunner) {
 	)
 }
 
-func hasLatestSchemaChangeSucceeded(t *testing.T, tdb *sqlutils.SQLRunner) bool {
-	result := tdb.QueryStr(t, fmt.Sprintf(
-		`SELECT status FROM [SHOW JOBS] WHERE job_type IN ('%s') ORDER BY finished DESC LIMIT 1`,
-		jobspb.TypeNewSchemaChange,
-	))
-	return result[0][0] == "succeeded"
-}
-
 func schemaChangeWaitQuery(statusInString string) string {
 	q := fmt.Sprintf(
 		`SELECT status, job_type, description FROM [SHOW JOBS] WHERE job_type IN ('%s', '%s', '%s') AND status NOT IN %s`,

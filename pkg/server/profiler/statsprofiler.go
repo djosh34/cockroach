@@ -67,9 +67,7 @@ func NewStatsProfiler(
 }
 
 // MaybeTakeProfile takes a profile if the non-go size is big enough.
-func (o *StatsProfiler) MaybeTakeProfile(
-	ctx context.Context, curRSS int64, ms *status.GoMemStats,
-) {
+func (o *StatsProfiler) MaybeTakeProfile(ctx context.Context, curRSS int64, ms *status.GoMemStats) {
 	o.maybeTakeProfile(ctx, curRSS, func(ctx context.Context, path string, _ ...interface{}) bool { return saveStats(ctx, path, ms) })
 }
 

@@ -842,12 +842,7 @@ func wrapFilesystemMiddleware(opts *pebble.Options) (vfs.FS, io.Closer) {
 	// operations.
 	fs, closer := vfs.WithDiskHealthChecks(opts.FS, diskHealthCheckInterval,
 		func(info vfs.DiskSlowInfo) {
-			opts.EventListener.DiskSlow(pebble.DiskSlowInfo{
-				Path:      info.Path,
-				OpType:    info.OpType,
-				Duration:  info.Duration,
-				WriteSize: info.WriteSize,
-			})
+			opts.EventListener.DiskSlow(pebble.DiskSlowInfo(info))
 		})
 	// If we encounter ENOSPC, exit with an informative exit code.
 	fs = vfs.OnDiskFull(fs, func() {

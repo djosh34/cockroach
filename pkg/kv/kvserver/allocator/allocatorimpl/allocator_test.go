@@ -8495,7 +8495,7 @@ func TestAllocatorRebalanceAway(t *testing.T) {
 			} else if tc.expected != nil && !ok {
 				t.Errorf("rebalancing to the incorrect store, expected %d, got nil", *tc.expected)
 			} else if !(tc.expected == nil && !ok) && *tc.expected != actual.StoreID {
-				t.Errorf("rebalancing to the incorrect store, expected %d, got %d", tc.expected, actual.StoreID)
+				t.Errorf("rebalancing to the incorrect store, expected %d, got %d", *tc.expected, actual.StoreID)
 			}
 		})
 	}

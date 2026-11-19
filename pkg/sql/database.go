@@ -17,11 +17,9 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/dbdesc"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/tabledesc"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/schemachanger/scerrors"
-	"github.com/cockroachdb/errors"
 )
 
 //
@@ -101,47 +99,4 @@ func (p *planner) writeDatabaseChangeToBatch(
 		desc,
 		b,
 	)
-}
-
-// forEachMutableTableInDatabase calls the given function on every table
-// descriptor inside the given database. Tables that have been
-// dropped are skipped.
-func (p *planner) forEachMutableTableInDatabase(
-	ctx context.Context,
-	dbDesc catalog.DatabaseDescriptor,
-	fn func(ctx context.Context, scName string, tbDesc *tabledesc.Mutable) error,
-) error {
-	all, err := p.Descriptors().GetAllDescriptors(ctx, p.txn)
-	if err != nil {
-		return err
-	}
-
-	// TODO(ajwerner): Rewrite this to not use the internalLookupCtx.
-	lCtx := newInternalLookupCtx(all.OrderedDescriptors(), dbDesc)
-	var droppedRemoved []descpb.ID
-	for _, tbID := range lCtx.tbIDs {
-		desc := lCtx.tbDescs[tbID]
-		if desc.Dropped() {
-			continue
-		}
-		droppedRemoved = append(droppedRemoved, tbID)
-	}
-	descs, err := p.Descriptors().MutableByID(p.Txn()).Descs(ctx, droppedRemoved)
-	if err != nil {
-		return err
-	}
-	for _, d := range descs {
-		mutable := d.(*tabledesc.Mutable)
-		schemaName, found, err := lCtx.GetSchemaName(ctx, d.GetParentSchemaID(), d.GetParentID(), p.ExecCfg().Settings.Version)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return errors.AssertionFailedf("schema id %d not found", d.GetParentSchemaID())
-		}
-		if err := fn(ctx, schemaName, mutable); err != nil {
-			return err
-		}
-	}
-	return nil
 }
