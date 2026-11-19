@@ -62,7 +62,6 @@ type zoneConfigOption struct {
 	field        config.Field
 	requiredType *types.T
 	setter       func(*zonepb.ZoneConfig, tree.Datum)
-	checkAllowed func(context.Context, *ExecutorConfig, tree.Datum) error
 }
 
 // supportedZoneConfigOptions indicates how to translate SQL variable
@@ -397,13 +396,7 @@ func evaluateZoneOptions(
 				return nil, nil, nil, pgerror.Newf(pgcode.InvalidParameterValue,
 					"unsupported NULL value for %q", tree.ErrString(name))
 			}
-			opt := supportedZoneConfigOptions[*name]
-			if opt.checkAllowed != nil {
-				if err := opt.checkAllowed(params.ctx, params.ExecCfg(), datum); err != nil {
-					return nil, nil, nil, err
-				}
-			}
-			setter := opt.setter
+			setter := supportedZoneConfigOptions[*name].setter
 			setters = append(setters, func(c *zonepb.ZoneConfig) { setter(c, datum) })
 			optionsStr = append(optionsStr, fmt.Sprintf("%s = %s", name, datum))
 		}

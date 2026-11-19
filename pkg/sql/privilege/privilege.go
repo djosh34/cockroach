@@ -92,15 +92,15 @@ var (
 	ReadWriteData         = List{SELECT, INSERT, DELETE, UPDATE}
 	ReadWriteSequenceData = List{SELECT, UPDATE, USAGE}
 	DBPrivileges          = List{ALL, BACKUP, CONNECT, CREATE, DROP, RESTORE, ZONECONFIG}
-	TablePrivileges       = List{ALL, BACKUP, CREATE, DROP, SELECT, INSERT, DELETE, UPDATE, ZONECONFIG}
+	TablePrivileges       = List{ALL, BACKUP, CHANGEFEED, CREATE, DROP, SELECT, INSERT, DELETE, UPDATE, ZONECONFIG}
 	SchemaPrivileges      = List{ALL, CREATE, USAGE}
 	TypePrivileges        = List{ALL, USAGE}
 	RoutinePrivileges     = List{ALL, EXECUTE}
 	// SequencePrivileges is appended with TablePrivileges as well. This is because
 	// before v22.2 we treated Sequences the same as Tables. This is to avoid making
 	// certain privileges unavailable after upgrade migration.
-	// Note that "CREATE, INSERT, DELETE, ZONECONFIG" are no-op privileges on sequences.
-	SequencePrivileges = List{ALL, USAGE, SELECT, UPDATE, CREATE, DROP, INSERT, DELETE, ZONECONFIG}
+	// Note that "CREATE, CHANGEFEED, INSERT, DELETE, ZONECONFIG" are no-op privileges on sequences.
+	SequencePrivileges = List{ALL, USAGE, SELECT, UPDATE, CREATE, CHANGEFEED, DROP, INSERT, DELETE, ZONECONFIG}
 	GlobalPrivileges   = List{
 		ALL, BACKUP, RESTORE, MODIFYCLUSTERSETTING, EXTERNALCONNECTION, VIEWACTIVITY, VIEWACTIVITYREDACTED,
 		VIEWCLUSTERSETTING, CANCELQUERY, NOSQLLOGIN, VIEWCLUSTERMETADATA, VIEWDEBUG, EXTERNALIOIMPLICITACCESS, VIEWJOB,
@@ -328,13 +328,13 @@ func ValidatePrivileges(privileges List, objectType ObjectType) error {
 }
 
 // ValidateGrantable returns an error if any privilege in privileges can no
-// longer be granted. BACKUP and RESTORE belonged to the removed backup
-// feature. Their bits stay valid so that stored privilege descriptors keep
+// longer be granted. BACKUP, RESTORE and CHANGEFEED belonged to removed
+// features. Their bits stay valid so that stored privilege descriptors keep
 // decoding and existing grants can still be revoked.
 func ValidateGrantable(privileges List) error {
 	for _, priv := range privileges {
 		switch priv {
-		case BACKUP, RESTORE:
+		case BACKUP, RESTORE, CHANGEFEED:
 			return pgerror.Newf(pgcode.FeatureNotSupported,
 				"privilege %s is unsupported", priv.DisplayName())
 		}

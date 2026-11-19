@@ -1482,7 +1482,7 @@ func (b *builderState) replaceSeqNamesWithIDs(
 			fmtCtx.WriteString(";")
 		}
 	default:
-		panic(errors.AssertionFailedf("unexpected function language: %s", lang))
+		panic(pgerror.Newf(pgcode.FeatureNotSupported, "routine language %s is unsupported", lang))
 	}
 	return fmtCtx.String()
 }
@@ -1564,7 +1564,7 @@ func (b *builderState) serializeUserDefinedTypes(
 			fmtCtx.WriteString(";")
 		}
 	default:
-		panic(errors.AssertionFailedf("unexpected function language: %s", lang))
+		panic(pgerror.Newf(pgcode.FeatureNotSupported, "routine language %s is unsupported", lang))
 	}
 	return fmtCtx.CloseAndGetString()
 }

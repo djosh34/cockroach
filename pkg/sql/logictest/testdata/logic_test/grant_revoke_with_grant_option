@@ -280,6 +280,7 @@ SHOW GRANTS FOR testuser
 ----
 database_name  schema_name  object_name  object_type  grantee   privilege_type  is_grantable
 test           public       t            table        testuser  BACKUP          true
+test           public       t            table        testuser  CHANGEFEED      true
 test           public       t            table        testuser  CREATE          true
 test           public       t            table        testuser  DROP            true
 test           public       t            table        testuser  INSERT          true

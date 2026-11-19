@@ -353,7 +353,7 @@ func rewriteFunctionBodyDBNames(
 		return fmtCtx.CloseAndGetString(), nil
 
 	default:
-		return "", errors.AssertionFailedf("unexpected function language %s", lang)
+		return "", pgerror.Newf(pgcode.FeatureNotSupported, "routine language %s is unsupported", lang)
 	}
 }
 
@@ -403,7 +403,7 @@ func rewriteTypesInRoutine(
 		return fmtCtx.CloseAndGetString(), nil
 
 	default:
-		return "", errors.AssertionFailedf("unexpected function language: %v", lang)
+		return "", pgerror.Newf(pgcode.FeatureNotSupported, "routine language %v is unsupported", lang)
 	}
 }
 
@@ -535,7 +535,7 @@ func rewriteSequencesInFunction(
 		}
 
 	default:
-		return "", errors.AssertionFailedf("unexpected function language %s", lang)
+		return "", pgerror.Newf(pgcode.FeatureNotSupported, "routine language %s is unsupported", lang)
 	}
 	return fmtCtx.CloseAndGetString(), nil
 }

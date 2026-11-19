@@ -207,7 +207,7 @@ func CreateUserDefinedArrayTypeDesc(
 	// ID of the array type in order for the array type to correctly created.
 	var elemTyp *types.T
 	switch t := typDesc.Kind; t {
-	case descpb.TypeDescriptor_ENUM, descpb.TypeDescriptor_MULTIREGION_ENUM:
+	case descpb.TypeDescriptor_ENUM:
 		elemTyp = types.MakeEnum(catid.TypeIDToOID(typDesc.GetID()), catid.TypeIDToOID(id))
 	case descpb.TypeDescriptor_COMPOSITE:
 		for _, e := range typDesc.Composite.Elements {

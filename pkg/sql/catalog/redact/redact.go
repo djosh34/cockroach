@@ -16,6 +16,8 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
+	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
+	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/schemachanger/scpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/errors"
@@ -249,7 +251,7 @@ func redactFunctionBodyStr(lang catpb.Function_Language, body *string) error {
 			fmtCtx.WriteString(";")
 		}
 	default:
-		return errors.AssertionFailedf("unexpected function language %s", lang)
+		return pgerror.Newf(pgcode.FeatureNotSupported, "routine language %s is unsupported", lang)
 	}
 	*body = fmtCtx.String()
 	return nil

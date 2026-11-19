@@ -23,6 +23,8 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/schemaexpr"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/tabledesc"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
+	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
+	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/semenumpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
@@ -256,7 +258,7 @@ func formatQuerySequencesForDisplay(
 			}
 		}
 	default:
-		return "", errors.AssertionFailedf("unexpected function language %s", lang)
+		return "", pgerror.Newf(pgcode.FeatureNotSupported, "routine language %s is unsupported", lang)
 	}
 	return fmtCtx.CloseAndGetString(), nil
 }
@@ -392,7 +394,7 @@ func formatFunctionQueryTypesForDisplay(
 			fmtCtx.WriteString(";")
 		}
 	default:
-		return "", errors.AssertionFailedf("unexpected function language %s", lang)
+		return "", pgerror.Newf(pgcode.FeatureNotSupported, "routine language %s is unsupported", lang)
 	}
 
 	return fmtCtx.CloseAndGetString(), nil

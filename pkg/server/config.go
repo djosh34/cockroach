@@ -720,17 +720,8 @@ func (cfg *Config) CreateEngines(ctx context.Context) (Engines, error) {
 	pebbleCache := pebble.NewCache(cfg.CacheSize)
 	defer pebbleCache.Unref()
 
-	var sharedStorage cloud.ExternalStorage
 	if cfg.SharedStorage != "" {
-		var err error
-		// Note that we don't pass an io interceptor here. Instead, we record shared
-		// storage metrics on a per-store basis; see storage.Metrics.
-		sharedStorage, err = cloud.ExternalStorageFromURI(ctx, cfg.SharedStorage,
-			base.ExternalIODirConfig{}, cfg.Settings, nil, cfg.User, nil,
-			nil, cloud.NilMetrics)
-		if err != nil {
-			return nil, err
-		}
+		return nil, errors.New("shared storage is unsupported")
 	}
 
 	var physicalStores int
@@ -840,9 +831,6 @@ func (cfg *Config) CreateEngines(ctx context.Context) (Engines, error) {
 			addCfgOpt(storage.MaxOpenFiles(int(openFileLimitPerStore)))
 			addCfgOpt(storage.MaxWriterConcurrency(2))
 			addCfgOpt(storage.RemoteStorageFactory(cfg.ExternalStorageAccessor))
-			if sharedStorage != nil {
-				addCfgOpt(storage.SharedStorage(sharedStorage))
-			}
 			addCfgOpt(storage.SecondaryCache(storage.SecondaryCacheBytes(cfg.SecondaryCache, du)))
 			// If the spec contains Pebble options, set those too.
 			if spec.PebbleOptions != "" {

@@ -277,7 +277,7 @@ func (b *Builder) buildRoutine(
 			bodyProps[i] = physProps
 		}
 	default:
-		panic(errors.AssertionFailedf("unexpected language: %v", o.Language))
+		panic(pgerror.Newf(pgcode.FeatureNotSupported, "routine language %v is unsupported", o.Language))
 	}
 
 	b.insideUDF = false

@@ -215,17 +215,16 @@ the following diagram:
 
 This diagram reveals the following:
 
-- There are actually 6 statement groups currently:
+- There are actually 5 statement groups currently:
   1. The “read-only” queries introduced above,
   2. DDL statements introduced above,
   3. SHOW/SET and other non-mutation SQL statements,
   4. SQL mutation statements,
-  5. Bulk I/O statements in CCL code that influence the schema: IMPORT/EXPORT, BACKUP/RESTORE,
-  6. Other CCL statements.
+  5. Bulk I/O statements that influence the schema: IMPORT/EXPORT.
 
 - There are 2 separate, independent and partly redundant
-  implementations of semantic analysis and validation. The CCL code
-  uses its own. (This is bad and ought to be changed, see below.)
+  implementations of semantic analysis and validation. The bulk I/O
+  code uses its own. (This is bad and ought to be changed, see below.)
 
 - There are 3 separate, somewhat independent but redundant
   implementations of logical planning and optimizations.
@@ -235,7 +234,7 @@ This diagram reveals the following:
 	was implemented, and is still used for every statement not yet
 	supported by the optimizer. This code is being phased out as
 	its features are being taken over by the cost-based optimizer.
-  - the CCL planning code exists in a separate package and tries
+  - the bulk I/O planning code exists in a separate package and tries
 	hard (and badly) to create logical plans as an add-on package.
 	It interfaces with the heuristic planner via some glue code that
 	was organically grown over time without any consideration for
@@ -246,7 +245,7 @@ This diagram reveals the following:
 - There are 2 somewhat independent but redundant execution engines for
   SQL query plans: **distributed** and **local**.
 
-  These two are currently being merged, although CCL statements
+  These two are currently being merged, although bulk I/O statements
   have no way to integrate with distributed execution currently and
   still heavily rely on local execution. (This is bad; this needs to
   change.)

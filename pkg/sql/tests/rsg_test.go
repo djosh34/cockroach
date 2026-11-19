@@ -685,7 +685,6 @@ var ignoredErrorPatterns = []string{
 	"cannot take logarithm of a negative number",
 	"input value must be",
 	"formats are supported for decode",
-	"only available in ccl",
 	"expect comma-separated list of filename",
 	"unknown constraint",
 	"invalid destination encoding name",

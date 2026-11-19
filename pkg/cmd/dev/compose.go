@@ -108,7 +108,6 @@ func (d *dev) compose(cmd *cobra.Command, _ []string) error {
 	args = append(args, "--test_arg", "-compare", "--test_arg", compareBin)
 	args = append(args, "--test_arg", "-test.v")
 	args = append(args, "--test_output", "all")
-	args = append(args, "--test_env", "COCKROACH_DEV_LICENSE")
 
 	logCommand("bazel", args...)
 	return d.exec.CommandContextInheritingStdStreams(ctx, "bazel", args...)

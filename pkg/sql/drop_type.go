@@ -75,14 +75,12 @@ func (p *planner) DropType(ctx context.Context, n *tree.DropType) (planNode, err
 				name,
 			)
 		case descpb.TypeDescriptor_MULTIREGION_ENUM:
-			// Multi-region enums are not directly droppable.
-			return nil, errors.WithHintf(
-				pgerror.Newf(
-					pgcode.DependentObjectsStillExist,
-					"%q is a multi-region enum and cannot be modified directly",
-					name,
-				),
-				"try ALTER DATABASE DROP REGION %s", name)
+			// Stored multi-region enums are not directly droppable.
+			return nil, pgerror.Newf(
+				pgcode.DependentObjectsStillExist,
+				"%q is a multi-region enum and cannot be modified directly",
+				name,
+			)
 		case descpb.TypeDescriptor_ENUM:
 			sqltelemetry.IncrementEnumCounter(sqltelemetry.EnumDrop)
 		case descpb.TypeDescriptor_TABLE_IMPLICIT_RECORD_TYPE:

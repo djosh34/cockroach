@@ -607,7 +607,7 @@ func (t *typeSchemaChanger) canRemoveEnumValueFromUDF(
 			}
 		}
 	default:
-		return errors.AssertionFailedf("unexpected function language %s", udfDesc.GetLanguage())
+		return pgerror.Newf(pgcode.FeatureNotSupported, "routine language %s is unsupported", udfDesc.GetLanguage())
 	}
 	return nil
 }

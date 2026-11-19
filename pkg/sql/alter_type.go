@@ -67,14 +67,12 @@ func (p *planner) AlterType(ctx context.Context, n *tree.AlterType) (planNode, e
 			tree.AsStringWithFQNames(n.Type, &p.semaCtx.Annotations),
 		)
 	case descpb.TypeDescriptor_MULTIREGION_ENUM:
-		// Multi-region enums can't be directly modified except for OWNER TO.
+		// Stored multi-region enums can't be modified except for OWNER TO.
 		if _, isAlterTypeOwner := n.Cmd.(*tree.AlterTypeOwner); !isAlterTypeOwner {
-			return nil, errors.WithHint(
-				pgerror.Newf(
-					pgcode.WrongObjectType,
-					"%q is a multi-region enum and can't be modified using the alter type command",
-					tree.AsStringWithFQNames(n.Type, &p.semaCtx.Annotations)),
-				"try adding/removing the region using ALTER DATABASE")
+			return nil, pgerror.Newf(
+				pgcode.WrongObjectType,
+				"%q is a multi-region enum and can't be modified using the alter type command",
+				tree.AsStringWithFQNames(n.Type, &p.semaCtx.Annotations))
 		}
 	case descpb.TypeDescriptor_ENUM:
 		sqltelemetry.IncrementEnumCounter(sqltelemetry.EnumAlter)
@@ -164,8 +162,7 @@ func findEnumMemberByName(
 func (p *planner) addEnumValue(
 	ctx context.Context, desc *typedesc.Mutable, node *tree.AlterTypeAddValue, jobDesc string,
 ) error {
-	if desc.Kind != descpb.TypeDescriptor_ENUM &&
-		desc.Kind != descpb.TypeDescriptor_MULTIREGION_ENUM {
+	if desc.Kind != descpb.TypeDescriptor_ENUM {
 		return pgerror.Newf(pgcode.WrongObjectType, "%q is not an enum", desc.Name)
 	}
 	// See if the value already exists in the enum or not.
@@ -194,8 +191,7 @@ func (p *planner) addEnumValue(
 func (p *planner) dropEnumValue(
 	ctx context.Context, desc *typedesc.Mutable, val tree.EnumValue,
 ) error {
-	if desc.Kind != descpb.TypeDescriptor_ENUM &&
-		desc.Kind != descpb.TypeDescriptor_MULTIREGION_ENUM {
+	if desc.Kind != descpb.TypeDescriptor_ENUM {
 		return pgerror.Newf(pgcode.WrongObjectType, "%q is not an enum", desc.Name)
 	}
 

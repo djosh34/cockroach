@@ -23,8 +23,5 @@ go_test(
     exec_properties = {"Pool": "large"},
     gotags = ["compose"],
     tags = ["integration"],
-    deps = [
-        "//pkg/build/bazel",
-        "//pkg/util/envutil",
-    ],
+    deps = ["//pkg/build/bazel"],
 )
