@@ -1858,6 +1858,12 @@ func maybeUpdateZoneConfigsForPKChange(
 		for i := range zoneWithRaw.ZoneConfigProto().Subzones {
 			subzone := &zoneWithRaw.ZoneConfigProto().Subzones[i]
 			if subzone.IndexID == uint32(oldIdx) {
+				// A partition subzone moves only if the new index has the same
+				// partition over the same columns. Its stored spans move with it.
+				if subzone.PartitionName != "" &&
+					!partitionMovesWithIndex(table, oldIdx, newIdx, subzone.PartitionName) {
+					continue
+				}
 				// If we find a subzone matching an old index, copy its subzone
 				// into a new subzone with the new index's ID.
 				subzoneCopy := *subzone
@@ -1871,7 +1877,7 @@ func maybeUpdateZoneConfigsForPKChange(
 	_, err = writeZoneConfig(
 		ctx, txn, table.ID, table,
 		zoneWithRaw.ZoneConfigProto(), zoneWithRaw.GetRawBytesInStorage(),
-		execCfg, kvTrace,
+		execCfg, kvTrace, oldIdxToNewIdx,
 	)
 	if err != nil {
 		return err

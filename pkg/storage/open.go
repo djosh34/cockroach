@@ -183,14 +183,6 @@ func BallastSize(size int64) ConfigOption {
 	}
 }
 
-// SharedStorage enables use of shared storage (experimental).
-func SharedStorage(sharedStorage cloud.ExternalStorage) ConfigOption {
-	return func(cfg *engineConfig) error {
-		cfg.SharedStorage = sharedStorage
-		return nil
-	}
-}
-
 // SecondaryCache enables use of a secondary cache to store shared objects.
 func SecondaryCache(size int64) ConfigOption {
 	return func(cfg *engineConfig) error {

@@ -10,5 +10,5 @@
 
 package jobsprotectedts_test
 
-// This package has no tests of its own. Its integration tests were part of
-// the removed CCL code.
+// This package has no tests of its own. Its integration tests were removed
+// together with the enterprise features they covered.

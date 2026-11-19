@@ -20,6 +20,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/covering"
+	"github.com/cockroachdb/cockroach/pkg/util/encoding"
 	"github.com/cockroachdb/cockroach/pkg/util/protoutil"
 )
 
@@ -130,13 +131,28 @@ func GenerateSubzoneSpans(
 // storedPartitionSpans returns the subzone spans of the stored zone config
 // (oldRaw) that belong to partition subzones which z still has. The returned
 // spans point into z.Subzones.
-func storedPartitionSpans(z *zonepb.ZoneConfig, oldRaw []byte) ([]zonepb.SubzoneSpan, error) {
+//
+// indexRemap maps the IDs of indexes that were rewritten (by TRUNCATE or a
+// primary key change) to the IDs of their replacements. A stored partition
+// span of a rewritten index is also returned for the same partition on the
+// replacement index, with the index prefix swapped, when z has that subzone.
+func storedPartitionSpans(
+	z *zonepb.ZoneConfig, oldRaw []byte, indexRemap map[descpb.IndexID]descpb.IndexID,
+) ([]zonepb.SubzoneSpan, error) {
 	if len(oldRaw) == 0 {
 		return nil, nil
 	}
 	var old zonepb.ZoneConfig
 	if err := protoutil.Unmarshal(oldRaw, &old); err != nil {
 		return nil, err
+	}
+	findSubzone := func(indexID uint32, partition string) (int32, bool) {
+		for i, subzone := range z.Subzones {
+			if subzone.IndexID == indexID && subzone.PartitionName == partition {
+				return int32(i), true
+			}
+		}
+		return 0, false
 	}
 	var spans []zonepb.SubzoneSpan
 	for _, s := range old.SubzoneSpans {
@@ -147,13 +163,79 @@ func storedPartitionSpans(z *zonepb.ZoneConfig, oldRaw []byte) ([]zonepb.Subzone
 		if oldSubzone.PartitionName == "" {
 			continue
 		}
-		for i, subzone := range z.Subzones {
-			if subzone.IndexID == oldSubzone.IndexID && subzone.PartitionName == oldSubzone.PartitionName {
-				s.SubzoneIndex = int32(i)
-				spans = append(spans, s)
-				break
-			}
+		if i, ok := findSubzone(oldSubzone.IndexID, oldSubzone.PartitionName); ok {
+			span := s
+			span.SubzoneIndex = i
+			spans = append(spans, span)
+		}
+		newIndexID, ok := indexRemap[descpb.IndexID(oldSubzone.IndexID)]
+		if !ok {
+			continue
+		}
+		i, ok := findSubzone(uint32(newIndexID), oldSubzone.PartitionName)
+		if !ok {
+			continue
+		}
+		if span, ok := moveSpanToIndex(s, descpb.IndexID(oldSubzone.IndexID), newIndexID); ok {
+			span.SubzoneIndex = i
+			spans = append(spans, span)
 		}
 	}
 	return spans, nil
+}
+
+// moveSpanToIndex swaps the index prefix of a subzone span from oldID to
+// newID. Subzone span keys are relative to the table prefix, so they start
+// with the encoded index ID. It returns false if the span is not inside the
+// old index.
+func moveSpanToIndex(
+	s zonepb.SubzoneSpan, oldID, newID descpb.IndexID,
+) (zonepb.SubzoneSpan, bool) {
+	oldPrefix := roachpb.Key(encoding.EncodeUvarintAscending(nil, uint64(oldID)))
+	newPrefix := roachpb.Key(encoding.EncodeUvarintAscending(nil, uint64(newID)))
+	if !bytes.HasPrefix(s.Key, oldPrefix) {
+		return zonepb.SubzoneSpan{}, false
+	}
+	moved := s
+	moved.Key = append(newPrefix[:len(newPrefix):len(newPrefix)], s.Key[len(oldPrefix):]...)
+	switch {
+	case len(s.EndKey) == 0:
+	case s.EndKey.Equal(oldPrefix.PrefixEnd()):
+		moved.EndKey = newPrefix.PrefixEnd()
+	case bytes.HasPrefix(s.EndKey, oldPrefix):
+		moved.EndKey = append(newPrefix[:len(newPrefix):len(newPrefix)], s.EndKey[len(oldPrefix):]...)
+	default:
+		return zonepb.SubzoneSpan{}, false
+	}
+	return moved, true
+}
+
+// partitionMovesWithIndex reports whether the partition named partition on
+// index oldID describes the same keys on its replacement newID, so that its
+// subzone and stored spans can move to the new index.
+func partitionMovesWithIndex(
+	table catalog.TableDescriptor, oldID, newID descpb.IndexID, partition string,
+) bool {
+	newIdx := catalog.FindIndexByID(table, newID)
+	if newIdx == nil || newIdx.GetPartitioning().FindPartitionByName(partition) == nil {
+		return false
+	}
+	oldIdx := catalog.FindIndexByID(table, oldID)
+	if oldIdx == nil {
+		// TRUNCATE removes the old index from the descriptor. Its replacement
+		// is a copy with the same columns and partitioning.
+		return true
+	}
+	n := oldIdx.GetPartitioning().NumColumns()
+	if n == 0 || newIdx.GetPartitioning().NumColumns() != n ||
+		oldIdx.NumKeyColumns() < n || newIdx.NumKeyColumns() < n {
+		return false
+	}
+	for i := 0; i < n; i++ {
+		if oldIdx.GetKeyColumnID(i) != newIdx.GetKeyColumnID(i) ||
+			oldIdx.GetKeyColumnDirection(i) != newIdx.GetKeyColumnDirection(i) {
+			return false
+		}
+	}
+	return true
 }

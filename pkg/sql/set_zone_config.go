@@ -768,6 +768,7 @@ func (n *setZoneConfigNode) startExec(params runParams) error {
 			partialZoneWithRaw.GetRawBytesInStorage(),
 			execConfig,
 			params.extendedEvalCtx.Tracing.KVTracingEnabled(),
+			nil, /* indexRemap */
 		)
 		if err != nil {
 			return err
@@ -1094,9 +1095,10 @@ func prepareZoneConfigWrites(
 	table catalog.TableDescriptor,
 	z *zonepb.ZoneConfig,
 	expectedExistingRawBytes []byte,
+	indexRemap map[descpb.IndexID]descpb.IndexID,
 ) (_ *zoneConfigUpdate, err error) {
 	if len(z.Subzones) > 0 {
-		partitionSpans, err := storedPartitionSpans(z, expectedExistingRawBytes)
+		partitionSpans, err := storedPartitionSpans(z, expectedExistingRawBytes, indexRemap)
 		if err != nil {
 			return nil, err
 		}
@@ -1123,8 +1125,11 @@ func writeZoneConfig(
 	expectedExistingRawBytes []byte,
 	execCfg *ExecutorConfig,
 	kvTrace bool,
+	indexRemap map[descpb.IndexID]descpb.IndexID,
 ) (numAffected int, err error) {
-	update, err := prepareZoneConfigWrites(ctx, execCfg, targetID, table, zone, expectedExistingRawBytes)
+	update, err := prepareZoneConfigWrites(
+		ctx, execCfg, targetID, table, zone, expectedExistingRawBytes, indexRemap,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -1205,7 +1210,7 @@ func RemoveIndexZoneConfigs(
 	if zcRewriteNecessary {
 		_, err = writeZoneConfig(
 			ctx, txn, tableDesc.GetID(), tableDesc, zone,
-			zoneWithRaw.GetRawBytesInStorage(), execCfg, kvTrace,
+			zoneWithRaw.GetRawBytesInStorage(), execCfg, kvTrace, nil, /* indexRemap */
 		)
 		if err != nil {
 			return err

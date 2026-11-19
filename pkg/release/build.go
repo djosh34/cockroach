@@ -358,7 +358,7 @@ func stageBinary(
 }
 
 // stageBinaryAs is like stageBinary, but gives the staged binary the given name
-// of using the name of the target's output. An empty name keeps that name.
+// instead of the name of the target's output. An empty name keeps that name.
 func stageBinaryAs(
 	target string,
 	name string,
@@ -387,7 +387,7 @@ func stageBinaryAs(
 		return err
 	}
 	defer closeFileOrPanic(srcF)
-	dstF, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE, 0755)
+	dstF, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
 		return err
 	}

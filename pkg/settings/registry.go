@@ -227,7 +227,7 @@ var retiredSettings = map[InternalKey]struct{}{
 	"bulkio.restore.use_simple_import_spans":                   {},
 	"bulkio.restore.remove_regions.enabled":                    {},
 
-	// removed with the CCL features.
+	// removed with multi-region, partitioning, changefeeds and session revival.
 	"server.user_login.session_revival_token.enabled":                    {},
 	"sql.defaults.experimental_auto_rehoming.enabled":                    {},
 	"sql.defaults.experimental_implicit_column_partitioning.enabled":     {},
