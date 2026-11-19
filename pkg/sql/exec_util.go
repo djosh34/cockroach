@@ -2114,9 +2114,9 @@ func checkResultType(typ *types.T) error {
 // EvalAsOfTimestamp evaluates and returns the timestamp from an AS OF SYSTEM
 // TIME clause.
 func (p *planner) EvalAsOfTimestamp(
-	ctx context.Context, asOfClause tree.AsOfClause, opts ...asof.EvalOption,
+	ctx context.Context, asOfClause tree.AsOfClause,
 ) (eval.AsOfSystemTime, error) {
-	asOf, err := asof.Eval(ctx, asOfClause, &p.semaCtx, p.EvalContext(), opts...)
+	asOf, err := asof.Eval(ctx, asOfClause, &p.semaCtx, p.EvalContext())
 	if err != nil {
 		return eval.AsOfSystemTime{}, err
 	}
@@ -2170,7 +2170,7 @@ func (p *planner) isAsOf(ctx context.Context, stmt tree.Statement) (*eval.AsOfSy
 	default:
 		return nil, nil
 	}
-	asOfRet, err := p.EvalAsOfTimestamp(ctx, asOf, asof.OptionAllowBoundedStaleness)
+	asOfRet, err := p.EvalAsOfTimestamp(ctx, asOf)
 	if err != nil {
 		return nil, err
 	}

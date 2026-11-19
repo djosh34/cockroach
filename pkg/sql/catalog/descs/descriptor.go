@@ -373,7 +373,7 @@ func (q *byIDLookupContext) lookupLeased(
 	if q.tc.cr.IsDescIDKnownToNotExist(id, q.flags.descFilters.maybeParentID) {
 		return nil, catalog.NoValidation, catalog.NewDescriptorNotFoundError(id)
 	}
-	desc, shouldReadFromStore, err := q.tc.leased.getByID(q.ctx, q.tc.deadlineHolder(q.txn), id)
+	desc, shouldReadFromStore, err := q.tc.leased.getByID(q.ctx, q.txn, id)
 	if err != nil || shouldReadFromStore {
 		return nil, catalog.NoValidation, err
 	}
@@ -578,7 +578,7 @@ func (tc *Collection) getNonVirtualDescriptorID(
 			return continueLookups, descpb.InvalidID, nil
 		}
 		ld, shouldReadFromStore, err := tc.leased.getByName(
-			ctx, tc.deadlineHolder(txn), parentID, parentSchemaID, name,
+			ctx, txn, parentID, parentSchemaID, name,
 		)
 		if err != nil {
 			return haltLookups, descpb.InvalidID, err
@@ -671,13 +671,6 @@ func (tc *Collection) finalizeDescriptors(
 		}
 	}
 	return nil
-}
-
-func (tc *Collection) deadlineHolder(txn *kv.Txn) deadlineHolder {
-	if tc.maxTimestampBoundDeadlineHolder.maxTimestampBound.IsEmpty() {
-		return txn
-	}
-	return &tc.maxTimestampBoundDeadlineHolder
 }
 
 func isTemporarySchema(name string) bool {

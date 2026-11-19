@@ -760,12 +760,6 @@ func (ec *Context) GetDateStyle() pgdate.DateStyle {
 	return ec.SessionData().GetDateStyle()
 }
 
-// BoundedStaleness returns true if this query uses bounded staleness.
-func (ec *Context) BoundedStaleness() bool {
-	return ec.AsOfSystemTime != nil &&
-		ec.AsOfSystemTime.BoundedStaleness
-}
-
 // ensureExpectedType will return an error if a datum does not match the
 // provided type. If the expected type is Any or if the datum is a Null
 // type, then no error will be returned.

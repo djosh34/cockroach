@@ -189,15 +189,6 @@ func (b *Builder) buildRelational(e memo.RelExpr) (execPlan, error) {
 		}
 	}
 
-	// Raise error if bounded staleness is used incorrectly.
-	if b.boundedStaleness() {
-		if _, ok := boundedStalenessAllowList[e.Op()]; !ok {
-			return execPlan{}, unimplemented.NewWithIssuef(67562,
-				"cannot use bounded staleness for %s", b.statementTag(e),
-			)
-		}
-	}
-
 	// Collect usage telemetry for relational node, if appropriate.
 	if !b.disableTelemetry {
 		if c := opt.OpTelemetryCounters[e.Op()]; c != nil {
@@ -676,29 +667,6 @@ func (b *Builder) scanParams(
 		(hardLimit == 0 || hardLimit > txnRowsReadErr+1) &&
 		(!maxResultsOk || maxResults > uint64(txnRowsReadErr+1)) {
 		hardLimit = txnRowsReadErr + 1
-	}
-
-	// If this is a bounded staleness query, check that it touches at most one
-	// range.
-	if b.boundedStaleness() {
-		valid := true
-		if b.containsBoundedStalenessScan {
-			// We already planned a scan, perhaps as part of a subquery.
-			valid = false
-		} else if hardLimit != 0 {
-			// If hardLimit is not 0, from KV's perspective, this is a multi-row scan
-			// with a limit. That means that even if the limit is 1, the scan can span
-			// multiple ranges if the first range is empty.
-			valid = false
-		} else {
-			valid = maxResultsOk && maxResults == 1
-		}
-		if !valid {
-			return exec.ScanParams{}, opt.ColMap{}, unimplemented.NewWithIssuef(67562,
-				"cannot use bounded staleness for queries that may touch more than one range or require an index join",
-			)
-		}
-		b.containsBoundedStalenessScan = true
 	}
 
 	parallelize := false
@@ -3699,27 +3667,4 @@ func (b *Builder) recordJoinAlgorithm(joinAlgorithm exec.JoinAlgorithm) {
 		b.JoinAlgorithmCounts = make(map[exec.JoinAlgorithm]int, exec.NumJoinAlgorithms)
 	}
 	b.JoinAlgorithmCounts[joinAlgorithm]++
-}
-
-// boundedStalenessAllowList contains the operators that may be used with
-// bounded staleness queries.
-var boundedStalenessAllowList = map[opt.Operator]struct{}{
-	opt.ValuesOp:           {},
-	opt.ScanOp:             {},
-	opt.PlaceholderScanOp:  {},
-	opt.SelectOp:           {},
-	opt.ProjectOp:          {},
-	opt.GroupByOp:          {},
-	opt.ScalarGroupByOp:    {},
-	opt.DistinctOnOp:       {},
-	opt.DistributeOp:       {},
-	opt.EnsureDistinctOnOp: {},
-	opt.LimitOp:            {},
-	opt.OffsetOp:           {},
-	opt.SortOp:             {},
-	opt.OrdinalityOp:       {},
-	opt.Max1RowOp:          {},
-	opt.ProjectSetOp:       {},
-	opt.WindowOp:           {},
-	opt.ExplainOp:          {},
 }

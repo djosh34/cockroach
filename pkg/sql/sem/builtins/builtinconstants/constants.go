@@ -21,8 +21,6 @@ const SequenceNameArg = "sequence_name"
 
 // DefaultFollowerReadDuration represents the default time span back from the
 // statement time which we wish to be recent and old enough for a follower read.
-// Such a default will be returned if we do *not* have an enterprise license
-// on a CCL distribution, which may not result in reading from the nearest replica.
 const DefaultFollowerReadDuration = -4800 * time.Millisecond
 
 // MaxAllocatedStringSize represents the maximum allowed string length

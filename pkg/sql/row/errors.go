@@ -38,12 +38,6 @@ import (
 func ConvertBatchError(ctx context.Context, tableDesc catalog.TableDescriptor, b *kv.Batch) error {
 	origPErr := b.MustPErr()
 	switch v := origPErr.GetDetail().(type) {
-	case *kvpb.MinTimestampBoundUnsatisfiableError:
-		return pgerror.WithCandidateCode(
-			origPErr.GoError(),
-			pgcode.UnsatisfiableBoundedStaleness,
-		)
-
 	case *kvpb.ConditionFailedError:
 		if origPErr.Index == nil {
 			break
@@ -80,7 +74,6 @@ func ConvertBatchError(ctx context.Context, tableDesc catalog.TableDescriptor, b
 func ConvertFetchError(spec *fetchpb.IndexFetchSpec, err error) error {
 	var errs struct {
 		wi *kvpb.WriteIntentError
-		bs *kvpb.MinTimestampBoundUnsatisfiableError
 	}
 	switch {
 	case errors.As(err, &errs.wi):
@@ -90,12 +83,6 @@ func ConvertFetchError(spec *fetchpb.IndexFetchSpec, err error) error {
 			return spec.TableName, spec.IndexName, colNames, values, err
 		}
 		return newLockNotAvailableError(errs.wi.Reason, decodeKeyFn)
-
-	case errors.As(err, &errs.bs):
-		return pgerror.WithCandidateCode(
-			err,
-			pgcode.UnsatisfiableBoundedStaleness,
-		)
 	}
 	return err
 }

@@ -389,10 +389,6 @@ var (
 	// Class XC - cockroach extension.
 	// CockroachDB distributed system related errors.
 
-	// UnsatisfiableBoundedStaleness signals that the bounded staleness query
-	// cannot be satisfied.
-	UnsatisfiableBoundedStaleness = MakeCode("XCUBS")
-
 	// QueryNotRunningInHomeRegion signals that a query is not running in its
 	// home region.
 	QueryNotRunningInHomeRegion = MakeCode("XCHR1")

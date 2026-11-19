@@ -53,7 +53,6 @@ var _ storage.NextKVer = &KVFetcher{}
 // as there is no concurrency).
 func newTxnKVFetcher(
 	txn *kv.Txn,
-	bsHeader *kvpb.BoundedStalenessHeader,
 	reverse bool,
 	lockStrength descpb.ScanLockingStrength,
 	lockWaitPolicy descpb.ScanLockingWaitPolicy,
@@ -62,33 +61,8 @@ func newTxnKVFetcher(
 	acc *mon.BoundAccount,
 	forceProductionKVBatchSize bool,
 ) *txnKVFetcher {
-	var sendFn sendFunc
 	var batchRequestsIssued int64
-	// Avoid the heap allocation by allocating sendFn specifically in the if.
-	if bsHeader == nil {
-		sendFn = makeTxnKVFetcherDefaultSendFunc(txn, &batchRequestsIssued)
-	} else {
-		negotiated := false
-		sendFn = func(ctx context.Context, ba *kvpb.BatchRequest) (br *kvpb.BatchResponse, _ error) {
-			ba.RoutingPolicy = kvpb.RoutingPolicy_NEAREST
-			var pErr *kvpb.Error
-			// Only use NegotiateAndSend if we have not yet negotiated a timestamp.
-			// If we have, fallback to Send which will already have the timestamp
-			// fixed.
-			if !negotiated {
-				ba.BoundedStaleness = bsHeader
-				br, pErr = txn.NegotiateAndSend(ctx, ba)
-				negotiated = true
-			} else {
-				br, pErr = txn.Send(ctx, ba)
-			}
-			if pErr != nil {
-				return nil, pErr.GoError()
-			}
-			batchRequestsIssued++
-			return br, nil
-		}
-	}
+	sendFn := makeTxnKVFetcherDefaultSendFunc(txn, &batchRequestsIssued)
 
 	fetcherArgs := newTxnKVFetcherArgs{
 		sendFn:                     sendFn,
@@ -120,7 +94,6 @@ func newTxnKVFetcher(
 // as there is no concurrency).
 func NewDirectKVBatchFetcher(
 	txn *kv.Txn,
-	bsHeader *kvpb.BoundedStalenessHeader,
 	spec *fetchpb.IndexFetchSpec,
 	reverse bool,
 	lockStrength descpb.ScanLockingStrength,
@@ -131,7 +104,7 @@ func NewDirectKVBatchFetcher(
 	forceProductionKVBatchSize bool,
 ) KVBatchFetcher {
 	f := newTxnKVFetcher(
-		txn, bsHeader, reverse, lockStrength, lockWaitPolicy, lockDurability,
+		txn, reverse, lockStrength, lockWaitPolicy, lockDurability,
 		lockTimeout, acc, forceProductionKVBatchSize,
 	)
 	f.scanFormat = kvpb.COL_BATCH_RESPONSE
@@ -147,7 +120,6 @@ func NewDirectKVBatchFetcher(
 // as there is no concurrency).
 func NewKVFetcher(
 	txn *kv.Txn,
-	bsHeader *kvpb.BoundedStalenessHeader,
 	reverse bool,
 	lockStrength descpb.ScanLockingStrength,
 	lockWaitPolicy descpb.ScanLockingWaitPolicy,
@@ -157,7 +129,7 @@ func NewKVFetcher(
 	forceProductionKVBatchSize bool,
 ) *KVFetcher {
 	return newKVFetcher(newTxnKVFetcher(
-		txn, bsHeader, reverse, lockStrength, lockWaitPolicy, lockDurability,
+		txn, reverse, lockStrength, lockWaitPolicy, lockDurability,
 		lockTimeout, acc, forceProductionKVBatchSize,
 	))
 }

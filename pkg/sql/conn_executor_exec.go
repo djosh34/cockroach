@@ -44,7 +44,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgnotice"
 	"github.com/cockroachdb/cockroach/pkg/sql/physicalplan"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/asof"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
@@ -1242,7 +1241,7 @@ func (ex *connExecutor) handleAOST(ctx context.Context, stmt tree.Statement) err
 	} else if execinfra.IsDynamicQueryHasNoHomeRegionError(ex.state.mu.autoRetryReason) {
 		asOfClause := tree.AsOfClause{Expr: followerReadTimestampExpr}
 		// Set the timestamp used by current_timestamp().
-		asOf, err := p.EvalAsOfTimestamp(ctx, asOfClause, asof.OptionAllowBoundedStaleness)
+		asOf, err := p.EvalAsOfTimestamp(ctx, asOfClause)
 		if err != nil {
 			return errors.AssertionFailedf(
 				"problem evaluating follower read timestamp for enforce_home_region dynamic error checking",
@@ -1270,11 +1269,9 @@ func (ex *connExecutor) handleAOST(ctx context.Context, stmt tree.Statement) err
 	if ex.implicitTxn() && !ex.extraTxnState.firstStmtExecuted {
 		if p.extendedEvalCtx.AsOfSystemTime == nil {
 			p.extendedEvalCtx.AsOfSystemTime = asOf
-			if !asOf.BoundedStaleness {
-				p.extendedEvalCtx.SetTxnTimestamp(asOf.Timestamp.GoTime())
-				if err := ex.state.setHistoricalTimestamp(ctx, asOf.Timestamp); err != nil {
-					return err
-				}
+			p.extendedEvalCtx.SetTxnTimestamp(asOf.Timestamp.GoTime())
+			if err := ex.state.setHistoricalTimestamp(ctx, asOf.Timestamp); err != nil {
+				return err
 			}
 			if err := ex.state.setReadOnlyMode(tree.ReadOnly); err != nil {
 				return err
@@ -1285,14 +1282,6 @@ func (ex *connExecutor) handleAOST(ctx context.Context, stmt tree.Statement) err
 		if *p.extendedEvalCtx.AsOfSystemTime == *asOf {
 			// In most cases, the AOST timestamps are expected to match.
 			return nil
-		}
-		if p.extendedEvalCtx.AsOfSystemTime.BoundedStaleness {
-			if !p.extendedEvalCtx.AsOfSystemTime.MaxTimestampBound.IsEmpty() {
-				// This has to be a bounded staleness read with nearest_only=True during
-				// a retry. The AOST read timestamps are expected to differ.
-				return nil
-			}
-			return errors.AssertionFailedf("expected bounded_staleness set with a max_timestamp_bound")
 		}
 		return pgerror.Newf(
 			pgcode.FeatureNotSupported,
@@ -1305,12 +1294,6 @@ func (ex *connExecutor) handleAOST(ctx context.Context, stmt tree.Statement) err
 	// the transaction's timestamp. This is useful for running AOST statements
 	// using the Executor inside an external transaction; one might want
 	// to do that to force p.avoidLeasedDescriptors to be set below.
-	if asOf.BoundedStaleness {
-		return pgerror.Newf(
-			pgcode.FeatureNotSupported,
-			"cannot use a bounded staleness query in a transaction",
-		)
-	}
 	if readTs := ex.state.getReadTimestamp(); asOf.Timestamp != readTs {
 		err = pgerror.Newf(pgcode.FeatureNotSupported,
 			"inconsistent AS OF SYSTEM TIME timestamp; expected: %s, got: %s", readTs, asOf.Timestamp)

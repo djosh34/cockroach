@@ -20,7 +20,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
 	"github.com/cockroachdb/cockroach/pkg/sql/isql"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/builtins"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/builtins/builtinconstants"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
@@ -75,10 +74,6 @@ func (t schemaTelemetryResumer) Resume(ctx context.Context, execCtx interface{})
 	aostDuration := builtinconstants.DefaultFollowerReadDuration
 	if knobs.AOSTDuration != nil {
 		aostDuration = *knobs.AOSTDuration
-	} else if fn := builtins.EvalFollowerReadOffset; fn != nil {
-		if d, err := fn(p.ExtendedEvalContext().ClusterID, p.ExecCfg().Settings); err == nil {
-			aostDuration = d
-		}
 	}
 
 	const maxRecords = 10000

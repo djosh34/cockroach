@@ -46,7 +46,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/telemetry"
 	"github.com/cockroachdb/cockroach/pkg/settings"
-	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql/appstatspb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catalogkeys"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
@@ -2707,14 +2706,8 @@ months and years, use the timestamptz subtraction operator.`,
 against a follower replica.
 
 This function is intended to be used with an AS OF SYSTEM TIME clause to perform
-historical reads against a time which is recent but sufficiently old for reads
-to be performed against the closest replica as opposed to the currently
-leaseholder for a given range.
-
-Note that this function requires an enterprise license on a CCL distribution to
-return a result that is less likely the closest replica. It is otherwise
-hardcoded as %s from the statement time, which may not result in reading from the
-nearest replica.`, builtinconstants.DefaultFollowerReadDuration),
+historical reads against a time which is recent but sufficiently old. It returns
+the statement time plus %s.`, builtinconstants.DefaultFollowerReadDuration),
 			Volatility: volatility.Volatile,
 		},
 	),
@@ -2726,76 +2719,6 @@ nearest replica.`, builtinconstants.DefaultFollowerReadDuration),
 			ReturnType: tree.FixedReturnType(types.TimestampTZ),
 			Fn:         followerReadTimestamp,
 			Info:       fmt.Sprintf("Same as %s. This name is deprecated.", asof.FollowerReadTimestampFunctionName),
-			Volatility: volatility.Volatile,
-		},
-	),
-
-	asof.WithMinTimestampFunctionName: makeBuiltin(
-		defProps(),
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "min_timestamp", Typ: types.TimestampTZ},
-			},
-			ReturnType: tree.FixedReturnType(types.TimestampTZ),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				ts, ok := tree.AsDTimestampTZ(args[0])
-				if !ok {
-					return nil, pgerror.New(pgcode.InvalidParameterValue, "expected timestamptz argument for min_timestamp")
-				}
-				return withMinTimestamp(ctx, evalCtx, ts.Time)
-			},
-			Info:       withMinTimestampInfo(false /* nearestOnly */),
-			Volatility: volatility.Volatile,
-		},
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "min_timestamp", Typ: types.TimestampTZ},
-				{Name: "nearest_only", Typ: types.Bool},
-			},
-			ReturnType: tree.FixedReturnType(types.TimestampTZ),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				ts, ok := tree.AsDTimestampTZ(args[0])
-				if !ok {
-					return nil, pgerror.New(pgcode.InvalidParameterValue, "expected timestamptz argument for min_timestamp")
-				}
-				return withMinTimestamp(ctx, evalCtx, ts.Time)
-			},
-			Info:       withMinTimestampInfo(true /* nearestOnly */),
-			Volatility: volatility.Volatile,
-		},
-	),
-
-	asof.WithMaxStalenessFunctionName: makeBuiltin(
-		defProps(),
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "max_staleness", Typ: types.Interval},
-			},
-			ReturnType: tree.FixedReturnType(types.TimestampTZ),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				interval, ok := tree.AsDInterval(args[0])
-				if !ok {
-					return nil, pgerror.New(pgcode.InvalidParameterValue, "expected interval argument for max_staleness")
-				}
-				return withMaxStaleness(ctx, evalCtx, interval.Duration)
-			},
-			Info:       withMaxStalenessInfo(false /* nearestOnly */),
-			Volatility: volatility.Volatile,
-		},
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "max_staleness", Typ: types.Interval},
-				{Name: "nearest_only", Typ: types.Bool},
-			},
-			ReturnType: tree.FixedReturnType(types.TimestampTZ),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				interval, ok := tree.AsDInterval(args[0])
-				if !ok {
-					return nil, pgerror.New(pgcode.InvalidParameterValue, "expected interval argument for max_staleness")
-				}
-				return withMaxStaleness(ctx, evalCtx, interval.Duration)
-			},
-			Info:       withMaxStalenessInfo(true /* nearestOnly */),
 			Volatility: volatility.Volatile,
 		},
 	),
@@ -11114,118 +11037,11 @@ var errInsufficientPriv = pgerror.New(
 	pgcode.InsufficientPrivilege, "insufficient privilege",
 )
 
-// EvalFollowerReadOffset is a function used often with AS OF SYSTEM TIME queries
-// to determine the appropriate offset from now which is likely to be safe for
-// follower reads. It is injected by followerreadsccl. An error may be returned
-// if an enterprise license is not installed.
-var EvalFollowerReadOffset func(logicalClusterID uuid.UUID, _ *cluster.Settings) (time.Duration, error)
-
-func recentTimestamp(ctx context.Context, evalCtx *eval.Context) (time.Time, error) {
-	if EvalFollowerReadOffset == nil {
-		telemetry.Inc(sqltelemetry.FollowerReadDisabledCCLCounter)
-		evalCtx.ClientNoticeSender.BufferClientNotice(
-			ctx,
-			pgnotice.Newf("follower reads disabled because you are running a non-CCL distribution"),
-		)
-		return evalCtx.StmtTimestamp.Add(builtinconstants.DefaultFollowerReadDuration), nil
-	}
-	offset, err := EvalFollowerReadOffset(evalCtx.ClusterID, evalCtx.Settings)
-	if err != nil {
-		if code := pgerror.GetPGCode(err); code == pgcode.CCLValidLicenseRequired {
-			telemetry.Inc(sqltelemetry.FollowerReadDisabledNoEnterpriseLicense)
-			evalCtx.ClientNoticeSender.BufferClientNotice(
-				ctx, pgnotice.Newf("follower reads disabled: %s", err.Error()),
-			)
-			return evalCtx.StmtTimestamp.Add(builtinconstants.DefaultFollowerReadDuration), nil
-		}
-		return time.Time{}, err
-	}
-	return evalCtx.StmtTimestamp.Add(offset), nil
-}
-
 func followerReadTimestamp(
-	ctx context.Context, evalCtx *eval.Context, _ tree.Datums,
+	_ context.Context, evalCtx *eval.Context, _ tree.Datums,
 ) (tree.Datum, error) {
-	ts, err := recentTimestamp(ctx, evalCtx)
-	if err != nil {
-		return nil, err
-	}
+	ts := evalCtx.StmtTimestamp.Add(builtinconstants.DefaultFollowerReadDuration)
 	return tree.MakeDTimestampTZ(ts, time.Microsecond)
-}
-
-var (
-	// WithMinTimestamp is an injectable function containing the implementation of the
-	// with_min_timestamp builtin.
-	WithMinTimestamp = func(_ context.Context, _ *eval.Context, t time.Time) (time.Time, error) {
-		return time.Time{}, pgerror.Newf(
-			pgcode.CCLRequired,
-			"%s can only be used with a CCL distribution",
-			asof.WithMinTimestampFunctionName,
-		)
-	}
-	// WithMaxStaleness is an injectable function containing the implementation of the
-	// with_max_staleness builtin.
-	WithMaxStaleness = func(_ context.Context, _ *eval.Context, d duration.Duration) (time.Time, error) {
-		return time.Time{}, pgerror.Newf(
-			pgcode.CCLRequired,
-			"%s can only be used with a CCL distribution",
-			asof.WithMaxStalenessFunctionName,
-		)
-	}
-)
-
-const nearestOnlyInfo = `
-
-If nearest_only is set to true, reads that cannot be served using the nearest
-available replica will error.
-`
-
-func withMinTimestampInfo(nearestOnly bool) string {
-	var nearestOnlyText string
-	if nearestOnly {
-		nearestOnlyText = nearestOnlyInfo
-	}
-	return fmt.Sprintf(
-		`When used in the AS OF SYSTEM TIME clause of an single-statement,
-read-only transaction, CockroachDB chooses the newest timestamp before the min_timestamp
-that allows execution of the reads at the nearest available replica without blocking.%s
-
-Note this function requires an enterprise license on a CCL distribution.`,
-		nearestOnlyText,
-	)
-}
-
-func withMaxStalenessInfo(nearestOnly bool) string {
-	var nearestOnlyText string
-	if nearestOnly {
-		nearestOnlyText = nearestOnlyInfo
-	}
-	return fmt.Sprintf(
-		`When used in the AS OF SYSTEM TIME clause of an single-statement,
-read-only transaction, CockroachDB chooses the newest timestamp within the staleness
-bound that allows execution of the reads at the nearest available replica without blocking.%s
-
-Note this function requires an enterprise license on a CCL distribution.`,
-		nearestOnlyText,
-	)
-}
-
-func withMinTimestamp(ctx context.Context, evalCtx *eval.Context, t time.Time) (tree.Datum, error) {
-	t, err := WithMinTimestamp(ctx, evalCtx, t)
-	if err != nil {
-		return nil, err
-	}
-	return tree.MakeDTimestampTZ(t, time.Microsecond)
-}
-
-func withMaxStaleness(
-	ctx context.Context, evalCtx *eval.Context, d duration.Duration,
-) (tree.Datum, error) {
-	t, err := WithMaxStaleness(ctx, evalCtx, d)
-	if err != nil {
-		return nil, err
-	}
-	return tree.MakeDTimestampTZ(t, time.Microsecond)
 }
 
 func jsonNumInvertedIndexEntries(_ *eval.Context, val tree.Datum) (tree.Datum, error) {

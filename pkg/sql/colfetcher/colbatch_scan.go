@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/col/coldata"
-	"github.com/cockroachdb/cockroach/pkg/kv/kvpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
 	"github.com/cockroachdb/cockroach/pkg/sql/colexecerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/colexecop"
@@ -145,32 +144,15 @@ func newColBatchScanBase(
 	spec *execinfrapb.TableReaderSpec,
 	post *execinfrapb.PostProcessSpec,
 	typeResolver *descs.DistSQLTypeResolver,
-) (*colBatchScanBase, *kvpb.BoundedStalenessHeader, *cFetcherTableArgs, error) {
+) (*colBatchScanBase, *cFetcherTableArgs, error) {
 	// NB: we hit this with a zero NodeID (but !ok) with multi-tenancy.
 	if nodeID, ok := flowCtx.NodeID.OptionalNodeID(); nodeID == 0 && ok {
-		return nil, nil, nil, errors.Errorf("attempting to create a ColBatchScan with uninitialized NodeID")
+		return nil, nil, errors.Errorf("attempting to create a ColBatchScan with uninitialized NodeID")
 	}
-	var bsHeader *kvpb.BoundedStalenessHeader
-	if aost := flowCtx.EvalCtx.AsOfSystemTime; aost != nil && aost.BoundedStaleness {
-		ts := aost.Timestamp
-		// If the descriptor's modification time is after the bounded staleness min bound,
-		// we have to increase the min bound.
-		// Otherwise, we would have table data which would not correspond to the correct
-		// schema.
-		if aost.Timestamp.Less(spec.TableDescriptorModificationTime) {
-			ts = spec.TableDescriptorModificationTime
-		}
-		bsHeader = &kvpb.BoundedStalenessHeader{
-			MinTimestampBound:       ts,
-			MinTimestampBoundStrict: aost.NearestOnly,
-			MaxTimestampBound:       flowCtx.EvalCtx.AsOfSystemTime.MaxTimestampBound, // may be empty
-		}
-	}
-
 	limitHint := rowinfra.RowLimit(execinfra.LimitHint(spec.LimitHint, post))
 	tableArgs, err := populateTableArgs(ctx, &spec.FetchSpec, typeResolver, false /* allowUnhydratedEnums */)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	s := colBatchScanBasePool.Get().(*colBatchScanBase)
@@ -184,7 +166,7 @@ func newColBatchScanBase(
 		// any other component), but we can use the memory account of the KV
 		// fetcher.
 		if err = kvFetcherMemAcc.Grow(ctx, s.Spans.MemUsageUpToLen()); err != nil {
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 		s.MakeSpansCopy()
 	}
@@ -211,7 +193,7 @@ func newColBatchScanBase(
 		parallelize:            spec.Parallelize,
 		ignoreMisplannedRanges: flowCtx.Local || spec.IgnoreMisplannedRanges,
 	}
-	return s, bsHeader, tableArgs, nil
+	return s, tableArgs, nil
 }
 
 // ColBatchScan is the colexecop.Operator implementation of TableReader. It
@@ -338,7 +320,7 @@ func NewColBatchScan(
 	estimatedRowCount uint64,
 	typeResolver *descs.DistSQLTypeResolver,
 ) (*ColBatchScan, []*types.T, error) {
-	base, bsHeader, tableArgs, err := newColBatchScanBase(
+	base, tableArgs, err := newColBatchScanBase(
 		ctx, kvFetcherMemAcc, flowCtx, processorID, spec, post, typeResolver,
 	)
 	if err != nil {
@@ -346,7 +328,6 @@ func NewColBatchScan(
 	}
 	kvFetcher := row.NewKVFetcher(
 		flowCtx.Txn,
-		bsHeader,
 		spec.Reverse,
 		spec.LockingStrength,
 		spec.LockingWaitPolicy,

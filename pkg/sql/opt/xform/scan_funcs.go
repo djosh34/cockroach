@@ -517,17 +517,13 @@ func (c *CustomFuncs) IsRegionalByRowTableScanOrSelect(input memo.RelExpr) bool 
 
 // IsSelectFromRemoteTableRowsOnly returns true if `input` is a select from a
 // REGIONAL BY TABLE or REGIONAL BY ROW table which only reads rows in a remote
-// region without bounded staleness. Bounded staleness would allow local
-// replicas to be used for the scan.
+// region.
 func (c *CustomFuncs) IsSelectFromRemoteTableRowsOnly(input memo.RelExpr) bool {
 	scanExpr, inputFilters, ok := c.getfilteredCanonicalScan(input)
 	if !ok {
 		return false
 	}
 	if !ok {
-		return false
-	}
-	if c.e.evalCtx.BoundedStaleness() {
 		return false
 	}
 	table := scanExpr.Memo().Metadata().Table(scanExpr.Table)

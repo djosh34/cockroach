@@ -758,10 +758,6 @@ func (b *Builder) buildScan(
 			))
 		}
 	}
-	if b.evalCtx.AsOfSystemTime != nil && b.evalCtx.AsOfSystemTime.BoundedStaleness {
-		private.Flags.NoIndexJoin = true
-		private.Flags.NoZigzagJoin = true
-	}
 	private.Flags.DisableNotVisibleIndex = disableNotVisibleIndex
 
 	b.addCheckConstraintsForTable(tabMeta)
@@ -1489,7 +1485,6 @@ func (b *Builder) validateAsOf(asOfClause tree.AsOfClause) {
 		asOfClause,
 		b.semaCtx,
 		b.evalCtx,
-		asof.OptionAllowBoundedStaleness,
 	)
 	if err != nil {
 		panic(err)
@@ -1500,10 +1495,7 @@ func (b *Builder) validateAsOf(asOfClause tree.AsOfClause) {
 			"AS OF SYSTEM TIME must be provided on a top-level statement"))
 	}
 
-	// Allow anything with max_timestamp_bound to differ, as this
-	// is a retry and we expect AOST to differ.
-	if *b.evalCtx.AsOfSystemTime != asOf &&
-		b.evalCtx.AsOfSystemTime.MaxTimestampBound.IsEmpty() {
+	if *b.evalCtx.AsOfSystemTime != asOf {
 		panic(unimplementedWithIssueDetailf(35712, "",
 			"cannot specify AS OF SYSTEM TIME with different timestamps"))
 	}

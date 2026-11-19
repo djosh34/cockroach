@@ -12,13 +12,10 @@ package asof
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
 	apd "github.com/cockroachdb/apd/v3"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/normalize"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
@@ -37,14 +34,6 @@ const FollowerReadTimestampFunctionName = "follower_read_timestamp"
 // "experimental_" function, which we keep for backwards compatibility.
 const FollowerReadTimestampExperimentalFunctionName = "experimental_follower_read_timestamp"
 
-// WithMinTimestampFunctionName is the name of the function that can be used
-// with AOST clauses to generate a bounded staleness at a fixed timestamp.
-const WithMinTimestampFunctionName = "with_min_timestamp"
-
-// WithMaxStalenessFunctionName is the name of the function that can be used
-// with AOST clauses to generate a bounded staleness at a maximum interval.
-const WithMaxStalenessFunctionName = "with_max_staleness"
-
 // IsFollowerReadTimestampFunction determines whether the AS OF SYSTEM TIME
 // clause contains a simple invocation of the follower_read_timestamp function.
 func IsFollowerReadTimestampFunction(
@@ -58,7 +47,6 @@ type funcType int
 const (
 	funcTypeInvalid funcType = iota
 	funcTypeFollowerRead
-	funcTypeBoundedStaleness
 )
 
 func resolveFuncType(
@@ -80,26 +68,8 @@ func resolveFuncType(
 	switch def.Name {
 	case FollowerReadTimestampFunctionName, FollowerReadTimestampExperimentalFunctionName:
 		return funcTypeFollowerRead
-	case WithMinTimestampFunctionName, WithMaxStalenessFunctionName:
-		return funcTypeBoundedStaleness
 	}
 	return funcTypeInvalid
-}
-
-type evalOptions struct {
-	allowBoundedStaleness bool
-}
-
-// EvalOption is an option to pass into Eval.
-type EvalOption func(o evalOptions) evalOptions
-
-// OptionAllowBoundedStaleness signifies Eval
-// should not error if a bounded staleness query is found.
-var OptionAllowBoundedStaleness EvalOption = func(
-	o evalOptions,
-) evalOptions {
-	o.allowBoundedStaleness = true
-	return o
 }
 
 // Eval evaluates the timestamp argument to an AS OF SYSTEM TIME query.
@@ -108,25 +78,10 @@ func Eval(
 	asOf tree.AsOfClause,
 	semaCtx *tree.SemaContext,
 	evalCtx *eval.Context,
-	opts ...EvalOption,
 ) (eval.AsOfSystemTime, error) {
-	o := evalOptions{}
-	for _, f := range opts {
-		o = f(o)
-	}
-
 	newInvalidExprError := func() error {
-		var optFuncs string
-		if o.allowBoundedStaleness {
-			optFuncs = fmt.Sprintf(
-				", %s, %s,",
-				WithMinTimestampFunctionName,
-				WithMaxStalenessFunctionName,
-			)
-		}
 		return errors.Errorf(
-			"AS OF SYSTEM TIME: only constant expressions%s or %s are allowed",
-			optFuncs,
+			"AS OF SYSTEM TIME: only constant expressions or %s are allowed",
 			FollowerReadTimestampFunctionName,
 		)
 	}
@@ -146,36 +101,8 @@ func Eval(
 	// All non-function expressions must be const and must TypeCheck into a
 	// string.
 	var te tree.TypedExpr
-	if asOfFuncExpr, ok := asOf.Expr.(*tree.FuncExpr); ok {
-		switch resolveFuncType(ctx, asOf, semaCtx.SearchPath) {
-		case funcTypeFollowerRead:
-		case funcTypeBoundedStaleness:
-			if !o.allowBoundedStaleness {
-				return eval.AsOfSystemTime{}, newInvalidExprError()
-			}
-			ret.BoundedStaleness = true
-
-			// Determine the value of the "nearest_only" argument.
-			if len(asOfFuncExpr.Exprs) == 2 {
-				nearestOnlyExpr, err := asOfFuncExpr.Exprs[1].TypeCheck(ctx, semaCtx, types.Bool)
-				if err != nil {
-					return eval.AsOfSystemTime{}, err
-				}
-				nearestOnlyEval, err := eval.Expr(ctx, evalCtx, nearestOnlyExpr)
-				if err != nil {
-					return eval.AsOfSystemTime{}, err
-				}
-				nearestOnly, ok := nearestOnlyEval.(*tree.DBool)
-				if !ok {
-					return eval.AsOfSystemTime{}, pgerror.Newf(
-						pgcode.InvalidParameterValue,
-						"%s: expected bool argument for nearest_only",
-						asOfFuncExpr.Func.String(),
-					)
-				}
-				ret.NearestOnly = bool(*nearestOnly)
-			}
-		default:
+	if _, ok := asOf.Expr.(*tree.FuncExpr); ok {
+		if resolveFuncType(ctx, asOf, semaCtx.SearchPath) != funcTypeFollowerRead {
 			return eval.AsOfSystemTime{}, newInvalidExprError()
 		}
 		var err error

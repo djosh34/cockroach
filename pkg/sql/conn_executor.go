@@ -25,7 +25,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
 	"github.com/cockroachdb/cockroach/pkg/kv"
-	"github.com/cockroachdb/cockroach/pkg/kv/kvpb"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/concurrency/isolation"
 	"github.com/cockroachdb/cockroach/pkg/multitenant"
 	"github.com/cockroachdb/cockroach/pkg/multitenant/multitenantcpu"
@@ -3330,15 +3329,10 @@ func isCommit(stmt tree.Statement) bool {
 	return ok
 }
 
-var retriableMinTimestampBoundUnsatisfiableError = errors.Newf(
-	"retriable MinTimestampBoundUnsatisfiableError",
-)
-
 // errIsRetriable is true if the error is a client-visible retry error
 // or the error is a special error that is handled internally and retried.
 func errIsRetriable(err error) bool {
 	return errors.HasInterface(err, (*pgerror.ClientVisibleRetryError)(nil)) ||
-		errors.Is(err, retriableMinTimestampBoundUnsatisfiableError) ||
 		// Note that this error is not handled internally and can make it to the
 		// client in implicit transactions. This is not great; it should
 		// be marked as a client visible retry error.
@@ -3371,32 +3365,6 @@ func (ex *connExecutor) convertRetriableErrorIntoUserVisibleError(
 // makeErrEvent takes an error and returns either an eventRetriableErr or an
 // eventNonRetriableErr, depending on the error type.
 func (ex *connExecutor) makeErrEvent(err error, stmt tree.Statement) (fsm.Event, fsm.EventPayload) {
-	// Check for MinTimestampBoundUnsatisfiableError errors.
-	// If this is detected, it means we are potentially able to retry with a lower
-	// MaxTimestampBound set if our MinTimestampBound was bumped up from the
-	// original AS OF SYSTEM TIME timestamp set due to a schema bumping the
-	// timestamp to a higher value.
-	if minTSErr := (*kvpb.MinTimestampBoundUnsatisfiableError)(nil); errors.As(err, &minTSErr) {
-		aost := ex.planner.EvalContext().AsOfSystemTime
-		if aost != nil && aost.BoundedStaleness {
-			if !aost.MaxTimestampBound.IsEmpty() && aost.MaxTimestampBound.LessEq(minTSErr.MinTimestampBound) {
-				// If this occurs, we have a strange logic bug where we resolved
-				// a minimum timestamp during a bounded staleness read to be greater
-				// than or equal to the maximum staleness bound we put up.
-				err = errors.CombineErrors(
-					errors.AssertionFailedf(
-						"unexpected MaxTimestampBound >= txn MinTimestampBound: %s >= %s",
-						aost.MaxTimestampBound,
-						minTSErr.MinTimestampBound,
-					),
-					err,
-				)
-			}
-			if aost.Timestamp.Less(minTSErr.MinTimestampBound) {
-				err = errors.Mark(err, retriableMinTimestampBoundUnsatisfiableError)
-			}
-		}
-	}
 
 	retriable := errIsRetriable(err)
 	if retriable && execinfra.IsDynamicQueryHasNoHomeRegionError(err) {
@@ -3718,12 +3686,7 @@ func (ex *connExecutor) resetEvalCtx(evalCtx *extendedEvalContext, txn *kv.Txn, 
 	evalCtx.SchemaChangerState = ex.extraTxnState.schemaChangerState
 	evalCtx.DescIDGenerator = ex.getDescIDGenerator()
 
-	// See resetPlanner for more context on setting the maximum timestamp for
-	// AOST read retries.
-	var minTSErr *kvpb.MinTimestampBoundUnsatisfiableError
-	if err := ex.state.mu.autoRetryReason; err != nil && errors.As(err, &minTSErr) {
-		evalCtx.AsOfSystemTime.MaxTimestampBound = ex.extraTxnState.descCollection.GetMaxTimestampBound()
-	} else if newTxn {
+	if newTxn {
 		evalCtx.AsOfSystemTime = nil
 	}
 }
@@ -3771,21 +3734,11 @@ func (ex *connExecutor) resetPlanner(
 ) {
 	p.resetPlanner(ctx, txn, stmtTS, ex.sessionData(), ex.state.mon)
 	autoRetryReason := ex.state.mu.autoRetryReason
-	// If we are retrying due to an unsatisfiable timestamp bound which is
-	// retriable, it means we were unable to serve the previous minimum timestamp
-	// as there was a schema update in between. When retrying, we want to keep the
-	// same minimum timestamp for the AOST read, but set the maximum timestamp
-	// to the point just before our failed read to ensure we don't try to read
-	// data which may be after the schema change when we retry.
-	var minTSErr *kvpb.MinTimestampBoundUnsatisfiableError
 	// Make sure the default locality specifies the actual gateway region at the
 	// start of query compilation. It could have been overridden to a remote
 	// region when the enforce_home_region session setting is true.
 	p.EvalContext().Locality = p.EvalContext().OriginalLocality
-	if err := autoRetryReason; err != nil && errors.As(err, &minTSErr) {
-		nextMax := minTSErr.MinTimestampBound
-		ex.extraTxnState.descCollection.SetMaxTimestampBound(nextMax)
-	} else if execinfra.IsDynamicQueryHasNoHomeRegionError(autoRetryReason) {
+	if execinfra.IsDynamicQueryHasNoHomeRegionError(autoRetryReason) {
 		if int(ex.state.mu.autoRetryCounter) <= len(p.EvalContext().RemoteRegions) {
 			// Set a fake gateway region for use by the optimizer to inform its
 			// decision on which region to access first in locality-optimized scan
@@ -3794,11 +3747,6 @@ func (ex *connExecutor) resetPlanner(
 			p.EvalContext().Locality =
 				p.EvalContext().Locality.CopyReplaceKeyValue("region", string(p.EvalContext().RemoteRegions[ex.state.mu.autoRetryCounter-1]))
 		}
-	} else if newTxn := txn == nil || p.extendedEvalCtx.Txn != txn; newTxn {
-		// Otherwise, only change the historical timestamps if this is a new txn.
-		// This is because resetPlanner can be called multiple times for the same
-		// txn during the extended protocol.
-		ex.extraTxnState.descCollection.ResetMaxTimestampBound()
 	}
 	ex.resetEvalCtx(&p.extendedEvalCtx, txn, stmtTS)
 }

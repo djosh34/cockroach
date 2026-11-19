@@ -115,10 +115,6 @@ type Builder struct {
 	// flags tracks various properties of the plan accumulated while building.
 	flags exec.PlanFlags
 
-	// containsBoundedStalenessScan is true if the query uses bounded
-	// staleness and contains a scan.
-	containsBoundedStalenessScan bool
-
 	// MaxFullScanRows is the maximum number of rows scanned by a full scan, as
 	// estimated by the optimizer.
 	MaxFullScanRows float64
@@ -339,11 +335,6 @@ func (b *Builder) findBuiltWithExpr(id opt.WithID) *builtWithExpr {
 		}
 	}
 	return nil
-}
-
-// boundedStaleness returns true if this query uses bounded staleness.
-func (b *Builder) boundedStaleness() bool {
-	return b.evalCtx != nil && b.evalCtx.BoundedStaleness()
 }
 
 // mdVarContainer is an eval.IndexedVarContainer implementation used by
