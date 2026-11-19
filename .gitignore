@@ -50,10 +50,5 @@ build/Railroad.jar
 # Local disk buffers for "roachprod logs" command
 /*.logs
 
-# Generated code.
-*.pb.go
-*.pb.gw.go
-pkg/testutils/serverutils/*_generated.go
-
 # Temporary directories during gomock generate
 **/gomock_reflect_*
