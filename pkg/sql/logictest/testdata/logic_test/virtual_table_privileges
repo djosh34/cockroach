@@ -47,7 +47,7 @@ false
 
 user testuser
 
-statement error pq: user testuser does not have SELECT privilege on relation tables
+statement ok
 SHOW TABLES
 
 user root

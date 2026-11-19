@@ -15,95 +15,95 @@ CREATE TABLE information_schema.t (x INT)
 query error database "information_schema" does not exist
 DROP DATABASE information_schema
 
-query TTTTIT rowsort
+query TTTTI rowsort
 SHOW TABLES FROM information_schema
 ----
-information_schema  administrable_role_authorizations      table  node  NULL  NULL
-information_schema  applicable_roles                       table  node  NULL  NULL
-information_schema  attributes                             table  node  NULL  NULL
-information_schema  character_sets                         table  node  NULL  NULL
-information_schema  check_constraint_routine_usage         table  node  NULL  NULL
-information_schema  check_constraints                      table  node  NULL  NULL
-information_schema  collation_character_set_applicability  table  node  NULL  NULL
-information_schema  collations                             table  node  NULL  NULL
-information_schema  column_column_usage                    table  node  NULL  NULL
-information_schema  column_domain_usage                    table  node  NULL  NULL
-information_schema  column_options                         table  node  NULL  NULL
-information_schema  column_privileges                      table  node  NULL  NULL
-information_schema  column_statistics                      table  node  NULL  NULL
-information_schema  column_udt_usage                       table  node  NULL  NULL
-information_schema  columns                                table  node  NULL  NULL
-information_schema  columns_extensions                     table  node  NULL  NULL
-information_schema  constraint_column_usage                table  node  NULL  NULL
-information_schema  constraint_table_usage                 table  node  NULL  NULL
-information_schema  data_type_privileges                   table  node  NULL  NULL
-information_schema  domain_constraints                     table  node  NULL  NULL
-information_schema  domain_udt_usage                       table  node  NULL  NULL
-information_schema  domains                                table  node  NULL  NULL
-information_schema  element_types                          table  node  NULL  NULL
-information_schema  enabled_roles                          table  node  NULL  NULL
-information_schema  engines                                table  node  NULL  NULL
-information_schema  events                                 table  node  NULL  NULL
-information_schema  files                                  table  node  NULL  NULL
-information_schema  foreign_data_wrapper_options           table  node  NULL  NULL
-information_schema  foreign_data_wrappers                  table  node  NULL  NULL
-information_schema  foreign_server_options                 table  node  NULL  NULL
-information_schema  foreign_servers                        table  node  NULL  NULL
-information_schema  foreign_table_options                  table  node  NULL  NULL
-information_schema  foreign_tables                         table  node  NULL  NULL
-information_schema  information_schema_catalog_name        table  node  NULL  NULL
-information_schema  key_column_usage                       table  node  NULL  NULL
-information_schema  keywords                               table  node  NULL  NULL
-information_schema  optimizer_trace                        table  node  NULL  NULL
-information_schema  parameters                             view   node  NULL  NULL
-information_schema  partitions                             table  node  NULL  NULL
-information_schema  plugins                                table  node  NULL  NULL
-information_schema  processlist                            table  node  NULL  NULL
-information_schema  profiling                              table  node  NULL  NULL
-information_schema  referential_constraints                table  node  NULL  NULL
-information_schema  resource_groups                        table  node  NULL  NULL
-information_schema  role_column_grants                     table  node  NULL  NULL
-information_schema  role_routine_grants                    table  node  NULL  NULL
-information_schema  role_table_grants                      table  node  NULL  NULL
-information_schema  role_udt_grants                        table  node  NULL  NULL
-information_schema  role_usage_grants                      table  node  NULL  NULL
-information_schema  routine_privileges                     table  node  NULL  NULL
-information_schema  routines                               view   node  NULL  NULL
-information_schema  schema_privileges                      table  node  NULL  NULL
-information_schema  schemata                               table  node  NULL  NULL
-information_schema  schemata_extensions                    table  node  NULL  NULL
-information_schema  sequences                              table  node  NULL  NULL
-information_schema  session_variables                      table  node  NULL  NULL
-information_schema  sql_features                           table  node  NULL  NULL
-information_schema  sql_implementation_info                table  node  NULL  NULL
-information_schema  sql_parts                              table  node  NULL  NULL
-information_schema  sql_sizing                             table  node  NULL  NULL
-information_schema  st_geometry_columns                    table  node  NULL  NULL
-information_schema  st_spatial_reference_systems           table  node  NULL  NULL
-information_schema  st_units_of_measure                    table  node  NULL  NULL
-information_schema  statistics                             table  node  NULL  NULL
-information_schema  table_constraints                      table  node  NULL  NULL
-information_schema  table_constraints_extensions           table  node  NULL  NULL
-information_schema  table_privileges                       table  node  NULL  NULL
-information_schema  tables                                 table  node  NULL  NULL
-information_schema  tables_extensions                      table  node  NULL  NULL
-information_schema  tablespaces                            table  node  NULL  NULL
-information_schema  tablespaces_extensions                 table  node  NULL  NULL
-information_schema  transforms                             table  node  NULL  NULL
-information_schema  triggered_update_columns               table  node  NULL  NULL
-information_schema  triggers                               table  node  NULL  NULL
-information_schema  type_privileges                        table  node  NULL  NULL
-information_schema  udt_privileges                         table  node  NULL  NULL
-information_schema  usage_privileges                       table  node  NULL  NULL
-information_schema  user_attributes                        table  node  NULL  NULL
-information_schema  user_defined_types                     table  node  NULL  NULL
-information_schema  user_mapping_options                   table  node  NULL  NULL
-information_schema  user_mappings                          table  node  NULL  NULL
-information_schema  user_privileges                        table  node  NULL  NULL
-information_schema  view_column_usage                      table  node  NULL  NULL
-information_schema  view_routine_usage                     table  node  NULL  NULL
-information_schema  view_table_usage                       table  node  NULL  NULL
-information_schema  views                                  table  node  NULL  NULL
+information_schema  administrable_role_authorizations      table  node  NULL
+information_schema  applicable_roles                       table  node  NULL
+information_schema  attributes                             table  node  NULL
+information_schema  character_sets                         table  node  NULL
+information_schema  check_constraint_routine_usage         table  node  NULL
+information_schema  check_constraints                      table  node  NULL
+information_schema  collation_character_set_applicability  table  node  NULL
+information_schema  collations                             table  node  NULL
+information_schema  column_column_usage                    table  node  NULL
+information_schema  column_domain_usage                    table  node  NULL
+information_schema  column_options                         table  node  NULL
+information_schema  column_privileges                      table  node  NULL
+information_schema  column_statistics                      table  node  NULL
+information_schema  column_udt_usage                       table  node  NULL
+information_schema  columns                                table  node  NULL
+information_schema  columns_extensions                     table  node  NULL
+information_schema  constraint_column_usage                table  node  NULL
+information_schema  constraint_table_usage                 table  node  NULL
+information_schema  data_type_privileges                   table  node  NULL
+information_schema  domain_constraints                     table  node  NULL
+information_schema  domain_udt_usage                       table  node  NULL
+information_schema  domains                                table  node  NULL
+information_schema  element_types                          table  node  NULL
+information_schema  enabled_roles                          table  node  NULL
+information_schema  engines                                table  node  NULL
+information_schema  events                                 table  node  NULL
+information_schema  files                                  table  node  NULL
+information_schema  foreign_data_wrapper_options           table  node  NULL
+information_schema  foreign_data_wrappers                  table  node  NULL
+information_schema  foreign_server_options                 table  node  NULL
+information_schema  foreign_servers                        table  node  NULL
+information_schema  foreign_table_options                  table  node  NULL
+information_schema  foreign_tables                         table  node  NULL
+information_schema  information_schema_catalog_name        table  node  NULL
+information_schema  key_column_usage                       table  node  NULL
+information_schema  keywords                               table  node  NULL
+information_schema  optimizer_trace                        table  node  NULL
+information_schema  parameters                             view   node  NULL
+information_schema  partitions                             table  node  NULL
+information_schema  plugins                                table  node  NULL
+information_schema  processlist                            table  node  NULL
+information_schema  profiling                              table  node  NULL
+information_schema  referential_constraints                table  node  NULL
+information_schema  resource_groups                        table  node  NULL
+information_schema  role_column_grants                     table  node  NULL
+information_schema  role_routine_grants                    table  node  NULL
+information_schema  role_table_grants                      table  node  NULL
+information_schema  role_udt_grants                        table  node  NULL
+information_schema  role_usage_grants                      table  node  NULL
+information_schema  routine_privileges                     table  node  NULL
+information_schema  routines                               view   node  NULL
+information_schema  schema_privileges                      table  node  NULL
+information_schema  schemata                               table  node  NULL
+information_schema  schemata_extensions                    table  node  NULL
+information_schema  sequences                              table  node  NULL
+information_schema  session_variables                      table  node  NULL
+information_schema  sql_features                           table  node  NULL
+information_schema  sql_implementation_info                table  node  NULL
+information_schema  sql_parts                              table  node  NULL
+information_schema  sql_sizing                             table  node  NULL
+information_schema  st_geometry_columns                    table  node  NULL
+information_schema  st_spatial_reference_systems           table  node  NULL
+information_schema  st_units_of_measure                    table  node  NULL
+information_schema  statistics                             table  node  NULL
+information_schema  table_constraints                      table  node  NULL
+information_schema  table_constraints_extensions           table  node  NULL
+information_schema  table_privileges                       table  node  NULL
+information_schema  tables                                 table  node  NULL
+information_schema  tables_extensions                      table  node  NULL
+information_schema  tablespaces                            table  node  NULL
+information_schema  tablespaces_extensions                 table  node  NULL
+information_schema  transforms                             table  node  NULL
+information_schema  triggered_update_columns               table  node  NULL
+information_schema  triggers                               table  node  NULL
+information_schema  type_privileges                        table  node  NULL
+information_schema  udt_privileges                         table  node  NULL
+information_schema  usage_privileges                       table  node  NULL
+information_schema  user_attributes                        table  node  NULL
+information_schema  user_defined_types                     table  node  NULL
+information_schema  user_mapping_options                   table  node  NULL
+information_schema  user_mappings                          table  node  NULL
+information_schema  user_privileges                        table  node  NULL
+information_schema  view_column_usage                      table  node  NULL
+information_schema  view_routine_usage                     table  node  NULL
+information_schema  view_table_usage                       table  node  NULL
+information_schema  views                                  table  node  NULL
 
 # Verify that the name is not special for databases.
 
@@ -222,103 +222,103 @@ TRUNCATE TABLE information_schema.session_variables
 
 # Verify information_schema handles reflection correctly.
 
-query TTTTTT rowsort
+query TT rowsort
 SHOW DATABASES
 ----
-defaultdb  root  NULL  NULL  {}  NULL
-postgres   root  NULL  NULL  {}  NULL
-system     node  NULL  NULL  {}  NULL
-test       root  NULL  NULL  {}  NULL
+defaultdb  root
+postgres   root
+system     node
+test       root
 
-query TTTTIT rowsort
+query TTTTI rowsort
 SHOW TABLES FROM test.information_schema
 ----
-information_schema  administrable_role_authorizations      table  node  NULL  NULL
-information_schema  applicable_roles                       table  node  NULL  NULL
-information_schema  attributes                             table  node  NULL  NULL
-information_schema  character_sets                         table  node  NULL  NULL
-information_schema  check_constraint_routine_usage         table  node  NULL  NULL
-information_schema  check_constraints                      table  node  NULL  NULL
-information_schema  collation_character_set_applicability  table  node  NULL  NULL
-information_schema  collations                             table  node  NULL  NULL
-information_schema  column_column_usage                    table  node  NULL  NULL
-information_schema  column_domain_usage                    table  node  NULL  NULL
-information_schema  column_options                         table  node  NULL  NULL
-information_schema  column_privileges                      table  node  NULL  NULL
-information_schema  column_statistics                      table  node  NULL  NULL
-information_schema  column_udt_usage                       table  node  NULL  NULL
-information_schema  columns                                table  node  NULL  NULL
-information_schema  columns_extensions                     table  node  NULL  NULL
-information_schema  constraint_column_usage                table  node  NULL  NULL
-information_schema  constraint_table_usage                 table  node  NULL  NULL
-information_schema  data_type_privileges                   table  node  NULL  NULL
-information_schema  domain_constraints                     table  node  NULL  NULL
-information_schema  domain_udt_usage                       table  node  NULL  NULL
-information_schema  domains                                table  node  NULL  NULL
-information_schema  element_types                          table  node  NULL  NULL
-information_schema  enabled_roles                          table  node  NULL  NULL
-information_schema  engines                                table  node  NULL  NULL
-information_schema  events                                 table  node  NULL  NULL
-information_schema  files                                  table  node  NULL  NULL
-information_schema  foreign_data_wrapper_options           table  node  NULL  NULL
-information_schema  foreign_data_wrappers                  table  node  NULL  NULL
-information_schema  foreign_server_options                 table  node  NULL  NULL
-information_schema  foreign_servers                        table  node  NULL  NULL
-information_schema  foreign_table_options                  table  node  NULL  NULL
-information_schema  foreign_tables                         table  node  NULL  NULL
-information_schema  information_schema_catalog_name        table  node  NULL  NULL
-information_schema  key_column_usage                       table  node  NULL  NULL
-information_schema  keywords                               table  node  NULL  NULL
-information_schema  optimizer_trace                        table  node  NULL  NULL
-information_schema  parameters                             view   node  NULL  NULL
-information_schema  partitions                             table  node  NULL  NULL
-information_schema  plugins                                table  node  NULL  NULL
-information_schema  processlist                            table  node  NULL  NULL
-information_schema  profiling                              table  node  NULL  NULL
-information_schema  referential_constraints                table  node  NULL  NULL
-information_schema  resource_groups                        table  node  NULL  NULL
-information_schema  role_column_grants                     table  node  NULL  NULL
-information_schema  role_routine_grants                    table  node  NULL  NULL
-information_schema  role_table_grants                      table  node  NULL  NULL
-information_schema  role_udt_grants                        table  node  NULL  NULL
-information_schema  role_usage_grants                      table  node  NULL  NULL
-information_schema  routine_privileges                     table  node  NULL  NULL
-information_schema  routines                               view   node  NULL  NULL
-information_schema  schema_privileges                      table  node  NULL  NULL
-information_schema  schemata                               table  node  NULL  NULL
-information_schema  schemata_extensions                    table  node  NULL  NULL
-information_schema  sequences                              table  node  NULL  NULL
-information_schema  session_variables                      table  node  NULL  NULL
-information_schema  sql_features                           table  node  NULL  NULL
-information_schema  sql_implementation_info                table  node  NULL  NULL
-information_schema  sql_parts                              table  node  NULL  NULL
-information_schema  sql_sizing                             table  node  NULL  NULL
-information_schema  st_geometry_columns                    table  node  NULL  NULL
-information_schema  st_spatial_reference_systems           table  node  NULL  NULL
-information_schema  st_units_of_measure                    table  node  NULL  NULL
-information_schema  statistics                             table  node  NULL  NULL
-information_schema  table_constraints                      table  node  NULL  NULL
-information_schema  table_constraints_extensions           table  node  NULL  NULL
-information_schema  table_privileges                       table  node  NULL  NULL
-information_schema  tables                                 table  node  NULL  NULL
-information_schema  tables_extensions                      table  node  NULL  NULL
-information_schema  tablespaces                            table  node  NULL  NULL
-information_schema  tablespaces_extensions                 table  node  NULL  NULL
-information_schema  transforms                             table  node  NULL  NULL
-information_schema  triggered_update_columns               table  node  NULL  NULL
-information_schema  triggers                               table  node  NULL  NULL
-information_schema  type_privileges                        table  node  NULL  NULL
-information_schema  udt_privileges                         table  node  NULL  NULL
-information_schema  usage_privileges                       table  node  NULL  NULL
-information_schema  user_attributes                        table  node  NULL  NULL
-information_schema  user_defined_types                     table  node  NULL  NULL
-information_schema  user_mapping_options                   table  node  NULL  NULL
-information_schema  user_mappings                          table  node  NULL  NULL
-information_schema  user_privileges                        table  node  NULL  NULL
-information_schema  view_column_usage                      table  node  NULL  NULL
-information_schema  view_routine_usage                     table  node  NULL  NULL
-information_schema  view_table_usage                       table  node  NULL  NULL
-information_schema  views                                  table  node  NULL  NULL
+information_schema  administrable_role_authorizations      table  node  NULL
+information_schema  applicable_roles                       table  node  NULL
+information_schema  attributes                             table  node  NULL
+information_schema  character_sets                         table  node  NULL
+information_schema  check_constraint_routine_usage         table  node  NULL
+information_schema  check_constraints                      table  node  NULL
+information_schema  collation_character_set_applicability  table  node  NULL
+information_schema  collations                             table  node  NULL
+information_schema  column_column_usage                    table  node  NULL
+information_schema  column_domain_usage                    table  node  NULL
+information_schema  column_options                         table  node  NULL
+information_schema  column_privileges                      table  node  NULL
+information_schema  column_statistics                      table  node  NULL
+information_schema  column_udt_usage                       table  node  NULL
+information_schema  columns                                table  node  NULL
+information_schema  columns_extensions                     table  node  NULL
+information_schema  constraint_column_usage                table  node  NULL
+information_schema  constraint_table_usage                 table  node  NULL
+information_schema  data_type_privileges                   table  node  NULL
+information_schema  domain_constraints                     table  node  NULL
+information_schema  domain_udt_usage                       table  node  NULL
+information_schema  domains                                table  node  NULL
+information_schema  element_types                          table  node  NULL
+information_schema  enabled_roles                          table  node  NULL
+information_schema  engines                                table  node  NULL
+information_schema  events                                 table  node  NULL
+information_schema  files                                  table  node  NULL
+information_schema  foreign_data_wrapper_options           table  node  NULL
+information_schema  foreign_data_wrappers                  table  node  NULL
+information_schema  foreign_server_options                 table  node  NULL
+information_schema  foreign_servers                        table  node  NULL
+information_schema  foreign_table_options                  table  node  NULL
+information_schema  foreign_tables                         table  node  NULL
+information_schema  information_schema_catalog_name        table  node  NULL
+information_schema  key_column_usage                       table  node  NULL
+information_schema  keywords                               table  node  NULL
+information_schema  optimizer_trace                        table  node  NULL
+information_schema  parameters                             view   node  NULL
+information_schema  partitions                             table  node  NULL
+information_schema  plugins                                table  node  NULL
+information_schema  processlist                            table  node  NULL
+information_schema  profiling                              table  node  NULL
+information_schema  referential_constraints                table  node  NULL
+information_schema  resource_groups                        table  node  NULL
+information_schema  role_column_grants                     table  node  NULL
+information_schema  role_routine_grants                    table  node  NULL
+information_schema  role_table_grants                      table  node  NULL
+information_schema  role_udt_grants                        table  node  NULL
+information_schema  role_usage_grants                      table  node  NULL
+information_schema  routine_privileges                     table  node  NULL
+information_schema  routines                               view   node  NULL
+information_schema  schema_privileges                      table  node  NULL
+information_schema  schemata                               table  node  NULL
+information_schema  schemata_extensions                    table  node  NULL
+information_schema  sequences                              table  node  NULL
+information_schema  session_variables                      table  node  NULL
+information_schema  sql_features                           table  node  NULL
+information_schema  sql_implementation_info                table  node  NULL
+information_schema  sql_parts                              table  node  NULL
+information_schema  sql_sizing                             table  node  NULL
+information_schema  st_geometry_columns                    table  node  NULL
+information_schema  st_spatial_reference_systems           table  node  NULL
+information_schema  st_units_of_measure                    table  node  NULL
+information_schema  statistics                             table  node  NULL
+information_schema  table_constraints                      table  node  NULL
+information_schema  table_constraints_extensions           table  node  NULL
+information_schema  table_privileges                       table  node  NULL
+information_schema  tables                                 table  node  NULL
+information_schema  tables_extensions                      table  node  NULL
+information_schema  tablespaces                            table  node  NULL
+information_schema  tablespaces_extensions                 table  node  NULL
+information_schema  transforms                             table  node  NULL
+information_schema  triggered_update_columns               table  node  NULL
+information_schema  triggers                               table  node  NULL
+information_schema  type_privileges                        table  node  NULL
+information_schema  udt_privileges                         table  node  NULL
+information_schema  usage_privileges                       table  node  NULL
+information_schema  user_attributes                        table  node  NULL
+information_schema  user_defined_types                     table  node  NULL
+information_schema  user_mapping_options                   table  node  NULL
+information_schema  user_mappings                          table  node  NULL
+information_schema  user_privileges                        table  node  NULL
+information_schema  view_column_usage                      table  node  NULL
+information_schema  view_routine_usage                     table  node  NULL
+information_schema  view_table_usage                       table  node  NULL
+information_schema  views                                  table  node  NULL
 
 query TT colnames
 SHOW CREATE TABLE information_schema.tables
@@ -464,11 +464,9 @@ crdb_internal       node_transaction_statistics
 crdb_internal       node_transactions
 crdb_internal       node_txn_execution_insights
 crdb_internal       node_txn_stats
-crdb_internal       partitions
 crdb_internal       pg_catalog_table_is_implemented
 crdb_internal       ranges
 crdb_internal       ranges_no_leases
-crdb_internal       regions
 crdb_internal       schema_changes
 crdb_internal       session_trace
 crdb_internal       session_variables
@@ -476,7 +474,6 @@ crdb_internal       statement_activity
 crdb_internal       statement_statistics
 crdb_internal       statement_statistics_persisted
 crdb_internal       statement_statistics_persisted_v22_2
-crdb_internal       super_regions
 crdb_internal       system_jobs
 crdb_internal       table_columns
 crdb_internal       table_indexes
@@ -816,11 +813,9 @@ node_transaction_statistics
 node_transactions
 node_txn_execution_insights
 node_txn_stats
-partitions
 pg_catalog_table_is_implemented
 ranges
 ranges_no_leases
-regions
 schema_changes
 session_trace
 session_variables
@@ -828,7 +823,6 @@ statement_activity
 statement_statistics
 statement_statistics_persisted
 statement_statistics_persisted_v22_2
-super_regions
 system_jobs
 table_columns
 table_indexes
@@ -1266,7 +1260,6 @@ system         crdb_internal       node_txn_execution_insights             SYSTE
 system         crdb_internal       node_txn_stats                          SYSTEM VIEW  NO
 system         information_schema  optimizer_trace                         SYSTEM VIEW  NO
 system         information_schema  parameters                              SYSTEM VIEW  NO
-system         crdb_internal       partitions                              SYSTEM VIEW  NO
 system         information_schema  partitions                              SYSTEM VIEW  NO
 system         pg_catalog          pg_aggregate                            SYSTEM VIEW  NO
 system         pg_catalog          pg_am                                   SYSTEM VIEW  NO
@@ -1409,7 +1402,6 @@ system         crdb_internal       ranges                                  SYSTE
 system         crdb_internal       ranges_no_leases                        SYSTEM VIEW  NO
 system         information_schema  referential_constraints                 SYSTEM VIEW  NO
 system         public              region_liveness                         BASE TABLE   YES
-system         crdb_internal       regions                                 SYSTEM VIEW  NO
 system         public              replication_constraint_stats            BASE TABLE   YES
 system         public              replication_critical_localities         BASE TABLE   YES
 system         public              replication_stats                       BASE TABLE   YES
@@ -1460,7 +1452,6 @@ system         public              statement_statistics                    BASE 
 system         crdb_internal       statement_statistics_persisted          SYSTEM VIEW  NO
 system         crdb_internal       statement_statistics_persisted_v22_2    SYSTEM VIEW  NO
 system         information_schema  statistics                              SYSTEM VIEW  NO
-system         crdb_internal       super_regions                           SYSTEM VIEW  NO
 system         crdb_internal       system_jobs                             SYSTEM VIEW  NO
 system         crdb_internal       table_columns                           SYSTEM VIEW  NO
 system         information_schema  table_constraints                       SYSTEM VIEW  NO
@@ -3333,11 +3324,9 @@ NULL     public   system         crdb_internal       node_transaction_statistics
 NULL     public   system         crdb_internal       node_transactions                       SELECT          NO            YES
 NULL     public   system         crdb_internal       node_txn_execution_insights             SELECT          NO            YES
 NULL     public   system         crdb_internal       node_txn_stats                          SELECT          NO            YES
-NULL     public   system         crdb_internal       partitions                              SELECT          NO            YES
 NULL     public   system         crdb_internal       pg_catalog_table_is_implemented         SELECT          NO            YES
 NULL     public   system         crdb_internal       ranges                                  SELECT          NO            YES
 NULL     public   system         crdb_internal       ranges_no_leases                        SELECT          NO            YES
-NULL     public   system         crdb_internal       regions                                 SELECT          NO            YES
 NULL     public   system         crdb_internal       schema_changes                          SELECT          NO            YES
 NULL     public   system         crdb_internal       session_trace                           SELECT          NO            YES
 NULL     public   system         crdb_internal       session_variables                       SELECT          NO            YES
@@ -3345,7 +3334,6 @@ NULL     public   system         crdb_internal       statement_activity         
 NULL     public   system         crdb_internal       statement_statistics                    SELECT          NO            YES
 NULL     public   system         crdb_internal       statement_statistics_persisted          SELECT          NO            YES
 NULL     public   system         crdb_internal       statement_statistics_persisted_v22_2    SELECT          NO            YES
-NULL     public   system         crdb_internal       super_regions                           SELECT          NO            YES
 NULL     public   system         crdb_internal       system_jobs                             SELECT          NO            YES
 NULL     public   system         crdb_internal       table_columns                           SELECT          NO            YES
 NULL     public   system         crdb_internal       table_indexes                           SELECT          NO            YES
@@ -4028,11 +4016,9 @@ NULL     public   system         crdb_internal       node_transaction_statistics
 NULL     public   system         crdb_internal       node_transactions                       SELECT          NO            YES
 NULL     public   system         crdb_internal       node_txn_execution_insights             SELECT          NO            YES
 NULL     public   system         crdb_internal       node_txn_stats                          SELECT          NO            YES
-NULL     public   system         crdb_internal       partitions                              SELECT          NO            YES
 NULL     public   system         crdb_internal       pg_catalog_table_is_implemented         SELECT          NO            YES
 NULL     public   system         crdb_internal       ranges                                  SELECT          NO            YES
 NULL     public   system         crdb_internal       ranges_no_leases                        SELECT          NO            YES
-NULL     public   system         crdb_internal       regions                                 SELECT          NO            YES
 NULL     public   system         crdb_internal       schema_changes                          SELECT          NO            YES
 NULL     public   system         crdb_internal       session_trace                           SELECT          NO            YES
 NULL     public   system         crdb_internal       session_variables                       SELECT          NO            YES
@@ -4040,7 +4026,6 @@ NULL     public   system         crdb_internal       statement_activity         
 NULL     public   system         crdb_internal       statement_statistics                    SELECT          NO            YES
 NULL     public   system         crdb_internal       statement_statistics_persisted          SELECT          NO            YES
 NULL     public   system         crdb_internal       statement_statistics_persisted_v22_2    SELECT          NO            YES
-NULL     public   system         crdb_internal       super_regions                           SELECT          NO            YES
 NULL     public   system         crdb_internal       system_jobs                             SELECT          NO            YES
 NULL     public   system         crdb_internal       table_columns                           SELECT          NO            YES
 NULL     public   system         crdb_internal       table_indexes                           SELECT          NO            YES
@@ -5472,7 +5457,6 @@ ORDER BY variable
 variable                                                   value
 allow_ordinal_column_references                            off
 allow_role_memberships_to_change_during_transaction        off
-alter_primary_region_super_region_override                 off
 application_name                                           ·
 avoid_buffering                                            off
 backslash_quote                                            safe_encoding
@@ -5505,7 +5489,6 @@ disable_partially_distributed_plans                        off
 disable_plan_gists                                         off
 disallow_full_table_scans                                  off
 distsql_plan_gateway_bias                                  2
-enable_auto_rehoming                                       off
 enable_create_stats_using_extremes                         off
 enable_durable_locking_for_serializable                    off
 enable_experimental_alter_column_type_general              off
@@ -5514,14 +5497,11 @@ enable_implicit_select_for_update                          on
 enable_implicit_transaction_for_batch_statements           on
 enable_insert_fast_path                                    on
 enable_multiple_modifications_of_table                     off
-enable_multiregion_placement_policy                        off
 enable_seqscan                                             on
 enable_shared_locking_for_serializable                     off
-enable_super_regions                                       off
 enable_zigzag_join                                         off
 escape_string_warning                                      on
 expect_and_ignore_not_visible_columns_in_copy              off
-experimental_enable_implicit_column_partitioning           off
 experimental_enable_temp_tables                            off
 experimental_enable_unique_without_index_constraints       on
 experimental_hash_group_join_enabled                       off
@@ -5556,7 +5536,6 @@ max_index_keys                                             32
 max_retries_for_read_committed                             10
 node_id                                                    1
 null_ordered_last                                          off
-on_update_rehome_row_enabled                               on
 opt_split_scan_limit                                       2048
 optimizer                                                  on
 optimizer_always_use_histograms                            on
@@ -5581,7 +5560,6 @@ optimizer_use_not_visible_indexes                          off
 optimizer_use_provided_ordering_fix                        on
 optimizer_use_trigram_similarity_optimization              off
 optimizer_use_virtual_computed_column_stats                off
-override_multi_region_zone_config                          off
 parallelize_multi_key_lookup_joins_enabled                 off
 password_encryption                                        scram-sha-256
 pg_trgm.similarity_threshold                               0.3

@@ -213,6 +213,9 @@ func (desc *immutable) ValidateSelf(vea catalog.ValidationErrorAccumulator) {
 	if desc.GetID() == descpb.InvalidID {
 		vea.Report(fmt.Errorf("invalid database ID %d", desc.GetID()))
 	}
+	if desc.RegionConfig != nil {
+		vea.Report(errors.New("multi-region databases are unsupported"))
+	}
 
 	// Validate the privilege descriptor.
 	if desc.Privileges == nil {

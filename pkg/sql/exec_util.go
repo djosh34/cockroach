@@ -330,49 +330,10 @@ var requireExplicitPrimaryKeysClusterMode = settings.RegisterBoolSetting(
 	false,
 	settings.WithPublic)
 
-var placementEnabledClusterMode = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.defaults.multiregion_placement_policy.enabled",
-	"default value for enable_multiregion_placement_policy;"+
-		" allows for use of PLACEMENT RESTRICTED",
-	false,
-)
-
-var autoRehomingEnabledClusterMode = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.defaults.experimental_auto_rehoming.enabled",
-	"default value for experimental_enable_auto_rehoming;"+
-		" allows for rows in REGIONAL BY ROW tables to be auto-rehomed on UPDATE",
-	false,
-)
-
-var onUpdateRehomeRowEnabledClusterMode = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.defaults.on_update_rehome_row.enabled",
-	"default value for on_update_rehome_row;"+
-		" enables ON UPDATE rehome_row() expressions to trigger on updates",
-	true,
-	settings.WithPublic)
-
 var temporaryTablesEnabledClusterMode = settings.RegisterBoolSetting(
 	settings.ApplicationLevel,
 	"sql.defaults.experimental_temporary_tables.enabled",
 	"default value for experimental_enable_temp_tables; allows for use of temporary tables by default",
-	false,
-	settings.WithPublic)
-
-var implicitColumnPartitioningEnabledClusterMode = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.defaults.experimental_implicit_column_partitioning.enabled",
-	"default value for experimental_enable_temp_tables; allows for the use of implicit column partitioning",
-	false,
-	settings.WithPublic)
-
-var overrideMultiRegionZoneConfigClusterMode = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.defaults.override_multi_region_zone_config.enabled",
-	"default value for override_multi_region_zone_config; "+
-		"allows for overriding the zone configs of a multi-region table or database",
 	false,
 	settings.WithPublic)
 
@@ -718,23 +679,6 @@ var costScansWithDefaultColSize = settings.RegisterBoolSetting(
 	settings.ApplicationLevel,
 	`sql.defaults.cost_scans_with_default_col_size.enabled`,
 	"setting to true uses the same size for all columns to compute scan cost",
-	false,
-	settings.WithPublic)
-
-var enableSuperRegions = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.defaults.super_regions.enabled",
-	"default value for enable_super_regions; "+
-		"allows for the usage of super regions",
-	false,
-	settings.WithPublic)
-
-var overrideAlterPrimaryRegionInSuperRegion = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.defaults.override_alter_primary_region_in_super_region.enabled",
-	"default value for override_alter_primary_region_in_super_region; "+
-		"allows for altering the primary region even if the primary region is a "+
-		"member of a super region",
 	false,
 	settings.WithPublic)
 
@@ -3277,28 +3221,8 @@ func (m *sessionDataMutator) SetSaveTablesPrefix(prefix string) {
 	m.data.SaveTablesPrefix = prefix
 }
 
-func (m *sessionDataMutator) SetPlacementEnabled(val bool) {
-	m.data.PlacementEnabled = val
-}
-
-func (m *sessionDataMutator) SetAutoRehomingEnabled(val bool) {
-	m.data.AutoRehomingEnabled = val
-}
-
-func (m *sessionDataMutator) SetOnUpdateRehomeRowEnabled(val bool) {
-	m.data.OnUpdateRehomeRowEnabled = val
-}
-
 func (m *sessionDataMutator) SetTempTablesEnabled(val bool) {
 	m.data.TempTablesEnabled = val
-}
-
-func (m *sessionDataMutator) SetImplicitColumnPartitioningEnabled(val bool) {
-	m.data.ImplicitColumnPartitioningEnabled = val
-}
-
-func (m *sessionDataMutator) SetOverrideMultiRegionZoneConfigEnabled(val bool) {
-	m.data.OverrideMultiRegionZoneConfigEnabled = val
 }
 
 func (m *sessionDataMutator) SetDisallowFullTableScans(val bool) {
@@ -3311,14 +3235,6 @@ func (m *sessionDataMutator) SetOptimizerApplyFullScanPenaltyToVirtualTables(val
 
 func (m *sessionDataMutator) SetAlterColumnTypeGeneral(val bool) {
 	m.data.AlterColumnTypeGeneralEnabled = val
-}
-
-func (m *sessionDataMutator) SetEnableSuperRegions(val bool) {
-	m.data.EnableSuperRegions = val
-}
-
-func (m *sessionDataMutator) SetEnableOverrideAlterPrimaryRegionInSuperRegion(val bool) {
-	m.data.OverrideAlterPrimaryRegionInSuperRegion = val
 }
 
 // TODO(rytaft): remove this once unique without index constraints are fully

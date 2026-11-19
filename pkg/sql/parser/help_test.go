@@ -123,7 +123,6 @@ func TestContextualHelp(t *testing.T) {
 		{`ALTER RANGE foo CONFIGURE ??`, `ALTER RANGE`},
 		{`ALTER RANGE ??`, `ALTER RANGE`},
 
-
 		{`ALTER DEFAULT PRIVILEGES ??`, `ALTER DEFAULT PRIVILEGES`},
 
 		{`ANALYZE ??`, `ANALYZE`},
@@ -432,8 +431,6 @@ func TestContextualHelp(t *testing.T) {
 		{`SHOW INDEXES FROM ??`, `SHOW INDEXES`},
 		{`SHOW INDEXES FROM blah ??`, `SHOW INDEXES`},
 
-
-
 		{`SHOW ROLES ??`, `SHOW ROLES`},
 
 		{`SHOW SCHEMAS FROM ??`, `SHOW SCHEMAS`},
@@ -455,7 +452,6 @@ func TestContextualHelp(t *testing.T) {
 		{`SHOW SYNTAX ??`, `SHOW SYNTAX`},
 		{`SHOW SYNTAX 'foo' ??`, `SHOW SYNTAX`},
 		{`SHOW SAVEPOINT STATUS ??`, `SHOW SAVEPOINT`},
-
 
 		{`SHOW RANGE ??`, `SHOW RANGE`},
 

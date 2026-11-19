@@ -40,13 +40,13 @@ CREATE SEQUENCE seq
 statement ok
 CREATE TYPE enum AS ENUM('a', 'b')
 
-query TTTTIT rowsort
+query TTTTI rowsort
 SHOW TABLES FROM public
 ----
-public  seq  sequence  testuser   0  NULL
-public  t    table     testuser   0  NULL
-public  u    table     testuser2  0  NULL
-public  v    view      testuser   0  NULL
+public  seq  sequence  testuser   0
+public  t    table     testuser   0
+public  u    table     testuser2  0
+public  v    view      testuser   0
 
 query TTTT
 SHOW ENUMS
@@ -56,10 +56,10 @@ public  enum  {a,b}  testuser
 statement ok
 DROP OWNED BY testuser
 
-query TTTTIT
+query TTTTI
 SHOW TABLES FROM public
 ----
-public  u  table  testuser2  0  NULL
+public  u  table  testuser2  0
 
 query error pgcode 42P01 relation "t" does not exist
 SELECT * FROM t
@@ -76,7 +76,7 @@ user testuser2
 statement ok
 DROP OWNED BY testuser2
 
-query TTTTIT
+query TTTTI
 SHOW TABLES FROM public
 ----
 
@@ -109,11 +109,11 @@ DROP OWNED BY testuser
 statement error pq: cannot drop desired object\(s\) because other objects depend on them
 DROP OWNED BY testuser RESTRICT
 
-query TTTTIT rowsort
+query TTTTI rowsort
 SHOW TABLES FROM public
 ----
-public  t  table  testuser   0  NULL
-public  v  view   testuser2  0  NULL
+public  t  table  testuser   0
+public  v  view   testuser2  0
 
 user root
 
@@ -123,7 +123,7 @@ DROP OWNED BY testuser2 CASCADE
 statement ok
 DROP OWNED BY testuser, testuser2
 
-query TTTTIT
+query TTTTI
 SHOW TABLES FROM public
 ----
 
@@ -157,7 +157,7 @@ DROP OWNED BY testuser
 statement ok
 DROP OWNED BY testuser, testuser2
 
-query TTTTIT
+query TTTTI
 SHOW TABLES FROM public
 ----
 
@@ -198,7 +198,7 @@ DROP OWNED BY testuser
 statement ok
 DROP OWNED BY testuser, testuser2
 
-query TTTTIT
+query TTTTI
 SHOW TABLES FROM public
 ----
 
@@ -294,7 +294,7 @@ SHOW GRANTS ON SCHEMA s
 test  s  admin  ALL  true
 test  s  root   ALL  true
 
-query TTTTIT
+query TTTTI
 SHOW TABLES FROM s
 ----
 
@@ -362,16 +362,16 @@ CREATE TABLE t2()
 statement ok
 SET ROLE root
 
-query TTTTIT rowsort
+query TTTTI rowsort
 SHOW TABLES FROM public
 ----
-public  t1  table  r1   0  NULL
-public  t2  table  r2   0  NULL
+public  t1  table  r1  0
+public  t2  table  r2  0
 
 statement ok
 DROP OWNED BY r1, r2
 
-query TTTTIT
+query TTTTI
 SHOW TABLES FROM public
 ----
 
@@ -466,17 +466,17 @@ CREATE TABLE d2.t1()
 
 user root
 
-query TTTTTT rowsort
+query TT rowsort
 SHOW DATABASES
 ----
-d1         root  NULL  NULL  {}  NULL
-d2         root  NULL  NULL  {}  NULL
-d3         root  NULL  NULL  {}  NULL
-d4         root  NULL  NULL  {}  NULL
-defaultdb  root  NULL  NULL  {}  NULL
-postgres   root  NULL  NULL  {}  NULL
-system     node  NULL  NULL  {}  NULL
-test       root  NULL  NULL  {}  NULL
+d1         root
+d2         root
+d3         root
+d4         root
+defaultdb  root
+postgres   root
+system     node
+test       root
 
 statement ok
 SET DATABASE = d1
@@ -494,15 +494,15 @@ s2                  root
 s3                  testuser
 s4                  testuser
 
-query TTTTIT rowsort
+query TTTTI rowsort
 SHOW TABLES FROM d1
 ----
-public  t1  table  root      0  NULL
-public  t2  table  testuser  0  NULL
-public  v1  view   root      0  NULL
-public  v2  view   testuser  0  NULL
-s1      t1  table  root      0  NULL
-s1      t2  table  testuser  0  NULL
+public  t1  table  root      0
+public  t2  table  testuser  0
+public  v1  view   root      0
+public  v2  view   testuser  0
+s1      t1  table  root      0
+s1      t2  table  testuser  0
 
 query TTTB rowsort
 SHOW GRANTS ON DATABASE d1
@@ -534,12 +534,12 @@ public              root
 s1                  root
 s2                  root
 
-query TTTTIT rowsort
+query TTTTI rowsort
 SHOW TABLES FROM d1
 ----
-public  t1  table  root      0  NULL
-public  v1  view   root      0  NULL
-s1      t1  table  root      0  NULL
+public  t1  table  root  0
+public  v1  view   root  0
+s1      t1  table  root  0
 
 query TTTTB rowsort
 SHOW GRANTS ON SCHEMA d1.s1
@@ -568,10 +568,10 @@ public              root
 s1                  root
 s2                  testuser
 
-query TTTTIT
+query TTTTI
 SHOW TABLES FROM d2
 ----
-public  t1  table  testuser  0  NULL
+public  t1  table  testuser  0
 
 query TTTB rowsort
 SHOW GRANTS ON DATABASE d2
@@ -594,7 +594,7 @@ pg_extension        node
 public              root
 s1                  root
 
-query TTTTIT
+query TTTTI
 SHOW TABLES FROM d2
 ----
 

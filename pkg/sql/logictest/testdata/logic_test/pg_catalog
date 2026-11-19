@@ -16,138 +16,138 @@ CREATE TABLE pg_catalog.t (x INT)
 query error database "pg_catalog" does not exist
 DROP DATABASE pg_catalog
 
-query TTTTIT rowsort
+query TTTTI rowsort
 SHOW TABLES FROM pg_catalog
 ----
-pg_catalog  pg_aggregate                     table  node  NULL  NULL
-pg_catalog  pg_am                            table  node  NULL  NULL
-pg_catalog  pg_amop                          table  node  NULL  NULL
-pg_catalog  pg_amproc                        table  node  NULL  NULL
-pg_catalog  pg_attrdef                       table  node  NULL  NULL
-pg_catalog  pg_attribute                     table  node  NULL  NULL
-pg_catalog  pg_auth_members                  table  node  NULL  NULL
-pg_catalog  pg_authid                        table  node  NULL  NULL
-pg_catalog  pg_available_extension_versions  table  node  NULL  NULL
-pg_catalog  pg_available_extensions          table  node  NULL  NULL
-pg_catalog  pg_cast                          table  node  NULL  NULL
-pg_catalog  pg_class                         table  node  NULL  NULL
-pg_catalog  pg_collation                     table  node  NULL  NULL
-pg_catalog  pg_config                        table  node  NULL  NULL
-pg_catalog  pg_constraint                    table  node  NULL  NULL
-pg_catalog  pg_conversion                    table  node  NULL  NULL
-pg_catalog  pg_cursors                       table  node  NULL  NULL
-pg_catalog  pg_database                      table  node  NULL  NULL
-pg_catalog  pg_db_role_setting               table  node  NULL  NULL
-pg_catalog  pg_default_acl                   table  node  NULL  NULL
-pg_catalog  pg_depend                        table  node  NULL  NULL
-pg_catalog  pg_description                   view   node  NULL  NULL
-pg_catalog  pg_enum                          table  node  NULL  NULL
-pg_catalog  pg_event_trigger                 table  node  NULL  NULL
-pg_catalog  pg_extension                     table  node  NULL  NULL
-pg_catalog  pg_file_settings                 table  node  NULL  NULL
-pg_catalog  pg_foreign_data_wrapper          table  node  NULL  NULL
-pg_catalog  pg_foreign_server                table  node  NULL  NULL
-pg_catalog  pg_foreign_table                 table  node  NULL  NULL
-pg_catalog  pg_group                         table  node  NULL  NULL
-pg_catalog  pg_hba_file_rules                table  node  NULL  NULL
-pg_catalog  pg_index                         table  node  NULL  NULL
-pg_catalog  pg_indexes                       table  node  NULL  NULL
-pg_catalog  pg_inherits                      table  node  NULL  NULL
-pg_catalog  pg_init_privs                    table  node  NULL  NULL
-pg_catalog  pg_language                      table  node  NULL  NULL
-pg_catalog  pg_largeobject                   table  node  NULL  NULL
-pg_catalog  pg_largeobject_metadata          table  node  NULL  NULL
-pg_catalog  pg_locks                         table  node  NULL  NULL
-pg_catalog  pg_matviews                      table  node  NULL  NULL
-pg_catalog  pg_namespace                     table  node  NULL  NULL
-pg_catalog  pg_opclass                       table  node  NULL  NULL
-pg_catalog  pg_operator                      table  node  NULL  NULL
-pg_catalog  pg_opfamily                      table  node  NULL  NULL
-pg_catalog  pg_partitioned_table             table  node  NULL  NULL
-pg_catalog  pg_policies                      table  node  NULL  NULL
-pg_catalog  pg_policy                        table  node  NULL  NULL
-pg_catalog  pg_prepared_statements           table  node  NULL  NULL
-pg_catalog  pg_prepared_xacts                table  node  NULL  NULL
-pg_catalog  pg_proc                          table  node  NULL  NULL
-pg_catalog  pg_publication                   table  node  NULL  NULL
-pg_catalog  pg_publication_rel               table  node  NULL  NULL
-pg_catalog  pg_publication_tables            table  node  NULL  NULL
-pg_catalog  pg_range                         table  node  NULL  NULL
-pg_catalog  pg_replication_origin            table  node  NULL  NULL
-pg_catalog  pg_replication_origin_status     table  node  NULL  NULL
-pg_catalog  pg_replication_slots             table  node  NULL  NULL
-pg_catalog  pg_rewrite                       table  node  NULL  NULL
-pg_catalog  pg_roles                         table  node  NULL  NULL
-pg_catalog  pg_rules                         table  node  NULL  NULL
-pg_catalog  pg_seclabel                      table  node  NULL  NULL
-pg_catalog  pg_seclabels                     table  node  NULL  NULL
-pg_catalog  pg_sequence                      table  node  NULL  NULL
-pg_catalog  pg_sequences                     table  node  NULL  NULL
-pg_catalog  pg_settings                      table  node  NULL  NULL
-pg_catalog  pg_shadow                        table  node  NULL  NULL
-pg_catalog  pg_shdepend                      table  node  NULL  NULL
-pg_catalog  pg_shdescription                 view   node  NULL  NULL
-pg_catalog  pg_shmem_allocations             table  node  NULL  NULL
-pg_catalog  pg_shseclabel                    table  node  NULL  NULL
-pg_catalog  pg_stat_activity                 table  node  NULL  NULL
-pg_catalog  pg_stat_all_indexes              table  node  NULL  NULL
-pg_catalog  pg_stat_all_tables               table  node  NULL  NULL
-pg_catalog  pg_stat_archiver                 table  node  NULL  NULL
-pg_catalog  pg_stat_bgwriter                 table  node  NULL  NULL
-pg_catalog  pg_stat_database                 table  node  NULL  NULL
-pg_catalog  pg_stat_database_conflicts       table  node  NULL  NULL
-pg_catalog  pg_stat_gssapi                   table  node  NULL  NULL
-pg_catalog  pg_stat_progress_analyze         table  node  NULL  NULL
-pg_catalog  pg_stat_progress_basebackup      table  node  NULL  NULL
-pg_catalog  pg_stat_progress_cluster         table  node  NULL  NULL
-pg_catalog  pg_stat_progress_create_index    table  node  NULL  NULL
-pg_catalog  pg_stat_progress_vacuum          table  node  NULL  NULL
-pg_catalog  pg_stat_replication              table  node  NULL  NULL
-pg_catalog  pg_stat_slru                     table  node  NULL  NULL
-pg_catalog  pg_stat_ssl                      table  node  NULL  NULL
-pg_catalog  pg_stat_subscription             table  node  NULL  NULL
-pg_catalog  pg_stat_sys_indexes              table  node  NULL  NULL
-pg_catalog  pg_stat_sys_tables               table  node  NULL  NULL
-pg_catalog  pg_stat_user_functions           table  node  NULL  NULL
-pg_catalog  pg_stat_user_indexes             table  node  NULL  NULL
-pg_catalog  pg_stat_user_tables              table  node  NULL  NULL
-pg_catalog  pg_stat_wal_receiver             table  node  NULL  NULL
-pg_catalog  pg_stat_xact_all_tables          table  node  NULL  NULL
-pg_catalog  pg_stat_xact_sys_tables          table  node  NULL  NULL
-pg_catalog  pg_stat_xact_user_functions      table  node  NULL  NULL
-pg_catalog  pg_stat_xact_user_tables         table  node  NULL  NULL
-pg_catalog  pg_statio_all_indexes            table  node  NULL  NULL
-pg_catalog  pg_statio_all_sequences          table  node  NULL  NULL
-pg_catalog  pg_statio_all_tables             table  node  NULL  NULL
-pg_catalog  pg_statio_sys_indexes            table  node  NULL  NULL
-pg_catalog  pg_statio_sys_sequences          table  node  NULL  NULL
-pg_catalog  pg_statio_sys_tables             table  node  NULL  NULL
-pg_catalog  pg_statio_user_indexes           table  node  NULL  NULL
-pg_catalog  pg_statio_user_sequences         table  node  NULL  NULL
-pg_catalog  pg_statio_user_tables            table  node  NULL  NULL
-pg_catalog  pg_statistic                     table  node  NULL  NULL
-pg_catalog  pg_statistic_ext                 table  node  NULL  NULL
-pg_catalog  pg_statistic_ext_data            table  node  NULL  NULL
-pg_catalog  pg_stats                         table  node  NULL  NULL
-pg_catalog  pg_stats_ext                     table  node  NULL  NULL
-pg_catalog  pg_subscription                  table  node  NULL  NULL
-pg_catalog  pg_subscription_rel              table  node  NULL  NULL
-pg_catalog  pg_tables                        table  node  NULL  NULL
-pg_catalog  pg_tablespace                    table  node  NULL  NULL
-pg_catalog  pg_timezone_abbrevs              table  node  NULL  NULL
-pg_catalog  pg_timezone_names                table  node  NULL  NULL
-pg_catalog  pg_transform                     table  node  NULL  NULL
-pg_catalog  pg_trigger                       table  node  NULL  NULL
-pg_catalog  pg_ts_config                     table  node  NULL  NULL
-pg_catalog  pg_ts_config_map                 table  node  NULL  NULL
-pg_catalog  pg_ts_dict                       table  node  NULL  NULL
-pg_catalog  pg_ts_parser                     table  node  NULL  NULL
-pg_catalog  pg_ts_template                   table  node  NULL  NULL
-pg_catalog  pg_type                          table  node  NULL  NULL
-pg_catalog  pg_user                          table  node  NULL  NULL
-pg_catalog  pg_user_mapping                  table  node  NULL  NULL
-pg_catalog  pg_user_mappings                 table  node  NULL  NULL
-pg_catalog  pg_views                         table  node  NULL  NULL
+pg_catalog  pg_aggregate                     table  node  NULL
+pg_catalog  pg_am                            table  node  NULL
+pg_catalog  pg_amop                          table  node  NULL
+pg_catalog  pg_amproc                        table  node  NULL
+pg_catalog  pg_attrdef                       table  node  NULL
+pg_catalog  pg_attribute                     table  node  NULL
+pg_catalog  pg_auth_members                  table  node  NULL
+pg_catalog  pg_authid                        table  node  NULL
+pg_catalog  pg_available_extension_versions  table  node  NULL
+pg_catalog  pg_available_extensions          table  node  NULL
+pg_catalog  pg_cast                          table  node  NULL
+pg_catalog  pg_class                         table  node  NULL
+pg_catalog  pg_collation                     table  node  NULL
+pg_catalog  pg_config                        table  node  NULL
+pg_catalog  pg_constraint                    table  node  NULL
+pg_catalog  pg_conversion                    table  node  NULL
+pg_catalog  pg_cursors                       table  node  NULL
+pg_catalog  pg_database                      table  node  NULL
+pg_catalog  pg_db_role_setting               table  node  NULL
+pg_catalog  pg_default_acl                   table  node  NULL
+pg_catalog  pg_depend                        table  node  NULL
+pg_catalog  pg_description                   view   node  NULL
+pg_catalog  pg_enum                          table  node  NULL
+pg_catalog  pg_event_trigger                 table  node  NULL
+pg_catalog  pg_extension                     table  node  NULL
+pg_catalog  pg_file_settings                 table  node  NULL
+pg_catalog  pg_foreign_data_wrapper          table  node  NULL
+pg_catalog  pg_foreign_server                table  node  NULL
+pg_catalog  pg_foreign_table                 table  node  NULL
+pg_catalog  pg_group                         table  node  NULL
+pg_catalog  pg_hba_file_rules                table  node  NULL
+pg_catalog  pg_index                         table  node  NULL
+pg_catalog  pg_indexes                       table  node  NULL
+pg_catalog  pg_inherits                      table  node  NULL
+pg_catalog  pg_init_privs                    table  node  NULL
+pg_catalog  pg_language                      table  node  NULL
+pg_catalog  pg_largeobject                   table  node  NULL
+pg_catalog  pg_largeobject_metadata          table  node  NULL
+pg_catalog  pg_locks                         table  node  NULL
+pg_catalog  pg_matviews                      table  node  NULL
+pg_catalog  pg_namespace                     table  node  NULL
+pg_catalog  pg_opclass                       table  node  NULL
+pg_catalog  pg_operator                      table  node  NULL
+pg_catalog  pg_opfamily                      table  node  NULL
+pg_catalog  pg_partitioned_table             table  node  NULL
+pg_catalog  pg_policies                      table  node  NULL
+pg_catalog  pg_policy                        table  node  NULL
+pg_catalog  pg_prepared_statements           table  node  NULL
+pg_catalog  pg_prepared_xacts                table  node  NULL
+pg_catalog  pg_proc                          table  node  NULL
+pg_catalog  pg_publication                   table  node  NULL
+pg_catalog  pg_publication_rel               table  node  NULL
+pg_catalog  pg_publication_tables            table  node  NULL
+pg_catalog  pg_range                         table  node  NULL
+pg_catalog  pg_replication_origin            table  node  NULL
+pg_catalog  pg_replication_origin_status     table  node  NULL
+pg_catalog  pg_replication_slots             table  node  NULL
+pg_catalog  pg_rewrite                       table  node  NULL
+pg_catalog  pg_roles                         table  node  NULL
+pg_catalog  pg_rules                         table  node  NULL
+pg_catalog  pg_seclabel                      table  node  NULL
+pg_catalog  pg_seclabels                     table  node  NULL
+pg_catalog  pg_sequence                      table  node  NULL
+pg_catalog  pg_sequences                     table  node  NULL
+pg_catalog  pg_settings                      table  node  NULL
+pg_catalog  pg_shadow                        table  node  NULL
+pg_catalog  pg_shdepend                      table  node  NULL
+pg_catalog  pg_shdescription                 view   node  NULL
+pg_catalog  pg_shmem_allocations             table  node  NULL
+pg_catalog  pg_shseclabel                    table  node  NULL
+pg_catalog  pg_stat_activity                 table  node  NULL
+pg_catalog  pg_stat_all_indexes              table  node  NULL
+pg_catalog  pg_stat_all_tables               table  node  NULL
+pg_catalog  pg_stat_archiver                 table  node  NULL
+pg_catalog  pg_stat_bgwriter                 table  node  NULL
+pg_catalog  pg_stat_database                 table  node  NULL
+pg_catalog  pg_stat_database_conflicts       table  node  NULL
+pg_catalog  pg_stat_gssapi                   table  node  NULL
+pg_catalog  pg_stat_progress_analyze         table  node  NULL
+pg_catalog  pg_stat_progress_basebackup      table  node  NULL
+pg_catalog  pg_stat_progress_cluster         table  node  NULL
+pg_catalog  pg_stat_progress_create_index    table  node  NULL
+pg_catalog  pg_stat_progress_vacuum          table  node  NULL
+pg_catalog  pg_stat_replication              table  node  NULL
+pg_catalog  pg_stat_slru                     table  node  NULL
+pg_catalog  pg_stat_ssl                      table  node  NULL
+pg_catalog  pg_stat_subscription             table  node  NULL
+pg_catalog  pg_stat_sys_indexes              table  node  NULL
+pg_catalog  pg_stat_sys_tables               table  node  NULL
+pg_catalog  pg_stat_user_functions           table  node  NULL
+pg_catalog  pg_stat_user_indexes             table  node  NULL
+pg_catalog  pg_stat_user_tables              table  node  NULL
+pg_catalog  pg_stat_wal_receiver             table  node  NULL
+pg_catalog  pg_stat_xact_all_tables          table  node  NULL
+pg_catalog  pg_stat_xact_sys_tables          table  node  NULL
+pg_catalog  pg_stat_xact_user_functions      table  node  NULL
+pg_catalog  pg_stat_xact_user_tables         table  node  NULL
+pg_catalog  pg_statio_all_indexes            table  node  NULL
+pg_catalog  pg_statio_all_sequences          table  node  NULL
+pg_catalog  pg_statio_all_tables             table  node  NULL
+pg_catalog  pg_statio_sys_indexes            table  node  NULL
+pg_catalog  pg_statio_sys_sequences          table  node  NULL
+pg_catalog  pg_statio_sys_tables             table  node  NULL
+pg_catalog  pg_statio_user_indexes           table  node  NULL
+pg_catalog  pg_statio_user_sequences         table  node  NULL
+pg_catalog  pg_statio_user_tables            table  node  NULL
+pg_catalog  pg_statistic                     table  node  NULL
+pg_catalog  pg_statistic_ext                 table  node  NULL
+pg_catalog  pg_statistic_ext_data            table  node  NULL
+pg_catalog  pg_stats                         table  node  NULL
+pg_catalog  pg_stats_ext                     table  node  NULL
+pg_catalog  pg_subscription                  table  node  NULL
+pg_catalog  pg_subscription_rel              table  node  NULL
+pg_catalog  pg_tables                        table  node  NULL
+pg_catalog  pg_tablespace                    table  node  NULL
+pg_catalog  pg_timezone_abbrevs              table  node  NULL
+pg_catalog  pg_timezone_names                table  node  NULL
+pg_catalog  pg_transform                     table  node  NULL
+pg_catalog  pg_trigger                       table  node  NULL
+pg_catalog  pg_ts_config                     table  node  NULL
+pg_catalog  pg_ts_config_map                 table  node  NULL
+pg_catalog  pg_ts_dict                       table  node  NULL
+pg_catalog  pg_ts_parser                     table  node  NULL
+pg_catalog  pg_ts_template                   table  node  NULL
+pg_catalog  pg_type                          table  node  NULL
+pg_catalog  pg_user                          table  node  NULL
+pg_catalog  pg_user_mapping                  table  node  NULL
+pg_catalog  pg_user_mappings                 table  node  NULL
+pg_catalog  pg_views                         table  node  NULL
 
 # Verify "pg_catalog" is a regular db name
 
@@ -171,138 +171,138 @@ SELECT * FROM pg_catalog.pg_class c WHERE nonexistent_function()
 
 # Verify pg_catalog handles reflection correctly.
 
-query TTTTIT rowsort
+query TTTTI rowsort
 SHOW TABLES FROM test.pg_catalog
 ----
-pg_catalog  pg_aggregate                     table  node  NULL  NULL
-pg_catalog  pg_am                            table  node  NULL  NULL
-pg_catalog  pg_amop                          table  node  NULL  NULL
-pg_catalog  pg_amproc                        table  node  NULL  NULL
-pg_catalog  pg_attrdef                       table  node  NULL  NULL
-pg_catalog  pg_attribute                     table  node  NULL  NULL
-pg_catalog  pg_auth_members                  table  node  NULL  NULL
-pg_catalog  pg_authid                        table  node  NULL  NULL
-pg_catalog  pg_available_extension_versions  table  node  NULL  NULL
-pg_catalog  pg_available_extensions          table  node  NULL  NULL
-pg_catalog  pg_cast                          table  node  NULL  NULL
-pg_catalog  pg_class                         table  node  NULL  NULL
-pg_catalog  pg_collation                     table  node  NULL  NULL
-pg_catalog  pg_config                        table  node  NULL  NULL
-pg_catalog  pg_constraint                    table  node  NULL  NULL
-pg_catalog  pg_conversion                    table  node  NULL  NULL
-pg_catalog  pg_cursors                       table  node  NULL  NULL
-pg_catalog  pg_database                      table  node  NULL  NULL
-pg_catalog  pg_db_role_setting               table  node  NULL  NULL
-pg_catalog  pg_default_acl                   table  node  NULL  NULL
-pg_catalog  pg_depend                        table  node  NULL  NULL
-pg_catalog  pg_description                   view   node  NULL  NULL
-pg_catalog  pg_enum                          table  node  NULL  NULL
-pg_catalog  pg_event_trigger                 table  node  NULL  NULL
-pg_catalog  pg_extension                     table  node  NULL  NULL
-pg_catalog  pg_file_settings                 table  node  NULL  NULL
-pg_catalog  pg_foreign_data_wrapper          table  node  NULL  NULL
-pg_catalog  pg_foreign_server                table  node  NULL  NULL
-pg_catalog  pg_foreign_table                 table  node  NULL  NULL
-pg_catalog  pg_group                         table  node  NULL  NULL
-pg_catalog  pg_hba_file_rules                table  node  NULL  NULL
-pg_catalog  pg_index                         table  node  NULL  NULL
-pg_catalog  pg_indexes                       table  node  NULL  NULL
-pg_catalog  pg_inherits                      table  node  NULL  NULL
-pg_catalog  pg_init_privs                    table  node  NULL  NULL
-pg_catalog  pg_language                      table  node  NULL  NULL
-pg_catalog  pg_largeobject                   table  node  NULL  NULL
-pg_catalog  pg_largeobject_metadata          table  node  NULL  NULL
-pg_catalog  pg_locks                         table  node  NULL  NULL
-pg_catalog  pg_matviews                      table  node  NULL  NULL
-pg_catalog  pg_namespace                     table  node  NULL  NULL
-pg_catalog  pg_opclass                       table  node  NULL  NULL
-pg_catalog  pg_operator                      table  node  NULL  NULL
-pg_catalog  pg_opfamily                      table  node  NULL  NULL
-pg_catalog  pg_partitioned_table             table  node  NULL  NULL
-pg_catalog  pg_policies                      table  node  NULL  NULL
-pg_catalog  pg_policy                        table  node  NULL  NULL
-pg_catalog  pg_prepared_statements           table  node  NULL  NULL
-pg_catalog  pg_prepared_xacts                table  node  NULL  NULL
-pg_catalog  pg_proc                          table  node  NULL  NULL
-pg_catalog  pg_publication                   table  node  NULL  NULL
-pg_catalog  pg_publication_rel               table  node  NULL  NULL
-pg_catalog  pg_publication_tables            table  node  NULL  NULL
-pg_catalog  pg_range                         table  node  NULL  NULL
-pg_catalog  pg_replication_origin            table  node  NULL  NULL
-pg_catalog  pg_replication_origin_status     table  node  NULL  NULL
-pg_catalog  pg_replication_slots             table  node  NULL  NULL
-pg_catalog  pg_rewrite                       table  node  NULL  NULL
-pg_catalog  pg_roles                         table  node  NULL  NULL
-pg_catalog  pg_rules                         table  node  NULL  NULL
-pg_catalog  pg_seclabel                      table  node  NULL  NULL
-pg_catalog  pg_seclabels                     table  node  NULL  NULL
-pg_catalog  pg_sequence                      table  node  NULL  NULL
-pg_catalog  pg_sequences                     table  node  NULL  NULL
-pg_catalog  pg_settings                      table  node  NULL  NULL
-pg_catalog  pg_shadow                        table  node  NULL  NULL
-pg_catalog  pg_shdepend                      table  node  NULL  NULL
-pg_catalog  pg_shdescription                 view   node  NULL  NULL
-pg_catalog  pg_shmem_allocations             table  node  NULL  NULL
-pg_catalog  pg_shseclabel                    table  node  NULL  NULL
-pg_catalog  pg_stat_activity                 table  node  NULL  NULL
-pg_catalog  pg_stat_all_indexes              table  node  NULL  NULL
-pg_catalog  pg_stat_all_tables               table  node  NULL  NULL
-pg_catalog  pg_stat_archiver                 table  node  NULL  NULL
-pg_catalog  pg_stat_bgwriter                 table  node  NULL  NULL
-pg_catalog  pg_stat_database                 table  node  NULL  NULL
-pg_catalog  pg_stat_database_conflicts       table  node  NULL  NULL
-pg_catalog  pg_stat_gssapi                   table  node  NULL  NULL
-pg_catalog  pg_stat_progress_analyze         table  node  NULL  NULL
-pg_catalog  pg_stat_progress_basebackup      table  node  NULL  NULL
-pg_catalog  pg_stat_progress_cluster         table  node  NULL  NULL
-pg_catalog  pg_stat_progress_create_index    table  node  NULL  NULL
-pg_catalog  pg_stat_progress_vacuum          table  node  NULL  NULL
-pg_catalog  pg_stat_replication              table  node  NULL  NULL
-pg_catalog  pg_stat_slru                     table  node  NULL  NULL
-pg_catalog  pg_stat_ssl                      table  node  NULL  NULL
-pg_catalog  pg_stat_subscription             table  node  NULL  NULL
-pg_catalog  pg_stat_sys_indexes              table  node  NULL  NULL
-pg_catalog  pg_stat_sys_tables               table  node  NULL  NULL
-pg_catalog  pg_stat_user_functions           table  node  NULL  NULL
-pg_catalog  pg_stat_user_indexes             table  node  NULL  NULL
-pg_catalog  pg_stat_user_tables              table  node  NULL  NULL
-pg_catalog  pg_stat_wal_receiver             table  node  NULL  NULL
-pg_catalog  pg_stat_xact_all_tables          table  node  NULL  NULL
-pg_catalog  pg_stat_xact_sys_tables          table  node  NULL  NULL
-pg_catalog  pg_stat_xact_user_functions      table  node  NULL  NULL
-pg_catalog  pg_stat_xact_user_tables         table  node  NULL  NULL
-pg_catalog  pg_statio_all_indexes            table  node  NULL  NULL
-pg_catalog  pg_statio_all_sequences          table  node  NULL  NULL
-pg_catalog  pg_statio_all_tables             table  node  NULL  NULL
-pg_catalog  pg_statio_sys_indexes            table  node  NULL  NULL
-pg_catalog  pg_statio_sys_sequences          table  node  NULL  NULL
-pg_catalog  pg_statio_sys_tables             table  node  NULL  NULL
-pg_catalog  pg_statio_user_indexes           table  node  NULL  NULL
-pg_catalog  pg_statio_user_sequences         table  node  NULL  NULL
-pg_catalog  pg_statio_user_tables            table  node  NULL  NULL
-pg_catalog  pg_statistic                     table  node  NULL  NULL
-pg_catalog  pg_statistic_ext                 table  node  NULL  NULL
-pg_catalog  pg_statistic_ext_data            table  node  NULL  NULL
-pg_catalog  pg_stats                         table  node  NULL  NULL
-pg_catalog  pg_stats_ext                     table  node  NULL  NULL
-pg_catalog  pg_subscription                  table  node  NULL  NULL
-pg_catalog  pg_subscription_rel              table  node  NULL  NULL
-pg_catalog  pg_tables                        table  node  NULL  NULL
-pg_catalog  pg_tablespace                    table  node  NULL  NULL
-pg_catalog  pg_timezone_abbrevs              table  node  NULL  NULL
-pg_catalog  pg_timezone_names                table  node  NULL  NULL
-pg_catalog  pg_transform                     table  node  NULL  NULL
-pg_catalog  pg_trigger                       table  node  NULL  NULL
-pg_catalog  pg_ts_config                     table  node  NULL  NULL
-pg_catalog  pg_ts_config_map                 table  node  NULL  NULL
-pg_catalog  pg_ts_dict                       table  node  NULL  NULL
-pg_catalog  pg_ts_parser                     table  node  NULL  NULL
-pg_catalog  pg_ts_template                   table  node  NULL  NULL
-pg_catalog  pg_type                          table  node  NULL  NULL
-pg_catalog  pg_user                          table  node  NULL  NULL
-pg_catalog  pg_user_mapping                  table  node  NULL  NULL
-pg_catalog  pg_user_mappings                 table  node  NULL  NULL
-pg_catalog  pg_views                         table  node  NULL  NULL
+pg_catalog  pg_aggregate                     table  node  NULL
+pg_catalog  pg_am                            table  node  NULL
+pg_catalog  pg_amop                          table  node  NULL
+pg_catalog  pg_amproc                        table  node  NULL
+pg_catalog  pg_attrdef                       table  node  NULL
+pg_catalog  pg_attribute                     table  node  NULL
+pg_catalog  pg_auth_members                  table  node  NULL
+pg_catalog  pg_authid                        table  node  NULL
+pg_catalog  pg_available_extension_versions  table  node  NULL
+pg_catalog  pg_available_extensions          table  node  NULL
+pg_catalog  pg_cast                          table  node  NULL
+pg_catalog  pg_class                         table  node  NULL
+pg_catalog  pg_collation                     table  node  NULL
+pg_catalog  pg_config                        table  node  NULL
+pg_catalog  pg_constraint                    table  node  NULL
+pg_catalog  pg_conversion                    table  node  NULL
+pg_catalog  pg_cursors                       table  node  NULL
+pg_catalog  pg_database                      table  node  NULL
+pg_catalog  pg_db_role_setting               table  node  NULL
+pg_catalog  pg_default_acl                   table  node  NULL
+pg_catalog  pg_depend                        table  node  NULL
+pg_catalog  pg_description                   view   node  NULL
+pg_catalog  pg_enum                          table  node  NULL
+pg_catalog  pg_event_trigger                 table  node  NULL
+pg_catalog  pg_extension                     table  node  NULL
+pg_catalog  pg_file_settings                 table  node  NULL
+pg_catalog  pg_foreign_data_wrapper          table  node  NULL
+pg_catalog  pg_foreign_server                table  node  NULL
+pg_catalog  pg_foreign_table                 table  node  NULL
+pg_catalog  pg_group                         table  node  NULL
+pg_catalog  pg_hba_file_rules                table  node  NULL
+pg_catalog  pg_index                         table  node  NULL
+pg_catalog  pg_indexes                       table  node  NULL
+pg_catalog  pg_inherits                      table  node  NULL
+pg_catalog  pg_init_privs                    table  node  NULL
+pg_catalog  pg_language                      table  node  NULL
+pg_catalog  pg_largeobject                   table  node  NULL
+pg_catalog  pg_largeobject_metadata          table  node  NULL
+pg_catalog  pg_locks                         table  node  NULL
+pg_catalog  pg_matviews                      table  node  NULL
+pg_catalog  pg_namespace                     table  node  NULL
+pg_catalog  pg_opclass                       table  node  NULL
+pg_catalog  pg_operator                      table  node  NULL
+pg_catalog  pg_opfamily                      table  node  NULL
+pg_catalog  pg_partitioned_table             table  node  NULL
+pg_catalog  pg_policies                      table  node  NULL
+pg_catalog  pg_policy                        table  node  NULL
+pg_catalog  pg_prepared_statements           table  node  NULL
+pg_catalog  pg_prepared_xacts                table  node  NULL
+pg_catalog  pg_proc                          table  node  NULL
+pg_catalog  pg_publication                   table  node  NULL
+pg_catalog  pg_publication_rel               table  node  NULL
+pg_catalog  pg_publication_tables            table  node  NULL
+pg_catalog  pg_range                         table  node  NULL
+pg_catalog  pg_replication_origin            table  node  NULL
+pg_catalog  pg_replication_origin_status     table  node  NULL
+pg_catalog  pg_replication_slots             table  node  NULL
+pg_catalog  pg_rewrite                       table  node  NULL
+pg_catalog  pg_roles                         table  node  NULL
+pg_catalog  pg_rules                         table  node  NULL
+pg_catalog  pg_seclabel                      table  node  NULL
+pg_catalog  pg_seclabels                     table  node  NULL
+pg_catalog  pg_sequence                      table  node  NULL
+pg_catalog  pg_sequences                     table  node  NULL
+pg_catalog  pg_settings                      table  node  NULL
+pg_catalog  pg_shadow                        table  node  NULL
+pg_catalog  pg_shdepend                      table  node  NULL
+pg_catalog  pg_shdescription                 view   node  NULL
+pg_catalog  pg_shmem_allocations             table  node  NULL
+pg_catalog  pg_shseclabel                    table  node  NULL
+pg_catalog  pg_stat_activity                 table  node  NULL
+pg_catalog  pg_stat_all_indexes              table  node  NULL
+pg_catalog  pg_stat_all_tables               table  node  NULL
+pg_catalog  pg_stat_archiver                 table  node  NULL
+pg_catalog  pg_stat_bgwriter                 table  node  NULL
+pg_catalog  pg_stat_database                 table  node  NULL
+pg_catalog  pg_stat_database_conflicts       table  node  NULL
+pg_catalog  pg_stat_gssapi                   table  node  NULL
+pg_catalog  pg_stat_progress_analyze         table  node  NULL
+pg_catalog  pg_stat_progress_basebackup      table  node  NULL
+pg_catalog  pg_stat_progress_cluster         table  node  NULL
+pg_catalog  pg_stat_progress_create_index    table  node  NULL
+pg_catalog  pg_stat_progress_vacuum          table  node  NULL
+pg_catalog  pg_stat_replication              table  node  NULL
+pg_catalog  pg_stat_slru                     table  node  NULL
+pg_catalog  pg_stat_ssl                      table  node  NULL
+pg_catalog  pg_stat_subscription             table  node  NULL
+pg_catalog  pg_stat_sys_indexes              table  node  NULL
+pg_catalog  pg_stat_sys_tables               table  node  NULL
+pg_catalog  pg_stat_user_functions           table  node  NULL
+pg_catalog  pg_stat_user_indexes             table  node  NULL
+pg_catalog  pg_stat_user_tables              table  node  NULL
+pg_catalog  pg_stat_wal_receiver             table  node  NULL
+pg_catalog  pg_stat_xact_all_tables          table  node  NULL
+pg_catalog  pg_stat_xact_sys_tables          table  node  NULL
+pg_catalog  pg_stat_xact_user_functions      table  node  NULL
+pg_catalog  pg_stat_xact_user_tables         table  node  NULL
+pg_catalog  pg_statio_all_indexes            table  node  NULL
+pg_catalog  pg_statio_all_sequences          table  node  NULL
+pg_catalog  pg_statio_all_tables             table  node  NULL
+pg_catalog  pg_statio_sys_indexes            table  node  NULL
+pg_catalog  pg_statio_sys_sequences          table  node  NULL
+pg_catalog  pg_statio_sys_tables             table  node  NULL
+pg_catalog  pg_statio_user_indexes           table  node  NULL
+pg_catalog  pg_statio_user_sequences         table  node  NULL
+pg_catalog  pg_statio_user_tables            table  node  NULL
+pg_catalog  pg_statistic                     table  node  NULL
+pg_catalog  pg_statistic_ext                 table  node  NULL
+pg_catalog  pg_statistic_ext_data            table  node  NULL
+pg_catalog  pg_stats                         table  node  NULL
+pg_catalog  pg_stats_ext                     table  node  NULL
+pg_catalog  pg_subscription                  table  node  NULL
+pg_catalog  pg_subscription_rel              table  node  NULL
+pg_catalog  pg_tables                        table  node  NULL
+pg_catalog  pg_tablespace                    table  node  NULL
+pg_catalog  pg_timezone_abbrevs              table  node  NULL
+pg_catalog  pg_timezone_names                table  node  NULL
+pg_catalog  pg_transform                     table  node  NULL
+pg_catalog  pg_trigger                       table  node  NULL
+pg_catalog  pg_ts_config                     table  node  NULL
+pg_catalog  pg_ts_config_map                 table  node  NULL
+pg_catalog  pg_ts_dict                       table  node  NULL
+pg_catalog  pg_ts_parser                     table  node  NULL
+pg_catalog  pg_ts_template                   table  node  NULL
+pg_catalog  pg_type                          table  node  NULL
+pg_catalog  pg_user                          table  node  NULL
+pg_catalog  pg_user_mapping                  table  node  NULL
+pg_catalog  pg_user_mappings                 table  node  NULL
+pg_catalog  pg_views                         table  node  NULL
 
 query TT colnames
 SHOW CREATE TABLE pg_catalog.pg_namespace
@@ -2791,7 +2791,6 @@ ORDER BY name
 name                                                       setting             category  short_desc  extra_desc  vartype
 allow_ordinal_column_references                            off                 NULL      NULL        NULL        string
 allow_role_memberships_to_change_during_transaction        off                 NULL      NULL        NULL        string
-alter_primary_region_super_region_override                 off                 NULL      NULL        NULL        string
 application_name                                           ·                   NULL      NULL        NULL        string
 avoid_buffering                                            off                 NULL      NULL        NULL        string
 backslash_quote                                            safe_encoding       NULL      NULL        NULL        string
@@ -2825,7 +2824,6 @@ disable_plan_gists                                         off                 N
 disallow_full_table_scans                                  off                 NULL      NULL        NULL        string
 distsql                                                    off                 NULL      NULL        NULL        string
 distsql_plan_gateway_bias                                  2                   NULL      NULL        NULL        string
-enable_auto_rehoming                                       off                 NULL      NULL        NULL        string
 enable_create_stats_using_extremes                         off                 NULL      NULL        NULL        string
 enable_durable_locking_for_serializable                    off                 NULL      NULL        NULL        string
 enable_experimental_alter_column_type_general              off                 NULL      NULL        NULL        string
@@ -2834,14 +2832,11 @@ enable_implicit_select_for_update                          on                  N
 enable_implicit_transaction_for_batch_statements           on                  NULL      NULL        NULL        string
 enable_insert_fast_path                                    on                  NULL      NULL        NULL        string
 enable_multiple_modifications_of_table                     off                 NULL      NULL        NULL        string
-enable_multiregion_placement_policy                        off                 NULL      NULL        NULL        string
 enable_seqscan                                             on                  NULL      NULL        NULL        string
 enable_shared_locking_for_serializable                     off                 NULL      NULL        NULL        string
-enable_super_regions                                       off                 NULL      NULL        NULL        string
 enable_zigzag_join                                         off                 NULL      NULL        NULL        string
 escape_string_warning                                      on                  NULL      NULL        NULL        string
 expect_and_ignore_not_visible_columns_in_copy              off                 NULL      NULL        NULL        string
-experimental_enable_implicit_column_partitioning           off                 NULL      NULL        NULL        string
 experimental_enable_temp_tables                            off                 NULL      NULL        NULL        string
 experimental_enable_unique_without_index_constraints       on                  NULL      NULL        NULL        string
 experimental_hash_group_join_enabled                       off                 NULL      NULL        NULL        string
@@ -2876,7 +2871,6 @@ max_index_keys                                             32                  N
 max_retries_for_read_committed                             10                  NULL      NULL        NULL        string
 node_id                                                    1                   NULL      NULL        NULL        string
 null_ordered_last                                          off                 NULL      NULL        NULL        string
-on_update_rehome_row_enabled                               on                  NULL      NULL        NULL        string
 opt_split_scan_limit                                       2048                NULL      NULL        NULL        string
 optimizer_always_use_histograms                            on                  NULL      NULL        NULL        string
 optimizer_apply_full_scan_penalty_to_virtual_tables        off                 NULL      NULL        NULL        string
@@ -2900,7 +2894,6 @@ optimizer_use_not_visible_indexes                          off                 N
 optimizer_use_provided_ordering_fix                        on                  NULL      NULL        NULL        string
 optimizer_use_trigram_similarity_optimization              off                 NULL      NULL        NULL        string
 optimizer_use_virtual_computed_column_stats                off                 NULL      NULL        NULL        string
-override_multi_region_zone_config                          off                 NULL      NULL        NULL        string
 parallelize_multi_key_lookup_joins_enabled                 off                 NULL      NULL        NULL        string
 password_encryption                                        scram-sha-256       NULL      NULL        NULL        string
 pg_trgm.similarity_threshold                               0.3                 NULL      NULL        NULL        string
@@ -2970,7 +2963,6 @@ ORDER BY name
 name                                                       setting             unit  context  enumvals  boot_val            reset_val
 allow_ordinal_column_references                            off                 NULL  user     NULL      off                 off
 allow_role_memberships_to_change_during_transaction        off                 NULL  user     NULL      off                 off
-alter_primary_region_super_region_override                 off                 NULL  user     NULL      off                 off
 application_name                                           ·                   NULL  user     NULL      ·                   ·
 avoid_buffering                                            off                 NULL  user     NULL      off                 off
 backslash_quote                                            safe_encoding       NULL  user     NULL      safe_encoding       safe_encoding
@@ -3004,7 +2996,6 @@ disable_plan_gists                                         off                 N
 disallow_full_table_scans                                  off                 NULL  user     NULL      off                 off
 distsql                                                    off                 NULL  user     NULL      off                 off
 distsql_plan_gateway_bias                                  2                   NULL  user     NULL      2                   2
-enable_auto_rehoming                                       off                 NULL  user     NULL      off                 off
 enable_create_stats_using_extremes                         off                 NULL  user     NULL      off                 off
 enable_durable_locking_for_serializable                    off                 NULL  user     NULL      off                 off
 enable_experimental_alter_column_type_general              off                 NULL  user     NULL      off                 off
@@ -3013,14 +3004,11 @@ enable_implicit_select_for_update                          on                  N
 enable_implicit_transaction_for_batch_statements           on                  NULL  user     NULL      on                  on
 enable_insert_fast_path                                    on                  NULL  user     NULL      on                  on
 enable_multiple_modifications_of_table                     off                 NULL  user     NULL      off                 off
-enable_multiregion_placement_policy                        off                 NULL  user     NULL      off                 off
 enable_seqscan                                             on                  NULL  user     NULL      on                  on
 enable_shared_locking_for_serializable                     off                 NULL  user     NULL      off                 off
-enable_super_regions                                       off                 NULL  user     NULL      off                 off
 enable_zigzag_join                                         off                 NULL  user     NULL      off                 off
 escape_string_warning                                      on                  NULL  user     NULL      on                  on
 expect_and_ignore_not_visible_columns_in_copy              off                 NULL  user     NULL      off                 off
-experimental_enable_implicit_column_partitioning           off                 NULL  user     NULL      off                 off
 experimental_enable_temp_tables                            off                 NULL  user     NULL      off                 off
 experimental_enable_unique_without_index_constraints       on                  NULL  user     NULL      off                 off
 experimental_hash_group_join_enabled                       off                 NULL  user     NULL      off                 off
@@ -3055,7 +3043,6 @@ max_index_keys                                             32                  N
 max_retries_for_read_committed                             10                  NULL  user     NULL      10                  10
 node_id                                                    1                   NULL  user     NULL      1                   1
 null_ordered_last                                          off                 NULL  user     NULL      off                 off
-on_update_rehome_row_enabled                               on                  NULL  user     NULL      on                  on
 opt_split_scan_limit                                       2048                NULL  user     NULL      2048                2048
 optimizer_always_use_histograms                            on                  NULL  user     NULL      on                  on
 optimizer_apply_full_scan_penalty_to_virtual_tables        off                 NULL  user     NULL      off                 off
@@ -3079,7 +3066,6 @@ optimizer_use_not_visible_indexes                          off                 N
 optimizer_use_provided_ordering_fix                        on                  NULL  user     NULL      on                  on
 optimizer_use_trigram_similarity_optimization              off                 NULL  user     NULL      off                 off
 optimizer_use_virtual_computed_column_stats                off                 NULL  user     NULL      off                 off
-override_multi_region_zone_config                          off                 NULL  user     NULL      off                 off
 parallelize_multi_key_lookup_joins_enabled                 off                 NULL  user     NULL      off                 off
 password_encryption                                        scram-sha-256       NULL  user     NULL      scram-sha-256       scram-sha-256
 pg_trgm.similarity_threshold                               0.3                 NULL  user     NULL      0.3                 0.3
@@ -3142,7 +3128,6 @@ SELECT name, source, min_val, max_val, sourcefile, sourceline FROM pg_catalog.pg
 name                                                       source  min_val  max_val  sourcefile  sourceline
 allow_ordinal_column_references                            NULL    NULL     NULL     NULL        NULL
 allow_role_memberships_to_change_during_transaction        NULL    NULL     NULL     NULL        NULL
-alter_primary_region_super_region_override                 NULL    NULL     NULL     NULL        NULL
 application_name                                           NULL    NULL     NULL     NULL        NULL
 avoid_buffering                                            NULL    NULL     NULL     NULL        NULL
 backslash_quote                                            NULL    NULL     NULL     NULL        NULL
@@ -3180,7 +3165,6 @@ disallow_full_table_scans                                  NULL    NULL     NULL
 distsql                                                    NULL    NULL     NULL     NULL        NULL
 distsql_plan_gateway_bias                                  NULL    NULL     NULL     NULL        NULL
 distsql_workmem                                            NULL    NULL     NULL     NULL        NULL
-enable_auto_rehoming                                       NULL    NULL     NULL     NULL        NULL
 enable_create_stats_using_extremes                         NULL    NULL     NULL     NULL        NULL
 enable_durable_locking_for_serializable                    NULL    NULL     NULL     NULL        NULL
 enable_experimental_alter_column_type_general              NULL    NULL     NULL     NULL        NULL
@@ -3189,14 +3173,11 @@ enable_implicit_select_for_update                          NULL    NULL     NULL
 enable_implicit_transaction_for_batch_statements           NULL    NULL     NULL     NULL        NULL
 enable_insert_fast_path                                    NULL    NULL     NULL     NULL        NULL
 enable_multiple_modifications_of_table                     NULL    NULL     NULL     NULL        NULL
-enable_multiregion_placement_policy                        NULL    NULL     NULL     NULL        NULL
 enable_seqscan                                             NULL    NULL     NULL     NULL        NULL
 enable_shared_locking_for_serializable                     NULL    NULL     NULL     NULL        NULL
-enable_super_regions                                       NULL    NULL     NULL     NULL        NULL
 enable_zigzag_join                                         NULL    NULL     NULL     NULL        NULL
 escape_string_warning                                      NULL    NULL     NULL     NULL        NULL
 expect_and_ignore_not_visible_columns_in_copy              NULL    NULL     NULL     NULL        NULL
-experimental_enable_implicit_column_partitioning           NULL    NULL     NULL     NULL        NULL
 experimental_enable_temp_tables                            NULL    NULL     NULL     NULL        NULL
 experimental_enable_unique_without_index_constraints       NULL    NULL     NULL     NULL        NULL
 experimental_hash_group_join_enabled                       NULL    NULL     NULL     NULL        NULL
@@ -3232,7 +3213,6 @@ max_retries_for_read_committed                             NULL    NULL     NULL
 multiple_active_portals_enabled                            NULL    NULL     NULL     NULL        NULL
 node_id                                                    NULL    NULL     NULL     NULL        NULL
 null_ordered_last                                          NULL    NULL     NULL     NULL        NULL
-on_update_rehome_row_enabled                               NULL    NULL     NULL     NULL        NULL
 opt_split_scan_limit                                       NULL    NULL     NULL     NULL        NULL
 optimizer                                                  NULL    NULL     NULL     NULL        NULL
 optimizer_always_use_histograms                            NULL    NULL     NULL     NULL        NULL
@@ -3257,7 +3237,6 @@ optimizer_use_not_visible_indexes                          NULL    NULL     NULL
 optimizer_use_provided_ordering_fix                        NULL    NULL     NULL     NULL        NULL
 optimizer_use_trigram_similarity_optimization              NULL    NULL     NULL     NULL        NULL
 optimizer_use_virtual_computed_column_stats                NULL    NULL     NULL     NULL        NULL
-override_multi_region_zone_config                          NULL    NULL     NULL     NULL        NULL
 parallelize_multi_key_lookup_joins_enabled                 NULL    NULL     NULL     NULL        NULL
 password_encryption                                        NULL    NULL     NULL     NULL        NULL
 pg_trgm.similarity_threshold                               NULL    NULL     NULL     NULL        NULL

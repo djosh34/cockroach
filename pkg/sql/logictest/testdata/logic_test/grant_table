@@ -99,11 +99,9 @@ test           crdb_internal       node_transaction_statistics             table
 test           crdb_internal       node_transactions                       table        public   SELECT          false
 test           crdb_internal       node_txn_execution_insights             table        public   SELECT          false
 test           crdb_internal       node_txn_stats                          table        public   SELECT          false
-test           crdb_internal       partitions                              table        public   SELECT          false
 test           crdb_internal       pg_catalog_table_is_implemented         table        public   SELECT          false
 test           crdb_internal       ranges                                  table        public   SELECT          false
 test           crdb_internal       ranges_no_leases                        table        public   SELECT          false
-test           crdb_internal       regions                                 table        public   SELECT          false
 test           crdb_internal       schema_changes                          table        public   SELECT          false
 test           crdb_internal       session_trace                           table        public   SELECT          false
 test           crdb_internal       session_variables                       table        public   SELECT          false
@@ -111,7 +109,6 @@ test           crdb_internal       statement_activity                      table
 test           crdb_internal       statement_statistics                    table        public   SELECT          false
 test           crdb_internal       statement_statistics_persisted          table        public   SELECT          false
 test           crdb_internal       statement_statistics_persisted_v22_2    table        public   SELECT          false
-test           crdb_internal       super_regions                           table        public   SELECT          false
 test           crdb_internal       system_jobs                             table        public   SELECT          false
 test           crdb_internal       table_columns                           table        public   SELECT          false
 test           crdb_internal       table_indexes                           table        public   SELECT          false

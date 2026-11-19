@@ -3,19 +3,19 @@
 statement ok
 CREATE TABLE show_this_table()
 
-query TTTTIT
+query TTTTI
 SHOW TABLES
 ----
-public  show_this_table  table  root  0  NULL
+public  show_this_table  table  root  0
 
 statement ok
 CREATE DATABASE other;
 SET DATABASE = 'other'
 
-query TTTTIT
+query TTTTI
 SHOW TABLES FROM test
 ----
-public  show_this_table  table  root  0  NULL
+public  show_this_table  table  root  0
 
 statement ok
 SET DATABASE = 'test'
@@ -23,15 +23,15 @@ SET DATABASE = 'test'
 statement ok
 SET CLUSTER SETTING sql.show_tables.estimated_row_count.enabled = false
 
-query TTTTT
+query TTTT
 SHOW TABLES
 ----
-public  show_this_table  table  root  NULL
+public  show_this_table  table  root
 
-query TTTTTT
+query TTTTT
 SHOW TABLES WITH COMMENT
 ----
-public  show_this_table  table  root  NULL  ·
+public  show_this_table  table  root  ·
 
 statement ok
 SET CLUSTER SETTING sql.show_tables.estimated_row_count.enabled = default
@@ -43,17 +43,17 @@ CREATE SCHEMA sc;
 CREATE TABLE sc.foo (i INT8);
 CREATE TABLE foo (i INT8);
 
-query TTTTIT rowsort
+query TTTTI rowsort
 SHOW TABLES
 ----
-public  foo  table  root  0  NULL
-sc      foo  table  root  0  NULL
+public  foo  table  root  0
+sc      foo  table  root  0
 
 
 statement ok
 USE other
 
-query TTTTIT
+query TTTTI
 SHOW TABLES FROM "Do you like this for a database name?".sc
 ----
-sc  foo  table  root  0  NULL
+sc  foo  table  root  0

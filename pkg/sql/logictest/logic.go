@@ -3808,11 +3808,7 @@ func (t *logicTest) maybeDropDatabases() error {
 				retErr = errors.CombineErrors(retErr, conn.Close())
 			}()
 			if _, err := conn.ExecContext(ctx, "SET database = $1", dbName); err != nil {
-				return errors.Wrapf(err, "error validating zone config for database %s", dbName)
-			}
-			// Ensure each database's zone configs are valid.
-			if _, err := conn.ExecContext(ctx, "SELECT crdb_internal.validate_multi_region_zone_configs()"); err != nil {
-				return errors.Wrapf(err, "error validating zone config for database %s", dbName)
+				return errors.Wrapf(err, "error switching to database %s", dbName)
 			}
 			// Drop the database.
 			dbTreeName := tree.Name(dbName)

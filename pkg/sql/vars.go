@@ -1679,105 +1679,10 @@ var varGen = map[string]sessionVar{
 	},
 
 	// CockroachDB extension.
-	`enable_multiregion_placement_policy`: {
-		GetStringVal: makePostgresBoolGetStringValFn(`enable_multiregion_placement_policy`),
-		Set: func(_ context.Context, m sessionDataMutator, s string) error {
-			b, err := paramparse.ParseBoolVar("enable_multiregion_placement_policy", s)
-			if err != nil {
-				return err
-			}
-			m.SetPlacementEnabled(b)
-			return nil
-		},
-		Get: func(evalCtx *extendedEvalContext, _ *kv.Txn) (string, error) {
-			return formatBoolAsPostgresSetting(evalCtx.SessionData().PlacementEnabled), nil
-		},
-		GlobalDefault: func(sv *settings.Values) string {
-			return formatBoolAsPostgresSetting(placementEnabledClusterMode.Get(sv))
-		},
-	},
-
-	// CockroachDB extension.
-	`enable_auto_rehoming`: {
-		GetStringVal: makePostgresBoolGetStringValFn(`enable_auto_rehoming`),
-		Set: func(_ context.Context, m sessionDataMutator, s string) error {
-			b, err := paramparse.ParseBoolVar("enable_auto_rehoming", s)
-			if err != nil {
-				return err
-			}
-			m.SetAutoRehomingEnabled(b)
-			return nil
-		},
-		Get: func(evalCtx *extendedEvalContext, _ *kv.Txn) (string, error) {
-			return formatBoolAsPostgresSetting(evalCtx.SessionData().AutoRehomingEnabled), nil
-		},
-		GlobalDefault: func(sv *settings.Values) string {
-			return formatBoolAsPostgresSetting(autoRehomingEnabledClusterMode.Get(sv))
-		},
-	},
-
-	// CockroachDB extension.
-	`on_update_rehome_row_enabled`: {
-		GetStringVal: makePostgresBoolGetStringValFn(`on_update_rehome_row_enabled`),
-		Set: func(_ context.Context, m sessionDataMutator, s string) error {
-			b, err := paramparse.ParseBoolVar("on_update_rehome_row_enabled", s)
-			if err != nil {
-				return err
-			}
-			m.SetOnUpdateRehomeRowEnabled(b)
-			return nil
-		},
-		Get: func(evalCtx *extendedEvalContext, _ *kv.Txn) (string, error) {
-			return formatBoolAsPostgresSetting(evalCtx.SessionData().OnUpdateRehomeRowEnabled), nil
-		},
-		GlobalDefault: func(sv *settings.Values) string {
-			return formatBoolAsPostgresSetting(onUpdateRehomeRowEnabledClusterMode.Get(sv))
-		},
-	},
-
-	// CockroachDB extension.
-	`experimental_enable_implicit_column_partitioning`: {
-		GetStringVal: makePostgresBoolGetStringValFn(`experimental_enable_implicit_column_partitioning`),
-		Set: func(_ context.Context, m sessionDataMutator, s string) error {
-			b, err := paramparse.ParseBoolVar("experimental_enable_implicit_column_partitioning", s)
-			if err != nil {
-				return err
-			}
-			m.SetImplicitColumnPartitioningEnabled(b)
-			return nil
-		},
-		Get: func(evalCtx *extendedEvalContext, _ *kv.Txn) (string, error) {
-			return formatBoolAsPostgresSetting(evalCtx.SessionData().ImplicitColumnPartitioningEnabled), nil
-		},
-		GlobalDefault: func(sv *settings.Values) string {
-			return formatBoolAsPostgresSetting(implicitColumnPartitioningEnabledClusterMode.Get(sv))
-		},
-	},
-
-	// CockroachDB extension.
 	// This is only kept for backwards compatibility and no longer has any effect.
 	`enable_drop_enum_value`: makeBackwardsCompatBoolVar(
 		"enable_drop_enum_value", true,
 	),
-
-	// CockroachDB extension.
-	`override_multi_region_zone_config`: {
-		GetStringVal: makePostgresBoolGetStringValFn(`override_multi_region_zone_config`),
-		Set: func(_ context.Context, m sessionDataMutator, s string) error {
-			b, err := paramparse.ParseBoolVar("override_multi_region_zone_config", s)
-			if err != nil {
-				return err
-			}
-			m.SetOverrideMultiRegionZoneConfigEnabled(b)
-			return nil
-		},
-		Get: func(evalCtx *extendedEvalContext, _ *kv.Txn) (string, error) {
-			return formatBoolAsPostgresSetting(evalCtx.SessionData().OverrideMultiRegionZoneConfigEnabled), nil
-		},
-		GlobalDefault: func(sv *settings.Values) string {
-			return formatBoolAsPostgresSetting(overrideMultiRegionZoneConfigClusterMode.Get(sv))
-		},
-	},
 
 	// CockroachDB extension.
 	// This is only kept for backwards compatibility and no longer has any effect.
@@ -2344,43 +2249,6 @@ var varGen = map[string]sessionVar{
 			return strconv.FormatInt(int64(tabledesc.MaxBucketAllowed), 10)
 		},
 	},
-
-	// CockroachDB extension.
-	`enable_super_regions`: {
-		GetStringVal: makePostgresBoolGetStringValFn(`enable_super_regions`),
-		Set: func(_ context.Context, m sessionDataMutator, s string) error {
-			b, err := paramparse.ParseBoolVar("enable_super_regions", s)
-			if err != nil {
-				return err
-			}
-			m.SetEnableSuperRegions(b)
-			return nil
-		},
-		Get: func(evalCtx *extendedEvalContext, _ *kv.Txn) (string, error) {
-			return formatBoolAsPostgresSetting(evalCtx.SessionData().EnableSuperRegions), nil
-		},
-		GlobalDefault: func(sv *settings.Values) string {
-			return formatBoolAsPostgresSetting(enableSuperRegions.Get(sv))
-		},
-	},
-
-	// CockroachDB extension.
-	`alter_primary_region_super_region_override`: {
-		GetStringVal: makePostgresBoolGetStringValFn(`alter_primary_region_super_region_override`),
-		Set: func(_ context.Context, m sessionDataMutator, s string) error {
-			b, err := paramparse.ParseBoolVar("alter_primary_region_super_region_override", s)
-			if err != nil {
-				return err
-			}
-			m.SetEnableOverrideAlterPrimaryRegionInSuperRegion(b)
-			return nil
-		},
-		Get: func(evalCtx *extendedEvalContext, _ *kv.Txn) (string, error) {
-			return formatBoolAsPostgresSetting(evalCtx.SessionData().OverrideAlterPrimaryRegionInSuperRegion), nil
-		},
-		GlobalDefault: func(sv *settings.Values) string {
-			return formatBoolAsPostgresSetting(overrideAlterPrimaryRegionInSuperRegion.Get(sv))
-		}},
 
 	// CockroachDB extension.
 	`enable_implicit_transaction_for_batch_statements`: {
@@ -3356,11 +3224,6 @@ func init() {
 	it := varGen[`idle_in_session_timeout`]
 	it.Hidden = false
 	varGen[`idle_session_timeout`] = it
-
-	// Compatibility with a previous version of CockroachDB.
-	ah := varGen[`enable_auto_rehoming`]
-	ah.Hidden = true
-	varGen[`experimental_enable_auto_rehoming`] = ah
 
 	// Initialize delegate.ValidVars.
 	for v := range varGen {

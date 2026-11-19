@@ -207,7 +207,6 @@ CREATE TABLE users(id UUID DEFAULT gen_random_uuid() PRIMARY KEY, promo_id INT R
 			{"large_full_scan_rows", "2000"},
 			{"locality_optimized_partitioned_index_scan", "off"},
 			{"null_ordered_last", "on"},
-			{"on_update_rehome_row_enabled", "off"},
 			{"opt_split_scan_limit", "1000"},
 			{"optimizer_use_histograms", "off"},
 			{"optimizer_use_multicol_stats", "off"},

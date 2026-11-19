@@ -40,11 +40,11 @@ CREATE TABLE IF NOT EXISTS a (id INT PRIMARY KEY)
 statement ok
 COMMENT ON TABLE a IS 'a_comment'
 
-query TTTTIT colnames
+query TTTTI colnames
 SHOW TABLES FROM test
 ----
-schema_name  table_name  type   owner  estimated_row_count  locality
-public       a           table  root   0                    NULL
+schema_name  table_name  type   owner  estimated_row_count
+public       a           table  root   0
 
 statement ok
 CREATE TABLE b (id INT PRIMARY KEY)
@@ -145,16 +145,16 @@ a            INT8       false        NULL            ·                      {f_
 b            INT8       false        NULL            ·                      {f_pkey}  false
 c            INT8       false        NULL            ·                      {f_pkey}  false
 
-query TTTTITT colnames,rowsort
+query TTTTIT colnames,rowsort
 SHOW TABLES FROM test WITH COMMENT
 ----
-schema_name  table_name  type   owner  estimated_row_count  locality  comment
-public       a           table  root   0                    NULL      a_comment
-public       b           table  root   0                    NULL      ·
-public       c           table  root   0                    NULL      ·
-public       d           table  root   0                    NULL      ·
-public       e           table  root   0                    NULL      ·
-public       f           table  root   0                    NULL      ·
+schema_name  table_name  type   owner  estimated_row_count  comment
+public       a           table  root   0                    a_comment
+public       b           table  root   0                    ·
+public       c           table  root   0                    ·
+public       d           table  root   0                    ·
+public       e           table  root   0                    ·
+public       f           table  root   0                    ·
 
 statement ok
 SET DATABASE = ""
@@ -542,10 +542,10 @@ statement ok
 INSERT INTO t1 SELECT a FROM generate_series(1, 1024) AS a(a)
 
 # only tables from current database
-query TTTTIT
+query TTTTI
 SHOW TABLES
 ----
-public  t1  table  testuser  0  NULL
+public  t1  table  testuser  0
 
 # see only virtual tables (estimated_row_count is NULL)
 # and tables testuser has access to (estimated_row_count >= 0)
@@ -624,11 +624,9 @@ node_transaction_statistics             NULL
 node_transactions                       NULL
 node_txn_execution_insights             NULL
 node_txn_stats                          NULL
-partitions                              NULL
 pg_catalog_table_is_implemented         NULL
 ranges                                  NULL
 ranges_no_leases                        NULL
-regions                                 NULL
 schema_changes                          NULL
 session_trace                           NULL
 session_variables                       NULL
@@ -636,7 +634,6 @@ statement_activity                      NULL
 statement_statistics                    NULL
 statement_statistics_persisted          NULL
 statement_statistics_persisted_v22_2    NULL
-super_regions                           NULL
 system_jobs                             NULL
 table_columns                           NULL
 table_indexes                           NULL

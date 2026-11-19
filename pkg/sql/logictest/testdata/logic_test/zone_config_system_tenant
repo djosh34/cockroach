@@ -38,6 +38,7 @@ SELECT zone_id, target FROM crdb_internal.zones ORDER BY 1
 60   TABLE system.public.statement_activity
 61   TABLE system.public.transaction_activity
 106  TABLE test.public.t
+107  TABLE test.public.a
 
 # The tests below test semantics around named zone for the system tenant. The
 # system tenant is allowed to alter all named zones. All named zones bar

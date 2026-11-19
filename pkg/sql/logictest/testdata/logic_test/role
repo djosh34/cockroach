@@ -1205,22 +1205,22 @@ GRANT SELECT ON privatedb.publictable TO public
 
 user testuser
 
-query TTTTTT rowsort
+query TT rowsort
 SHOW DATABASES
 ----
-db2        root  NULL  NULL  {}  NULL
-defaultdb  root  NULL  NULL  {}  NULL
-postgres   root  NULL  NULL  {}  NULL
-publicdb   root  NULL  NULL  {}  NULL
-test       root  NULL  NULL  {}  NULL
+db2        root
+defaultdb  root
+postgres   root
+publicdb   root
+test       root
 
-query TTTTIT rowsort
+query TTTTI rowsort
 SHOW TABLES FROM publicdb
 ----
-public  privatetable  table  root  0  NULL
-public  publictable   table  root  0  NULL
+public  privatetable  table  root  0
+public  publictable   table  root  0
 
-query TTTTIT
+query TTTTI
 SHOW TABLES FROM privatedb
 ----
 
@@ -1263,11 +1263,11 @@ SELECT * FROM publicdb.publictable
 statement error user testuser does not have INSERT privilege on relation publictable
 INSERT INTO publicdb.publictable VALUES (1)
 
-query TTTTIT rowsort
+query TTTTI rowsort
 SHOW TABLES FROM publicdb
 ----
-public  privatetable  table  root  0  NULL
-public  publictable   table  root  0  NULL
+public  privatetable  table  root  0
+public  publictable   table  root  0
 
 # Test that non-admin users cannot drop admins.
 user root

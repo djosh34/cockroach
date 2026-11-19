@@ -221,12 +221,6 @@ func TestCreateAsShow(t *testing.T) {
 			setup: "CREATE TABLE show_ranges_tbl (id int PRIMARY KEY)",
 		},
 		{
-			sql: "SHOW SURVIVAL GOAL FROM DATABASE",
-		},
-		{
-			sql: "SHOW REGIONS FROM DATABASE",
-		},
-		{
 			sql: "SHOW GRANTS ON ROLE",
 		},
 		{
