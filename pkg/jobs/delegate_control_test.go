@@ -392,12 +392,12 @@ func TestJobControlByType(t *testing.T) {
 	})
 
 	// To test the commands on valid job types, one job of every type in every state will be created.
-	var allJobTypes = []jobspb.Type{jobspb.TypeChangefeed, jobspb.TypeImport, jobspb.TypeBackup, jobspb.TypeRestore}
+	// Changefeeds are removed, so job control no longer accepts their type.
+	var allJobTypes = []jobspb.Type{jobspb.TypeImport, jobspb.TypeBackup, jobspb.TypeRestore}
 	var jobspbTypeToString = map[jobspb.Type]string{
-		jobspb.TypeChangefeed: "CHANGEFEED",
-		jobspb.TypeBackup:     "BACKUP",
-		jobspb.TypeImport:     "IMPORT",
-		jobspb.TypeRestore:    "RESTORE",
+		jobspb.TypeBackup:  "BACKUP",
+		jobspb.TypeImport:  "IMPORT",
+		jobspb.TypeRestore: "RESTORE",
 	}
 
 	var allJobStates = []Status{StatusPending, StatusRunning, StatusPaused, StatusFailed,
@@ -436,7 +436,6 @@ func TestJobControlByType(t *testing.T) {
 					jobDetails  jobspb.Details
 					jobProgress jobspb.ProgressDetails
 				}{
-					{jobspb.ChangefeedDetails{}, jobspb.ChangefeedProgress{}},
 					{jobspb.ImportDetails{}, jobspb.ImportProgress{}},
 					{jobspb.BackupDetails{}, jobspb.BackupProgress{}},
 					{jobspb.RestoreDetails{}, jobspb.RestoreProgress{}},

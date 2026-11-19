@@ -22,8 +22,7 @@ select
 
 exec-ddl
 CREATE TABLE g (
-  id INT PRIMARY KEY,
-  geog GEOGRAPHY
+  id INT PRIMARY KEY
 )
 ----
 
@@ -41,48 +40,6 @@ ALTER TABLE g INJECT STATISTICS '[
 ]'
 ----
 
-# If there is a limit hint, n, the filter is not expected to be evaluated for
-# each input row. It is only expected to be evaluated on the number of rows
-# required to produce n rows.
-opt
-SELECT id FROM g
-WHERE st_dwithin(geog, st_makepoint(1.0, 1.0)::geography, 200)
-LIMIT 10
-----
-project
- ├── columns: id:1!null
- ├── cardinality: [0 - 10]
- ├── immutable
- ├── stats: [rows=10]
- ├── cost: 204.633636
- ├── key: (1)
- └── limit
-      ├── columns: id:1!null geog:2!null
-      ├── cardinality: [0 - 10]
-      ├── immutable
-      ├── stats: [rows=10]
-      ├── cost: 204.523636
-      ├── key: (1)
-      ├── fd: (1)-->(2)
-      ├── select
-      │    ├── columns: id:1!null geog:2!null
-      │    ├── immutable
-      │    ├── stats: [rows=55000, distinct(2)=50000, null(2)=0]
-      │    ├── cost: 204.413636
-      │    ├── key: (1)
-      │    ├── fd: (1)-->(2)
-      │    ├── limit hint: 10.00
-      │    ├── scan g
-      │    │    ├── columns: id:1!null geog:2
-      │    │    ├── stats: [rows=500000, distinct(1)=500000, null(1)=0, distinct(2)=50000, null(2)=5000]
-      │    │    ├── cost: 112.565455
-      │    │    ├── key: (1)
-      │    │    ├── fd: (1)-->(2)
-      │    │    └── limit hint: 90.91
-      │    └── filters
-      │         └── st_dwithin(geog:2, '0101000020E6100000000000000000F03F000000000000F03F', 200.0) [outer=(2), immutable, constraints=(/2: (/NULL - ])]
-      └── 10
-
 # There is no error when calculating the cost with a limit hint if the
 # selectivity is zero. The build command is used to avoid normalizing the
 # expression to an empty Values expression.
@@ -95,29 +52,29 @@ limit
  ├── columns: id:1!null
  ├── cardinality: [0 - 0]
  ├── stats: [rows=0]
- ├── cost: 535028.66
+ ├── cost: 525028.46
  ├── key: (1)
  ├── project
  │    ├── columns: id:1!null
  │    ├── cardinality: [0 - 0]
  │    ├── stats: [rows=0]
- │    ├── cost: 535028.65
+ │    ├── cost: 525028.45
  │    ├── key: (1)
  │    ├── limit hint: 10.00
  │    └── select
- │         ├── columns: id:1!null geog:2 crdb_internal_mvcc_timestamp:3 tableoid:4
+ │         ├── columns: id:1!null crdb_internal_mvcc_timestamp:2 tableoid:3
  │         ├── cardinality: [0 - 0]
  │         ├── stats: [rows=0]
- │         ├── cost: 535028.64
+ │         ├── cost: 525028.44
  │         ├── key: (1)
- │         ├── fd: (1)-->(2-4)
+ │         ├── fd: (1)-->(2,3)
  │         ├── limit hint: 10.00
  │         ├── scan g
- │         │    ├── columns: id:1!null geog:2 crdb_internal_mvcc_timestamp:3 tableoid:4
+ │         │    ├── columns: id:1!null crdb_internal_mvcc_timestamp:2 tableoid:3
  │         │    ├── stats: [rows=500000]
- │         │    ├── cost: 530028.62
+ │         │    ├── cost: 520028.42
  │         │    ├── key: (1)
- │         │    └── fd: (1)-->(2-4)
+ │         │    └── fd: (1)-->(2,3)
  │         └── filters
  │              └── false [constraints=(contradiction; tight)]
  └── 10

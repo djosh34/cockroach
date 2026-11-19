@@ -33,10 +33,6 @@ completions:
   "ALL" (reserved) -> "ALL" (0, 0)
   "ALTER" (unreserved) -> "ALTER" (0, 0)
   ... entries omitted ...
-- "relation":
-  "geography_columns" (Shows all defined geography columns. Matches PostGIS' geography_columns function) -> "geography_columns" (0, 0)
-  "geometry_columns" (Shows all defined geometry columns. Matches PostGIS' geometry_columns functional) -> "geometry_columns" (0, 0)
-  "spatial_ref_sys" (Shows all defined Spatial Reference Identifiers (SRIDs). Matches PostGIS' spatia) -> "spatial_ref_sys" (0, 0)
 - "schema":
   "crdb_internal" () -> "crdb_internal" (0, 0)
   "information_schema" () -> "information_schema" (0, 0)
@@ -53,8 +49,6 @@ msg: ""
 completions:
 - "database":
   "defaultdb" () -> "defaultdb" (0, 6)
-- "functions":
-  "default_to_database_primary_region(" ((from schema pg_catalog) Returns the given region if the region has been added to the current database) -> "default_to_database_primary_region(" (0, 6)
 - "keyword":
   "DEFAULT" (reserved) -> "DEFAULT" (0, 6)
   "DEFAULTS" (unreserved) -> "DEFAULTS" (0, 6)

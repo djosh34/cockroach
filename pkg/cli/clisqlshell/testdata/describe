@@ -414,9 +414,6 @@ pg_catalog,pg_user,table,node,NULL
 pg_catalog,pg_user_mapping,table,node,NULL
 pg_catalog,pg_user_mappings,table,node,NULL
 pg_catalog,pg_views,table,node,NULL
-pg_extension,geography_columns,table,node,NULL
-pg_extension,geometry_columns,table,node,NULL
-pg_extension,spatial_ref_sys,table,node,NULL
 public,ftable1,table,root,NULL
 public,ftable1_pkey,index,root,ftable1
 public,ftable1_x_key,index,root,ftable1
@@ -714,9 +711,6 @@ https://www.postgresql.org/docs/9.5/catalog-pg-user-mapping.html"
 pg_catalog,pg_user_mappings,table,node,NULL,permanent,prefix,pg_user_mappings was created for compatibility and is currently unimplemented
 pg_catalog,pg_views,table,node,NULL,permanent,prefix,"view definitions (incomplete - see also information_schema.views)
 https://www.postgresql.org/docs/9.5/view-pg-views.html"
-pg_extension,geography_columns,table,node,NULL,permanent,prefix,Shows all defined geography columns. Matches PostGIS' geography_columns functionality.
-pg_extension,geometry_columns,table,node,NULL,permanent,prefix,Shows all defined geometry columns. Matches PostGIS' geometry_columns functionality.
-pg_extension,spatial_ref_sys,table,node,NULL,permanent,prefix,Shows all defined Spatial Reference Identifiers (SRIDs). Matches PostGIS' spatial_ref_sys table.
 public,ftable1,table,root,NULL,permanent,prefix,
 public,ftable1_pkey,index,root,ftable1,permanent,prefix,
 public,ftable1_x_key,index,root,ftable1,permanent,prefix,
@@ -2417,9 +2411,6 @@ boolean,character,NULL,in assignment
 boolean,character varying,NULL,in assignment
 boolean,integer,NULL,no
 boolean,text,NULL,in assignment
-box2d,geometry,NULL,yes
-bytea,geography,NULL,yes
-bytea,geometry,NULL,yes
 character,"""char""",NULL,in assignment
 character,character,NULL,yes
 character,character varying,NULL,yes
@@ -2438,15 +2429,6 @@ double precision,integer,NULL,in assignment
 double precision,numeric,NULL,in assignment
 double precision,real,NULL,in assignment
 double precision,smallint,NULL,in assignment
-geography,bytea,NULL,yes
-geography,geography,NULL,yes
-geography,geometry,NULL,no
-geometry,box2d,NULL,yes
-geometry,bytea,NULL,yes
-geometry,geography,NULL,yes
-geometry,geometry,NULL,yes
-geometry,jsonb,NULL,no
-geometry,text,NULL,yes
 inet,character,NULL,in assignment
 inet,character varying,NULL,in assignment
 inet,text,NULL,in assignment
@@ -2531,7 +2513,6 @@ smallint,regtype,NULL,yes
 text,"""char""",NULL,in assignment
 text,character,NULL,yes
 text,character varying,NULL,yes
-text,geometry,NULL,yes
 text,name,NULL,yes
 text,regclass,NULL,yes
 text,text,NULL,yes

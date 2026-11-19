@@ -38,6 +38,9 @@ loop:
 		case types.UnknownFamily, types.AnyFamily:
 			// These are not included on purpose.
 			continue loop
+		case types.GeometryFamily, types.GeographyFamily, types.Box2DFamily:
+			// The spatial types are removed; only their wire values remain.
+			continue loop
 		}
 		noFamilyRepresentative[familyID] = struct{}{}
 	}

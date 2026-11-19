@@ -31,7 +31,9 @@ const (
 )
 
 var (
-	elasticCPUControlEnabled = settings.RegisterBoolSetting(
+	// ElasticCPUControlEnabled turns elastic CPU admission control on. It is
+	// exported so tests can turn it on where the default is off.
+	ElasticCPUControlEnabled = settings.RegisterBoolSetting(
 		settings.SystemOnly,
 		"admission.elastic_cpu.enabled",
 		"when true, elastic work (like backups) performed by the KV layer is subject to admission control",
@@ -132,7 +134,7 @@ func (e *ElasticCPUWorkQueue) enabled() bool {
 		return true
 	}
 
-	return elasticCPUControlEnabled.Get(&e.settings.SV)
+	return ElasticCPUControlEnabled.Get(&e.settings.SV)
 }
 
 func (e *ElasticCPUWorkQueue) close() {

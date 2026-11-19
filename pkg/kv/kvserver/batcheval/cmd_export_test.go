@@ -458,6 +458,10 @@ func TestExportRequestWithCPULimitResumeSpans(t *testing.T) {
 				},
 			}}}})
 	defer tc.Stopper().Stop(context.Background())
+	// Elastic CPU control is off by default without per-goroutine CPU time.
+	for i := 0; i < tc.NumServers(); i++ {
+		admission.ElasticCPUControlEnabled.Override(ctx, &tc.Server(i).SystemLayer().ClusterSettings().SV, true)
+	}
 
 	srv := tc.Server(0)
 

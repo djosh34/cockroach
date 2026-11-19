@@ -1521,11 +1521,11 @@ CREATE TABLE t_test_param (
   FAMILY fam_0_a_b (a, b)
 );
 
-statement error pq: invalid storage param "s2_max_level" on primary key
-ALTER TABLE t_test_param ALTER PRIMARY KEY USING COLUMNS (b) WITH (s2_max_level=20);
+statement error pq: invalid storage param "fillfactor" on primary key
+ALTER TABLE t_test_param ALTER PRIMARY KEY USING COLUMNS (b) WITH (fillfactor=20);
 
-statement error pq: invalid storage param "s2_max_level" on primary key
-ALTER TABLE t_test_param ALTER PRIMARY KEY USING COLUMNS (b) USING HASH WITH (s2_max_level=20);
+statement error pq: invalid storage param "fillfactor" on primary key
+ALTER TABLE t_test_param ALTER PRIMARY KEY USING COLUMNS (b) USING HASH WITH (fillfactor=20);
 
 statement error pq: "bucket_count" storage param should only be set with "USING HASH" for hash sharded index
 ALTER TABLE t_test_param ALTER PRIMARY KEY USING COLUMNS (b) WITH (bucket_count=5);

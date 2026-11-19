@@ -1552,6 +1552,8 @@ func TestGetDescriptorsFromStoreForIntervalCPULimiterPagination(t *testing.T) {
 		}},
 	})
 	defer srv.Stopper().Stop(ctx)
+	// Elastic CPU control is off by default without per-goroutine CPU time.
+	admission.ElasticCPUControlEnabled.Override(ctx, &srv.SystemLayer().ClusterSettings().SV, true)
 	s := srv.ApplicationLayer()
 
 	sqlDB := sqlutils.MakeSQLRunner(db)

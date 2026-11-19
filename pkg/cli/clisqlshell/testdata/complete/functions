@@ -17,11 +17,9 @@ completions:
   "lastval(" ((from schema pg_catalog) Return value most recently obtained with nextval in this session) -> "lastval(" (0, 2)
   "lastval(" ((from schema public) ) -> "lastval(" (0, 2)
 - "keyword":
-  "LABEL" (unreserved) -> "LABEL" (0, 2)
   "LANGUAGE" (unreserved) -> "LANGUAGE" (0, 2)
   "LAST" (unreserved) -> "LAST" (0, 2)
   "LATERAL" (reserved) -> "LATERAL" (0, 2)
-  "LATEST" (unreserved) -> "LATEST" (0, 2)
 
 complete
 SELECT pg_catalog.la@

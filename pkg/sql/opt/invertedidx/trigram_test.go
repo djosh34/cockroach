@@ -106,7 +106,7 @@ func TestTryFilterTrigram(t *testing.T) {
 		// that is tested elsewhere. This is just testing that we are constraining
 		// the index when we expect to and we have the correct values for tight,
 		// unique, and remainingFilters.
-		spanExpr, _, remainingFilters, _, ok := invertedidx.TryFilterInvertedIndex(
+		spanExpr, _, remainingFilters, ok := invertedidx.TryFilterInvertedIndex(
 			context.Background(),
 			evalCtx,
 			&f,

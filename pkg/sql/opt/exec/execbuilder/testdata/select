@@ -2056,9 +2056,6 @@ vectorized: true
   table: tbl_with_no_primary_constraint@tbl_with_no_primary_constraint_pkey
   spans: FULL SCAN
 
-statement ok
-SHOW PARTITIONS FROM INDEX tbl_with_no_primary_constraint@primary
-
 query T
 EXPLAIN (VERBOSE) SELECT b FROM tbl_with_primary_named_index@primary ORDER BY b
 ----
@@ -2071,6 +2068,3 @@ vectorized: true
   estimated row count: 1,000 (missing stats)
   table: tbl_with_primary_named_index@primary
   spans: FULL SCAN
-
-statement ok
-SELECT index_name FROM [SHOW PARTITIONS FROM INDEX tbl_with_primary_named_index@primary]

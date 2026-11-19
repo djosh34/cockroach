@@ -1622,10 +1622,6 @@ INSERT INTO unique_array VALUES (ARRAY[2], ARRAY[2, 3])
 statement error duplicate key value violates unique constraint
 CREATE UNIQUE INDEX ON unique_array(b)
 
-# Create an indexes on a bad type.
-statement error pq: unimplemented: column x is of type geography\[\] and thus is not indexable
-CREATE TABLE tbad (x GEOGRAPHY[] PRIMARY KEY)
-
 # Test arrays of composite types.
 # Add x to PRIMARY KEY once #50659 is fixed.
 statement ok

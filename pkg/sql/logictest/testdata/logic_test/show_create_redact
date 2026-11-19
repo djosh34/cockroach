@@ -100,13 +100,13 @@ ef  CREATE TABLE public.ef (
     )
 
 statement ok
-CREATE TABLE g (g GEOMETRY AS ('POINT (0 0)') VIRTUAL)
+CREATE TABLE g (g STRING AS ('POINT (0 0)') VIRTUAL)
 
 query TT
 SHOW CREATE TABLE g WITH REDACT
 ----
 g  CREATE TABLE public.g (
-     g GEOMETRY NULL AS (‹×›:::GEOMETRY) VIRTUAL,
+     g STRING NULL AS (‹×›:::STRING) VIRTUAL,
      rowid INT8 NOT VISIBLE NOT NULL DEFAULT unique_rowid(),
      CONSTRAINT g_pkey PRIMARY KEY (rowid ASC)
    )

@@ -188,17 +188,6 @@ func TestCreateAsShow(t *testing.T) {
 			setup: "CREATE TABLE show_constraints_tbl (id int PRIMARY KEY)",
 		},
 		{
-			sql: "SHOW PARTITIONS FROM DATABASE defaultdb",
-		},
-		{
-			sql:   "SHOW PARTITIONS FROM TABLE show_partitions_tbl",
-			setup: "CREATE TABLE show_partitions_tbl (id int PRIMARY KEY)",
-		},
-		{
-			sql:   "SHOW PARTITIONS FROM INDEX show_partitions_idx_tbl@show_partitions_idx_tbl_pkey",
-			setup: "CREATE TABLE show_partitions_idx_tbl (id int PRIMARY KEY)",
-		},
-		{
 			sql: "SHOW GRANTS",
 		},
 		{

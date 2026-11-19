@@ -23,16 +23,8 @@ type alias struct {
 	hidden      bool
 }
 
-var aliases = map[string]alias{
-	"replication-source": {
-		aliasTarget: "virtual+app+sharedservice+repl",
-		description: "configuration suitable for a replication source cluster",
-	},
-	"replication-target": {
-		aliasTarget: "virtual+noapp+repl",
-		description: "configuration suitable for a replication target cluster",
-	},
-}
+// aliases maps alternate names to profiles.
+var aliases = map[string]alias{}
 
 const defaultProfileName = "default"
 
@@ -65,17 +57,9 @@ var staticProfiles = map[string]configProfile{
 		description: "virtualization enabled but no virtual cluster defined yet",
 		tasks:       virtClusterInitTasks,
 	},
-	"virtual+noapp+repl": {
-		description: "virtualization enabled but no virtual cluster defined yet, with replication enabled",
-		tasks:       enableReplication(virtClusterInitTasks),
-	},
 	"virtual+app+sharedservice": {
 		description: "one virtual cluster configured to serve SQL application traffic",
 		tasks:       virtClusterWithAppServiceInitTasks,
-	},
-	"virtual+app+sharedservice+repl": {
-		description: "one virtual cluster configured to serve SQL application traffic, with replication enabled",
-		tasks:       enableReplication(virtClusterWithAppServiceInitTasks),
 	},
 }
 
@@ -84,7 +68,7 @@ var staticProfiles = map[string]configProfile{
 //
 // NOTE: DO NOT MODIFY TASKS HERE. Task execution is identified by the
 // task ID; already-run tasks will not re-run. Add tasks at the end of
-// each config profile. See enableReplication() for an example.
+// each config profile.
 var virtClusterInitTasks = []autoconfigpb.Task{
 	makeTask("initial cluster config",
 		/* nonTxnSQL */ []string{
@@ -93,8 +77,6 @@ var virtClusterInitTasks = []autoconfigpb.Task{
 			// Enable zone config changes in secondary tenants  (this ought to be configurable per-tenant, but is not possible yet in v23.1).
 			"SET CLUSTER SETTING sql.virtual_cluster.feature_access.zone_configs.enabled = true",
 			"SET CLUSTER SETTING sql.virtual_cluster.feature_access.zone_configs_unrestricted.enabled = true",
-			// Enable multi-region abstractions in secondary tenants.
-			"SET CLUSTER SETTING sql.virtual_cluster.feature_access.multiregion.enabled = true",
 			// Disable range coalescing (as long as the problems related
 			// to range coalescing have not been solved yet).
 			"SET CLUSTER SETTING spanconfig.range_coalescing.system.enabled = false",
@@ -128,7 +110,7 @@ var virtClusterInitTasks = []autoconfigpb.Task{
 
 // NOTE: DO NOT MODIFY TASKS HERE. Task execution is identified by the
 // task ID; already-run tasks will not re-run. Add tasks at the end of
-// each config profile. See enableReplication() for an example.
+// each config profile.
 var virtClusterWithAppServiceInitTasks = append(
 	virtClusterInitTasks[:len(virtClusterInitTasks):len(virtClusterInitTasks)],
 	makeTask("create an application virtual cluster",
@@ -148,18 +130,6 @@ var virtClusterWithAppServiceInitTasks = append(
 		nil, /* txnSQL */
 	),
 )
-
-func enableReplication(baseTasks []autoconfigpb.Task) []autoconfigpb.Task {
-	return append(baseTasks[:len(baseTasks):len(baseTasks)],
-		makeTask("enable rangefeeds and replication",
-			/* nonTxnSQL */ []string{
-				"SET CLUSTER SETTING kv.rangefeed.enabled = true",
-				"SET CLUSTER SETTING physical_replication.enabled = true",
-			},
-			nil, /* txnSQL */
-		),
-	)
-}
 
 func makeTask(description string, nonTxnSQL, txnSQL []string) autoconfigpb.Task {
 	return autoconfigpb.Task{

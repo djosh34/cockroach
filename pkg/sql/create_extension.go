@@ -43,21 +43,22 @@ func (n *createExtensionNode) unimplementedExtensionError(issue int) error {
 
 func (n *createExtensionNode) startExec(params runParams) error {
 	switch n.CreateExtension.Name {
-	case "postgis",
-		"pg_trgm",
+	case "pg_trgm",
 		"fuzzystrmatch",
 		"pgcrypto",
 		"uuid-ossp":
 		telemetry.Inc(sqltelemetry.CreateExtensionCounter(string(n.CreateExtension.Name)))
 		return nil
-	case "postgis_raster",
+	case "postgis",
+		"postgis_raster",
 		"postgis_topology",
 		"postgis_sfcgal",
 		"address_standardizer",
 		"address_standardizer_data_us",
 		"postgis_tiger_geocoder":
-		// PostGIS specific extensions.
-		return n.unimplementedExtensionError(54514)
+		// PostGIS and its extensions need the spatial types, which are removed.
+		return pgerror.Newf(pgcode.FeatureNotSupported,
+			"extension %q is unsupported: spatial features are removed", n.CreateExtension.Name)
 	case "btree_gin":
 		return n.unimplementedExtensionError(51992)
 	case "btree_gist":

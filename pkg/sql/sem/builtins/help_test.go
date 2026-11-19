@@ -62,7 +62,8 @@ func TestHelpFunctions(t *testing.T) {
 		})
 	})
 
-	if numTestsRun < 1000 {
+	// About 770 builtins remain after the spatial functions were removed.
+	if numTestsRun < 700 {
 		t.Errorf("Test saw %d builtins, probably load order is wrong", numTestsRun)
 	}
 }

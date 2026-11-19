@@ -112,6 +112,10 @@ func TestNoOpGrant(t *testing.T) {
 				// We exclude `ALL` privilege here because granting `ALL` here will disturb testing for other privileges.
 				continue
 			}
+			if !privilege.Grantable(priv) {
+				// The privileges of removed features can no longer be granted.
+				continue
+			}
 
 			// Grant privilege `privilege` on `objectType` `objectName` to user `roach`.
 			tdb.Exec(t, fmt.Sprintf("GRANT %v ON %v %v TO %v", priv.DisplayName(), objectType, objectName, userRoach.Normalized()))

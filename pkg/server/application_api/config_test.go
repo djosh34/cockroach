@@ -236,11 +236,11 @@ func TestAdminAPISettings(t *testing.T) {
 
 		// Non-admin with VIEWACTIVITY and not VIEWCLUSTERSETTING permission requesting specific cluster setting
 		// from console should return that cluster setting
-		if err := srvtestutils.GetAdminJSONProtoWithAdminOption(s, "settings?keys=ui.display_timezone",
+		if err := srvtestutils.GetAdminJSONProtoWithAdminOption(s, "settings?keys=sql.stats.automatic_collection.enabled",
 			&resp, false); err != nil {
 			t.Fatal(err)
 		}
-		require.NotNil(t, resp.KeyValues["ui.display_timezone"])
+		require.NotNil(t, resp.KeyValues["sql.stats.automatic_collection.enabled"])
 		require.True(t, len(resp.KeyValues) == 1)
 
 		// Non-admin with VIEWACTIVITY and not VIEWCLUSTERSETTING permission requesting specific cluster setting

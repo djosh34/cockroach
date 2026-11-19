@@ -335,8 +335,8 @@ func TestSearchPathSpecialChar(t *testing.T) {
 		expectedSearchPathString string
 	}{
 		{
-			searchPath:               []string{`$user`, `public`, `postgis`, `geography`},
-			expectedSearchPathString: `"$user", public, postgis, "geography"`,
+			searchPath:               []string{`$user`, `public`, `postgis`, `table`},
+			expectedSearchPathString: `"$user", public, postgis, "table"`,
 		},
 		{
 			searchPath:               []string{`dirt`, `test`, `$user`, `public`, `prod`},

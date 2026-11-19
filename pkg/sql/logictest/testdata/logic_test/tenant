@@ -562,7 +562,7 @@ statement ok
 SET CLUSTER SETTING sql.restrict_system_interface.enabled = true
 
 statement error blocked update to application-level cluster setting.*\nHINT:.*\nTry changing the setting from a virtual cluster
-SET CLUSTER SETTING ui.display_timezone = 'America/New_York'
+SET CLUSTER SETTING sql.metrics.statement_details.enabled = false
 
 statement error blocked DDL execution from the system interface.*\nHINT:.*\nTry running the DDL from a virtual cluster
 CREATE TABLE foo(x INT)

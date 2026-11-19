@@ -88,17 +88,6 @@ func TestRouteToNode(t *testing.T) {
 			expectRegex:                 regexp.MustCompile(`ranges_underreplicated{store="2",node_id="2"}`),
 		},
 		{
-			name:                    "remote / root HTML on node 2 from node 1 using cookie",
-			path:                    "/",
-			sourceServerID:          0,
-			nodeIDRequestedInCookie: "2",
-			expectStatusCode:        200,
-			// The root HTTP endpoint returns the "Binary built without web
-			// UI" response in tests so it's a bit tricky to look for any more
-			// detail here.
-			expectRegex: regexp.MustCompile(`<!DOCTYPE html>`),
-		},
-		{
 			name:                    "unathenticated remote request for statements endpoint should fail",
 			path:                    "/_status/statements",
 			sourceServerID:          0,

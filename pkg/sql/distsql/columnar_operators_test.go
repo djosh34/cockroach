@@ -76,10 +76,6 @@ var aggregateFuncToNumArguments = map[execinfrapb.AggregatorSpec_Func]int{
 	execinfrapb.JSONBObjectAgg:          2,
 	execinfrapb.VarPop:                  1,
 	execinfrapb.StddevPop:               1,
-	execinfrapb.StMakeline:              1,
-	execinfrapb.StExtent:                1,
-	execinfrapb.StUnion:                 1,
-	execinfrapb.StCollect:               1,
 	execinfrapb.CovarPop:                2,
 	execinfrapb.CovarSamp:               2,
 	execinfrapb.RegrIntercept:           2,
@@ -133,7 +129,13 @@ func TestAggregateFuncToNumArguments(t *testing.T) {
 	fns := make([]execinfrapb.AggregatorSpec_Func, 0,
 		len(execinfrapb.AggregatorSpec_Func_name))
 	for fn := range execinfrapb.AggregatorSpec_Func_name {
-		fns = append(fns, execinfrapb.AggregatorSpec_Func(fn))
+		switch f := execinfrapb.AggregatorSpec_Func(fn); f {
+		case execinfrapb.AggregatorSpec_ST_MAKELINE, execinfrapb.AggregatorSpec_ST_EXTENT,
+			execinfrapb.AggregatorSpec_ST_UNION, execinfrapb.AggregatorSpec_ST_COLLECT:
+			// The spatial aggregates are removed; only their wire values remain.
+		default:
+			fns = append(fns, f)
+		}
 	}
 	sort.Slice(fns, func(i, j int) bool { return fns[i] < fns[j] })
 	for _, fn := range fns {
@@ -267,10 +269,6 @@ func TestAggregatorAgainstProcessor(t *testing.T) {
 								switch aggFn {
 								case execinfrapb.ConcatAgg,
 									execinfrapb.StringAgg,
-									execinfrapb.StMakeline,
-									execinfrapb.StExtent,
-									execinfrapb.StUnion,
-									execinfrapb.StCollect,
 									execinfrapb.ArrayAgg,
 									execinfrapb.ArrayCatAgg:
 									for _, typ := range aggFnInputTypes {

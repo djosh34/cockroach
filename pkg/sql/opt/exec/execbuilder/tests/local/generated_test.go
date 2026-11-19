@@ -531,13 +531,6 @@ func TestExecBuild_sql_activity_stats_compaction(
 	runExecBuildLogicTest(t, "sql_activity_stats_compaction")
 }
 
-func TestExecBuild_sql_fn(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runExecBuildLogicTest(t, "sql_fn")
-}
-
 func TestExecBuild_sql_statistics_persisted(
 	t *testing.T,
 ) {

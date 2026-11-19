@@ -6,13 +6,12 @@ unimplemented.*
 feature-usage
 CREATE EXTENSION postgis
 ----
-sql.extension.create.postgis
+error: pq: extension "postgis" is unsupported: spatial features are removed
 
 feature-usage
 CREATE EXTENSION postgis_raster
 ----
-error: pq: unimplemented: extension "postgis_raster" is not yet supported
-unimplemented.#54514.CREATE EXTENSION postgis_raster
+error: pq: extension "postgis_raster" is unsupported: spatial features are removed
 
 feature-usage
 CREATE EXTENSION pg_trgm

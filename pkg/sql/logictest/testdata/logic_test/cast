@@ -1452,7 +1452,7 @@ CREATE TABLE def_assn_cast (
 statement ok
 CREATE TABLE upd_assn_cast (
   id INT4,
-  a TEXT ON UPDATE 'POINT(2.0 2.0)'::GEOMETRY,
+  a TEXT ON UPDATE '2001-01-01'::DATE,
   b FLOAT8 ON UPDATE 6::INT4,
   c VARCHAR ON UPDATE '{ "customer": "John Doe"}'::JSONB
 )
@@ -1475,7 +1475,7 @@ SELECT * from def_assn_cast
 query ITFT
 SELECT * from upd_assn_cast
 ----
-2  010100000000000000000000400000000000000040  6  {"customer": "John Doe"}
+2  2001-01-01  6  {"customer": "John Doe"}
 
 
 statement error pq: could not parse .* as type .*: invalid .* value
@@ -1529,7 +1529,7 @@ FROM
         t98373@[0]
 ----
 array_agg
-array_agg
+2
 array_agg
 array_agg
 array_agg

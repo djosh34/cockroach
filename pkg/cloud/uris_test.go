@@ -59,3 +59,28 @@ func TestSanitizeExternalStorageURI(t *testing.T) {
 		})
 	}
 }
+
+func TestParseURI(t *testing.T) {
+	for _, tc := range []struct {
+		uri, host, path, err string
+	}{
+		{uri: "https://a:1/p", host: "a:1", path: "/p"},
+		{uri: "https://a:1,b:2,c/p?x=1", host: "a:1,b:2,c", path: "/p"},
+		{uri: "http://u:pw@a:1,b:2", host: "a:1,b:2"},
+		{uri: "https://a:1:2/p", err: "invalid port"},
+		{uri: "https://a:1,b:2:3/p", err: "invalid port"},
+		{uri: "nodelocal://1,2/p", host: "1,2", path: "/p"},
+	} {
+		t.Run(tc.uri, func(t *testing.T) {
+			u, err := cloud.ParseURI(tc.uri)
+			if tc.err != "" {
+				require.ErrorContains(t, err, tc.err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.host, u.Host)
+			require.Equal(t, tc.path, u.Path)
+			require.Equal(t, tc.uri, u.String())
+		})
+	}
+}

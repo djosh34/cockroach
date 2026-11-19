@@ -402,7 +402,6 @@ project
       └── filters
            └── max:12 = 1 [outer=(12), constraints=(/12: [/1 - /1]; tight), fd=()-->(12)]
 
-
 # Ignore ConstAgg aggregates on other columns.
 exprnorm expect=RejectNullsGroupBy
 (Root
@@ -1625,7 +1624,6 @@ exec-ddl
 CREATE TABLE table1_89986 (
   col1_0 FLOAT8,
   col1_1 FLOAT4 NOT NULL,
-  col1_2 BOX2D[] NULL,
   col1_3 "char" NOT NULL,
   col1_4 BOOL NULL,
   col1_5 INT2 NOT NULL,
@@ -1637,8 +1635,7 @@ CREATE TABLE table1_89986 (
   FAMILY (col1_8, col1_0),
   FAMILY (col1_6),
   FAMILY (col1_5, col1_7),
-  FAMILY (col1_4, col1_1, col1_3),
-  FAMILY (col1_2)
+  FAMILY (col1_4, col1_1, col1_3)
 )
 ----
 
@@ -1678,9 +1675,9 @@ SELECT tab_3663.col2_3,
  ORDER BY tab_3663.crdb_internal_mvcc_timestamp DESC, tab_3663.tableoid DESC, tab_3663.col2_5
 ----
 project
- ├── columns: col2_3:2 "?column?":66!null "?column?":67!null col_12038:68!null col2_6:5!null "?column?":66!null  [hidden: tab_3663.col2_5:4 tab_3663.crdb_internal_mvcc_timestamp:11 tab_3663.tableoid:12]
- ├── fd: ()-->(66-68)
- ├── ordering: -11,-12,+4 opt(66-68) [actual: -11,-12,+4]
+ ├── columns: col2_3:2 "?column?":65!null "?column?":66!null col_12038:67!null col2_6:5!null "?column?":65!null  [hidden: tab_3663.col2_5:4 tab_3663.crdb_internal_mvcc_timestamp:11 tab_3663.tableoid:12]
+ ├── fd: ()-->(65-67)
+ ├── ordering: -11,-12,+4 opt(65-67) [actual: -11,-12,+4]
  ├── sort
  │    ├── columns: tab_3663.col2_3:2 tab_3663.col2_5:4 tab_3663.col2_6:5!null tab_3663.col2_9:6 tab_3663.crdb_internal_mvcc_timestamp:11 tab_3663.tableoid:12
  │    ├── ordering: -11,-12,+4
@@ -1689,44 +1686,44 @@ project
  │         ├── scan table2_89986 [as=tab_3663]
  │         │    └── columns: tab_3663.col2_3:2 tab_3663.col2_5:4 tab_3663.col2_6:5!null tab_3663.col2_9:6 tab_3663.crdb_internal_mvcc_timestamp:11 tab_3663.tableoid:12
  │         ├── inner-join (hash)
- │         │    ├── columns: tab_3664.col2_12:21!null col1_3:28!null col1_8:33 tab_3666.col2_9:43!null tab_3666.col2_11:45 col2_9:62!null
+ │         │    ├── columns: tab_3664.col2_12:21!null col1_3:27!null col1_8:32 tab_3666.col2_9:42!null tab_3666.col2_11:44 col2_9:61!null
  │         │    ├── outer: (6)
- │         │    ├── fd: ()-->(43,62), (43)==(62), (62)==(43), (21)==(28), (28)==(21)
+ │         │    ├── fd: ()-->(42,61), (42)==(61), (61)==(42), (21)==(27), (27)==(21)
  │         │    ├── scan table2_89986 [as=tab_3664]
  │         │    │    └── columns: tab_3664.col2_12:21
  │         │    ├── inner-join (hash)
- │         │    │    ├── columns: col1_3:28 col1_8:33 tab_3666.col2_9:43!null tab_3666.col2_11:45 col2_9:62!null
+ │         │    │    ├── columns: col1_3:27 col1_8:32 tab_3666.col2_9:42!null tab_3666.col2_11:44 col2_9:61!null
  │         │    │    ├── outer: (6)
- │         │    │    ├── fd: ()-->(43,62), (43)==(62), (62)==(43)
+ │         │    │    ├── fd: ()-->(42,61), (42)==(61), (61)==(42)
  │         │    │    ├── left-join (hash)
- │         │    │    │    ├── columns: col1_3:28 col1_8:33 tab_3666.col2_9:43 tab_3666.col2_11:45
+ │         │    │    │    ├── columns: col1_3:27 col1_8:32 tab_3666.col2_9:42 tab_3666.col2_11:44
  │         │    │    │    ├── scan table2_89986 [as=tab_3666]
- │         │    │    │    │    └── columns: tab_3666.col2_9:43 tab_3666.col2_11:45
+ │         │    │    │    │    └── columns: tab_3666.col2_9:42 tab_3666.col2_11:44
  │         │    │    │    ├── scan table1_89986
- │         │    │    │    │    ├── columns: col1_3:28!null col1_8:33
+ │         │    │    │    │    ├── columns: col1_3:27!null col1_8:32
  │         │    │    │    │    └── computed column expressions
- │         │    │    │    │         ├── col1_8:33
- │         │    │    │    │         │    └── col1_7:32 + col1_5:30
- │         │    │    │    │         └── col1_9:34
+ │         │    │    │    │         ├── col1_8:32
+ │         │    │    │    │         │    └── col1_7:31 + col1_5:29
+ │         │    │    │    │         └── col1_9:33
  │         │    │    │    │              └── col1_0:25 + col1_1:26
  │         │    │    │    └── filters
- │         │    │    │         └── col1_8:33 = tab_3666.col2_11:45 [outer=(33,45), constraints=(/33: (/NULL - ]; /45: (/NULL - ]), fd=(33)==(45), (45)==(33)]
+ │         │    │    │         └── col1_8:32 = tab_3666.col2_11:44 [outer=(32,44), constraints=(/32: (/NULL - ]; /44: (/NULL - ]), fd=(32)==(44), (44)==(32)]
  │         │    │    ├── project
- │         │    │    │    ├── columns: col2_9:62
+ │         │    │    │    ├── columns: col2_9:61
  │         │    │    │    ├── outer: (6)
- │         │    │    │    ├── fd: ()-->(62)
+ │         │    │    │    ├── fd: ()-->(61)
  │         │    │    │    ├── scan table2_89986 [as=tab_3667]
  │         │    │    │    └── projections
- │         │    │    │         └── tab_3663.col2_9:6 [as=col2_9:62, outer=(6)]
+ │         │    │    │         └── tab_3663.col2_9:6 [as=col2_9:61, outer=(6)]
  │         │    │    └── filters
- │         │    │         └── tab_3666.col2_9:43 = col2_9:62 [outer=(43,62), constraints=(/43: (/NULL - ]; /62: (/NULL - ]), fd=(43)==(62), (62)==(43)]
+ │         │    │         └── tab_3666.col2_9:42 = col2_9:61 [outer=(42,61), constraints=(/42: (/NULL - ]; /61: (/NULL - ]), fd=(42)==(61), (61)==(42)]
  │         │    └── filters
- │         │         └── tab_3664.col2_12:21 = col1_3:28 [outer=(21,28), constraints=(/21: (/NULL - ]; /28: (/NULL - ]), fd=(21)==(28), (28)==(21)]
+ │         │         └── tab_3664.col2_12:21 = col1_3:27 [outer=(21,27), constraints=(/21: (/NULL - ]; /27: (/NULL - ]), fd=(21)==(27), (27)==(21)]
  │         └── filters (true)
  └── projections
-      ├── 0 [as="?column?":66]
-      ├── '23:43:20-08:00:00' [as="?column?":67]
-      └── '2026-09-17 11:54:13.000946' [as=col_12038:68]
+      ├── 0 [as="?column?":65]
+      ├── '23:43:20-08:00:00' [as="?column?":66]
+      └── '2026-09-17 11:54:13.000946' [as=col_12038:67]
 
 # Regression test for #100559 - don't panic when exploration uncovers possible
 # null-rejection that normalization failed to find.

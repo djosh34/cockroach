@@ -2,8 +2,8 @@
   "version": "8.0.27",
   "diffSummary": {
     "TotalTables": 48,
-    "TotalColumns": 476,
-    "MissingTables": 0,
+    "TotalColumns": 459,
+    "MissingTables": 3,
     "MissingColumns": 79,
     "DatatypeMismatches": 0
   },
@@ -79,6 +79,9 @@
       "default_collation_name": null,
       "default_encryption": null
     },
+    "st_geometry_columns": {},
+    "st_spatial_reference_systems": {},
+    "st_units_of_measure": {},
     "statistics": {
       "collation": null,
       "comment": null,

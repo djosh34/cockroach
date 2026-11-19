@@ -47,12 +47,10 @@ CREATE TABLE index_tab
     longitude INT,
     data1 INT NOT NULL,
     data2 INT NOT NULL,
-    geom GEOMETRY,
     INDEX a (id, data1, data2),
     INDEX b (val, data1, data2),
     INDEX c (region, data1, data2),
-    INDEX d (latitude, longitude, data1, data2),
-    INVERTED INDEX geomIdx(geom)
+    INDEX d (latitude, longitude, data1, data2)
 )
 ----
 
@@ -1027,38 +1025,38 @@ limit
  ├── ordering: +6
  ├── union-all
  │    ├── columns: val:2!null data1:6!null
- │    ├── left columns: val:46 data1:50
- │    ├── right columns: val:35 data1:39
+ │    ├── left columns: val:38 data1:42
+ │    ├── right columns: val:29 data1:33
  │    ├── cardinality: [0 - 30]
  │    ├── ordering: +6
  │    ├── limit hint: 10.00
  │    ├── union-all
- │    │    ├── columns: val:46!null data1:50!null
- │    │    ├── left columns: val:13 data1:17
- │    │    ├── right columns: val:24 data1:28
+ │    │    ├── columns: val:38!null data1:42!null
+ │    │    ├── left columns: val:11 data1:15
+ │    │    ├── right columns: val:20 data1:24
  │    │    ├── cardinality: [0 - 20]
- │    │    ├── ordering: +50
+ │    │    ├── ordering: +42
  │    │    ├── limit hint: 10.00
  │    │    ├── scan index_tab@b
- │    │    │    ├── columns: val:13!null data1:17!null
- │    │    │    ├── constraint: /13/17/18/12: [/1 - /1]
+ │    │    │    ├── columns: val:11!null data1:15!null
+ │    │    │    ├── constraint: /11/15/16/10: [/1 - /1]
  │    │    │    ├── limit: 10
- │    │    │    ├── fd: ()-->(13)
- │    │    │    ├── ordering: +17 opt(13) [actual: +17]
+ │    │    │    ├── fd: ()-->(11)
+ │    │    │    ├── ordering: +15 opt(11) [actual: +15]
  │    │    │    └── limit hint: 10.00
  │    │    └── scan index_tab@b
- │    │         ├── columns: val:24!null data1:28!null
- │    │         ├── constraint: /24/28/29/23: [/2 - /2]
+ │    │         ├── columns: val:20!null data1:24!null
+ │    │         ├── constraint: /20/24/25/19: [/2 - /2]
  │    │         ├── limit: 10
- │    │         ├── fd: ()-->(24)
- │    │         ├── ordering: +28 opt(24) [actual: +28]
+ │    │         ├── fd: ()-->(20)
+ │    │         ├── ordering: +24 opt(20) [actual: +24]
  │    │         └── limit hint: 10.00
  │    └── scan index_tab@b
- │         ├── columns: val:35!null data1:39!null
- │         ├── constraint: /35/39/40/34: [/3 - /3]
+ │         ├── columns: val:29!null data1:33!null
+ │         ├── constraint: /29/33/34/28: [/3 - /3]
  │         ├── limit: 10
- │         ├── fd: ()-->(35)
- │         ├── ordering: +39 opt(35) [actual: +39]
+ │         ├── fd: ()-->(29)
+ │         ├── ordering: +33 opt(29) [actual: +33]
  │         └── limit hint: 10.00
  └── 10
 
@@ -1067,10 +1065,10 @@ opt expect=SplitLimitedScanIntoUnionScans
 SELECT max(data1) FROM index_tab WHERE region = 'US_EAST' OR region = 'US_WEST'
 ----
 scalar-group-by
- ├── columns: max:12
+ ├── columns: max:10
  ├── cardinality: [1 - 1]
  ├── key: ()
- ├── fd: ()-->(12)
+ ├── fd: ()-->(10)
  ├── limit
  │    ├── columns: region:3!null data1:6!null
  │    ├── internal-ordering: -6
@@ -1079,28 +1077,28 @@ scalar-group-by
  │    ├── fd: ()-->(3,6)
  │    ├── union-all
  │    │    ├── columns: region:3!null data1:6!null
- │    │    ├── left columns: region:15 data1:18
- │    │    ├── right columns: region:26 data1:29
+ │    │    ├── left columns: region:13 data1:16
+ │    │    ├── right columns: region:22 data1:25
  │    │    ├── cardinality: [0 - 2]
  │    │    ├── ordering: -6
  │    │    ├── limit hint: 1.00
  │    │    ├── scan index_tab@c,rev
- │    │    │    ├── columns: region:15!null data1:18!null
- │    │    │    ├── constraint: /15/18/19/13: [/'US_EAST' - /'US_EAST']
+ │    │    │    ├── columns: region:13!null data1:16!null
+ │    │    │    ├── constraint: /13/16/17/11: [/'US_EAST' - /'US_EAST']
  │    │    │    ├── limit: 1(rev)
  │    │    │    ├── key: ()
- │    │    │    ├── fd: ()-->(15,18)
+ │    │    │    ├── fd: ()-->(13,16)
  │    │    │    └── limit hint: 1.00
  │    │    └── scan index_tab@c,rev
- │    │         ├── columns: region:26!null data1:29!null
- │    │         ├── constraint: /26/29/30/24: [/'US_WEST' - /'US_WEST']
+ │    │         ├── columns: region:22!null data1:25!null
+ │    │         ├── constraint: /22/25/26/20: [/'US_WEST' - /'US_WEST']
  │    │         ├── limit: 1(rev)
  │    │         ├── key: ()
- │    │         ├── fd: ()-->(26,29)
+ │    │         ├── fd: ()-->(22,25)
  │    │         └── limit hint: 1.00
  │    └── 1
  └── aggregations
-      └── const-agg [as=max:12, outer=(6)]
+      └── const-agg [as=max:10, outer=(6)]
            └── data1:6
 
 # Case with multi-column keys in single-key spans.
@@ -1110,10 +1108,10 @@ FROM index_tab
 WHERE (latitude, longitude) = (1, 2) OR (latitude, longitude) = (4, 5)
 ----
 scalar-group-by
- ├── columns: max:12
+ ├── columns: max:10
  ├── cardinality: [1 - 1]
  ├── key: ()
- ├── fd: ()-->(12)
+ ├── fd: ()-->(10)
  ├── limit
  │    ├── columns: latitude:4!null longitude:5!null data1:6!null
  │    ├── internal-ordering: -6
@@ -1122,28 +1120,28 @@ scalar-group-by
  │    ├── fd: ()-->(4-6)
  │    ├── union-all
  │    │    ├── columns: latitude:4!null longitude:5!null data1:6!null
- │    │    ├── left columns: latitude:16 longitude:17 data1:18
- │    │    ├── right columns: latitude:27 longitude:28 data1:29
+ │    │    ├── left columns: latitude:14 longitude:15 data1:16
+ │    │    ├── right columns: latitude:23 longitude:24 data1:25
  │    │    ├── cardinality: [0 - 2]
  │    │    ├── ordering: -6
  │    │    ├── limit hint: 1.00
  │    │    ├── scan index_tab@d,rev
- │    │    │    ├── columns: latitude:16!null longitude:17!null data1:18!null
- │    │    │    ├── constraint: /16/17/18/19/13: [/1/2 - /1/2]
+ │    │    │    ├── columns: latitude:14!null longitude:15!null data1:16!null
+ │    │    │    ├── constraint: /14/15/16/17/11: [/1/2 - /1/2]
  │    │    │    ├── limit: 1(rev)
  │    │    │    ├── key: ()
- │    │    │    ├── fd: ()-->(16-18)
+ │    │    │    ├── fd: ()-->(14-16)
  │    │    │    └── limit hint: 1.00
  │    │    └── scan index_tab@d,rev
- │    │         ├── columns: latitude:27!null longitude:28!null data1:29!null
- │    │         ├── constraint: /27/28/29/30/24: [/4/5 - /4/5]
+ │    │         ├── columns: latitude:23!null longitude:24!null data1:25!null
+ │    │         ├── constraint: /23/24/25/26/20: [/4/5 - /4/5]
  │    │         ├── limit: 1(rev)
  │    │         ├── key: ()
- │    │         ├── fd: ()-->(27-29)
+ │    │         ├── fd: ()-->(23-25)
  │    │         └── limit hint: 1.00
  │    └── 1
  └── aggregations
-      └── const-agg [as=max:12, outer=(6)]
+      └── const-agg [as=max:10, outer=(6)]
            └── data1:6
 
 # Case with countable multi-key spans.
@@ -1151,10 +1149,10 @@ opt expect=SplitLimitedScanIntoUnionScans
 SELECT max(data1) FROM index_tab WHERE val > 0 AND val < 4
 ----
 scalar-group-by
- ├── columns: max:12
+ ├── columns: max:10
  ├── cardinality: [1 - 1]
  ├── key: ()
- ├── fd: ()-->(12)
+ ├── fd: ()-->(10)
  ├── limit
  │    ├── columns: val:2!null data1:6!null
  │    ├── internal-ordering: -6
@@ -1163,42 +1161,42 @@ scalar-group-by
  │    ├── fd: ()-->(2,6)
  │    ├── union-all
  │    │    ├── columns: val:2!null data1:6!null
- │    │    ├── left columns: val:47 data1:51
- │    │    ├── right columns: val:36 data1:40
+ │    │    ├── left columns: val:39 data1:43
+ │    │    ├── right columns: val:30 data1:34
  │    │    ├── cardinality: [0 - 3]
  │    │    ├── ordering: -6
  │    │    ├── limit hint: 1.00
  │    │    ├── union-all
- │    │    │    ├── columns: val:47!null data1:51!null
- │    │    │    ├── left columns: val:14 data1:18
- │    │    │    ├── right columns: val:25 data1:29
+ │    │    │    ├── columns: val:39!null data1:43!null
+ │    │    │    ├── left columns: val:12 data1:16
+ │    │    │    ├── right columns: val:21 data1:25
  │    │    │    ├── cardinality: [0 - 2]
- │    │    │    ├── ordering: -51
+ │    │    │    ├── ordering: -43
  │    │    │    ├── limit hint: 1.00
  │    │    │    ├── scan index_tab@b,rev
- │    │    │    │    ├── columns: val:14!null data1:18!null
- │    │    │    │    ├── constraint: /14/18/19/13: [/1 - /1]
+ │    │    │    │    ├── columns: val:12!null data1:16!null
+ │    │    │    │    ├── constraint: /12/16/17/11: [/1 - /1]
  │    │    │    │    ├── limit: 1(rev)
  │    │    │    │    ├── key: ()
- │    │    │    │    ├── fd: ()-->(14,18)
+ │    │    │    │    ├── fd: ()-->(12,16)
  │    │    │    │    └── limit hint: 1.00
  │    │    │    └── scan index_tab@b,rev
- │    │    │         ├── columns: val:25!null data1:29!null
- │    │    │         ├── constraint: /25/29/30/24: [/2 - /2]
+ │    │    │         ├── columns: val:21!null data1:25!null
+ │    │    │         ├── constraint: /21/25/26/20: [/2 - /2]
  │    │    │         ├── limit: 1(rev)
  │    │    │         ├── key: ()
- │    │    │         ├── fd: ()-->(25,29)
+ │    │    │         ├── fd: ()-->(21,25)
  │    │    │         └── limit hint: 1.00
  │    │    └── scan index_tab@b,rev
- │    │         ├── columns: val:36!null data1:40!null
- │    │         ├── constraint: /36/40/41/35: [/3 - /3]
+ │    │         ├── columns: val:30!null data1:34!null
+ │    │         ├── constraint: /30/34/35/29: [/3 - /3]
  │    │         ├── limit: 1(rev)
  │    │         ├── key: ()
- │    │         ├── fd: ()-->(36,40)
+ │    │         ├── fd: ()-->(30,34)
  │    │         └── limit hint: 1.00
  │    └── 1
  └── aggregations
-      └── const-agg [as=max:12, outer=(6)]
+      └── const-agg [as=max:10, outer=(6)]
            └── data1:6
 
 # Case with limit ordering on more than one column.
@@ -1216,24 +1214,24 @@ limit
  ├── ordering: +6,+7
  ├── union-all
  │    ├── columns: region:3!null data1:6!null data2:7!null
- │    ├── left columns: region:14 data1:17 data2:18
- │    ├── right columns: region:25 data1:28 data2:29
+ │    ├── left columns: region:12 data1:15 data2:16
+ │    ├── right columns: region:21 data1:24 data2:25
  │    ├── cardinality: [0 - 20]
  │    ├── ordering: +6,+7
  │    ├── limit hint: 10.00
  │    ├── scan index_tab@c
- │    │    ├── columns: region:14!null data1:17!null data2:18!null
- │    │    ├── constraint: /14/17/18/12: [/'US_EAST' - /'US_EAST']
+ │    │    ├── columns: region:12!null data1:15!null data2:16!null
+ │    │    ├── constraint: /12/15/16/10: [/'US_EAST' - /'US_EAST']
  │    │    ├── limit: 10
- │    │    ├── fd: ()-->(14)
- │    │    ├── ordering: +17,+18 opt(14) [actual: +17,+18]
+ │    │    ├── fd: ()-->(12)
+ │    │    ├── ordering: +15,+16 opt(12) [actual: +15,+16]
  │    │    └── limit hint: 10.00
  │    └── scan index_tab@c
- │         ├── columns: region:25!null data1:28!null data2:29!null
- │         ├── constraint: /25/28/29/23: [/'US_WEST' - /'US_WEST']
+ │         ├── columns: region:21!null data1:24!null data2:25!null
+ │         ├── constraint: /21/24/25/19: [/'US_WEST' - /'US_WEST']
  │         ├── limit: 10
- │         ├── fd: ()-->(25)
- │         ├── ordering: +28,+29 opt(25) [actual: +28,+29]
+ │         ├── fd: ()-->(21)
+ │         ├── ordering: +24,+25 opt(21) [actual: +24,+25]
  │         └── limit hint: 10.00
  └── 10
 
@@ -1253,24 +1251,24 @@ limit
  ├── ordering: +6,+7
  ├── union-all
  │    ├── columns: region:3!null data1:6!null data2:7!null
- │    ├── left columns: region:14 data1:17 data2:18
- │    ├── right columns: region:25 data1:28 data2:29
+ │    ├── left columns: region:12 data1:15 data2:16
+ │    ├── right columns: region:21 data1:24 data2:25
  │    ├── cardinality: [0 - 20]
  │    ├── ordering: +6,+7
  │    ├── limit hint: 10.00
  │    ├── scan index_tab@c
- │    │    ├── columns: region:14!null data1:17!null data2:18!null
- │    │    ├── constraint: /14/17/18/12: [/'US_EAST'/4 - /'US_EAST']
+ │    │    ├── columns: region:12!null data1:15!null data2:16!null
+ │    │    ├── constraint: /12/15/16/10: [/'US_EAST'/4 - /'US_EAST']
  │    │    ├── limit: 10
- │    │    ├── fd: ()-->(14)
- │    │    ├── ordering: +17,+18 opt(14) [actual: +17,+18]
+ │    │    ├── fd: ()-->(12)
+ │    │    ├── ordering: +15,+16 opt(12) [actual: +15,+16]
  │    │    └── limit hint: 10.00
  │    └── scan index_tab@c
- │         ├── columns: region:25!null data1:28!null data2:29!null
- │         ├── constraint: /25/28/29/23: [/'US_WEST'/4 - /'US_WEST']
+ │         ├── columns: region:21!null data1:24!null data2:25!null
+ │         ├── constraint: /21/24/25/19: [/'US_WEST'/4 - /'US_WEST']
  │         ├── limit: 10
- │         ├── fd: ()-->(25)
- │         ├── ordering: +28,+29 opt(25) [actual: +28,+29]
+ │         ├── fd: ()-->(21)
+ │         ├── ordering: +24,+25 opt(21) [actual: +24,+25]
  │         └── limit hint: 10.00
  └── 10
 
@@ -1290,24 +1288,24 @@ limit
  ├── ordering: +6,+7
  ├── union-all
  │    ├── columns: region:3!null data1:6!null data2:7!null
- │    ├── left columns: region:14 data1:17 data2:18
- │    ├── right columns: region:25 data1:28 data2:29
+ │    ├── left columns: region:12 data1:15 data2:16
+ │    ├── right columns: region:21 data1:24 data2:25
  │    ├── cardinality: [0 - 20]
  │    ├── ordering: +6,+7
  │    ├── limit hint: 10.00
  │    ├── scan index_tab@c
- │    │    ├── columns: region:14!null data1:17!null data2:18!null
- │    │    ├── constraint: /14/17/18/12: [/'US_EAST' - /'US_EAST'/2]
+ │    │    ├── columns: region:12!null data1:15!null data2:16!null
+ │    │    ├── constraint: /12/15/16/10: [/'US_EAST' - /'US_EAST'/2]
  │    │    ├── limit: 10
- │    │    ├── fd: ()-->(14)
- │    │    ├── ordering: +17,+18 opt(14) [actual: +17,+18]
+ │    │    ├── fd: ()-->(12)
+ │    │    ├── ordering: +15,+16 opt(12) [actual: +15,+16]
  │    │    └── limit hint: 10.00
  │    └── scan index_tab@c
- │         ├── columns: region:25!null data1:28!null data2:29!null
- │         ├── constraint: /25/28/29/23: [/'US_WEST' - /'US_WEST'/2]
+ │         ├── columns: region:21!null data1:24!null data2:25!null
+ │         ├── constraint: /21/24/25/19: [/'US_WEST' - /'US_WEST'/2]
  │         ├── limit: 10
- │         ├── fd: ()-->(25)
- │         ├── ordering: +28,+29 opt(25) [actual: +28,+29]
+ │         ├── fd: ()-->(21)
+ │         ├── ordering: +24,+25 opt(21) [actual: +24,+25]
  │         └── limit hint: 10.00
  └── 10
 
@@ -1328,24 +1326,24 @@ limit
  ├── ordering: +6,+7
  ├── union-all
  │    ├── columns: region:3!null data1:6!null data2:7!null
- │    ├── left columns: region:14 data1:17 data2:18
- │    ├── right columns: region:25 data1:28 data2:29
+ │    ├── left columns: region:12 data1:15 data2:16
+ │    ├── right columns: region:21 data1:24 data2:25
  │    ├── cardinality: [0 - 20]
  │    ├── ordering: +6,+7
  │    ├── limit hint: 10.00
  │    ├── scan index_tab@c
- │    │    ├── columns: region:14!null data1:17!null data2:18!null
- │    │    ├── constraint: /14/17/18/12: [/'US_EAST'/4 - /'US_EAST'/999]
+ │    │    ├── columns: region:12!null data1:15!null data2:16!null
+ │    │    ├── constraint: /12/15/16/10: [/'US_EAST'/4 - /'US_EAST'/999]
  │    │    ├── limit: 10
- │    │    ├── fd: ()-->(14)
- │    │    ├── ordering: +17,+18 opt(14) [actual: +17,+18]
+ │    │    ├── fd: ()-->(12)
+ │    │    ├── ordering: +15,+16 opt(12) [actual: +15,+16]
  │    │    └── limit hint: 10.00
  │    └── scan index_tab@c
- │         ├── columns: region:25!null data1:28!null data2:29!null
- │         ├── constraint: /25/28/29/23: [/'US_WEST'/4 - /'US_WEST'/999]
+ │         ├── columns: region:21!null data1:24!null data2:25!null
+ │         ├── constraint: /21/24/25/19: [/'US_WEST'/4 - /'US_WEST'/999]
  │         ├── limit: 10
- │         ├── fd: ()-->(25)
- │         ├── ordering: +28,+29 opt(25) [actual: +28,+29]
+ │         ├── fd: ()-->(21)
+ │         ├── ordering: +24,+25 opt(21) [actual: +24,+25]
  │         └── limit hint: 10.00
  └── 10
 
@@ -1368,36 +1366,36 @@ top-k
  ├── ordering: +6,+7
  └── union-all
       ├── columns: latitude:4!null longitude:5 data1:6!null data2:7!null
-      ├── left columns: latitude:81 longitude:82 data1:83 data2:84
-      ├── right columns: latitude:92 longitude:93 data1:94 data2:95
+      ├── left columns: latitude:67 longitude:68 data1:69 data2:70
+      ├── right columns: latitude:76 longitude:77 data1:78 data2:79
       ├── union-all
-      │    ├── columns: latitude:81!null longitude:82!null data1:83!null data2:84!null
-      │    ├── left columns: latitude:70 longitude:71 data1:72 data2:73
-      │    ├── right columns: latitude:59 longitude:60 data1:61 data2:62
+      │    ├── columns: latitude:67!null longitude:68!null data1:69!null data2:70!null
+      │    ├── left columns: latitude:58 longitude:59 data1:60 data2:61
+      │    ├── right columns: latitude:49 longitude:50 data1:51 data2:52
       │    ├── cardinality: [0 - 30]
       │    ├── union-all
-      │    │    ├── columns: latitude:70!null longitude:71!null data1:72!null data2:73!null
-      │    │    ├── left columns: latitude:37 longitude:38 data1:39 data2:40
-      │    │    ├── right columns: latitude:48 longitude:49 data1:50 data2:51
+      │    │    ├── columns: latitude:58!null longitude:59!null data1:60!null data2:61!null
+      │    │    ├── left columns: latitude:31 longitude:32 data1:33 data2:34
+      │    │    ├── right columns: latitude:40 longitude:41 data1:42 data2:43
       │    │    ├── cardinality: [0 - 20]
       │    │    ├── scan index_tab@d
-      │    │    │    ├── columns: latitude:37!null longitude:38!null data1:39!null data2:40!null
-      │    │    │    ├── constraint: /37/38/39/40/34: [/10/11 - /10/11]
+      │    │    │    ├── columns: latitude:31!null longitude:32!null data1:33!null data2:34!null
+      │    │    │    ├── constraint: /31/32/33/34/28: [/10/11 - /10/11]
       │    │    │    ├── limit: 10
-      │    │    │    └── fd: ()-->(37,38)
+      │    │    │    └── fd: ()-->(31,32)
       │    │    └── scan index_tab@d
-      │    │         ├── columns: latitude:48!null longitude:49!null data1:50!null data2:51!null
-      │    │         ├── constraint: /48/49/50/51/45: [/10/12 - /10/12]
+      │    │         ├── columns: latitude:40!null longitude:41!null data1:42!null data2:43!null
+      │    │         ├── constraint: /40/41/42/43/37: [/10/12 - /10/12]
       │    │         ├── limit: 10
-      │    │         └── fd: ()-->(48,49)
+      │    │         └── fd: ()-->(40,41)
       │    └── scan index_tab@d
-      │         ├── columns: latitude:59!null longitude:60!null data1:61!null data2:62!null
-      │         ├── constraint: /59/60/61/62/56: [/10/13 - /10/13]
+      │         ├── columns: latitude:49!null longitude:50!null data1:51!null data2:52!null
+      │         ├── constraint: /49/50/51/52/46: [/10/13 - /10/13]
       │         ├── limit: 10
-      │         └── fd: ()-->(59,60)
+      │         └── fd: ()-->(49,50)
       └── scan index_tab@d
-           ├── columns: latitude:92!null longitude:93 data1:94!null data2:95!null
-           └── constraint: /92/93/94/95/89
+           ├── columns: latitude:76!null longitude:77 data1:78!null data2:79!null
+           └── constraint: /76/77/78/79/73
                 ├── [/-5 - /-5]
                 └── [/0 - /0]
 
@@ -1408,10 +1406,10 @@ FROM index_tab WHERE region = 'US_WEST' OR region = 'US_EAST'
 ORDER BY data1 LIMIT 10
 ----
 index-join index_tab
- ├── columns: id:1!null val:2 region:3!null latitude:4 longitude:5 data1:6!null data2:7!null geom:8
+ ├── columns: id:1!null val:2 region:3!null latitude:4 longitude:5 data1:6!null data2:7!null
  ├── cardinality: [0 - 10]
  ├── key: (1)
- ├── fd: (1)-->(2-8)
+ ├── fd: (1)-->(2-7)
  ├── ordering: +6
  └── limit
       ├── columns: id:1!null region:3!null data1:6!null data2:7!null
@@ -1422,26 +1420,26 @@ index-join index_tab
       ├── ordering: +6
       ├── union-all
       │    ├── columns: id:1!null region:3!null data1:6!null data2:7!null
-      │    ├── left columns: id:12 region:14 data1:17 data2:18
-      │    ├── right columns: id:23 region:25 data1:28 data2:29
+      │    ├── left columns: id:10 region:12 data1:15 data2:16
+      │    ├── right columns: id:19 region:21 data1:24 data2:25
       │    ├── cardinality: [0 - 20]
       │    ├── ordering: +6
       │    ├── limit hint: 10.00
       │    ├── scan index_tab@c
-      │    │    ├── columns: id:12!null region:14!null data1:17!null data2:18!null
-      │    │    ├── constraint: /14/17/18/12: [/'US_EAST' - /'US_EAST']
+      │    │    ├── columns: id:10!null region:12!null data1:15!null data2:16!null
+      │    │    ├── constraint: /12/15/16/10: [/'US_EAST' - /'US_EAST']
       │    │    ├── limit: 10
-      │    │    ├── key: (12)
-      │    │    ├── fd: ()-->(14), (12)-->(17,18)
-      │    │    ├── ordering: +17 opt(14) [actual: +17]
+      │    │    ├── key: (10)
+      │    │    ├── fd: ()-->(12), (10)-->(15,16)
+      │    │    ├── ordering: +15 opt(12) [actual: +15]
       │    │    └── limit hint: 10.00
       │    └── scan index_tab@c
-      │         ├── columns: id:23!null region:25!null data1:28!null data2:29!null
-      │         ├── constraint: /25/28/29/23: [/'US_WEST' - /'US_WEST']
+      │         ├── columns: id:19!null region:21!null data1:24!null data2:25!null
+      │         ├── constraint: /21/24/25/19: [/'US_WEST' - /'US_WEST']
       │         ├── limit: 10
-      │         ├── key: (23)
-      │         ├── fd: ()-->(25), (23)-->(28,29)
-      │         ├── ordering: +28 opt(25) [actual: +28]
+      │         ├── key: (19)
+      │         ├── fd: ()-->(21), (19)-->(24,25)
+      │         ├── ordering: +24 opt(21) [actual: +24]
       │         └── limit hint: 10.00
       └── 10
 
@@ -1586,26 +1584,26 @@ limit
  ├── ordering: +5
  ├── union-all
  │    ├── columns: id:1!null latitude:4!null longitude:5!null
- │    ├── left columns: id:12 latitude:15 longitude:16
- │    ├── right columns: id:23 latitude:26 longitude:27
+ │    ├── left columns: id:10 latitude:13 longitude:14
+ │    ├── right columns: id:19 latitude:22 longitude:23
  │    ├── cardinality: [0 - 20]
  │    ├── ordering: +5
  │    ├── limit hint: 10.00
  │    ├── scan index_tab@d
- │    │    ├── columns: id:12!null latitude:15!null longitude:16!null
- │    │    ├── constraint: /15/16/17/18/12: (/0/NULL - /0]
+ │    │    ├── columns: id:10!null latitude:13!null longitude:14!null
+ │    │    ├── constraint: /13/14/15/16/10: (/0/NULL - /0]
  │    │    ├── limit: 10
- │    │    ├── key: (12)
- │    │    ├── fd: ()-->(15), (12)-->(16)
- │    │    ├── ordering: +16 opt(15) [actual: +16]
+ │    │    ├── key: (10)
+ │    │    ├── fd: ()-->(13), (10)-->(14)
+ │    │    ├── ordering: +14 opt(13) [actual: +14]
  │    │    └── limit hint: 10.00
  │    └── scan index_tab@d
- │         ├── columns: id:23!null latitude:26!null longitude:27!null
- │         ├── constraint: /26/27/28/29/23: (/10/NULL - /10]
+ │         ├── columns: id:19!null latitude:22!null longitude:23!null
+ │         ├── constraint: /22/23/24/25/19: (/10/NULL - /10]
  │         ├── limit: 10
- │         ├── key: (23)
- │         ├── fd: ()-->(26), (23)-->(27)
- │         ├── ordering: +27 opt(26) [actual: +27]
+ │         ├── key: (19)
+ │         ├── fd: ()-->(22), (19)-->(23)
+ │         ├── ordering: +23 opt(22) [actual: +23]
  │         └── limit hint: 10.00
  └── 10
 
@@ -1630,52 +1628,20 @@ top-k
       ├── key: (1)
       └── fd: (1)-->(4,5)
 
-# No-op case because the scan has an inverted index.
-opt expect-not=SplitLimitedScanIntoUnionScans
-SELECT geom FROM index_tab WHERE ST_Intersects('POINT(3.0 3.0)'::geometry, geom)
-----
-select
- ├── columns: geom:8!null
- ├── immutable
- ├── index-join index_tab
- │    ├── columns: geom:8
- │    └── inverted-filter
- │         ├── columns: id:1!null
- │         ├── inverted expression: /11
- │         │    ├── tight: false, unique: false
- │         │    └── union spans
- │         │         ├── ["B\xfd\x10\x00\x00\x00\x00\x00\x00\x00", "B\xfd\x10\x00\x00\x00\x00\x00\x00\x00"]
- │         │         ├── ["B\xfd\x14\x00\x00\x00\x00\x00\x00\x00", "B\xfd\x14\x00\x00\x00\x00\x00\x00\x00"]
- │         │         └── ["B\xfd\x14\x00\x00\x00\x00\x00\x00\x01", "B\xfd\x16\x00\x00\x00\x00\x00\x00\x00")
- │         ├── pre-filterer expression
- │         │    └── st_intersects('010100000000000000000008400000000000000840', geom:8)
- │         ├── key: (1)
- │         └── scan index_tab@geomidx
- │              ├── columns: id:1!null geom_inverted_key:11!null
- │              ├── inverted constraint: /11/1
- │              │    └── spans
- │              │         ├── ["B\xfd\x10\x00\x00\x00\x00\x00\x00\x00", "B\xfd\x10\x00\x00\x00\x00\x00\x00\x00"]
- │              │         ├── ["B\xfd\x14\x00\x00\x00\x00\x00\x00\x00", "B\xfd\x14\x00\x00\x00\x00\x00\x00\x00"]
- │              │         └── ["B\xfd\x14\x00\x00\x00\x00\x00\x00\x01", "B\xfd\x16\x00\x00\x00\x00\x00\x00\x00")
- │              ├── key: (1)
- │              └── fd: (1)-->(11)
- └── filters
-      └── st_intersects('010100000000000000000008400000000000000840', geom:8) [outer=(8), immutable, constraints=(/8: (/NULL - ])]
-
 # No-op case because the multi-key span isn't countable.
 opt expect-not=SplitLimitedScanIntoUnionScans
 SELECT max(data1) FROM index_tab WHERE region > 'US_EAST' AND region < 'US_WEST'
 ----
 scalar-group-by
- ├── columns: max:12
+ ├── columns: max:10
  ├── cardinality: [1 - 1]
  ├── key: ()
- ├── fd: ()-->(12)
+ ├── fd: ()-->(10)
  ├── scan index_tab@c
  │    ├── columns: region:3!null data1:6!null
  │    └── constraint: /3/6/7/1: [/e'US_EAST\x00' - /'US_WEST')
  └── aggregations
-      └── max [as=max:12, outer=(6)]
+      └── max [as=max:10, outer=(6)]
            └── data1:6
 
 # No-op case because the number of keys exceeds maxScanCount.
@@ -1683,15 +1649,15 @@ opt expect-not=SplitLimitedScanIntoUnionScans
 SELECT max(data1) FROM index_tab WHERE val > 0 AND val < 300
 ----
 scalar-group-by
- ├── columns: max:12
+ ├── columns: max:10
  ├── cardinality: [1 - 1]
  ├── key: ()
- ├── fd: ()-->(12)
+ ├── fd: ()-->(10)
  ├── scan index_tab@b
  │    ├── columns: val:2!null data1:6!null
  │    └── constraint: /2/6/7/1: [/1 - /299]
  └── aggregations
-      └── max [as=max:12, outer=(6)]
+      └── max [as=max:10, outer=(6)]
            └── data1:6
 
 # No-op case because the same number of rows would be scanned by the split-up
@@ -1700,10 +1666,10 @@ opt expect-not=SplitLimitedScanIntoUnionScans
 SELECT max(data1) FROM index_tab WHERE id > 0 AND id < 4
 ----
 scalar-group-by
- ├── columns: max:12
+ ├── columns: max:10
  ├── cardinality: [1 - 1]
  ├── key: ()
- ├── fd: ()-->(12)
+ ├── fd: ()-->(10)
  ├── scan index_tab@a
  │    ├── columns: id:1!null data1:6!null
  │    ├── constraint: /1/6/7: [/1 - /3]
@@ -1711,7 +1677,7 @@ scalar-group-by
  │    ├── key: (1)
  │    └── fd: (1)-->(6)
  └── aggregations
-      └── max [as=max:12, outer=(6)]
+      └── max [as=max:10, outer=(6)]
            └── data1:6
 
 # No-op case because the scan is already limited.
@@ -1721,10 +1687,10 @@ FROM (SELECT region, data1 FROM index_tab LIMIT 10)
 WHERE region='ASIA' OR region='AUSTRALIA'
 ----
 scalar-group-by
- ├── columns: max:12
+ ├── columns: max:10
  ├── cardinality: [1 - 1]
  ├── key: ()
- ├── fd: ()-->(12)
+ ├── fd: ()-->(10)
  ├── select
  │    ├── columns: region:3!null data1:6!null
  │    ├── cardinality: [0 - 10]
@@ -1734,7 +1700,7 @@ scalar-group-by
  │    └── filters
  │         └── (region:3 = 'ASIA') OR (region:3 = 'AUSTRALIA') [outer=(3), constraints=(/3: [/'ASIA' - /'ASIA'] [/'AUSTRALIA' - /'AUSTRALIA']; tight)]
  └── aggregations
-      └── max [as=max:12, outer=(6)]
+      └── max [as=max:10, outer=(6)]
            └── data1:6
 
 # No-op case because the limit is negative.
@@ -1766,15 +1732,15 @@ opt expect-not=SplitLimitedScanIntoUnionScans
 SELECT max(data1) FROM index_tab@b
 ----
 scalar-group-by
- ├── columns: max:12
+ ├── columns: max:10
  ├── cardinality: [1 - 1]
  ├── key: ()
- ├── fd: ()-->(12)
+ ├── fd: ()-->(10)
  ├── scan index_tab@b
  │    ├── columns: data1:6!null
  │    └── flags: force-index=b
  └── aggregations
-      └── max [as=max:12, outer=(6)]
+      └── max [as=max:10, outer=(6)]
            └── data1:6
 
 # ---------------------------------------------------

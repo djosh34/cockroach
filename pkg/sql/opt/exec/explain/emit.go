@@ -1021,6 +1021,7 @@ func (e *emitter) emitNodeAttributes(n *Node) error {
 		max1RowOp,
 		hashSetOpOp,
 		streamingSetOpOp,
+		unionAllOp,
 		explainOptOp,
 		explainOp,
 		showTraceOp,

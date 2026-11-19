@@ -2,11 +2,11 @@
 
 # Err if the last column is not an invertable type.
 statement error column b of type int is not allowed as the last column in an inverted index\nHINT: see the documentation for more information about inverted indexes: https://www.cockroachlabs.com/docs/.*/inverted-indexes.html
-CREATE TABLE m_err (k INT PRIMARY KEY, a INT, b INT, geom GEOMETRY, INVERTED INDEX (a, b))
+CREATE TABLE m_err (k INT PRIMARY KEY, a INT, b INT, INVERTED INDEX (a, b))
 
 # Err if a non-last column is not a non-invertable type.
-statement error column geom1 of type geometry is only allowed as the last column in an inverted index\nHINT: see the documentation for more information about inverted indexes: https://www.cockroachlabs.com/docs/.*/inverted-indexes.html
-CREATE TABLE m_err (k INT PRIMARY KEY, geom1 GEOMETRY , geom GEOMETRY, INVERTED INDEX (geom1, geom))
+statement error column t1 of type tsvector is only allowed as the last column in an inverted index\nHINT: see the documentation for more information about inverted indexes: https://www.cockroachlabs.com/docs/.*/inverted-indexes.html
+CREATE TABLE m_err (k INT PRIMARY KEY, t1 TSVECTOR, t TSVECTOR, INVERTED INDEX (t1, t))
 
 
 statement ok
@@ -16,42 +16,17 @@ statement error the last column in an inverted index cannot have the DESC option
 CREATE TABLE m_err (k INT PRIMARY KEY, a INT, j JSON, INVERTED INDEX (a, j DESC))
 
 statement ok
-CREATE TABLE m (k INT PRIMARY KEY, a INT, geom GEOMETRY, INVERTED INDEX (a, geom))
+CREATE TABLE m (k INT PRIMARY KEY, a INT, j JSON, INVERTED INDEX (a, j))
 
 statement ok
-CREATE TABLE n (k INT PRIMARY KEY, a INT, geom GEOMETRY);
-CREATE INVERTED INDEX n ON n (a, geom);
+CREATE TABLE n (k INT PRIMARY KEY, a INT, j JSON);
+CREATE INVERTED INDEX n ON n (a, j);
 
 statement error the last column in an inverted index cannot have the DESC option
-CREATE INVERTED INDEX ON n (a, geom DESC)
+CREATE INVERTED INDEX ON n (a, j DESC)
 
 statement ok
-CREATE INVERTED INDEX ON n (a ASC, geom)
-
-statement
-CREATE TABLE s (
-  k INT PRIMARY KEY,
-  a INT,
-  geom GEOMETRY,
-  INVERTED INDEX (a, geom) WITH (geometry_min_x=0),
-  FAMILY (k),
-  FAMILY (a),
-  FAMILY (geom)
-)
-
-query T
-SELECT create_statement FROM [SHOW CREATE TABLE s]
-----
-CREATE TABLE public.s (
-  k INT8 NOT NULL,
-  a INT8 NULL,
-  geom GEOMETRY NULL,
-  CONSTRAINT s_pkey PRIMARY KEY (k ASC),
-  INVERTED INDEX s_a_geom_idx (a ASC, geom) WITH (geometry_min_x=0),
-  FAMILY fam_0_k (k),
-  FAMILY fam_1_a (a),
-  FAMILY fam_2_geom (geom)
-)
+CREATE INVERTED INDEX ON n (a ASC, j)
 
 # Dropping the inverted column of the index drops the index.
 statement ok

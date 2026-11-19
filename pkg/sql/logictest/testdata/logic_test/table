@@ -707,9 +707,6 @@ sql_features                            NULL
 sql_implementation_info                 NULL
 sql_parts                               NULL
 sql_sizing                              NULL
-st_geometry_columns                     NULL
-st_spatial_reference_systems            NULL
-st_units_of_measure                     NULL
 statistics                              NULL
 table_constraints                       NULL
 table_constraints_extensions            NULL
@@ -862,9 +859,6 @@ pg_user                                 NULL
 pg_user_mapping                         NULL
 pg_user_mappings                        NULL
 pg_views                                NULL
-geography_columns                       NULL
-geometry_columns                        NULL
-spatial_ref_sys                         NULL
 t1                                      0
 
 statement ok

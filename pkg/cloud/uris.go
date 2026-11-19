@@ -46,6 +46,45 @@ func GetPrefixBeforeWildcard(p string) string {
 	return path.Dir(p[:globIndex])
 }
 
+// ParseURI parses an external storage URI. It works like url.Parse, except
+// that an http or https URI may name several hosts separated by commas, each
+// with its own port, as in "https://a:8080,b:8080/path". url.Parse rejects
+// such a host list because of the colons, so ParseURI checks each host on its
+// own and keeps the whole list in Host.
+func ParseURI(s string) (*url.URL, error) {
+	u, err := url.Parse(s)
+	if err == nil {
+		return u, nil
+	}
+	scheme, rest, ok := strings.Cut(s, "://")
+	if !ok || !(strings.EqualFold(scheme, "http") || strings.EqualFold(scheme, "https")) {
+		return nil, err
+	}
+	authority, tail := rest, ""
+	if i := strings.IndexAny(rest, "/?#"); i >= 0 {
+		authority, tail = rest[:i], rest[i:]
+	}
+	userinfo := ""
+	if i := strings.LastIndex(authority, "@"); i >= 0 {
+		userinfo, authority = authority[:i+1], authority[i+1:]
+	}
+	hosts := strings.Split(authority, ",")
+	if len(hosts) < 2 {
+		return nil, err
+	}
+	for _, h := range hosts {
+		if _, hostErr := url.Parse(scheme + "://" + h); hostErr != nil {
+			return nil, err
+		}
+	}
+	u, firstErr := url.Parse(scheme + "://" + userinfo + hosts[0] + tail)
+	if firstErr != nil {
+		return nil, err
+	}
+	u.Host = authority
+	return u, nil
+}
+
 // SanitizeExternalStorageURI returns the external storage URI with with some
 // secrets redacted, for use when showing these URIs in the UI, to provide some
 // protection from shoulder-surfing. The param is still present -- just
@@ -55,7 +94,7 @@ func GetPrefixBeforeWildcard(p string) string {
 // passed allowing this function to be used to scrub other URIs too (such as
 // non-cloudstorage changefeed sinks).n
 func SanitizeExternalStorageURI(path string, extraParams []string) (string, error) {
-	uri, err := url.Parse(path)
+	uri, err := ParseURI(path)
 	if err != nil {
 		return "", err
 	}

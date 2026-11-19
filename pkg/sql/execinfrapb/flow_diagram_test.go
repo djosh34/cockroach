@@ -277,7 +277,7 @@ func TestPlanDiagramIndexJoin(t *testing.T) {
 
 	compareDiagrams(t, json, expected)
 
-	expectedURL := `https://cockroachdb.github.io/distsqlplan/decode.html#eJy0kkFr2zAUx-_7FOZ_ncoseSedAmtgGeuyJb0NM1TrNROzJU-SaUrwdx9SujUOyWgL1cHw9Jd_76dn7xB-t5BYL6_mxfrb5-LjfDUHg3WavqiOAuR3cDAIMFSoGXrvGgrB-RTt8sGF3kKWDMb2Q0zbNUPjPEHuEE1sCRLX6qalFSlN_l0JBk1RmTbjczRbu44WVtMWDB9cO3Q2yEKx4gb1yOCG-MgOUW0Ikh_ILC4hy5Ed-PCn-_DX8eETH_F0H_E6PuKsz6OG85o86anATLxFPZ6Q_uSMfXCuTjn33nTK3x8ab1mR6uUQZTGrzrqLI_fqObNcUeidDTRROtepPOp0wdNNSW9oP5ngBt_QV--afHZfLjMob2gKcZ9W-2Jhc8RTB0-q-_drHpL4S0n8mCReShLHpOq_pPcTUjm9Xc1w27q7H0ZDonxYFycefxfSC2oT0mdb_3R3GXt936ehRz8Qw5X6RZcUyXfGmhBNA3mr2kDj-OZPAAAA___R4oYQ`
+	expectedURL := `https://cockroachdb.github.io/distsqlplan/decode.html#eJy0k1FvmzAQx9_3KdD_da6GzZ78FGmNtEzrsoW-TWhy8TWzBpjZRk2F-O6TSbcCSqa2UkFCsu_43Y_j3MP_riCRb6_WSf7tc_JxvVuDobGavqiaPOR3cDAIMGQoGFpnS_Leuhjqx8SNPkCmDKZpuxC3C4bSOoLsEUyoCBLX6qaiHSlN7l0KBk1BmSomH0Or3Na0aTQdwPDBVl3deJkoltygGBhsFx7ZPqg9QfKJzOYSMh3YxIc_3Ye_jg-f-Yin-4jX8RFnfR41rNPkSM8FVuItiuGE9Cdrmgfn7JRz60yt3P3U-MCSuN52QSar7Ky7WLhnz-nljnxrG08zpXOV0kWlCx6_lPR-nP0e3naupK_OlmPucbkdlccNTT4co1ks58MmnoJxOn1wpOp_ozkl8ZeS-JIkXkoSS1L2X9L7GSmdktLYsdvK3v0wGhLpw3Vx4vH3RnxB7X38bflPezdir-_b2PTgOmK4Ur_okgK52jTGB1NC3qrK0zC8-TMA0eKGEA==`
 	if url.String() != expectedURL {
 		t.Errorf("expected `%s` got `%s`", expectedURL, url.String())
 	}
