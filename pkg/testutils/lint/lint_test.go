@@ -1706,43 +1706,6 @@ func TestLint(t *testing.T) {
 		}
 	})
 
-	// TODO(tamird): replace this with errcheck.NewChecker() when
-	// https://github.com/dominikh/go-tools/issues/57 is fixed.
-	t.Run("TestErrCheck", func(t *testing.T) {
-		skip.UnderShort(t)
-		excludesPath, err := filepath.Abs(datapathutils.TestDataPath(t, "errcheck_excludes.txt"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		// errcheck uses 2GB of ram (as of 2017-07-13), so don't parallelize it.
-		cmd, stderr, filter, err := dirCmd(
-			crdbDir,
-			"errcheck",
-			"-exclude",
-			excludesPath,
-			pkgScope,
-		)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if err := cmd.Start(); err != nil {
-			t.Fatal(err)
-		}
-
-		if err := stream.ForEach(filter, func(s string) {
-			t.Errorf("%s <- unchecked error", s)
-		}); err != nil {
-			t.Error(err)
-		}
-
-		if err := cmd.Wait(); err != nil {
-			if out := stderr.String(); len(out) > 0 {
-				t.Fatalf("err=%s, stderr=%s", err, out)
-			}
-		}
-	})
-
 	t.Run("TestReturnCheck", func(t *testing.T) {
 		skip.UnderShort(t)
 		// returncheck uses 2GB of ram (as of 2017-07-13), so don't parallelize it.
@@ -2367,8 +2330,15 @@ func TestLint(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to find %s: %s", vetTool, err)
 		}
+		// roachvet also runs errcheck, which reports unchecked errors
+		// except for the functions listed in errcheck_excludes.txt.
+		excludesPath, err := filepath.Abs(datapathutils.TestDataPath(t, "errcheck_excludes.txt"))
+		if err != nil {
+			t.Fatal(err)
+		}
 		vetCmd(t, crdbDir, "go",
-			[]string{"vet", "-vettool", vetToolPath, "-all", "-printf.funcs", printfuncs, pkgScope},
+			[]string{"vet", "-vettool", vetToolPath, "-all", "-printf.funcs", printfuncs,
+				"-errcheck.exclude", excludesPath, pkgScope},
 			filters)
 
 	})

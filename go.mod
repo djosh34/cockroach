@@ -294,7 +294,6 @@ tool (
 	github.com/cockroachdb/returncheck
 	github.com/golang/mock/mockgen
 	github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
-	github.com/kisielk/errcheck
 	github.com/mmatczuk/go_generics/cmd/go_generics
 	github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc
 	golang.org/x/tools/cmd/goyacc

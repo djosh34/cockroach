@@ -47,15 +47,16 @@ jobs:
   lint:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # The whole-tree tools each need several GB of memory, so every part
+        # gets its own runner. See build/ci/lint.sh.
+        part: [vet, roachvet, staticcheck, returncheck, rest]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-go
-      - name: go vet
-        # unsafeptr runs in TestRoachVet below, which knows its exceptions.
-        # Two packages at a time keep vet within the runner's memory.
-        run: go vet -p 2 -unsafeptr=false ./pkg/...
-      - name: Lint tests
-        run: build/ci/lint.sh
+      - run: build/ci/lint.sh ${{ matrix.part }}
 
   test:
     runs-on: ubuntu-24.04

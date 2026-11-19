@@ -38,8 +38,9 @@ too, generated per config (`local` and `fakedist`):
 go test -tags crdb_test ./pkg/sql/logictest/tests/local -run 'TestLogic_select$'
 ```
 
-The lint tests need the lint tools on the `PATH`; `build/ci/lint.sh` builds
-them and runs the tests.
+The lint tests need the lint tools on the `PATH`. `build/ci/lint.sh` builds
+them and runs one part of the checks: `vet`, `roachvet` (go vet with the
+repository's analyzers and errcheck), `staticcheck`, `returncheck` or `rest`.
 
 ## CI
 
@@ -47,10 +48,12 @@ them and runs the tests.
 
 - `build`: `go build ./...` without cgo for linux/amd64 and linux/arm64.
 - `generate`: `build/generate.sh`, failing on any change.
-- `lint`: `go vet` and the lint tests.
+- `lint`: `go vet` and the lint tests, in five parallel parts, because the
+  whole-tree tools each need several GB of memory.
 - `test` and `logic`: the tests and the logic tests, in shards. `build/ci/test.sh`
   picks the tests of a shard. It balances the shards by the times in
-  `build/ci/times.txt`, which come from earlier CI runs.
+  `build/ci/times.txt`, which come from earlier CI runs, and splits the
+  slowest packages into parts that each run every Nth test function.
 - `ci-ok`: passes only if every other job passed. It is the check that `main`
   requires.
 
