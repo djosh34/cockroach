@@ -1,77 +1,77 @@
-query TTTTTT rowsort
+query TT rowsort
 SHOW DATABASES
 ----
-defaultdb  root  NULL  NULL  {}  NULL
-postgres   root  NULL  NULL  {}  NULL
-system     node  NULL  NULL  {}  NULL
-test       root  NULL  NULL  {}  NULL
+defaultdb  root
+postgres   root
+system     node
+test       root
 
 # The test expectations are different on tenants because of
 # descriptor_id_sq, tenant, tenant_usage, and span_configurations.
 skipif config 3node-tenant-default-configs
 skipif config local-mixed-23.1
-query TTTTT
-SELECT schema_name, table_name, type, owner, locality FROM [SHOW TABLES FROM system] ORDER BY 2
+query TTTT
+SELECT schema_name, table_name, type, owner FROM [SHOW TABLES FROM system] ORDER BY 2
 ----
-public  comments                         table     node  NULL
-public  database_role_settings           table     node  NULL
-public  descriptor                       table     node  NULL
-public  descriptor_id_seq                sequence  node  NULL
-public  eventlog                         table     node  NULL
-public  external_connections             table     node  NULL
-public  job_info                         table     node  NULL
-public  jobs                             table     node  NULL
-public  join_tokens                      table     node  NULL
-public  lease                            table     node  NULL
-public  locations                        table     node  NULL
-public  migrations                       table     node  NULL
-public  mvcc_statistics                  table     node  NULL
-public  namespace                        table     node  NULL
-public  privileges                       table     node  NULL
-public  protected_ts_meta                table     node  NULL
-public  protected_ts_records             table     node  NULL
-public  rangelog                         table     node  NULL
-public  region_liveness                  table     node  NULL
-public  replication_constraint_stats     table     node  NULL
-public  replication_critical_localities  table     node  NULL
-public  replication_stats                table     node  NULL
-public  reports_meta                     table     node  NULL
-public  role_id_seq                      sequence  node  NULL
-public  role_members                     table     node  NULL
-public  role_options                     table     node  NULL
-public  scheduled_jobs                   table     node  NULL
-public  settings                         table     node  NULL
-public  span_configurations              table     node  NULL
-public  span_stats_buckets               table     node  NULL
-public  span_stats_samples               table     node  NULL
-public  span_stats_tenant_boundaries     table     node  NULL
-public  span_stats_unique_keys           table     node  NULL
-public  sql_instances                    table     node  NULL
-public  sqlliveness                      table     node  NULL
-public  statement_activity               table     node  NULL
-public  statement_bundle_chunks          table     node  NULL
-public  statement_diagnostics            table     node  NULL
-public  statement_diagnostics_requests   table     node  NULL
-public  statement_execution_insights     table     node  NULL
-public  statement_statistics             table     node  NULL
-public  table_statistics                 table     node  NULL
-public  task_payloads                    table     node  NULL
-public  tenant_id_seq                    sequence  node  NULL
-public  tenant_settings                  table     node  NULL
-public  tenant_tasks                     table     node  NULL
-public  tenant_usage                     table     node  NULL
-public  tenants                          table     node  NULL
-public  transaction_activity             table     node  NULL
-public  transaction_execution_insights   table     node  NULL
-public  transaction_statistics           table     node  NULL
-public  ui                               table     node  NULL
-public  users                            table     node  NULL
-public  web_sessions                     table     node  NULL
-public  zones                            table     node  NULL
+public  comments                         table     node
+public  database_role_settings           table     node
+public  descriptor                       table     node
+public  descriptor_id_seq                sequence  node
+public  eventlog                         table     node
+public  external_connections             table     node
+public  job_info                         table     node
+public  jobs                             table     node
+public  join_tokens                      table     node
+public  lease                            table     node
+public  locations                        table     node
+public  migrations                       table     node
+public  mvcc_statistics                  table     node
+public  namespace                        table     node
+public  privileges                       table     node
+public  protected_ts_meta                table     node
+public  protected_ts_records             table     node
+public  rangelog                         table     node
+public  region_liveness                  table     node
+public  replication_constraint_stats     table     node
+public  replication_critical_localities  table     node
+public  replication_stats                table     node
+public  reports_meta                     table     node
+public  role_id_seq                      sequence  node
+public  role_members                     table     node
+public  role_options                     table     node
+public  scheduled_jobs                   table     node
+public  settings                         table     node
+public  span_configurations              table     node
+public  span_stats_buckets               table     node
+public  span_stats_samples               table     node
+public  span_stats_tenant_boundaries     table     node
+public  span_stats_unique_keys           table     node
+public  sql_instances                    table     node
+public  sqlliveness                      table     node
+public  statement_activity               table     node
+public  statement_bundle_chunks          table     node
+public  statement_diagnostics            table     node
+public  statement_diagnostics_requests   table     node
+public  statement_execution_insights     table     node
+public  statement_statistics             table     node
+public  table_statistics                 table     node
+public  task_payloads                    table     node
+public  tenant_id_seq                    sequence  node
+public  tenant_settings                  table     node
+public  tenant_tasks                     table     node
+public  tenant_usage                     table     node
+public  tenants                          table     node
+public  transaction_activity             table     node
+public  transaction_execution_insights   table     node
+public  transaction_statistics           table     node
+public  ui                               table     node
+public  users                            table     node
+public  web_sessions                     table     node
+public  zones                            table     node
 
 onlyif config 3node-tenant-default-configs
-query TTTTT
-SELECT schema_name, table_name, type, owner, locality FROM [SHOW TABLES FROM system] ORDER BY 2
+query TTTT
+SELECT schema_name, table_name, type, owner FROM [SHOW TABLES FROM system] ORDER BY 2
 ----
 public  comments                         table     node  NULL
 public  database_role_settings           table     node  NULL

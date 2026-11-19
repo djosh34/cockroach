@@ -13,7 +13,6 @@ package execbuilder
 import (
 	"context"
 
-	"github.com/cockroachdb/cockroach/pkg/sql/execinfra"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/exec"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/memo"
@@ -21,15 +20,12 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/props"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/props/physical"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/xform"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/builtins/builtinsregistry"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree/treebin"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree/treecmp"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/volatility"
-	"github.com/cockroachdb/cockroach/pkg/sql/sqlerrors"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/cockroach/pkg/util/errorutil"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
@@ -711,8 +707,6 @@ func (b *Builder) buildExistsSubquery(
 				false, /* generator */
 				false, /* tailCall */
 				false, /* procedure */
-				nil,   /* blockState */
-				nil,   /* cursorDeclaration */
 			),
 			tree.DBoolFalse,
 		}, types.Bool), nil
@@ -749,26 +743,6 @@ func (b *Builder) buildSubquery(
 ) (tree.TypedExpr, error) {
 	subquery := scalar.(*memo.SubqueryExpr)
 	input := subquery.Input
-
-	if b.evalCtx.SessionData().EnforceHomeRegion && b.IsANSIDML {
-		inputDistributionProvidedPhysical := input.ProvidedPhysical()
-		if homeRegion, ok := inputDistributionProvidedPhysical.Distribution.GetSingleRegion(); ok {
-			if gatewayRegion, ok := b.evalCtx.GetLocalRegion(); ok {
-				if homeRegion != gatewayRegion {
-					return nil, pgerror.Newf(pgcode.QueryNotRunningInHomeRegion,
-						`%s. Try running the query from region '%s'. %s`,
-						execinfra.QueryNotRunningInHomeRegionMessagePrefix,
-						homeRegion,
-						sqlerrors.EnforceHomeRegionFurtherInfo,
-					)
-				}
-			}
-		} else {
-			return nil, pgerror.Newf(pgcode.QueryHasNoHomeRegion,
-				"Query has no home region. Try adding a LIMIT clause. %s",
-				sqlerrors.EnforceHomeRegionFurtherInfo)
-		}
-	}
 
 	// TODO(radu): for now we only support the trivial projection.
 	cols := input.Relational().OutputCols
@@ -830,8 +804,6 @@ func (b *Builder) buildSubquery(
 			false, /* generator */
 			false, /* tailCall */
 			false, /* procedure */
-			nil,   /* blockState */
-			nil,   /* cursorDeclaration */
 		), nil
 	}
 
@@ -848,7 +820,7 @@ func (b *Builder) buildSubquery(
 			ctx context.Context, ref tree.RoutineExecFactory, args tree.Datums, fn tree.RoutinePlanGeneratedFunc,
 		) error {
 			ef := ref.(exec.Factory)
-			eb := New(ctx, ef, b.optimizer, b.mem, b.catalog, input, b.semaCtx, b.evalCtx, false /* allowAutoCommit */, b.IsANSIDML)
+			eb := New(ctx, ef, b.optimizer, b.mem, b.catalog, input, b.semaCtx, b.evalCtx, false /* allowAutoCommit */)
 			eb.withExprs = withExprs
 			eb.disableTelemetry = true
 			eb.planLazySubqueries = true
@@ -889,8 +861,6 @@ func (b *Builder) buildSubquery(
 			false, /* generator */
 			false, /* tailCall */
 			false, /* procedure */
-			nil,   /* blockState */
-			nil,   /* cursorDeclaration */
 		), nil
 	}
 
@@ -962,10 +932,6 @@ func (b *Builder) buildUDF(ctx *buildScalarCtx, scalar opt.ScalarExpr) (tree.Typ
 		}
 	}
 
-	if udf.Def.BlockState != nil {
-		b.initRoutineExceptionHandler(udf.Def.BlockState, udf.Def.ExceptionBlock)
-	}
-
 	// Create a tree.RoutinePlanFn that can plan the statements in the UDF body.
 	// TODO(mgartner): Add support for WITH expressions inside UDF bodies.
 	planGen := b.buildRoutinePlanGenerator(
@@ -981,41 +947,6 @@ func (b *Builder) buildUDF(ctx *buildScalarCtx, scalar opt.ScalarExpr) (tree.Typ
 	// statements.
 	enableStepping := udf.Def.Volatility == volatility.Volatile
 
-	// Build each routine for the exception handler, if one exists.
-	var exceptionHandler *tree.RoutineExceptionHandler
-	if udf.Def.ExceptionBlock != nil {
-		block := udf.Def.ExceptionBlock
-		exceptionHandler = &tree.RoutineExceptionHandler{
-			Codes:   block.Codes,
-			Actions: make([]*tree.RoutineExpr, len(block.Actions)),
-		}
-		for i, action := range block.Actions {
-			actionPlanGen := b.buildRoutinePlanGenerator(
-				action.Params,
-				action.Body,
-				action.BodyProps,
-				false, /* allowOuterWithRefs */
-				nil,   /* wrapRootExpr */
-			)
-			// Build a routine with no arguments for the exception handler. The actual
-			// arguments will be supplied when (if) the handler is invoked.
-			exceptionHandler.Actions[i] = tree.NewTypedRoutineExpr(
-				action.Name,
-				nil, /* args */
-				actionPlanGen,
-				action.Typ,
-				true, /* enableStepping */
-				action.CalledOnNullInput,
-				action.MultiColDataSource,
-				action.SetReturning,
-				false, /* tailCall */
-				false, /* procedure */
-				nil,   /* blockState */
-				nil,   /* cursorDeclaration */
-			)
-		}
-	}
-
 	return tree.NewTypedRoutineExpr(
 		udf.Def.Name,
 		args,
@@ -1027,51 +958,7 @@ func (b *Builder) buildUDF(ctx *buildScalarCtx, scalar opt.ScalarExpr) (tree.Typ
 		udf.Def.SetReturning,
 		udf.TailCall,
 		false, /* procedure */
-		udf.Def.BlockState,
-		udf.Def.CursorDeclaration,
 	), nil
-}
-
-// initRoutineExceptionHandler initializes the exception handler (if any) for
-// the shared BlockState of a group of sub-routines within a PLpgSQL block.
-func (b *Builder) initRoutineExceptionHandler(
-	blockState *tree.BlockState, exceptionBlock *memo.ExceptionBlock,
-) {
-	if exceptionBlock == nil {
-		// Building the exception block is currently the only necessary
-		// initialization.
-		return
-	}
-	exceptionHandler := &tree.RoutineExceptionHandler{
-		Codes:   exceptionBlock.Codes,
-		Actions: make([]*tree.RoutineExpr, len(exceptionBlock.Actions)),
-	}
-	for i, action := range exceptionBlock.Actions {
-		actionPlanGen := b.buildRoutinePlanGenerator(
-			action.Params,
-			action.Body,
-			action.BodyProps,
-			false, /* allowOuterWithRefs */
-			nil,   /* wrapRootExpr */
-		)
-		// Build a routine with no arguments for the exception handler. The actual
-		// arguments will be supplied when (if) the handler is invoked.
-		exceptionHandler.Actions[i] = tree.NewTypedRoutineExpr(
-			action.Name,
-			nil, /* args */
-			actionPlanGen,
-			action.Typ,
-			true, /* enableStepping */
-			action.CalledOnNullInput,
-			action.MultiColDataSource,
-			action.SetReturning,
-			false, /* tailCall */
-			false, /* procedure */
-			nil,   /* blockState */
-			nil,   /* cursorDeclaration */
-		)
-	}
-	blockState.ExceptionHandler = exceptionHandler
 }
 
 type wrapRootExprFn func(f *norm.Factory, e memo.RelExpr) opt.Expr
@@ -1206,7 +1093,7 @@ func (b *Builder) buildRoutinePlanGenerator(
 
 			// Build the memo into a plan.
 			ef := ref.(exec.Factory)
-			eb := New(ctx, ef, &o, f.Memo(), b.catalog, optimizedExpr, b.semaCtx, b.evalCtx, false /* allowAutoCommit */, b.IsANSIDML)
+			eb := New(ctx, ef, &o, f.Memo(), b.catalog, optimizedExpr, b.semaCtx, b.evalCtx, false /* allowAutoCommit */)
 			eb.withExprs = withExprs
 			eb.disableTelemetry = true
 			eb.planLazySubqueries = true

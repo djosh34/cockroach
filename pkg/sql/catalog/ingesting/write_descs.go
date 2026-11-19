@@ -155,10 +155,6 @@ func WriteDescriptors(
 					table.GetID(), table)
 			}
 		}
-		if err := processTableForMultiRegion(ctx, txn, descsCol, table); err != nil {
-			return err
-		}
-
 		if err := descsCol.WriteDescToBatch(
 			ctx, kvTrace, tables[i].(catalog.MutableDescriptor), b,
 		); err != nil {
@@ -226,35 +222,6 @@ func WriteDescriptors(
 			return pgerror.Newf(pgcode.DuplicateObject, "table already exists")
 		}
 		return err
-	}
-	return nil
-}
-
-func processTableForMultiRegion(
-	ctx context.Context, txn *kv.Txn, descsCol *descs.Collection, table catalog.TableDescriptor,
-) error {
-	dbDesc, err := descsCol.ByID(txn).WithoutDropped().Get().Database(ctx, table.GetParentID())
-	if err != nil {
-		return err
-	}
-	// If the table descriptor is being written to a multi-region database and
-	// the table does not have a locality config setup, set one up here. The
-	// table's locality config will be set to the default locality - REGIONAL
-	// BY TABLE IN PRIMARY REGION.
-	if dbDesc.IsMultiRegion() {
-		if table.GetLocalityConfig() == nil {
-			table.(*tabledesc.Mutable).SetTableLocalityRegionalByTable(tree.PrimaryRegionNotSpecifiedName)
-		}
-	} else {
-		// If the database is not multi-region enabled, ensure that we don't
-		// write any multi-region table descriptors into it.
-		if table.GetLocalityConfig() != nil {
-			return pgerror.Newf(pgcode.FeatureNotSupported,
-				"cannot restore or create multi-region table %s into non-multi-region database %s",
-				table.GetName(),
-				dbDesc.GetName(),
-			)
-		}
 	}
 	return nil
 }

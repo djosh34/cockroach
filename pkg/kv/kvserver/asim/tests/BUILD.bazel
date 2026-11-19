@@ -21,10 +21,6 @@ go_library(
         "//pkg/kv/kvserver/asim/scheduled",
         "//pkg/kv/kvserver/asim/state",
         "//pkg/roachpb",
-        "//pkg/sql",
-        "//pkg/sql/catalog/catpb",
-        "//pkg/sql/catalog/descpb",
-        "//pkg/sql/catalog/multiregion",
     ],
 )
 

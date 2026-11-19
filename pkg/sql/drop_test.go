@@ -518,10 +518,8 @@ func TestDropIndexWithZoneConfigOSS(t *testing.T) {
 	indexSpan := tableDesc.IndexSpan(keys.SystemSQLCodec, index.GetID())
 	tests.CheckKeyCount(t, kvDB, indexSpan, numRows)
 
-	// Hack in zone configs for the primary and secondary indexes. (You need a CCL
-	// binary to do this properly.) Dropping the index will thus require
-	// regenerating the zone config's SubzoneSpans, which will fail with a "CCL
-	// required" error.
+	// Hack in zone configs for the primary and secondary indexes. Dropping the
+	// index will thus require regenerating the zone config's SubzoneSpans.
 	zoneConfig := zonepb.ZoneConfig{
 		Subzones: []zonepb.Subzone{
 			{IndexID: uint32(tableDesc.GetPrimaryIndexID()), Config: s.DefaultZoneConfig()},

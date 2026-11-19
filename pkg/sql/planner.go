@@ -21,12 +21,10 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
 	"github.com/cockroachdb/cockroach/pkg/keyvisualizer"
 	"github.com/cockroachdb/cockroach/pkg/kv"
-	"github.com/cockroachdb/cockroach/pkg/repstream"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
 	"github.com/cockroachdb/cockroach/pkg/spanconfig"
-	"github.com/cockroachdb/cockroach/pkg/sql/auditlogging"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catsessiondata"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/colinfo"
@@ -41,9 +39,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/exprutil"
 	"github.com/cockroachdb/cockroach/pkg/sql/idxusage"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
-	"github.com/cockroachdb/cockroach/pkg/sql/privilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/querycache"
-	"github.com/cockroachdb/cockroach/pkg/sql/regions"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catid"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/transform"
@@ -57,6 +53,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/envutil"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
 	"github.com/cockroachdb/cockroach/pkg/util/mon"
+	"github.com/cockroachdb/cockroach/pkg/util/rangedesc"
 	"github.com/cockroachdb/cockroach/pkg/util/ulid"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/logtags"
@@ -113,9 +110,6 @@ type extendedEvalContext struct {
 	SchemaChangerState *SchemaChangerState
 
 	statementPreparer statementPreparer
-
-	// validateDbZoneConfig should the DB zone config on commit.
-	validateDbZoneConfig *bool
 }
 
 // copyFromExecCfg copies relevant fields from an ExecutorConfig.
@@ -136,7 +130,6 @@ func (evalCtx *extendedEvalContext) copyFromExecCfg(execCfg *ExecutorConfig) {
 	evalCtx.ClusterName = execCfg.RPCContext.ClusterName()
 	evalCtx.NodeID = execCfg.NodeInfo.NodeID
 	evalCtx.Locality = execCfg.Locality
-	evalCtx.OriginalLocality = execCfg.Locality
 	evalCtx.NodesStatusServer = execCfg.NodesStatusServer
 	evalCtx.TenantStatusServer = execCfg.TenantStatusServer
 	evalCtx.SQLStatusServer = execCfg.SQLStatusServer
@@ -206,10 +199,6 @@ type planner struct {
 	// Corresponding Statement for this query.
 	stmt Statement
 
-	// StmtWithHomeRegionEnforced, if non-nil is the SQL statement for which a
-	// home region is being enforced.
-	StmtNoConstantsWithHomeRegionEnforced string
-
 	// pausablePortal is set when the query is from a pausable portal.
 	pausablePortal *PreparedPortal
 
@@ -273,8 +262,6 @@ type planner struct {
 
 	// trackDependency is used to track circular dependencies when dropping views.
 	trackDependency map[catid.DescID]bool
-
-	reducedAuditConfig *auditlogging.ReducedAuditConfig
 }
 
 // hasFlowForPausablePortal returns true if the planner is for re-executing a
@@ -431,13 +418,11 @@ func newInternalPlanner(
 
 	p.extendedEvalCtx = internalExtendedEvalCtx(ctx, sds, params.collection, txn, ts, ts, execCfg)
 	p.extendedEvalCtx.Planner = p
-	p.extendedEvalCtx.StreamManagerFactory = p
 	p.extendedEvalCtx.PrivilegedAccessor = p
 	p.extendedEvalCtx.SessionAccessor = p
 	p.extendedEvalCtx.ClientNoticeSender = p
 	p.extendedEvalCtx.Sequence = p
 	p.extendedEvalCtx.Tenant = p
-	p.extendedEvalCtx.Regions = p
 	p.extendedEvalCtx.JoinTokenCreator = p
 	p.extendedEvalCtx.Gossip = p
 	p.extendedEvalCtx.JobsProfiler = p
@@ -445,7 +430,6 @@ func newInternalPlanner(
 	p.extendedEvalCtx.ClusterName = execCfg.RPCContext.ClusterName()
 	p.extendedEvalCtx.NodeID = execCfg.NodeInfo.NodeID
 	p.extendedEvalCtx.Locality = execCfg.Locality
-	p.extendedEvalCtx.OriginalLocality = execCfg.Locality
 
 	p.sessionDataMutatorIterator = smi
 	p.autoCommit = false
@@ -629,10 +613,6 @@ func (p *planner) LeaseMgr() *lease.Manager {
 	return p.execCfg.LeaseManager
 }
 
-func (p *planner) AuditConfig() *auditlogging.AuditConfigLock {
-	return p.execCfg.AuditConfig
-}
-
 func (p *planner) Txn() *kv.Txn {
 	return p.txn
 }
@@ -658,14 +638,6 @@ func (p *planner) InternalSQLTxn() descs.Txn {
 		p.internalSQLTxn.init(p.txn, ie)
 	}
 	return &p.internalSQLTxn
-}
-
-func (p *planner) regionsProvider() *regions.Provider {
-	if txn := p.InternalSQLTxn(); txn != nil {
-		_ = txn.Regions() // force initialization
-		return p.internalSQLTxn.extraTxnState.regionsProvider
-	}
-	return nil
 }
 
 func (p *planner) User() username.SQLUsername {
@@ -716,18 +688,6 @@ func (p *planner) ResolveTableName(ctx context.Context, tn *tree.TableName) (tre
 		return 0, err
 	}
 	return tree.ID(desc.GetID()), nil
-}
-
-// CheckPrivilegeForTableID implements the AuthorizationAccessor interface.
-// Requires a valid transaction to be open.
-func (p *planner) CheckPrivilegeForTableID(
-	ctx context.Context, tableID descpb.ID, privilege privilege.Kind,
-) error {
-	desc, err := p.LookupTableByID(ctx, tableID)
-	if err != nil {
-		return err
-	}
-	return p.CheckPrivilegeForUser(ctx, desc, privilege, p.User())
 }
 
 // LookupTableByID looks up a table, by the given descriptor ID. Based on the
@@ -920,18 +880,6 @@ func (p *planner) resetPlanner(
 	p.pausablePortal = nil
 }
 
-// GetReplicationStreamManager returns a ReplicationStreamManager.
-func (p *planner) GetReplicationStreamManager(
-	ctx context.Context,
-) (eval.ReplicationStreamManager, error) {
-	return repstream.GetReplicationStreamManager(ctx, p.EvalContext(), p.InternalSQLTxn(), p.ExtendedEvalContext().SessionID)
-}
-
-// GetStreamIngestManager returns a StreamIngestManager.
-func (p *planner) GetStreamIngestManager(ctx context.Context) (eval.StreamIngestManager, error) {
-	return repstream.GetStreamIngestManager(ctx, p.EvalContext(), p.InternalSQLTxn(), p.ExtendedEvalContext().SessionID)
-}
-
 // SpanStats returns a stats for the given span of keys.
 func (p *planner) SpanStats(
 	ctx context.Context, spans roachpb.Spans,
@@ -996,4 +944,34 @@ func (p *planner) AutoCommit() bool {
 // mustUseLeafTxn returns true if inner plans must use a leaf transaction.
 func (p *planner) mustUseLeafTxn() bool {
 	return atomic.LoadInt32(&p.atomic.innerPlansMustUseLeafTxn) >= 1
+}
+
+// GetRangeDescIterator is part of the eval.Planner interface.
+func (p *planner) GetRangeDescIterator(
+	ctx context.Context, span roachpb.Span,
+) (rangedesc.Iterator, error) {
+	return p.ExecCfg().RangeDescIteratorFactory.NewIterator(ctx, span)
+}
+
+// GetRangeDescByID is part of the eval.Planner interface.
+func (p *planner) GetRangeDescByID(
+	ctx context.Context, rangeID roachpb.RangeID,
+) (rangeDesc roachpb.RangeDescriptor, _ error) {
+	execCfg := p.execCfg
+	tenantSpan := execCfg.Codec.TenantSpan()
+	rangeDescIterator, err := execCfg.RangeDescIteratorFactory.NewIterator(ctx, tenantSpan)
+	if err != nil {
+		return rangeDesc, err
+	}
+	for rangeDescIterator.Valid() {
+		rangeDesc = rangeDescIterator.CurRangeDescriptor()
+		if rangeDesc.RangeID == rangeID {
+			break
+		}
+		rangeDescIterator.Next()
+	}
+	if !rangeDescIterator.Valid() {
+		return rangeDesc, errors.Newf("range with ID %d not found", rangeID)
+	}
+	return rangeDesc, nil
 }

@@ -415,12 +415,6 @@ func addIndexToCandidates(
 		return
 	}
 
-	// Do not add indexes to PARTITION ALL BY tables.
-	// TODO(rytaft): Support these tables by adding implicit partitioning columns.
-	if currTable.IsPartitionAllBy() {
-		return
-	}
-
 	// Do not add duplicate indexes.
 	for _, existingIndex := range indexCandidates[currTable] {
 		if len(existingIndex) != len(newIndex) {

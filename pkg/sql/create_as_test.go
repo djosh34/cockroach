@@ -205,9 +205,6 @@ func TestCreateAsShow(t *testing.T) {
 			sql: "SHOW JOBS",
 		},
 		{
-			sql: "SHOW CHANGEFEED JOBS",
-		},
-		{
 			sql: "SHOW ALL CLUSTER STATEMENTS",
 		},
 		{
@@ -222,12 +219,6 @@ func TestCreateAsShow(t *testing.T) {
 		{
 			sql:   "SHOW RANGE FROM TABLE show_ranges_tbl FOR ROW (0)",
 			setup: "CREATE TABLE show_ranges_tbl (id int PRIMARY KEY)",
-		},
-		{
-			sql: "SHOW SURVIVAL GOAL FROM DATABASE",
-		},
-		{
-			sql: "SHOW REGIONS FROM DATABASE",
 		},
 		{
 			sql: "SHOW GRANTS ON ROLE",

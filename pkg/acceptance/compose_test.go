@@ -26,13 +26,7 @@ import (
 const composeDir = "compose"
 
 func TestCompose(t *testing.T) {
-	t.Run("ComposeGSS", func(t *testing.T) {
-		testCompose(t, filepath.Join("gss", "docker-compose.yml"), "psql")
-	})
-	t.Run("ComposeGSSPython", func(t *testing.T) {
-		testCompose(t, filepath.Join("gss", "docker-compose-python.yml"), "python")
-	})
-	t.Run("ComposeGSSFlyway", func(t *testing.T) {
+	t.Run("ComposeFlyway", func(t *testing.T) {
 		testCompose(t, filepath.Join("flyway", "docker-compose.yml"), "flyway")
 	})
 }
@@ -75,9 +69,6 @@ func testCompose(t *testing.T, path string, exitCodeFrom string) {
 	cmd := exec.Command(
 		"docker",
 		"compose",
-		// NB: Using --compatibility here in order to preserve compose V1 hostnames
-		// (with underscores) instead of V2 hostnames (with -), because the
-		// hostnames are hardcoded in the Kerberos keys.
 		"--compatibility",
 		"--ansi=never",
 		"-f", path,

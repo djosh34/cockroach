@@ -1009,7 +1009,6 @@ message ChangefeedDetails {
   //
   map<uint32, ChangefeedTargetTable> tables = 6 [
     (gogoproto.castkey) = "github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb.ID",
-    (gogoproto.casttype) = "ChangefeedTargets",
     (gogoproto.nullable) = false
   ];
   string sink_uri = 3 [(gogoproto.customname) = "SinkURI"];

@@ -21,8 +21,7 @@ import (
 )
 
 // TenantSideCostController is an interface through which tenant code reports
-// and throttles resource usage. Its implementation lives in the
-// tenantcostclient CCL package.
+// and throttles resource usage.
 type TenantSideCostController interface {
 	Start(
 		ctx context.Context,

@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
-	_ "github.com/cockroachdb/cockroach/pkg/ccl/backupccl"
 	"github.com/cockroachdb/cockroach/pkg/jobs"
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobstest"
@@ -951,14 +950,6 @@ func TestZipJobTrace(t *testing.T) {
 	dir, cleanupFn := testutils.TempDir(t)
 	defer cleanupFn()
 	zipName := filepath.Join(dir, "test.zip")
-
-	// Run a backup that completes, we should not see a trace for this job.
-	runner.Exec(t, `CREATE TABLE foo (id INT)`)
-	runner.Exec(t, `BACKUP TABLE foo INTO 'userfile:///completes'`)
-
-	// Run a restore that completes, we should not see a trace for this job.
-	runner.Exec(t, `CREATE DATABASE test`)
-	runner.Exec(t, `RESTORE TABLE foo FROM LATEST IN 'userfile:///completes' WITH into_db = 'test'`)
 
 	triggerJobAndWaitForRun := func(jobQuery string) jobspb.JobID {
 		var jobID jobspb.JobID

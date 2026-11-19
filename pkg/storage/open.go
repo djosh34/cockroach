@@ -183,14 +183,6 @@ func BallastSize(size int64) ConfigOption {
 	}
 }
 
-// SharedStorage enables use of shared storage (experimental).
-func SharedStorage(sharedStorage cloud.ExternalStorage) ConfigOption {
-	return func(cfg *engineConfig) error {
-		cfg.SharedStorage = sharedStorage
-		return nil
-	}
-}
-
 // SecondaryCache enables use of a secondary cache to store shared objects.
 func SecondaryCache(size int64) ConfigOption {
 	return func(cfg *engineConfig) error {
@@ -224,30 +216,6 @@ func MaxConcurrentCompactions(n int) ConfigOption {
 func PebbleOptions(pebbleOptions string, parseHooks *pebble.ParseHooks) ConfigOption {
 	return func(cfg *engineConfig) error {
 		return cfg.Opts.Parse(pebbleOptions, parseHooks)
-	}
-}
-
-// EncryptionAtRest configures an engine to use encryption-at-rest. It is used
-// for configuring in-memory engines, which are used in tests. It is not safe
-// to modify the given slice afterwards as it is captured by reference.
-func EncryptionAtRest(encryptionOptions []byte) ConfigOption {
-	return func(cfg *engineConfig) error {
-		if len(encryptionOptions) > 0 {
-			cfg.UseFileRegistry = true
-			cfg.EncryptionOptions = encryptionOptions
-		}
-		return nil
-	}
-}
-
-// Hook configures a hook to initialize additional storage options. It's used
-// to initialize encryption-at-rest details in CCL builds.
-func Hook(hookFunc func(*base.StorageConfig) error) ConfigOption {
-	return func(cfg *engineConfig) error {
-		if hookFunc == nil {
-			return nil
-		}
-		return hookFunc(&cfg.PebbleConfig.StorageConfig)
 	}
 }
 

@@ -426,27 +426,6 @@ func foreignKeyMutator(
 		if !ok {
 			continue
 		}
-		// Skip partitioned tables, since using foreign keys results in in-between
-		// filters not yielding a constraint.
-		// TODO(harding): Allow foreign keys on partitioned tables.
-		var skip bool
-		for _, def := range table.Defs {
-			switch def := def.(type) {
-			case *tree.IndexTableDef:
-				if def.PartitionByIndex != nil {
-					skip = true
-					break
-				}
-			case *tree.UniqueConstraintTableDef:
-				if def.IndexTableDef.PartitionByIndex != nil {
-					skip = true
-					break
-				}
-			}
-		}
-		if skip {
-			continue
-		}
 		tables = append(tables, table)
 		byName[table.Table] = table
 		usedCols[table.Table] = map[tree.Name]bool{}
@@ -672,10 +651,6 @@ var postgresStatementMutator MultiStatementMutation = func(rng *rand.Rand, stmts
 			changed = true
 			continue
 		case *tree.CreateTable:
-			if stmt.PartitionByTable != nil {
-				stmt.PartitionByTable = nil
-				changed = true
-			}
 			for i := 0; i < len(stmt.Defs); i++ {
 				switch def := stmt.Defs[i].(type) {
 				case *tree.FamilyTableDef:
@@ -699,10 +674,6 @@ var postgresStatementMutator MultiStatementMutation = func(rng *rand.Rand, stmts
 						changed = true
 					}
 				case *tree.UniqueConstraintTableDef:
-					if def.PartitionByIndex != nil {
-						def.PartitionByIndex = nil
-						changed = true
-					}
 					if def.WithoutIndex {
 						def.WithoutIndex = false
 						changed = true

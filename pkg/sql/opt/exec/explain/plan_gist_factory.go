@@ -585,37 +585,8 @@ func (u *unknownTable) Zone() cat.Zone {
 	return cat.EmptyZone()
 }
 
-func (u *unknownTable) IsPartitionAllBy() bool {
-	return false
-}
-
 func (u *unknownTable) IsRefreshViewRequired() bool {
 	return false
-}
-
-// HomeRegion is part of the cat.Table interface.
-func (u *unknownTable) HomeRegion() (region string, ok bool) {
-	return "", false
-}
-
-// IsGlobalTable is part of the cat.Table interface.
-func (u *unknownTable) IsGlobalTable() bool {
-	return false
-}
-
-// IsRegionalByRow is part of the cat.Table interface.
-func (u *unknownTable) IsRegionalByRow() bool {
-	return false
-}
-
-// IsMultiregion is part of the cat.Table interface.
-func (u *unknownTable) IsMultiregion() bool {
-	return false
-}
-
-// HomeRegionColName is part of the cat.Table interface.
-func (u *unknownTable) HomeRegionColName() (colName string, ok bool) {
-	return "", false
 }
 
 // GetDatabaseID is part of the cat.Table interface.
@@ -725,24 +696,12 @@ func (u *unknownIndex) ImplicitColumnCount() int {
 	return 0
 }
 
-func (u *unknownIndex) ImplicitPartitioningColumnCount() int {
-	return 0
-}
-
 func (u *unknownIndex) GeoConfig() geoindex.Config {
 	return geoindex.Config{}
 }
 
 func (u *unknownIndex) Version() descpb.IndexDescriptorVersion {
 	return descpb.LatestIndexDescriptorVersion
-}
-
-func (u *unknownIndex) PartitionCount() int {
-	return 0
-}
-
-func (u *unknownIndex) Partition(i int) cat.Partition {
-	panic(errors.AssertionFailedf("not implemented"))
 }
 
 var _ cat.Index = &unknownIndex{}

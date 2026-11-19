@@ -28,14 +28,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type noOIDCConfigured struct{}
-
-func (c *noOIDCConfigured) GetOIDCConf() OIDCUIConf {
-	return OIDCUIConf{
-		Enabled: false,
-	}
-}
-
 type testFs struct{}
 
 func (t testFs) Open(name string) (fs.File, error) {
@@ -64,7 +56,6 @@ func TestUIHandlerDevelopment(t *testing.T) {
 			z := ""
 			return &z
 		},
-		OIDC: &noOIDCConfigured{},
 	}
 	server := httptest.NewServer(Handler(cfg))
 	defer server.Close()
@@ -138,7 +129,6 @@ func TestUIHandler(t *testing.T) {
 			z := ""
 			return &z
 		},
-		OIDC: &noOIDCConfigured{},
 	}
 
 	server := httptest.NewServer(Handler(cfg))

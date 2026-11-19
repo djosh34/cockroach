@@ -653,7 +653,7 @@ func getFileLine(
 			fmt.Sprintf(`cd "$(git rev-parse --show-toplevel)" && git grep -n 'func %s(' '%s/*_test.go'`,
 				testName, packageName))
 		// This command returns output such as:
-		// ../ccl/storageccl/export_test.go:31:func TestExportCmd(t *testing.T) {
+		// ../storage/mvcc_test.go:31:func TestMVCCKeys(t *testing.T) {
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			fmt.Printf("couldn't find test %s in %s: %s %+v\n",
@@ -698,19 +698,8 @@ func getOwner(ctx context.Context, packageName, testName string) (_teams []team.
 			log.Fatalf("test-eng team could not be found in TEAMS.yaml")
 		}
 
-		// Workaround for #107885.
-		if strings.Contains(packageName, "backupccl") {
-			dr := co.GetTeamForAlias("cockroachdb/disaster-recovery")
-			if dr.Name() == "" {
-				log.Fatalf("disaster-recovery team could not be found in TEAMS.yaml")
-			}
-
-			log.Printf("assigning %s.%s to 'disaster-recovery' due to #107885", packageName, testName)
-			match = []team.Team{dr}
-		} else {
-			log.Printf("assigning %s.%s to 'test-eng' as catch-all", packageName, testName)
-			match = []team.Team{testEng}
-		}
+		log.Printf("assigning %s.%s to 'test-eng' as catch-all", packageName, testName)
+		match = []team.Team{testEng}
 	}
 	return match
 }

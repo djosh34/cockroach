@@ -146,7 +146,7 @@ func (ts *tenantSpecId) getTenantInfo(
 	return GetTenantRecordByID(ctx, p.InternalSQLTxn(), tid, p.ExecCfg().Settings)
 }
 
-// LookupTenantInfo implements PlanHookState for the benefits of CCL statements.
+// LookupTenantInfo implements PlanHookState.
 func (p *planner) LookupTenantInfo(
 	ctx context.Context, ts *tree.TenantSpec, op string,
 ) (*mtinfopb.TenantInfo, error) {

@@ -53,7 +53,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondatapb"
-	"github.com/cockroachdb/cockroach/pkg/sql/sqlerrors"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqltelemetry"
 	"github.com/cockroachdb/cockroach/pkg/storage"
 	"github.com/cockroachdb/cockroach/pkg/util/admission/admissionpb"
@@ -1191,10 +1190,6 @@ func (sc *SchemaChanger) RunStateMachineBeforeBackfill(ctx context.Context) erro
 		if err != nil {
 			return err
 		}
-		dbDesc, err := txn.Descriptors().ByID(txn.KV()).WithoutNonPublic().Get().Database(ctx, tbl.GetParentID())
-		if err != nil {
-			return err
-		}
 		runStatus = ""
 		// Apply mutations belonging to the same version.
 		for _, m := range tbl.AllMutations() {
@@ -1227,14 +1222,7 @@ func (sc *SchemaChanger) RunStateMachineBeforeBackfill(ctx context.Context) erro
 			// index swap occurs. The logic that generates spans for subzone
 			// configurations removes spans for indexes in the dropping state,
 			// which we don't want. So, set up the zone configs before we swap.
-			if err := sc.applyZoneConfigChangeForMutation(
-				ctx,
-				txn,
-				dbDesc,
-				tbl,
-				m,
-				false, // isDone
-			); err != nil {
+			if err := sc.applyZoneConfigChangeForMutation(ctx, txn, tbl, m); err != nil {
 				return err
 			}
 		}
@@ -1442,11 +1430,6 @@ func (sc *SchemaChanger) done(ctx context.Context) error {
 			return err
 		}
 
-		dbDesc, err := txn.Descriptors().ByID(txn.KV()).WithoutNonPublic().Get().Database(ctx, scTable.GetParentID())
-		if err != nil {
-			return err
-		}
-
 		collectReferencedTypeIDs := func() (catalog.DescriptorIDSet, error) {
 			typeLookupFn := func(id descpb.ID) (catalog.TypeDescriptor, error) {
 				desc, err := txn.Descriptors().ByIDWithLeased(txn.KV()).WithoutNonPublic().Get().Type(ctx, id)
@@ -1455,7 +1438,7 @@ func (sc *SchemaChanger) done(ctx context.Context) error {
 				}
 				return desc, nil
 			}
-			ids, _, err := scTable.GetAllReferencedTypeIDs(dbDesc, typeLookupFn)
+			ids, _, err := scTable.GetAllReferencedTypeIDs(typeLookupFn)
 			return catalog.MakeDescriptorIDSet(ids...), err
 		}
 		referencedTypeIDs, err := collectReferencedTypeIDs()
@@ -1520,15 +1503,7 @@ func (sc *SchemaChanger) done(ctx context.Context) error {
 
 			// Ensure that zone configurations are finalized (or rolled back) when
 			// done is called.
-			// This will configure the table zone config for multi-region transformations.
-			if err := sc.applyZoneConfigChangeForMutation(
-				ctx,
-				txn,
-				dbDesc,
-				scTable,
-				m,
-				true, // isDone
-			); err != nil {
+			if err := sc.applyZoneConfigChangeForMutation(ctx, txn, scTable, m); err != nil {
 				return err
 			}
 
@@ -1655,54 +1630,6 @@ func (sc *SchemaChanger) done(ctx context.Context) error {
 				if fn := sc.testingKnobs.RunBeforePrimaryKeySwap; fn != nil {
 					fn()
 				}
-				// For locality swaps, ensure the table descriptor fields are correctly filled.
-				if pkSwap.HasLocalityConfig() {
-					lcSwap := pkSwap.LocalityConfigSwap()
-					localityConfigToSwapTo := lcSwap.NewLocalityConfig
-					if m.Adding() {
-						// Sanity check that locality has not been changed during backfill.
-						if !scTable.LocalityConfig.Equal(lcSwap.OldLocalityConfig) {
-							return errors.AssertionFailedf(
-								"expected locality on table to match old locality\ngot: %s\nwant %s",
-								scTable.LocalityConfig,
-								lcSwap.OldLocalityConfig,
-							)
-						}
-
-						// If we are adding a new REGIONAL BY ROW column, after backfilling, the
-						// default expression should be switched to utilize to gateway_region.
-						if colID := lcSwap.NewRegionalByRowColumnID; colID != nil {
-							col, err := catalog.MustFindColumnByID(scTable, *colID)
-							if err != nil {
-								return err
-							}
-							col.ColumnDesc().DefaultExpr = lcSwap.NewRegionalByRowColumnDefaultExpr
-						}
-
-					} else {
-						// DROP is hit on cancellation, in which case we must roll back.
-						localityConfigToSwapTo = lcSwap.OldLocalityConfig
-					}
-
-					if err := setNewLocalityConfig(
-						ctx, txn.KV(), txn.Descriptors(), b, scTable, localityConfigToSwapTo, kvTrace,
-					); err != nil {
-						return err
-					}
-					switch localityConfigToSwapTo.Locality.(type) {
-					case *catpb.LocalityConfig_RegionalByTable_,
-						*catpb.LocalityConfig_Global_:
-						scTable.PartitionAllBy = false
-					case *catpb.LocalityConfig_RegionalByRow_:
-						scTable.PartitionAllBy = true
-					default:
-						return errors.AssertionFailedf(
-							"unknown locality on PK swap: %T",
-							localityConfigToSwapTo,
-						)
-					}
-				}
-
 				// If we performed MakeMutationComplete on a PrimaryKeySwap mutation, then we need to start
 				// a job for the index deletion mutations that the primary key swap mutation added, if any.
 				jobID, err := sc.queueCleanupJob(ctx, txn, scTable)
@@ -1927,17 +1854,16 @@ func maybeUpdateZoneConfigsForPKChange(
 		oldIdxToNewIdx[oldID] = swapInfo.NewIndexes[i]
 	}
 
-	// It is safe to copy the zone config off a primary index of a REGIONAL BY ROW table.
-	// This is because the prefix of the PK we used to partition by will stay the same,
-	// so a direct copy will always work.
-	if table.IsLocalityRegionalByRow() {
-		oldIdxToNewIdx[swapInfo.OldPrimaryIndexId] = swapInfo.NewPrimaryIndexId
-	}
-
 	for oldIdx, newIdx := range oldIdxToNewIdx {
 		for i := range zoneWithRaw.ZoneConfigProto().Subzones {
 			subzone := &zoneWithRaw.ZoneConfigProto().Subzones[i]
 			if subzone.IndexID == uint32(oldIdx) {
+				// A partition subzone moves only if the new index has the same
+				// partition over the same columns. Its stored spans move with it.
+				if subzone.PartitionName != "" &&
+					!partitionMovesWithIndex(table, oldIdx, newIdx, subzone.PartitionName) {
+					continue
+				}
 				// If we find a subzone matching an old index, copy its subzone
 				// into a new subzone with the new index's ID.
 				subzoneCopy := *subzone
@@ -1947,14 +1873,13 @@ func maybeUpdateZoneConfigsForPKChange(
 		}
 	}
 
-	// Write the zone back. This call regenerates the index spans that apply
-	// to each partition in the index.
+	// Write the zone back. This call regenerates the subzone spans.
 	_, err = writeZoneConfig(
 		ctx, txn, table.ID, table,
 		zoneWithRaw.ZoneConfigProto(), zoneWithRaw.GetRawBytesInStorage(),
-		execCfg, false, kvTrace,
+		execCfg, kvTrace, oldIdxToNewIdx,
 	)
-	if err != nil && !sqlerrors.IsCCLRequiredError(err) {
+	if err != nil {
 		return err
 	}
 
@@ -2573,25 +2498,22 @@ func createSchemaChangeEvalCtx(
 		ExecCfg: execCfg,
 		Descs:   descriptors,
 		Context: eval.Context{
-			SessionDataStack:     sessiondata.NewStack(sd),
-			Planner:              &faketreeeval.DummyEvalPlanner{},
-			StreamManagerFactory: &faketreeeval.DummyStreamManagerFactory{},
-			PrivilegedAccessor:   &faketreeeval.DummyPrivilegedAccessor{},
-			SessionAccessor:      &faketreeeval.DummySessionAccessor{},
-			ClientNoticeSender:   &faketreeeval.DummyClientNoticeSender{},
-			Sequence:             &faketreeeval.DummySequenceOperators{},
-			Tenant:               &faketreeeval.DummyTenantOperator{},
-			Regions:              &faketreeeval.DummyRegionOperator{},
-			Settings:             execCfg.Settings,
-			TestingKnobs:         execCfg.EvalContextTestingKnobs,
-			ClusterID:            execCfg.NodeInfo.LogicalClusterID(),
-			ClusterName:          execCfg.RPCContext.ClusterName(),
-			NodeID:               execCfg.NodeInfo.NodeID,
-			Codec:                execCfg.Codec,
-			Locality:             execCfg.Locality,
-			OriginalLocality:     execCfg.Locality,
-			Tracer:               execCfg.AmbientCtx.Tracer,
-			ULIDEntropy:          ulid.Monotonic(crypto_rand.Reader, 0),
+			SessionDataStack:   sessiondata.NewStack(sd),
+			Planner:            &faketreeeval.DummyEvalPlanner{},
+			PrivilegedAccessor: &faketreeeval.DummyPrivilegedAccessor{},
+			SessionAccessor:    &faketreeeval.DummySessionAccessor{},
+			ClientNoticeSender: &faketreeeval.DummyClientNoticeSender{},
+			Sequence:           &faketreeeval.DummySequenceOperators{},
+			Tenant:             &faketreeeval.DummyTenantOperator{},
+			Settings:           execCfg.Settings,
+			TestingKnobs:       execCfg.EvalContextTestingKnobs,
+			ClusterID:          execCfg.NodeInfo.LogicalClusterID(),
+			ClusterName:        execCfg.RPCContext.ClusterName(),
+			NodeID:             execCfg.NodeInfo.NodeID,
+			Codec:              execCfg.Codec,
+			Locality:           execCfg.Locality,
+			Tracer:             execCfg.AmbientCtx.Tracer,
+			ULIDEntropy:        ulid.Monotonic(crypto_rand.Reader, 0),
 		},
 	}
 	// TODO(andrei): This is wrong (just like on the main code path on
@@ -2992,94 +2914,11 @@ func (sc *SchemaChanger) queueCleanupJob(
 }
 
 func (sc *SchemaChanger) applyZoneConfigChangeForMutation(
-	ctx context.Context,
-	txn descs.Txn,
-	dbDesc catalog.DatabaseDescriptor,
-	tableDesc *tabledesc.Mutable,
-	mutation catalog.Mutation,
-	isDone bool,
+	ctx context.Context, txn descs.Txn, tableDesc *tabledesc.Mutable, mutation catalog.Mutation,
 ) error {
 	if pkSwap := mutation.AsPrimaryKeySwap(); pkSwap != nil {
-		if pkSwap.HasLocalityConfig() {
-			// We will add up to three options - one for the table itself,
-			// one for dropping any zone configs for old indexes and one
-			// for all the new indexes associated with the table.
-			opts := make([]applyZoneConfigForMultiRegionTableOption, 0, 3)
-			lcSwap := pkSwap.LocalityConfigSwap()
-
-			// For locality configs, we need to update the zone configs to match
-			// the new multi-region locality configuration, instead of
-			// copying the old zone configs over.
-			if mutation.Adding() {
-				// Only apply the zone configuration on the table when the mutation
-				// is complete.
-				if isDone {
-					// The table re-writing the LocalityConfig does most of the work for
-					// us here, but if we're coming from REGIONAL BY ROW, it's also
-					// necessary to drop the zone configurations on the index partitions.
-					if lcSwap.OldLocalityConfig.GetRegionalByRow() != nil {
-						oldIndexIDs := make([]descpb.IndexID, 0, pkSwap.NumOldIndexes())
-						_ = pkSwap.ForEachOldIndexIDs(func(id descpb.IndexID) error {
-							oldIndexIDs = append(oldIndexIDs, id)
-							return nil
-						})
-						opts = append(opts, dropZoneConfigsForMultiRegionIndexes(oldIndexIDs...))
-					}
-
-					opts = append(
-						opts,
-						applyZoneConfigForMultiRegionTableOptionTableNewConfig(
-							lcSwap.NewLocalityConfig,
-						),
-					)
-				}
-				switch lcSwap.NewLocalityConfig.Locality.(type) {
-				case *catpb.LocalityConfig_Global_,
-					*catpb.LocalityConfig_RegionalByTable_:
-				case *catpb.LocalityConfig_RegionalByRow_:
-					// Apply new zone configurations for all newly partitioned indexes.
-					newIndexIDs := make([]descpb.IndexID, 0, pkSwap.NumNewIndexes())
-					_ = pkSwap.ForEachNewIndexIDs(func(id descpb.IndexID) error {
-						newIndexIDs = append(newIndexIDs, id)
-						return nil
-					})
-					opts = append(opts, applyZoneConfigForMultiRegionTableOptionNewIndexes(newIndexIDs...))
-				default:
-					return errors.AssertionFailedf(
-						"unknown locality on PK swap: %T",
-						lcSwap.NewLocalityConfig.Locality,
-					)
-				}
-			} else {
-				// DROP is hit on cancellation, in which case we must roll back.
-				opts = append(
-					opts,
-					applyZoneConfigForMultiRegionTableOptionTableNewConfig(
-						lcSwap.OldLocalityConfig,
-					),
-				)
-			}
-
-			regionConfig, err := SynthesizeRegionConfig(ctx, txn.KV(), dbDesc.GetID(), txn.Descriptors())
-			if err != nil {
-				return err
-			}
-			if err := ApplyZoneConfigForMultiRegionTable(
-				ctx,
-				txn,
-				sc.execCfg,
-				false, /* kvTrace */
-				regionConfig,
-				tableDesc,
-				opts...,
-			); err != nil {
-				return err
-			}
-		}
-
-		// In all cases, we now copy the zone configs over for any new indexes.
-		// Note this is done even for isDone = true, though not strictly
-		// necessary.
+		// Copy the zone configs over for any new indexes. Note this is done even
+		// for isDone = true, though not strictly necessary.
 		return maybeUpdateZoneConfigsForPKChange(
 			ctx, txn, sc.execCfg, false /* kvTrace */, tableDesc, pkSwap.PrimaryKeySwapDesc(),
 		)

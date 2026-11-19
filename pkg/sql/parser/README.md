@@ -57,18 +57,18 @@ generate a contextual help text during LALR error recovery.
 For example:
 
 ```
-backup_stmt:
-  BACKUP targets TO string_or_placeholder opt_as_of_clause opt_incremental opt_with_options
+truncate_stmt:
+  TRUNCATE opt_table relation_expr_list opt_drop_behavior
   {
-    $$.val = &Backup{Targets: $2.targetList(), To: $4.expr(), IncrementalFrom: $6.exprs(), AsOf: $5.asOfClause(), Options: $7.kvOptions()}
+    $$.val = &tree.Truncate{Tables: $3.tableNames(), DropBehavior: $4.dropBehavior()}
   }
-| BACKUP error { return helpWith(sqllex, `BACKUP`) }
+| TRUNCATE error { return helpWith(sqllex, `TRUNCATE`) }
 ```
 
-In this example, the grammar specifies that if the BACKUP keyword is
+In this example, the grammar specifies that if the TRUNCATE keyword is
 followed by some input tokens such that the first (valid) grammar rule
 doesn't apply, the parser will "recover from the error" by
-backtracking up until the point it only sees `BACKUP` on the stack
+backtracking up until the point it only sees `TRUNCATE` on the stack
 followed by non-parsable tokens, at which points it takes the `error`
 rule and executes its action.
 
@@ -88,9 +88,9 @@ Since the pattern "`{ return helpWith(sqllex, ...) }`" is common, we also implem
 a shorthand syntax based on comments, for example:
 
 ```
-backup_stmt:
+truncate_stmt:
    ...
-| BACKUP error // SHOW HELP: BACKUP
+| TRUNCATE error // SHOW HELP: TRUNCATE
 ```
 
 The special comment syntax "`SHOW HELP: XXXX`" is substituted by means
@@ -121,7 +121,6 @@ If we try to place an `error`-based recovery rule at the top-level:
 ```
 stmt:
   alter_stmt
-| backup_stmt
 | ...
 | delete_stmt
 | ...
@@ -131,7 +130,7 @@ stmt:
 This wouldn't work: the code inside the `error` action cannot
 "observe" the tokens observed so far and there would be no way to know
 whether the error should be about DELETE, or instead about ALTER,
-BACKUP, etc.
+TRUNCATE, etc.
 
 So in order to handle HELPTOKEN after a valid statement, we must place
 it in a rule where the context is still available, that is *before the

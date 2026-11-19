@@ -25,13 +25,13 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-// getSingleRegionClause returns an extra clause if the system database is in
-// a single region to optimize scans on the system.leases table.
+// getSingleRegionClause returns an extra clause that limits scans on the
+// system.leases table to the single region all leases are written to.
 func getSingleRegionClause(
-	ctx context.Context, isMultiRegion bool, st *cluster.Settings,
+	ctx context.Context, st *cluster.Settings,
 ) (query string, queryParam []byte) {
 	query, queryParam = "", nil
-	if !isMultiRegion && st.Version.IsActive(ctx, clusterversion.V23_1_SystemRbrSingleWrite) {
+	if st.Version.IsActive(ctx, clusterversion.V23_1_SystemRbrSingleWrite) {
 		query = " AND crdb_region=$2"
 		queryParam = enum.One
 	}
@@ -43,7 +43,6 @@ func getSingleRegionClause(
 func CountLeases(
 	ctx context.Context,
 	executor isql.Executor,
-	isMultiRegion bool,
 	st *cluster.Settings,
 	versions []IDVersion,
 	at hlc.Timestamp,
@@ -57,7 +56,7 @@ func CountLeases(
 			t.ID, t.Version))
 	}
 
-	singleRegionClause, singleRegionParam := getSingleRegionClause(ctx, isMultiRegion, st)
+	singleRegionClause, singleRegionParam := getSingleRegionClause(ctx, st)
 	stmt := fmt.Sprintf(`SELECT count(1) FROM system.public.lease AS OF SYSTEM TIME '%s' WHERE (%s) %s `,
 		at.AsOfSystemTime(),
 		whereClauses.String(),

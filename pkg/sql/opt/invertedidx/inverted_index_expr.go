@@ -207,7 +207,6 @@ func TryFilterInvertedIndexBySimilarity(
 	tabMeta := md.TableMeta(tabID)
 	columnCount := index.ExplicitColumnCount()
 	prefixColumnCount := index.NonInvertedPrefixColumnCount()
-	ps := tabMeta.IndexPartitionLocality(index.Ordinal())
 
 	// The indexed column must be of a string-like type.
 	srcColOrd := index.InvertedColumn().InvertedSourceColumnOrdinal()
@@ -318,7 +317,7 @@ func TryFilterInvertedIndexBySimilarity(
 		cols, notNullCols, tabMeta.ComputedCols,
 		tabMeta.ColsInComputedColsExpressions,
 		false, /* consolidate */
-		evalCtx, f, ps, checkCancellation,
+		evalCtx, f, checkCancellation,
 	)
 	prefixConstraint = ic.UnconsolidatedConstraint()
 	if prefixConstraint.Prefix(evalCtx) != prefixColumnCount {
@@ -681,7 +680,6 @@ func constrainPrefixColumns(
 ) (constraint *constraint.Constraint, remainingFilters memo.FiltersExpr, ok bool) {
 	tabMeta := factory.Metadata().TableMeta(tabID)
 	prefixColumnCount := index.NonInvertedPrefixColumnCount()
-	ps := tabMeta.IndexPartitionLocality(index.Ordinal())
 
 	// If this is a single-column inverted index, there are no prefix columns to
 	// constrain.
@@ -723,7 +721,7 @@ func constrainPrefixColumns(
 		prefixColumns, notNullCols, tabMeta.ComputedCols,
 		tabMeta.ColsInComputedColsExpressions,
 		false, /* consolidate */
-		evalCtx, factory, ps, checkCancellation,
+		evalCtx, factory, checkCancellation,
 	)
 	constraint = ic.UnconsolidatedConstraint()
 	if constraint.Prefix(evalCtx) < prefixColumnCount {

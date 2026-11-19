@@ -674,38 +674,6 @@ EXPLAIN SHOW AUTOMATIC JOBS -- literals removed
 EXPLAIN SHOW AUTOMATIC JOBS -- identifiers removed
 
 parse
-SHOW CHANGEFEED JOB 1234
-----
-SHOW CHANGEFEED JOBS VALUES (1234) -- normalized!
-SHOW CHANGEFEED JOBS VALUES ((1234)) -- fully parenthesized
-SHOW CHANGEFEED JOBS VALUES (_) -- literals removed
-SHOW CHANGEFEED JOBS VALUES (1234) -- identifiers removed
-
-parse
-EXPLAIN SHOW CHANGEFEED JOB 1234
-----
-EXPLAIN SHOW CHANGEFEED JOBS VALUES (1234) -- normalized!
-EXPLAIN SHOW CHANGEFEED JOBS VALUES ((1234)) -- fully parenthesized
-EXPLAIN SHOW CHANGEFEED JOBS VALUES (_) -- literals removed
-EXPLAIN SHOW CHANGEFEED JOBS VALUES (1234) -- identifiers removed
-
-parse
-SHOW CHANGEFEED JOBS
-----
-SHOW CHANGEFEED JOBS
-SHOW CHANGEFEED JOBS -- fully parenthesized
-SHOW CHANGEFEED JOBS -- literals removed
-SHOW CHANGEFEED JOBS -- identifiers removed
-
-parse
-EXPLAIN SHOW CHANGEFEED JOBS
-----
-EXPLAIN SHOW CHANGEFEED JOBS
-EXPLAIN SHOW CHANGEFEED JOBS -- fully parenthesized
-EXPLAIN SHOW CHANGEFEED JOBS -- literals removed
-EXPLAIN SHOW CHANGEFEED JOBS -- identifiers removed
-
-parse
 SHOW CLUSTER STATEMENTS
 ----
 SHOW CLUSTER STATEMENTS
@@ -1244,62 +1212,6 @@ SHOW RANGES FROM INDEX i -- literals removed
 SHOW RANGES FROM INDEX _ -- identifiers removed
 
 parse
-SHOW REGIONS
-----
-SHOW REGIONS
-SHOW REGIONS -- fully parenthesized
-SHOW REGIONS -- literals removed
-SHOW REGIONS -- identifiers removed
-
-parse
-SHOW REGIONS FROM CLUSTER
-----
-SHOW REGIONS FROM CLUSTER
-SHOW REGIONS FROM CLUSTER -- fully parenthesized
-SHOW REGIONS FROM CLUSTER -- literals removed
-SHOW REGIONS FROM CLUSTER -- identifiers removed
-
-parse
-SHOW REGIONS FROM ALL DATABASES
-----
-SHOW REGIONS FROM ALL DATABASES
-SHOW REGIONS FROM ALL DATABASES -- fully parenthesized
-SHOW REGIONS FROM ALL DATABASES -- literals removed
-SHOW REGIONS FROM ALL DATABASES -- identifiers removed
-
-parse
-SHOW REGIONS FROM DATABASE
-----
-SHOW REGIONS FROM DATABASE
-SHOW REGIONS FROM DATABASE -- fully parenthesized
-SHOW REGIONS FROM DATABASE -- literals removed
-SHOW REGIONS FROM DATABASE -- identifiers removed
-
-parse
-SHOW REGIONS FROM DATABASE d
-----
-SHOW REGIONS FROM DATABASE d
-SHOW REGIONS FROM DATABASE d -- fully parenthesized
-SHOW REGIONS FROM DATABASE d -- literals removed
-SHOW REGIONS FROM DATABASE _ -- identifiers removed
-
-parse
-SHOW SURVIVAL GOAL FROM DATABASE
-----
-SHOW SURVIVAL GOAL FROM DATABASE
-SHOW SURVIVAL GOAL FROM DATABASE -- fully parenthesized
-SHOW SURVIVAL GOAL FROM DATABASE -- literals removed
-SHOW SURVIVAL GOAL FROM DATABASE -- identifiers removed
-
-parse
-SHOW SURVIVAL GOAL FROM DATABASE d
-----
-SHOW SURVIVAL GOAL FROM DATABASE d
-SHOW SURVIVAL GOAL FROM DATABASE d -- fully parenthesized
-SHOW SURVIVAL GOAL FROM DATABASE d -- literals removed
-SHOW SURVIVAL GOAL FROM DATABASE _ -- identifiers removed
-
-parse
 SHOW EXPERIMENTAL_FINGERPRINTS FROM TABLE d.t
 ----
 SHOW EXPERIMENTAL_FINGERPRINTS FROM TABLE d.t
@@ -1406,46 +1318,6 @@ SHOW ZONE CONFIGURATION FROM TABLE db.schema.t -- fully parenthesized
 SHOW ZONE CONFIGURATION FROM TABLE db.schema.t -- literals removed
 SHOW ZONE CONFIGURATION FROM TABLE _._._ -- identifiers removed
 
-parse
-SHOW ZONE CONFIGURATION FROM PARTITION p OF TABLE db.t
-----
-SHOW ZONE CONFIGURATION FROM PARTITION p OF TABLE db.t
-SHOW ZONE CONFIGURATION FROM PARTITION p OF TABLE db.t -- fully parenthesized
-SHOW ZONE CONFIGURATION FROM PARTITION p OF TABLE db.t -- literals removed
-SHOW ZONE CONFIGURATION FROM PARTITION _ OF TABLE _._ -- identifiers removed
-
-parse
-SHOW ZONE CONFIGURATION FROM TABLE t PARTITION foo
-----
-SHOW ZONE CONFIGURATION FROM PARTITION foo OF TABLE t -- normalized!
-SHOW ZONE CONFIGURATION FROM PARTITION foo OF TABLE t -- fully parenthesized
-SHOW ZONE CONFIGURATION FROM PARTITION foo OF TABLE t -- literals removed
-SHOW ZONE CONFIGURATION FROM PARTITION _ OF TABLE _ -- identifiers removed
-
-parse
-SHOW ZONE CONFIGURATION FOR TABLE foo PARTITION bar
-----
-SHOW ZONE CONFIGURATION FROM PARTITION bar OF TABLE foo -- normalized!
-SHOW ZONE CONFIGURATION FROM PARTITION bar OF TABLE foo -- fully parenthesized
-SHOW ZONE CONFIGURATION FROM PARTITION bar OF TABLE foo -- literals removed
-SHOW ZONE CONFIGURATION FROM PARTITION _ OF TABLE _ -- identifiers removed
-
-parse
-SHOW ZONE CONFIGURATION FOR PARTITION foo OF TABLE bar
-----
-SHOW ZONE CONFIGURATION FROM PARTITION foo OF TABLE bar -- normalized!
-SHOW ZONE CONFIGURATION FROM PARTITION foo OF TABLE bar -- fully parenthesized
-SHOW ZONE CONFIGURATION FROM PARTITION foo OF TABLE bar -- literals removed
-SHOW ZONE CONFIGURATION FROM PARTITION _ OF TABLE _ -- identifiers removed
-
-parse
-SHOW ZONE CONFIGURATION FROM INDEX t@idx PARTITION foo
-----
-SHOW ZONE CONFIGURATION FROM PARTITION foo OF INDEX t@idx -- normalized!
-SHOW ZONE CONFIGURATION FROM PARTITION foo OF INDEX t@idx -- fully parenthesized
-SHOW ZONE CONFIGURATION FROM PARTITION foo OF INDEX t@idx -- literals removed
-SHOW ZONE CONFIGURATION FROM PARTITION _ OF INDEX _@_ -- identifiers removed
-
 
 parse
 SHOW ZONE CONFIGURATION FROM TABLE t
@@ -1454,14 +1326,6 @@ SHOW ZONE CONFIGURATION FROM TABLE t
 SHOW ZONE CONFIGURATION FROM TABLE t -- fully parenthesized
 SHOW ZONE CONFIGURATION FROM TABLE t -- literals removed
 SHOW ZONE CONFIGURATION FROM TABLE _ -- identifiers removed
-
-parse
-SHOW ZONE CONFIGURATION FROM PARTITION p OF TABLE t
-----
-SHOW ZONE CONFIGURATION FROM PARTITION p OF TABLE t
-SHOW ZONE CONFIGURATION FROM PARTITION p OF TABLE t -- fully parenthesized
-SHOW ZONE CONFIGURATION FROM PARTITION p OF TABLE t -- literals removed
-SHOW ZONE CONFIGURATION FROM PARTITION _ OF TABLE _ -- identifiers removed
 
 parse
 SHOW ZONE CONFIGURATION FROM INDEX db.t@i
@@ -1494,22 +1358,6 @@ SHOW ZONE CONFIGURATION FROM INDEX foo -- normalized!
 SHOW ZONE CONFIGURATION FROM INDEX foo -- fully parenthesized
 SHOW ZONE CONFIGURATION FROM INDEX foo -- literals removed
 SHOW ZONE CONFIGURATION FROM INDEX _ -- identifiers removed
-
-parse
-SHOW ZONE CONFIGURATION FOR INDEX foo PARTITION bar
-----
-SHOW ZONE CONFIGURATION FROM PARTITION bar OF INDEX foo -- normalized!
-SHOW ZONE CONFIGURATION FROM PARTITION bar OF INDEX foo -- fully parenthesized
-SHOW ZONE CONFIGURATION FROM PARTITION bar OF INDEX foo -- literals removed
-SHOW ZONE CONFIGURATION FROM PARTITION _ OF INDEX _ -- identifiers removed
-
-parse
-SHOW ZONE CONFIGURATION FOR PARTITION foo OF INDEX bar
-----
-SHOW ZONE CONFIGURATION FROM PARTITION foo OF INDEX bar -- normalized!
-SHOW ZONE CONFIGURATION FROM PARTITION foo OF INDEX bar -- fully parenthesized
-SHOW ZONE CONFIGURATION FROM PARTITION foo OF INDEX bar -- literals removed
-SHOW ZONE CONFIGURATION FROM PARTITION _ OF INDEX _ -- identifiers removed
 
 
 ## Tables are the default, but can also be specified with
@@ -1829,46 +1677,6 @@ EXPLAIN SHOW SAVEPOINT STATUS -- literals removed
 EXPLAIN SHOW SAVEPOINT STATUS -- identifiers removed
 
 parse
-SHOW TRANSFER STATE
-----
-SHOW TRANSFER STATE
-SHOW TRANSFER STATE -- fully parenthesized
-SHOW TRANSFER STATE -- literals removed
-SHOW TRANSFER STATE -- identifiers removed
-
-parse
-SHOW TRANSFER STATE WITH ''
-----
-SHOW TRANSFER STATE WITH ''
-SHOW TRANSFER STATE WITH ('') -- fully parenthesized
-SHOW TRANSFER STATE WITH '_' -- literals removed
-SHOW TRANSFER STATE WITH '' -- identifiers removed
-
-parse
-SHOW TRANSFER STATE WITH 'foo-bar'
-----
-SHOW TRANSFER STATE WITH 'foo-bar'
-SHOW TRANSFER STATE WITH ('foo-bar') -- fully parenthesized
-SHOW TRANSFER STATE WITH '_' -- literals removed
-SHOW TRANSFER STATE WITH 'foo-bar' -- identifiers removed
-
-parse
-SHOW TRANSFER STATE WITH 'foo'
-----
-SHOW TRANSFER STATE WITH 'foo'
-SHOW TRANSFER STATE WITH ('foo') -- fully parenthesized
-SHOW TRANSFER STATE WITH '_' -- literals removed
-SHOW TRANSFER STATE WITH 'foo' -- identifiers removed
-
-parse
-SHOW TRANSFER STATE WITH 'foo''o'
-----
-SHOW TRANSFER STATE WITH e'foo\'o' -- normalized!
-SHOW TRANSFER STATE WITH (e'foo\'o') -- fully parenthesized
-SHOW TRANSFER STATE WITH '_' -- literals removed
-SHOW TRANSFER STATE WITH e'foo\'o' -- identifiers removed
-
-parse
 SHOW LAST QUERY STATISTICS
 ----
 SHOW LAST QUERY STATISTICS RETURNING parse_latency, plan_latency, exec_latency, service_latency, post_commit_jobs_latency -- normalized!
@@ -2005,14 +1813,6 @@ SHOW VIRTUAL CLUSTER foo -- literals removed
 SHOW VIRTUAL CLUSTER _ -- identifiers removed
 
 parse
-SHOW VIRTUAL CLUSTER foo WITH REPLICATION STATUS
-----
-SHOW VIRTUAL CLUSTER foo WITH REPLICATION STATUS
-SHOW VIRTUAL CLUSTER (foo) WITH REPLICATION STATUS -- fully parenthesized
-SHOW VIRTUAL CLUSTER foo WITH REPLICATION STATUS -- literals removed
-SHOW VIRTUAL CLUSTER _ WITH REPLICATION STATUS -- identifiers removed
-
-parse
 SHOW VIRTUAL CLUSTER foo WITH CAPABILITIES
 ----
 SHOW VIRTUAL CLUSTER foo WITH CAPABILITIES
@@ -2029,60 +1829,9 @@ SHOW VIRTUAL CLUSTER ALL -- literals removed
 SHOW VIRTUAL CLUSTER ALL -- identifiers removed
 
 parse
-SHOW VIRTUAL CLUSTERS WITH REPLICATION STATUS
-----
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS -- normalized!
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS -- fully parenthesized
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS -- literals removed
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS -- identifiers removed
-
-parse
 SHOW VIRTUAL CLUSTER ALL
 ----
 SHOW VIRTUAL CLUSTER ALL
 SHOW VIRTUAL CLUSTER ALL -- fully parenthesized
 SHOW VIRTUAL CLUSTER ALL -- literals removed
 SHOW VIRTUAL CLUSTER ALL -- identifiers removed
-
-parse
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS
-----
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS -- fully parenthesized
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS -- literals removed
-SHOW VIRTUAL CLUSTER ALL WITH REPLICATION STATUS -- identifiers removed
-
-parse
-SHOW VIRTUAL CLUSTER foo WITH REPLICATION STATUS, CAPABILITIES
-----
-SHOW VIRTUAL CLUSTER foo WITH REPLICATION STATUS, CAPABILITIES
-SHOW VIRTUAL CLUSTER (foo) WITH REPLICATION STATUS, CAPABILITIES -- fully parenthesized
-SHOW VIRTUAL CLUSTER foo WITH REPLICATION STATUS, CAPABILITIES -- literals removed
-SHOW VIRTUAL CLUSTER _ WITH REPLICATION STATUS, CAPABILITIES -- identifiers removed
-
-parse
-SHOW BACKUP 'family' IN ('string', 'placeholder', 'placeholder', 'placeholder', 'string', 'placeholder', 'string', 'placeholder') WITH incremental_location = 'nullif', privileges, debug_dump_metadata_sst
-----
-SHOW BACKUP 'family' IN ('*****', '*****', '*****', '*****', '*****', '*****', '*****', '*****') WITH OPTIONS (incremental_location = '*****', privileges, debug_dump_metadata_sst) -- normalized!
-SHOW BACKUP ('family') IN (('*****'), ('*****'), ('*****'), ('*****'), ('*****'), ('*****'), ('*****'), ('*****')) WITH OPTIONS (incremental_location = ('*****'), privileges, debug_dump_metadata_sst) -- fully parenthesized
-SHOW BACKUP '_' IN ('_', '_', '_', '_', '_', '_', '_', '_') WITH OPTIONS (incremental_location = '_', privileges, debug_dump_metadata_sst) -- literals removed
-SHOW BACKUP 'family' IN ('*****', '*****', '*****', '*****', '*****', '*****', '*****', '*****') WITH OPTIONS (incremental_location = '*****', privileges, debug_dump_metadata_sst) -- identifiers removed
-SHOW BACKUP 'family' IN ('string', 'placeholder', 'placeholder', 'placeholder', 'string', 'placeholder', 'string', 'placeholder') WITH OPTIONS (incremental_location = 'nullif', privileges, debug_dump_metadata_sst) -- passwords exposed
-
-parse
-SHOW BACKUP 'abc' WITH SKIP SIZE
-----
-SHOW BACKUP '*****' WITH OPTIONS (skip size) -- normalized!
-SHOW BACKUP ('*****') WITH OPTIONS (skip size) -- fully parenthesized
-SHOW BACKUP '_' WITH OPTIONS (skip size) -- literals removed
-SHOW BACKUP '*****' WITH OPTIONS (skip size) -- identifiers removed
-SHOW BACKUP 'abc' WITH OPTIONS (skip size) -- passwords exposed
-
-parse
-SHOW BACKUP 'abc' WITH NOWAIT
-----
-SHOW BACKUP '*****' WITH OPTIONS (skip size) -- normalized!
-SHOW BACKUP ('*****') WITH OPTIONS (skip size) -- fully parenthesized
-SHOW BACKUP '_' WITH OPTIONS (skip size) -- literals removed
-SHOW BACKUP '*****' WITH OPTIONS (skip size) -- identifiers removed
-SHOW BACKUP 'abc' WITH OPTIONS (skip size) -- passwords exposed

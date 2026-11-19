@@ -24,7 +24,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
-	"github.com/cockroachdb/cockroach/pkg/sql/sessiondatapb"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
 )
 
@@ -67,54 +66,6 @@ func TestSimplifyFilters(t *testing.T) {
 	sel = f.ConstructSelect(vals, filters)
 	if len(sel.(*memo.SelectExpr).Filters) != 1 {
 		t.Fatalf("filters result should have filtered True operator")
-	}
-}
-
-// Test CopyAndReplace on an already optimized memo. Before CopyAndReplace is
-// called, the query has a placeholder that causes the optimizer to use a
-// parameterized lookup-join. After CopyAndReplace substitutes a constant for
-// the placeholder, the optimizer switches to a constrained scan. A similar
-// pattern is used by the ApplyJoin execution operator which replaces variables
-// with constants in an already optimized tree. The CopyAndReplace code must
-// take care to copy over the normalized tree rather than the optimized tree by
-// using the FirstExpr method.
-func TestCopyAndReplace(t *testing.T) {
-	cat := testcat.New()
-	if _, err := cat.ExecuteDDL("CREATE TABLE ab (a INT PRIMARY KEY, b INT)"); err != nil {
-		t.Fatal(err)
-	}
-
-	evalCtx := eval.MakeTestingEvalContext(cluster.MakeTestingClusterSettings())
-	evalCtx.SessionData().PlanCacheMode = sessiondatapb.PlanCacheModeAuto
-
-	var o xform.Optimizer
-	testutils.BuildQuery(t, &o, cat, &evalCtx, "SELECT * FROM ab WHERE a = $1")
-
-	if e, err := o.Optimize(); err != nil {
-		t.Fatal(err)
-	} else if e.Op() != opt.ProjectOp || e.Child(0).Op() != opt.LookupJoinOp {
-		t.Errorf("expected optimizer to choose a (project (lookup-join)), not (%v (%v))",
-			e.Op(), e.Child(0).Op())
-	}
-
-	m := o.Factory().DetachMemo()
-
-	o.Init(context.Background(), &evalCtx, cat)
-	var replaceFn norm.ReplaceFunc
-	replaceFn = func(e opt.Expr) opt.Expr {
-		if e.Op() == opt.PlaceholderOp {
-			return o.Factory().ConstructConstVal(tree.NewDInt(1), types.Int)
-		}
-		return o.Factory().CopyAndReplaceDefault(e, replaceFn)
-	}
-	o.Factory().CopyAndReplace(m.RootExpr().(memo.RelExpr), m.RootProps(), replaceFn)
-
-	if e, err := o.Optimize(); err != nil {
-		t.Fatal(err)
-	} else if e.Op() != opt.ScanOp {
-		t.Errorf("expected optimizer to choose a constrained scan, not %v", e.Op())
-	} else if e.(*memo.ScanExpr).Constraint == nil {
-		t.Errorf("expected optimizer to choose a constrained scan")
 	}
 }
 

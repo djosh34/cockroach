@@ -84,29 +84,6 @@ func (p *planner) addColumnImpl(
 	idx := cdd.PrimaryKeyOrUniqueIndexDescriptor
 	incTelemetryForNewColumn(d, col)
 
-	// Ensure all new indexes are partitioned appropriately.
-	if idx != nil {
-		if n.tableDesc.IsLocalityRegionalByRow() {
-			if err := params.p.checkNoRegionChangeUnderway(
-				params.ctx,
-				n.tableDesc.GetParentID(),
-				"add an UNIQUE COLUMN on a REGIONAL BY ROW table",
-			); err != nil {
-				return err
-			}
-		}
-
-		*idx, err = p.configureIndexDescForNewIndexPartitioning(
-			params.ctx,
-			desc,
-			*idx,
-			nil, /* PartitionByIndex */
-		)
-		if err != nil {
-			return err
-		}
-	}
-
 	// We're checking to see if a user is trying add a non-nullable column without a default to a
 	// non empty table by scanning the primary index span with a limit of 1 to see if any key exists.
 	if !col.Nullable && (col.DefaultExpr == nil && !col.IsComputed()) {
@@ -195,20 +172,6 @@ func (p *planner) addColumnImpl(
 		return nil
 	}); err != nil {
 		return err
-	}
-
-	// Zone configuration logic is only required for REGIONAL BY ROW tables
-	// with newly created indexes.
-	if n.tableDesc.IsLocalityRegionalByRow() && idx != nil {
-		// Configure zone configuration if required. This must happen after
-		// all the IDs have been allocated.
-		if err := p.configureZoneConfigForNewIndexPartitioning(
-			params.ctx,
-			n.tableDesc,
-			*idx,
-		); err != nil {
-			return err
-		}
 	}
 
 	if col.Virtual && !col.Nullable {

@@ -8,8 +8,8 @@
 // by the Apache License, Version 2.0, included in the file
 // licenses/APL.txt.
 
-// Package sctest contains tools to run end-to-end datadriven tests in both
-// ccl and non-ccl settings.
+// Package sctest contains tools to run end-to-end datadriven tests of the
+// declarative schema changer.
 package sctest
 
 import (

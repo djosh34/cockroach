@@ -24,7 +24,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/kv/kvclient/rangefeed"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/server/settingswatcher"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/desctestutils"
 	"github.com/cockroachdb/cockroach/pkg/sql/enum"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlinstance"
@@ -571,8 +570,7 @@ func TestReclaimLoop(t *testing.T) {
 	session.StartTS = clock.Now()
 	session.ExpTS = session.StartTS.Add(expiration.Nanoseconds(), 0)
 
-	db := s.InternalDB().(descs.DB)
-	err := storage.RunInstanceIDReclaimLoop(ctx, s.AppStopper(), ts, db, session)
+	err := storage.RunInstanceIDReclaimLoop(ctx, s.AppStopper(), ts, session)
 	require.NoError(t, err)
 
 	reclaimGroupInterval := instancestorage.ReclaimLoopInterval.Get(&s.ClusterSettings().SV)

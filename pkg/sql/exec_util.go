@@ -42,18 +42,14 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/kv/kvclient/kvtenant"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvclient/rangecache"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvclient/rangefeed"
-	"github.com/cockroachdb/cockroach/pkg/kv/kvclient/rangefeed/rangefeedcache"
-	"github.com/cockroachdb/cockroach/pkg/kv/kvpb"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/kvserverbase"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/protectedts"
-	"github.com/cockroachdb/cockroach/pkg/multitenant"
 	"github.com/cockroachdb/cockroach/pkg/multitenant/tenantcapabilities"
 	"github.com/cockroachdb/cockroach/pkg/obs"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/rpc"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/autoconfig/acprovider"
-	"github.com/cockroachdb/cockroach/pkg/server/license"
 	"github.com/cockroachdb/cockroach/pkg/server/pgurl"
 	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
 	"github.com/cockroachdb/cockroach/pkg/server/status/statuspb"
@@ -62,7 +58,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/spanconfig"
 	"github.com/cockroachdb/cockroach/pkg/sql/appstatspb"
-	"github.com/cockroachdb/cockroach/pkg/sql/auditlogging"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/lease"
@@ -117,7 +112,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/metric"
 	"github.com/cockroachdb/cockroach/pkg/util/mon"
 	"github.com/cockroachdb/cockroach/pkg/util/rangedesc"
-	"github.com/cockroachdb/cockroach/pkg/util/retry"
 	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil/pgdate"
 	"github.com/cockroachdb/cockroach/pkg/util/tracing"
@@ -336,49 +330,10 @@ var requireExplicitPrimaryKeysClusterMode = settings.RegisterBoolSetting(
 	false,
 	settings.WithPublic)
 
-var placementEnabledClusterMode = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.defaults.multiregion_placement_policy.enabled",
-	"default value for enable_multiregion_placement_policy;"+
-		" allows for use of PLACEMENT RESTRICTED",
-	false,
-)
-
-var autoRehomingEnabledClusterMode = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.defaults.experimental_auto_rehoming.enabled",
-	"default value for experimental_enable_auto_rehoming;"+
-		" allows for rows in REGIONAL BY ROW tables to be auto-rehomed on UPDATE",
-	false,
-)
-
-var onUpdateRehomeRowEnabledClusterMode = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.defaults.on_update_rehome_row.enabled",
-	"default value for on_update_rehome_row;"+
-		" enables ON UPDATE rehome_row() expressions to trigger on updates",
-	true,
-	settings.WithPublic)
-
 var temporaryTablesEnabledClusterMode = settings.RegisterBoolSetting(
 	settings.ApplicationLevel,
 	"sql.defaults.experimental_temporary_tables.enabled",
 	"default value for experimental_enable_temp_tables; allows for use of temporary tables by default",
-	false,
-	settings.WithPublic)
-
-var implicitColumnPartitioningEnabledClusterMode = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.defaults.experimental_implicit_column_partitioning.enabled",
-	"default value for experimental_enable_temp_tables; allows for the use of implicit column partitioning",
-	false,
-	settings.WithPublic)
-
-var overrideMultiRegionZoneConfigClusterMode = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.defaults.override_multi_region_zone_config.enabled",
-	"default value for override_multi_region_zone_config; "+
-		"allows for overriding the zone configs of a multi-region table or database",
 	false,
 	settings.WithPublic)
 
@@ -437,20 +392,6 @@ var optUseMultiColStatsClusterMode = settings.RegisterBoolSetting(
 	"default value for optimizer_use_multicol_stats session setting; enables usage of multi-column stats in the optimizer by default",
 	true,
 	settings.WithPublic)
-
-// localityOptimizedSearchMode controls the cluster default for the use of
-// locality optimized search. If enabled, the optimizer will try to plan scans
-// and lookup joins in which local nodes (i.e., nodes in the gateway region) are
-// searched for matching rows before remote nodes, in the hope that the
-// execution engine can avoid visiting remote nodes.
-var localityOptimizedSearchMode = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.defaults.locality_optimized_partitioned_index_scan.enabled",
-	"default value for locality_optimized_partitioned_index_scan session setting; "+
-		"enables searching for rows in the current region before searching remote regions",
-	true,
-	settings.WithPublic)
-
 var implicitSelectForUpdateClusterMode = settings.RegisterBoolSetting(
 	settings.ApplicationLevel,
 	"sql.defaults.implicit_select_for_update.enabled",
@@ -738,23 +679,6 @@ var costScansWithDefaultColSize = settings.RegisterBoolSetting(
 	settings.ApplicationLevel,
 	`sql.defaults.cost_scans_with_default_col_size.enabled`,
 	"setting to true uses the same size for all columns to compute scan cost",
-	false,
-	settings.WithPublic)
-
-var enableSuperRegions = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.defaults.super_regions.enabled",
-	"default value for enable_super_regions; "+
-		"allows for the usage of super regions",
-	false,
-	settings.WithPublic)
-
-var overrideAlterPrimaryRegionInSuperRegion = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.defaults.override_alter_primary_region_in_super_region.enabled",
-	"default value for override_alter_primary_region_in_super_region; "+
-		"allows for altering the primary region even if the primary region is a "+
-		"member of a super region",
 	false,
 	settings.WithPublic)
 
@@ -1333,8 +1257,6 @@ type ExecutorConfig struct {
 	TenantTestingKnobs                   *TenantTestingKnobs
 	TTLTestingKnobs                      *TTLTestingKnobs
 	SchemaTelemetryTestingKnobs          *SchemaTelemetryTestingKnobs
-	BackupRestoreTestingKnobs            *BackupRestoreTestingKnobs
-	StreamingTestingKnobs                *StreamingTestingKnobs
 	SQLStatsTestingKnobs                 *sqlstats.TestingKnobs
 	TelemetryLoggingTestingKnobs         *TelemetryLoggingTestingKnobs
 	SpanConfigTestingKnobs               *spanconfig.TestingKnobs
@@ -1356,10 +1278,6 @@ type ExecutorConfig struct {
 	// SessionInitCache cache; contains information used during authentication
 	// and per-role default settings.
 	SessionInitCache *sessioninit.Cache
-
-	// AuditConfig is the cluster's audit configuration. See the
-	// 'sql.log.user_audit' cluster setting to see how this is configured.
-	AuditConfig *auditlogging.AuditConfigLock
 
 	// ProtectedTimestampProvider encapsulates the protected timestamp subsystem.
 	ProtectedTimestampProvider protectedts.Provider
@@ -1426,10 +1344,6 @@ type ExecutorConfig struct {
 	// TraceCollector is used to contact all live nodes in the cluster, and
 	// collect trace spans from their inflight node registries.
 	TraceCollector *collector.TraceCollector
-
-	// TenantUsageServer is used to implement configuration APIs for tenant cost
-	// control.
-	TenantUsageServer multitenant.TenantUsageServer
 
 	// KVStoresIterator is used by various crdb_internal builtins to directly
 	// access stores on this node.
@@ -1502,9 +1416,6 @@ type ExecutorConfig struct {
 	// VirtualClusterName contains the name of the virtual cluster
 	// (tenant).
 	VirtualClusterName roachpb.TenantName
-
-	// LicenseEnforcer is used to enforce the license profiles.
-	LicenseEnforcer *license.Enforcer
 
 	// CidrLookup is used to look up the tag name for a given IP address.
 	CidrLookup *cidr.Lookup
@@ -1802,103 +1713,6 @@ type SchemaTelemetryTestingKnobs struct {
 // ModuleTestingKnobs implements the base.ModuleTestingKnobs interface.
 func (*SchemaTelemetryTestingKnobs) ModuleTestingKnobs() {}
 
-// BackupRestoreTestingKnobs contains knobs for backup and restore behavior.
-//
-// TODO (msbutler): move these to backupccl
-type BackupRestoreTestingKnobs struct {
-	// CaptureResolvedTableDescSpans allows for intercepting the spans which are
-	// resolved during backup planning, and will eventually be backed up during
-	// execution.
-	CaptureResolvedTableDescSpans func([]roachpb.Span)
-
-	// RunAfterSplitAndScatteringEntry allows blocking the RESTORE job after a
-	// single RestoreSpanEntry has been split and scattered.
-	RunAfterSplitAndScatteringEntry func(ctx context.Context)
-
-	// RunAfterProcessingRestoreSpanEntry allows blocking the RESTORE job after a
-	// single RestoreSpanEntry has been processed and added to the SSTBatcher.
-	RunAfterProcessingRestoreSpanEntry func(ctx context.Context, entry *execinfrapb.RestoreSpanEntry) error
-
-	// RunAfterExportingSpanEntry allows blocking the BACKUP job after a single
-	// span has been exported.
-	RunAfterExportingSpanEntry func(ctx context.Context, response *kvpb.ExportResponse)
-
-	// BackupMonitor is used to overwrite the monitor used by backup during
-	// testing. This is typically the bulk mem monitor if not
-	// specified here.
-	BackupMemMonitor *mon.BytesMonitor
-
-	RestoreDistSQLRetryPolicy *retry.Options
-
-	RunBeforeRestoreFlow func() error
-
-	RunAfterRestoreFlow func() error
-}
-
-var _ base.ModuleTestingKnobs = &BackupRestoreTestingKnobs{}
-
-// ModuleTestingKnobs implements the base.ModuleTestingKnobs interface.
-func (*BackupRestoreTestingKnobs) ModuleTestingKnobs() {}
-
-// StreamingTestingKnobs contains knobs for streaming behavior.
-type StreamingTestingKnobs struct {
-	// RunAfterReceivingEvent allows blocking the stream ingestion processor after
-	// a single event has been received.
-	RunAfterReceivingEvent func(ctx context.Context) error
-
-	// ElideCheckpointEvent elides checkpoint event ingestion if this returns true
-	ElideCheckpointEvent func(nodeId base.SQLInstanceID, frontier hlc.Timestamp) bool
-
-	// BeforeClientSubscribe allows observation of parameters about to be passed
-	// to a streaming client
-	BeforeClientSubscribe func(addr string, token string, startTime hlc.Timestamp)
-
-	// BeforeIngestionStart allows blocking the stream ingestion job
-	// before a stream ingestion happens.
-	BeforeIngestionStart func(ctx context.Context) error
-
-	// AfterReplicationFlowPlan allows the caller to inspect the ingestion and
-	// frontier specs generated for the replication job.
-	AfterReplicationFlowPlan func(map[base.SQLInstanceID]*execinfrapb.StreamIngestionDataSpec,
-		*execinfrapb.StreamIngestionFrontierSpec)
-
-	AfterPersistingPartitionSpecs func()
-
-	// OverrideRevertRangeBatchSize allows overriding the `MaxSpanRequestKeys`
-	// used when sending a RevertRange request.
-	OverrideRevertRangeBatchSize int64
-
-	// AfterCutoverStarted allows blocking after the cutover has started.
-	AfterCutoverStarted func()
-
-	// OnCutoverProgressUpdate is called on every progress update
-	// call during the cutover process.
-	OnCutoverProgressUpdate func(remainingSpans roachpb.Spans)
-
-	// CutoverProgressShouldUpdate overrides the standard logic
-	// for whether the job record is updated on a progress update.
-	CutoverProgressShouldUpdate func() bool
-
-	DistSQLRetryPolicy *retry.Options
-
-	AfterRetryIteration func(err error)
-
-	MockSpanConfigTableName *tree.TableName
-
-	RightAfterSpanConfigFlush func(ctx context.Context, bufferedUpdates []spanconfig.Record, bufferedDeletes []spanconfig.Target)
-
-	AfterResumerJobLoad func(err error) error
-
-	SkipSpanConfigReplication bool
-
-	SpanConfigRangefeedCacheKnobs *rangefeedcache.TestingKnobs
-}
-
-var _ base.ModuleTestingKnobs = &StreamingTestingKnobs{}
-
-// ModuleTestingKnobs implements the base.ModuleTestingKnobs interface.
-func (*StreamingTestingKnobs) ModuleTestingKnobs() {}
-
 func shouldDistributeGivenRecAndMode(
 	rec distRecommendation, mode sessiondatapb.DistSQLExecMode,
 ) bool {
@@ -2118,9 +1932,9 @@ func checkResultType(typ *types.T) error {
 // EvalAsOfTimestamp evaluates and returns the timestamp from an AS OF SYSTEM
 // TIME clause.
 func (p *planner) EvalAsOfTimestamp(
-	ctx context.Context, asOfClause tree.AsOfClause, opts ...asof.EvalOption,
+	ctx context.Context, asOfClause tree.AsOfClause,
 ) (eval.AsOfSystemTime, error) {
-	asOf, err := asof.Eval(ctx, asOfClause, &p.semaCtx, p.EvalContext(), opts...)
+	asOf, err := asof.Eval(ctx, asOfClause, &p.semaCtx, p.EvalContext())
 	if err != nil {
 		return eval.AsOfSystemTime{}, err
 	}
@@ -2174,7 +1988,7 @@ func (p *planner) isAsOf(ctx context.Context, stmt tree.Statement) (*eval.AsOfSy
 	default:
 		return nil, nil
 	}
-	asOfRet, err := p.EvalAsOfTimestamp(ctx, asOf, asof.OptionAllowBoundedStaleness)
+	asOfRet, err := p.EvalAsOfTimestamp(ctx, asOf)
 	if err != nil {
 		return nil, err
 	}
@@ -2270,14 +2084,6 @@ type SessionArgs struct {
 	// client.
 	RemoteAddr            net.Addr
 	ConnResultsBufferSize int64
-	// SessionRevivalToken may contain a token generated from a different session
-	// that can be used to authenticate this session. If it is set, all other
-	// authentication is skipped. Once the token is used to authenticate, this
-	// value should be zeroed out.
-	SessionRevivalToken []byte
-	// JWTAuthEnabled indicates if the customer is passing a JWT token in the
-	// password field.
-	JWTAuthEnabled bool
 }
 
 // SessionRegistry stores a set of all sessions on this node.
@@ -3118,7 +2924,7 @@ func (it *sessionDataMutatorIterator) mutator(
 }
 
 // SetSessionDefaultIntSize sets the default int size for the session.
-// It is exported for use in import which is a CCL package.
+// It is exported for use in import.
 func (it *sessionDataMutatorIterator) SetSessionDefaultIntSize(size int32) {
 	it.applyOnEachMutator(func(m sessionDataMutator) {
 		m.SetDefaultIntSize(size)
@@ -3324,10 +3130,6 @@ func (m *sessionDataMutator) SetOptimizerUseNotVisibleIndexes(val bool) {
 	m.data.OptimizerUseNotVisibleIndexes = val
 }
 
-func (m *sessionDataMutator) SetLocalityOptimizedSearch(val bool) {
-	m.data.LocalityOptimizedSearch = val
-}
-
 func (m *sessionDataMutator) SetImplicitSelectForUpdate(val bool) {
 	m.data.ImplicitSelectForUpdate = val
 }
@@ -3419,28 +3221,8 @@ func (m *sessionDataMutator) SetSaveTablesPrefix(prefix string) {
 	m.data.SaveTablesPrefix = prefix
 }
 
-func (m *sessionDataMutator) SetPlacementEnabled(val bool) {
-	m.data.PlacementEnabled = val
-}
-
-func (m *sessionDataMutator) SetAutoRehomingEnabled(val bool) {
-	m.data.AutoRehomingEnabled = val
-}
-
-func (m *sessionDataMutator) SetOnUpdateRehomeRowEnabled(val bool) {
-	m.data.OnUpdateRehomeRowEnabled = val
-}
-
 func (m *sessionDataMutator) SetTempTablesEnabled(val bool) {
 	m.data.TempTablesEnabled = val
-}
-
-func (m *sessionDataMutator) SetImplicitColumnPartitioningEnabled(val bool) {
-	m.data.ImplicitColumnPartitioningEnabled = val
-}
-
-func (m *sessionDataMutator) SetOverrideMultiRegionZoneConfigEnabled(val bool) {
-	m.data.OverrideMultiRegionZoneConfigEnabled = val
 }
 
 func (m *sessionDataMutator) SetDisallowFullTableScans(val bool) {
@@ -3453,14 +3235,6 @@ func (m *sessionDataMutator) SetOptimizerApplyFullScanPenaltyToVirtualTables(val
 
 func (m *sessionDataMutator) SetAlterColumnTypeGeneral(val bool) {
 	m.data.AlterColumnTypeGeneralEnabled = val
-}
-
-func (m *sessionDataMutator) SetEnableSuperRegions(val bool) {
-	m.data.EnableSuperRegions = val
-}
-
-func (m *sessionDataMutator) SetEnableOverrideAlterPrimaryRegionInSuperRegion(val bool) {
-	m.data.OverrideAlterPrimaryRegionInSuperRegion = val
 }
 
 // TODO(rytaft): remove this once unique without index constraints are fully
@@ -3668,10 +3442,6 @@ func (m *sessionDataMutator) SetDeclareCursorStatementTimeoutEnabled(val bool) {
 	m.data.DeclareCursorStatementTimeoutEnabled = val
 }
 
-func (m *sessionDataMutator) SetEnforceHomeRegion(val bool) {
-	m.data.EnforceHomeRegion = val
-}
-
 func (m *sessionDataMutator) SetVariableInequalityLookupJoinEnabled(val bool) {
 	m.data.VariableInequalityLookupJoinEnabled = val
 }
@@ -3698,10 +3468,6 @@ func (m *sessionDataMutator) SetOptimizerUseImprovedSplitDisjunctionForJoins(val
 
 func (m *sessionDataMutator) SetInjectRetryErrorsOnCommitEnabled(val bool) {
 	m.data.InjectRetryErrorsOnCommitEnabled = val
-}
-
-func (m *sessionDataMutator) SetEnforceHomeRegionFollowerReadsEnabled(val bool) {
-	m.data.EnforceHomeRegionFollowerReadsEnabled = val
 }
 
 func (m *sessionDataMutator) SetOptimizerAlwaysUseHistograms(val bool) {
@@ -3790,10 +3556,6 @@ func (m *sessionDataMutator) SetOptimizerUseLockOpForSerializable(val bool) {
 
 func (m *sessionDataMutator) SetOptimizerUseProvidedOrderingFix(val bool) {
 	m.data.OptimizerUseProvidedOrderingFix = val
-}
-
-func (m *sessionDataMutator) SetDisableChangefeedReplication(val bool) {
-	m.data.DisableChangefeedReplication = val
 }
 
 func (m *sessionDataMutator) SetDistSQLPlanGatewayBias(val int64) {

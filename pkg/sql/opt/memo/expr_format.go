@@ -362,7 +362,7 @@ func (f *ExprFmtCtx) formatRelational(e RelExpr, tp treeprinter.Node) {
 		colList = t.Cols
 
 	case *UnionExpr, *IntersectExpr, *ExceptExpr,
-		*UnionAllExpr, *IntersectAllExpr, *ExceptAllExpr, *LocalityOptimizedSearchExpr:
+		*UnionAllExpr, *IntersectAllExpr, *ExceptAllExpr:
 		colList = e.Private().(*SetPrivate).OutCols
 
 	default:
@@ -412,7 +412,7 @@ func (f *ExprFmtCtx) formatRelational(e RelExpr, tp treeprinter.Node) {
 	// Special-case handling for set operators to show the left and right
 	// input columns that correspond to the output columns.
 	case *UnionExpr, *IntersectExpr, *ExceptExpr,
-		*UnionAllExpr, *IntersectAllExpr, *ExceptAllExpr, *LocalityOptimizedSearchExpr:
+		*UnionAllExpr, *IntersectAllExpr, *ExceptAllExpr:
 		private := e.Private().(*SetPrivate)
 		if !f.HasFlags(ExprFmtHideColumns) {
 			f.formatRelColList(e, tp, "left columns:", private.LeftCols)
@@ -570,10 +570,6 @@ func (f *ExprFmtCtx) formatRelational(e RelExpr, tp treeprinter.Node) {
 			if len(t.LookupExpr) > 0 {
 				n := tp.Childf("lookup expression")
 				f.formatExpr(&t.LookupExpr, n)
-			}
-			if len(t.RemoteLookupExpr) > 0 {
-				n := tp.Childf("remote lookup expression")
-				f.formatExpr(&t.RemoteLookupExpr, n)
 			}
 		}
 		if t.LookupColsAreTableKey {
@@ -982,33 +978,11 @@ func (f *ExprFmtCtx) formatScalarWithLabel(
 			}
 			n = tp.Child("body")
 			for i := range udf.Def.Body {
-				if i == 0 && udf.Def.CursorDeclaration != nil {
-					// The first statement is opening a cursor.
-					cur := n.Child("open-cursor")
-					f.formatExpr(udf.Def.Body[i], cur)
-					continue
-				}
 				f.formatExpr(udf.Def.Body[i], n)
 			}
 			delete(f.seenUDFs, udf.Def)
 		} else {
 			tp.Child("recursive-call")
-		}
-		if udf.Def.ExceptionBlock != nil {
-			n = tp.Child("exception-handler")
-			for i := range udf.Def.ExceptionBlock.Codes {
-				code := udf.Def.ExceptionBlock.Codes[i]
-				body := udf.Def.ExceptionBlock.Actions[i].Body
-				var branch treeprinter.Node
-				if code.String() == "OTHERS" {
-					branch = n.Child("OTHERS")
-				} else {
-					branch = n.Childf("SQLSTATE '%s'", code)
-				}
-				for j := range body {
-					f.formatExpr(body[j], branch)
-				}
-			}
 		}
 	}
 

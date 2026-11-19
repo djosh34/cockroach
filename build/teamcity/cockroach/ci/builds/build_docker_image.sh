@@ -19,7 +19,7 @@ tc_start_block "Copy cockroach binary and dependency files to build/deploy"
 
 # Get the cockroach binary from Build (Linux ${arch})
 # Artifacts rules:
-# bazel-bin/pkg/cmd/cockroach/cockroach_/cockroach=>upstream_artifacts
+# bazel-bin/pkg/cmd/cockroach-oss/cockroach-oss_/cockroach-oss=>upstream_artifacts
 # bazel-bin/c-deps/libgeos/lib/libgeos.so=>upstream_artifacts
 # bazel-bin/c-deps/libgeos/lib/libgeos_c.so=>upstream_artifacts
 cp upstream_artifacts/cockroach\

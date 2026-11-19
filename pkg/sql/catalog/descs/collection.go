@@ -127,12 +127,6 @@ type Collection struct {
 	// deletedDescs that will not need to wait for new lease versions.
 	deletedDescs catalog.DescriptorIDSet
 
-	// maxTimestampBoundDeadlineHolder contains the maximum timestamp to read
-	// schemas at. This is only set during the retries of bounded_staleness when
-	// nearest_only=True, in which we want a schema read that should be no older
-	// than MaxTimestampBound.
-	maxTimestampBoundDeadlineHolder maxTimestampBoundDeadlineHolder
-
 	// Session is a sqlliveness.Session which may be optionally set.
 	// It must be set in the multi-tenant environment for ephemeral
 	// SQL pods. It should not be set otherwise.
@@ -158,21 +152,6 @@ func (tc *Collection) GetDeletedDescs() catalog.DescriptorIDSet {
 // only done when a deadline exists.
 func (tc *Collection) MaybeUpdateDeadline(ctx context.Context, txn *kv.Txn) (err error) {
 	return tc.leased.maybeUpdateDeadline(ctx, txn, tc.sqlLivenessSession)
-}
-
-// SetMaxTimestampBound sets the maximum timestamp to read schemas at.
-func (tc *Collection) SetMaxTimestampBound(maxTimestampBound hlc.Timestamp) {
-	tc.maxTimestampBoundDeadlineHolder.maxTimestampBound = maxTimestampBound
-}
-
-// ResetMaxTimestampBound resets the maximum timestamp to read schemas at.
-func (tc *Collection) ResetMaxTimestampBound() {
-	tc.maxTimestampBoundDeadlineHolder.maxTimestampBound = hlc.Timestamp{}
-}
-
-// GetMaxTimestampBound returns the maximum timestamp to read schemas at.
-func (tc *Collection) GetMaxTimestampBound() hlc.Timestamp {
-	return tc.maxTimestampBoundDeadlineHolder.maxTimestampBound
 }
 
 // SkipValidationOnWrite avoids validating stored descriptors prior to

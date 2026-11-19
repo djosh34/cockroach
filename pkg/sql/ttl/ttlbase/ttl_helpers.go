@@ -71,13 +71,6 @@ var (
 		true,
 		settings.WithPublic,
 	)
-	changefeedReplicationDisabled = settings.RegisterBoolSetting(
-		settings.ApplicationLevel,
-		"sql.ttl.changefeed_replication.disabled",
-		"if true, deletes issued by TTL will not be replicated via changefeeds",
-		false,
-		settings.WithPublic,
-	)
 )
 
 var (
@@ -149,12 +142,6 @@ func CheckJobEnabled(settingsValues *settings.Values) error {
 		)
 	}
 	return nil
-}
-
-// GetChangefeedReplicationDisabled returns whether changefeed replication
-// should be disabled for this job based on the relevant cluster setting.
-func GetChangefeedReplicationDisabled(settingsValues *settings.Values) bool {
-	return changefeedReplicationDisabled.Get(settingsValues)
 }
 
 // BuildScheduleLabel returns a string value intended for use as the

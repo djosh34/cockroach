@@ -173,18 +173,6 @@ func formatCatalogIndex(tab Table, ord int, tp treeprinter.Node, redactableValue
 
 	FormatZone(idx.Zone(), child)
 
-	if n := idx.PartitionCount(); n > 0 {
-		c := child.Child("partitions")
-		for i := 0; i < n; i++ {
-			p := idx.Partition(i)
-			part := c.Child(p.Name())
-			prefixes := part.Child("partition by list prefixes")
-			for _, datums := range p.PartitionByListPrefixes() {
-				prefixes.Child(MaybeMarkRedactable(datums.String(), redactableValues))
-			}
-			FormatZone(p.Zone(), part)
-		}
-	}
 	if pred, isPartial := idx.Predicate(); isPartial {
 		child.Childf("WHERE %s", MaybeMarkRedactable(pred, redactableValues))
 	}

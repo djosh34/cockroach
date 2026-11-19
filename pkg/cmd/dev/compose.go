@@ -32,7 +32,7 @@ func makeComposeCmd(runE func(cmd *cobra.Command, args []string) error) *cobra.C
 	}
 	addCommonBuildFlags(composeCmd)
 	addCommonTestFlags(composeCmd)
-	composeCmd.Flags().Bool(noRebuildCockroachFlag, false, "set if it is unnecessary to rebuild cockroach (artifacts/cockroach must already exist, e.g. after being created by a previous `dev compose` run)")
+	composeCmd.Flags().Bool(noRebuildCockroachFlag, false, "set if it is unnecessary to rebuild cockroach (artifacts/cockroach-oss must already exist, e.g. after being created by a previous `dev compose` run)")
 	composeCmd.Flags().String(volumeFlag, "bzlhome", "the Docker volume to use as the container home directory (only used for cross builds)")
 	composeCmd.Flags().Duration(eachFlag, 10*time.Minute, "individual test timeout")
 	return composeCmd
@@ -49,7 +49,7 @@ func (d *dev) compose(cmd *cobra.Command, _ []string) error {
 	)
 
 	if !noRebuildCockroach {
-		crossArgs, targets, err := d.getBasicBuildArgs(ctx, []string{"//pkg/cmd/cockroach:cockroach", "//pkg/compose/compare/compare:compare_test", "//c-deps:libgeos"})
+		crossArgs, targets, err := d.getBasicBuildArgs(ctx, []string{"//pkg/cmd/cockroach-oss:cockroach-oss", "//pkg/compose/compare/compare:compare_test", "//c-deps:libgeos"})
 		if err != nil {
 			return err
 		}
@@ -65,7 +65,7 @@ func (d *dev) compose(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	artifactsDir := filepath.Join(workspace, "artifacts")
-	cockroachBin := filepath.Join(artifactsDir, "cockroach")
+	cockroachBin := filepath.Join(artifactsDir, "cockroach-oss")
 	compareBin := filepath.Join(artifactsDir, "compare_test")
 
 	// Copy libgeos files to a temporary directory, since the compose tests expect
@@ -108,7 +108,6 @@ func (d *dev) compose(cmd *cobra.Command, _ []string) error {
 	args = append(args, "--test_arg", "-compare", "--test_arg", compareBin)
 	args = append(args, "--test_arg", "-test.v")
 	args = append(args, "--test_output", "all")
-	args = append(args, "--test_env", "COCKROACH_DEV_LICENSE")
 
 	logCommand("bazel", args...)
 	return d.exec.CommandContextInheritingStdStreams(ctx, "bazel", args...)

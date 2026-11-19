@@ -241,7 +241,7 @@ func (b *indexScanBuilder) Build(grp memo.RelExpr) {
 		scan := &memo.ScanExpr{ScanPrivate: b.scanPrivate}
 		md := b.mem.Metadata()
 		tabMeta := md.TableMeta(scan.Table)
-		scan.Distribution.FromIndexScan(b.c.e.ctx, b.c.e.evalCtx, tabMeta, scan.Index, scan.Constraint)
+		scan.Distribution.FromIndexScan(tabMeta, scan.Index)
 		b.mem.AddScanToGroup(scan, grp)
 		return
 	}

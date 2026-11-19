@@ -30,13 +30,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
-	"github.com/otan/gopgkrb5"
 )
-
-func init() {
-	// Ensure that the CLI client commands can use GSSAPI authentication.
-	pgconn.RegisterGSSProvider(func() (pgconn.GSS, error) { return gopgkrb5.NewGSS() })
-}
 
 type sqlConn struct {
 	// connCtx links this connection to a connection configuration

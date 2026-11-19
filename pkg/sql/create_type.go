@@ -45,16 +45,6 @@ type createTypeNode struct {
 	dbDesc   catalog.DatabaseDescriptor
 }
 
-// EnumType is the type of an enum.
-type EnumType int
-
-const (
-	// EnumTypeUserDefined is a user defined enum.
-	EnumTypeUserDefined = iota
-	// EnumTypeMultiRegion is a multi-region related enum.
-	EnumTypeMultiRegion
-)
-
 // Use to satisfy the linter.
 var _ planNode = &createTypeNode{n: nil}
 
@@ -217,7 +207,7 @@ func CreateUserDefinedArrayTypeDesc(
 	// ID of the array type in order for the array type to correctly created.
 	var elemTyp *types.T
 	switch t := typDesc.Kind; t {
-	case descpb.TypeDescriptor_ENUM, descpb.TypeDescriptor_MULTIREGION_ENUM:
+	case descpb.TypeDescriptor_ENUM:
 		elemTyp = types.MakeEnum(catid.TypeIDToOID(typDesc.GetID()), catid.TypeIDToOID(id))
 	case descpb.TypeDescriptor_COMPOSITE:
 		for _, e := range typDesc.Composite.Elements {
@@ -312,7 +302,7 @@ func (p *planner) createUserDefinedType(params runParams, n *createTypeNode) err
 	switch n.n.Variety {
 	case tree.Enum:
 		return params.p.createEnumWithID(
-			params, id, n.n.EnumLabels, n.dbDesc, n.typeName, EnumTypeUserDefined,
+			params, id, n.n.EnumLabels, n.dbDesc, n.typeName,
 		)
 	case tree.Composite:
 		if !p.execCfg.Settings.Version.IsActive(params.ctx, clusterversion.V23_1) {
@@ -335,7 +325,6 @@ func CreateEnumTypeDesc(
 	dbDesc catalog.DatabaseDescriptor,
 	schema catalog.SchemaDescriptor,
 	typeName *tree.TypeName,
-	enumType EnumType,
 ) (*typedesc.Mutable, error) {
 	// Ensure there are no duplicates in the input enum values.
 	seenVals := make(map[tree.EnumValue]struct{})
@@ -369,19 +358,6 @@ func CreateEnumTypeDesc(
 		return nil, err
 	}
 
-	enumKind := descpb.TypeDescriptor_ENUM
-	var regionConfig *descpb.TypeDescriptor_RegionConfig
-	if enumType == EnumTypeMultiRegion {
-		enumKind = descpb.TypeDescriptor_MULTIREGION_ENUM
-		primaryRegion, err := dbDesc.PrimaryRegionName()
-		if err != nil {
-			return nil, err
-		}
-		regionConfig = &descpb.TypeDescriptor_RegionConfig{
-			PrimaryRegion: primaryRegion,
-		}
-	}
-
 	// TODO (rohany): OID's are computed using an offset of
 	//  oidext.CockroachPredefinedOIDMax from the descriptor ID. Once we have
 	//  a free list of descriptor ID's (#48438), we should allocate an ID from
@@ -392,11 +368,10 @@ func CreateEnumTypeDesc(
 		ID:             id,
 		ParentID:       dbDesc.GetID(),
 		ParentSchemaID: schema.GetID(),
-		Kind:           enumKind,
+		Kind:           descpb.TypeDescriptor_ENUM,
 		EnumMembers:    members,
 		Version:        1,
 		Privileges:     privs,
-		RegionConfig:   regionConfig,
 	}).BuildCreatedMutableType(), nil
 }
 
@@ -470,7 +445,6 @@ func (p *planner) createEnumWithID(
 	enumLabels tree.EnumValueList,
 	dbDesc catalog.DatabaseDescriptor,
 	typeName *tree.TypeName,
-	enumType EnumType,
 ) error {
 	sqltelemetry.IncrementEnumCounter(sqltelemetry.EnumCreate)
 
@@ -480,7 +454,7 @@ func (p *planner) createEnumWithID(
 		return err
 	}
 
-	typeDesc, err := CreateEnumTypeDesc(params, id, enumLabels, dbDesc, schema, typeName, enumType)
+	typeDesc, err := CreateEnumTypeDesc(params, id, enumLabels, dbDesc, schema, typeName)
 	if err != nil {
 		return err
 	}

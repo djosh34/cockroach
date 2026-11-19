@@ -26,11 +26,9 @@ import (
 
 type testFileTemplateConfig struct {
 	LogicTest                     bool
-	CclLogicTest                  bool
 	ExecBuildLogicTest            bool
 	SqliteLogicTest               bool
 	CockroachGoTestserverTest     bool
-	Ccl                           bool
 	ForceProductionValues         bool
 	Package, TestRuleName, RelDir string
 	ConfigIdx                     int
@@ -41,7 +39,7 @@ type testFileTemplateConfig struct {
 var outDir = flag.String("out-dir", "", "path to the root of the cockroach workspace")
 
 type logicTestGenerator struct {
-	cclLogicTestsGlob, execBuildLogicTestsGlob, logicTestsGlob, sqliteLogicTestsPath string
+	execBuildLogicTestsGlob, logicTestsGlob, sqliteLogicTestsPath string
 }
 
 func (g *logicTestGenerator) testdir(rel string) (*testdir, error) {
@@ -69,9 +67,9 @@ type testPrefixConfigPaths struct {
 }
 
 type testdir struct {
-	g                                                                                                            *logicTestGenerator
-	dir, relPathToParent                                                                                         string
-	cclLogicTestsConfigPaths, execBuildLogicTestsConfigPaths, logicTestsConfigPaths, sqliteLogicTestsConfigPaths []testPrefixConfigPaths
+	g                                                                                  *logicTestGenerator
+	dir, relPathToParent                                                               string
+	execBuildLogicTestsConfigPaths, logicTestsConfigPaths, sqliteLogicTestsConfigPaths []testPrefixConfigPaths
 }
 
 func (t *testdir) addLogicTests(testPrefix string, calc logictestbase.ConfigCalculator) error {
@@ -80,15 +78,6 @@ func (t *testdir) addLogicTests(testPrefix string, calc logictestbase.ConfigCalc
 		return err
 	}
 	t.logicTestsConfigPaths = append(t.logicTestsConfigPaths, testPrefixConfigPaths{testPrefix: testPrefix, configPaths: paths})
-	return nil
-}
-
-func (t *testdir) addCclLogicTests(testPrefix string, calc logictestbase.ConfigCalculator) error {
-	paths, err := calc.Enumerate(t.g.cclLogicTestsGlob)
-	if err != nil {
-		return err
-	}
-	t.cclLogicTestsConfigPaths = append(t.cclLogicTestsConfigPaths, testPrefixConfigPaths{testPrefix: testPrefix, configPaths: paths})
 	return nil
 }
 
@@ -123,7 +112,6 @@ var tmpRegexp = regexp.MustCompile(`/_(\w|\-)+$`)
 func (t *testdir) dump() error {
 	for configIdx := range logictestbase.LogicTestConfigs {
 		tplCfg := testFileTemplateConfig{
-			Ccl:                   strings.Contains(t.dir, "pkg/ccl"),
 			ForceProductionValues: strings.HasSuffix(t.dir, "pkg/sql/opt/exec/execbuilder/tests"),
 		}
 		var testCount int
@@ -141,13 +129,6 @@ func (t *testdir) dump() error {
 			testCount += nonTmpCount(paths)
 			if len(paths) > 0 {
 				tplCfg.LogicTest = true
-			}
-		}
-		for _, configPaths := range t.cclLogicTestsConfigPaths {
-			paths := configPaths.configPaths[configIdx]
-			testCount += nonTmpCount(paths)
-			if len(paths) > 0 {
-				tplCfg.CclLogicTest = true
 			}
 		}
 		for _, configPaths := range t.execBuildLogicTestsConfigPaths {
@@ -192,12 +173,6 @@ func (t *testdir) dump() error {
 			paths := configPaths.configPaths[configIdx]
 			for _, file := range paths {
 				dumpTestForFile(f, configPaths.testPrefix, filepath.Base(file), "runLogicTest")
-			}
-		}
-		for _, configPaths := range t.cclLogicTestsConfigPaths {
-			paths := configPaths.configPaths[configIdx]
-			for _, file := range paths {
-				dumpTestForFile(f, configPaths.testPrefix, filepath.Base(file), "runCCLLogicTest")
 			}
 		}
 		for _, configPaths := range t.execBuildLogicTestsConfigPaths {
@@ -273,12 +248,7 @@ func generate() error {
 	}
 	var gen logicTestGenerator
 	if bazel.BuiltWithBazel() {
-		runfiles, err := bazel.Runfile("pkg/ccl/logictestccl/testdata/logic_test")
-		if err != nil {
-			return err
-		}
-		cclLogicTestsGlob := filepath.Join(runfiles, "[^.]*")
-		runfiles, err = bazel.Runfile("pkg/sql/opt/exec/execbuilder/testdata/")
+		runfiles, err := bazel.Runfile("pkg/sql/opt/exec/execbuilder/testdata/")
 		if err != nil {
 			return err
 		}
@@ -293,10 +263,9 @@ func generate() error {
 			return err
 		}
 		gen = logicTestGenerator{
-			cclLogicTestsGlob, execBuildLogicTestsGlob, logicTestsGlob, sqliteLogicTestsPath,
+			execBuildLogicTestsGlob, logicTestsGlob, sqliteLogicTestsPath,
 		}
 	} else {
-		cclLogicTestsGlob := "pkg/ccl/logictestccl/testdata/logic_test/[^.]*"
 		logicTestsGlob := "pkg/sql/logictest/testdata/logic_test/[^.]*"
 		execBuildLogicTestsGlob := "pkg/sql/opt/exec/execbuilder/testdata/[^.]*"
 		sqliteLogicTestsPath, err := sqlitelogictest.FindLocalLogicTestClone()
@@ -304,7 +273,7 @@ func generate() error {
 			return err
 		}
 		gen = logicTestGenerator{
-			cclLogicTestsGlob, execBuildLogicTestsGlob, logicTestsGlob, sqliteLogicTestsPath,
+			execBuildLogicTestsGlob, logicTestsGlob, sqliteLogicTestsPath,
 		}
 	}
 
@@ -328,57 +297,7 @@ func generate() error {
 		if err != nil {
 			return err
 		}
-		err = t.addSqliteLogicTests("TestSqlLiteLogic", logictestbase.ConfigCalculator{RunCCLConfigs: true})
-		if err != nil {
-			return err
-		}
-		err = t.dump()
-		if err != nil {
-			return err
-		}
-	}
-
-	{
-		t, err := gen.testdir("pkg/ccl/logictestccl/tests")
-		if err != nil {
-			return err
-		}
-		err = t.addCclLogicTests("TestCCLLogic", logictestbase.ConfigCalculator{})
-		if err != nil {
-			return err
-		}
-		tenantCalc := logictestbase.ConfigCalculator{
-			ConfigOverrides:       []string{"3node-tenant"},
-			ConfigFilterOverrides: []string{"3node-tenant-multiregion"},
-			RunCCLConfigs:         true,
-		}
-		err = t.addCclLogicTests("TestTenantLogicCCL", tenantCalc)
-		if err != nil {
-			return err
-		}
-		err = t.addLogicTests("TestTenantLogic", tenantCalc)
-		if err != nil {
-			return err
-		}
-		err = t.addExecBuildLogicTests("TestTenantExecBuild", tenantCalc)
-		if err != nil {
-			return err
-		}
-		err = t.dump()
-		if err != nil {
-			return err
-		}
-	}
-
-	{
-		t, err := gen.testdir("pkg/ccl/sqlitelogictestccl/tests")
-		if err != nil {
-			return err
-		}
-		err = t.addSqliteLogicTests("TestTenantSQLLiteLogic", logictestbase.ConfigCalculator{
-			RunCCLConfigs:   true,
-			ConfigOverrides: []string{"3node-tenant"},
-		})
+		err = t.addSqliteLogicTests("TestSqlLiteLogic", logictestbase.ConfigCalculator{})
 		if err != nil {
 			return err
 		}

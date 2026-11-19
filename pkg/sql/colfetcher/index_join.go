@@ -584,7 +584,6 @@ func NewColIndexJoin(
 	} else {
 		kvFetcher = row.NewKVFetcher(
 			txn,
-			nil,   /* bsHeader */
 			false, /* reverse */
 			spec.LockingStrength,
 			spec.LockingWaitPolicy,

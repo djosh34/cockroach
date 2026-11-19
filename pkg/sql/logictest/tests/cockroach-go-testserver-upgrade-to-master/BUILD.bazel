@@ -10,7 +10,7 @@ go_test(
     }),
     data = [
         "//c-deps:libgeos",  # keep
-        "//pkg/cmd/cockroach-short",  # keep
+        "//pkg/cmd/cockroach-oss",  # keep
         "//pkg/sql/logictest:cockroach_predecessor_version",  # keep
         "//pkg/sql/logictest:testdata",  # keep
     ],
@@ -22,6 +22,7 @@ go_test(
     deps = [
         "//pkg/base",
         "//pkg/build/bazel",
+        "//pkg/kv/kvclient/kvtenant",
         "//pkg/security/securityassets",
         "//pkg/security/securitytest",
         "//pkg/server",

@@ -73,7 +73,6 @@ func (*AlterTableSetDefault) alterTableCmd()         {}
 func (*AlterTableSetOnUpdate) alterTableCmd()        {}
 func (*AlterTableSetVisible) alterTableCmd()         {}
 func (*AlterTableValidateConstraint) alterTableCmd() {}
-func (*AlterTablePartitionByTable) alterTableCmd()   {}
 func (*AlterTableInjectStats) alterTableCmd()        {}
 func (*AlterTableSetStorageParams) alterTableCmd()   {}
 func (*AlterTableResetStorageParams) alterTableCmd() {}
@@ -93,7 +92,6 @@ var _ AlterTableCmd = &AlterTableSetDefault{}
 var _ AlterTableCmd = &AlterTableSetOnUpdate{}
 var _ AlterTableCmd = &AlterTableSetVisible{}
 var _ AlterTableCmd = &AlterTableValidateConstraint{}
-var _ AlterTableCmd = &AlterTablePartitionByTable{}
 var _ AlterTableCmd = &AlterTableInjectStats{}
 var _ AlterTableCmd = &AlterTableSetStorageParams{}
 var _ AlterTableCmd = &AlterTableResetStorageParams{}
@@ -538,22 +536,6 @@ func (node *AlterTableDropStored) Format(ctx *FmtCtx) {
 	ctx.WriteString(" DROP STORED")
 }
 
-// AlterTablePartitionByTable represents an ALTER TABLE PARTITION [ALL]
-// BY command.
-type AlterTablePartitionByTable struct {
-	*PartitionByTable
-}
-
-// TelemetryName implements the AlterTableCmd interface.
-func (node *AlterTablePartitionByTable) TelemetryName() string {
-	return "partition_by"
-}
-
-// Format implements the NodeFormatter interface.
-func (node *AlterTablePartitionByTable) Format(ctx *FmtCtx) {
-	ctx.FormatNode(node.PartitionByTable)
-}
-
 // AuditMode represents a table audit mode
 type AuditMode int
 
@@ -649,26 +631,6 @@ func (node *AlterTableResetStorageParams) Format(ctx *FmtCtx) {
 		lexbase.EncodeSQLStringWithFlags(buf, param, f.EncodeFlags())
 	}
 	ctx.WriteString(")")
-}
-
-// AlterTableLocality represents an ALTER TABLE LOCALITY command.
-type AlterTableLocality struct {
-	Name     *UnresolvedObjectName
-	IfExists bool
-	Locality *Locality
-}
-
-var _ Statement = &AlterTableLocality{}
-
-// Format implements the NodeFormatter interface.
-func (node *AlterTableLocality) Format(ctx *FmtCtx) {
-	ctx.WriteString("ALTER TABLE ")
-	if node.IfExists {
-		ctx.WriteString("IF EXISTS ")
-	}
-	ctx.FormatNode(node.Name)
-	ctx.WriteString(" SET ")
-	ctx.FormatNode(node.Locality)
 }
 
 // AlterTableSetSchema represents an ALTER TABLE SET SCHEMA command.

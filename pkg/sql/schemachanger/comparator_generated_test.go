@@ -198,11 +198,6 @@ func TestSchemaChangeComparator_cast(t *testing.T) {
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/cast"
 	runSchemaChangeComparatorTest(t, logicTestFile)
 }
-func TestSchemaChangeComparator_ccl(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/ccl"
-	runSchemaChangeComparatorTest(t, logicTestFile)
-}
 func TestSchemaChangeComparator_check_constraints(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/check_constraints"
@@ -488,11 +483,6 @@ func TestSchemaChangeComparator_distsql_tenant(t *testing.T) {
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/distsql_tenant"
 	runSchemaChangeComparatorTest(t, logicTestFile)
 }
-func TestSchemaChangeComparator_distsql_tenant_locality(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/distsql_tenant_locality"
-	runSchemaChangeComparatorTest(t, logicTestFile)
-}
 func TestSchemaChangeComparator_distsql_union(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/distsql_union"
@@ -686,11 +676,6 @@ func TestSchemaChangeComparator_gen_test_objects(t *testing.T) {
 func TestSchemaChangeComparator_generator_probe_ranges(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/generator_probe_ranges"
-	runSchemaChangeComparatorTest(t, logicTestFile)
-}
-func TestSchemaChangeComparator_generic_license(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/generic_license"
 	runSchemaChangeComparatorTest(t, logicTestFile)
 }
 func TestSchemaChangeComparator_geospatial(t *testing.T) {
@@ -1093,19 +1078,9 @@ func TestSchemaChangeComparator_mixed_version_upgrade_repair_descriptors(t *test
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/mixed_version_upgrade_repair_descriptors"
 	runSchemaChangeComparatorTest(t, logicTestFile)
 }
-func TestSchemaChangeComparator_multi_region(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/multi_region"
-	runSchemaChangeComparatorTest(t, logicTestFile)
-}
 func TestSchemaChangeComparator_multi_statement(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/multi_statement"
-	runSchemaChangeComparatorTest(t, logicTestFile)
-}
-func TestSchemaChangeComparator_multiregion_invalid_locality(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/multiregion_invalid_locality"
 	runSchemaChangeComparatorTest(t, logicTestFile)
 }
 func TestSchemaChangeComparator_name_escapes(t *testing.T) {
@@ -1203,11 +1178,6 @@ func TestSchemaChangeComparator_partial_txn_commit(t *testing.T) {
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/partial_txn_commit"
 	runSchemaChangeComparatorTest(t, logicTestFile)
 }
-func TestSchemaChangeComparator_partitioning(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/partitioning"
-	runSchemaChangeComparatorTest(t, logicTestFile)
-}
 func TestSchemaChangeComparator_pg_builtins(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/pg_builtins"
@@ -1251,16 +1221,6 @@ func TestSchemaChangeComparator_pgcrypto_builtins(t *testing.T) {
 func TestSchemaChangeComparator_pgoidtype(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/pgoidtype"
-	runSchemaChangeComparatorTest(t, logicTestFile)
-}
-func TestSchemaChangeComparator_plpgsql_builtins(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/plpgsql_builtins"
-	runSchemaChangeComparatorTest(t, logicTestFile)
-}
-func TestSchemaChangeComparator_plpgsql_license(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/plpgsql_license"
 	runSchemaChangeComparatorTest(t, logicTestFile)
 }
 func TestSchemaChangeComparator_poison_after_push(t *testing.T) {
@@ -1666,11 +1626,6 @@ func TestSchemaChangeComparator_show_tables(t *testing.T) {
 func TestSchemaChangeComparator_show_tenant_fingerprints(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/show_tenant_fingerprints"
-	runSchemaChangeComparatorTest(t, logicTestFile)
-}
-func TestSchemaChangeComparator_show_transfer_state(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/show_transfer_state"
 	runSchemaChangeComparatorTest(t, logicTestFile)
 }
 func TestSchemaChangeComparator_show_var(t *testing.T) {

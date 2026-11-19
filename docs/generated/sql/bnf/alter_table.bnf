@@ -12,7 +12,5 @@ alter_table_stmt ::=
 	| 'ALTER' 'TABLE' 'IF' 'EXISTS' table_name 'RENAME' 'TO' table_new_name
 	| 'ALTER' 'TABLE' table_name 'SET' 'SCHEMA' schema_name
 	| 'ALTER' 'TABLE' 'IF' 'EXISTS' table_name 'SET' 'SCHEMA' schema_name
-	| 'ALTER' 'TABLE' table_name 'SET' locality
-	| 'ALTER' 'TABLE' 'IF' 'EXISTS' table_name 'SET' locality
 	| 'ALTER' 'TABLE' table_name 'OWNER' 'TO' role_spec
 	| 'ALTER' 'TABLE' 'IF' 'EXISTS' table_name 'OWNER' 'TO' role_spec

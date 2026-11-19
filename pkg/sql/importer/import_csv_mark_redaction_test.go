@@ -20,9 +20,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestMarkRedactionCCLStatement verifies that the redactable parts
-// of CCL statements are marked correctly.
-func TestMarkRedactionCCLStatement(t *testing.T) {
+// TestMarkRedactionImportStatement verifies that the redactable parts
+// of IMPORT statements are marked correctly.
+func TestMarkRedactionImportStatement(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	defer log.Scope(t).Close(t)
 	testCases := []struct {

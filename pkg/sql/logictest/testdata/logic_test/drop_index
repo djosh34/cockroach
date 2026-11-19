@@ -185,12 +185,12 @@ users       users_pkey  false       3             title        title       N/A  
 statement ok
 CREATE VIEW v2 AS SELECT name FROM v
 
-query TTTTIT rowsort
+query TTTTI rowsort
 SHOW TABLES
 ----
-public  users  table  root  0  NULL
-public  v      view   root  0  NULL
-public  v2     view   root  0  NULL
+public  users  table  root  0
+public  v      view   root  0
+public  v2     view   root  0
 
 statement ok
 GRANT ALL ON users to testuser
@@ -216,10 +216,10 @@ users       users_pkey  false       1             id           id          ASC  
 users       users_pkey  false       2             name         name        N/A        true     false     true     1
 users       users_pkey  false       3             title        title       N/A        true     false     true     1
 
-query TTTTIT
+query TTTTI
 SHOW TABLES
 ----
-public  users  table  root  0  NULL
+public  users  table  root  0
 
 # Test that schema change job description is correct #80889
 statement ok

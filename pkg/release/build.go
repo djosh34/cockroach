@@ -159,7 +159,7 @@ func MakeRelease(platform Platform, opts BuildOptions, pkgDir string) error {
 	if !(opts.Channel == build.DefaultTelemetryChannel || opts.Channel == build.FIPSTelemetryChannel) {
 		return errors.Newf("cannot set the telemetry channel to %s, supported channels: %s and %s", opts.Channel, build.DefaultTelemetryChannel, build.FIPSTelemetryChannel)
 	}
-	buildArgs := []string{"build", "//pkg/cmd/cockroach", "//pkg/cmd/cockroach-sql"}
+	buildArgs := []string{"build", "//pkg/cmd/cockroach-oss", "//pkg/cmd/cockroach-sql"}
 	if platform != PlatformMacOSArm && platform != PlatformWindows {
 		buildArgs = append(buildArgs, "//c-deps:libgeos")
 	}
@@ -197,7 +197,8 @@ func MakeRelease(platform Platform, opts BuildOptions, pkgDir string) error {
 	if err != nil {
 		return err
 	}
-	if err := stageBinary("//pkg/cmd/cockroach", platform, bazelBin, pkgDir, true); err != nil {
+	// The server binary is shipped as "cockroach".
+	if err := stageBinaryAs("//pkg/cmd/cockroach-oss", "cockroach", platform, bazelBin, pkgDir, true); err != nil {
 		return err
 	}
 	// TODO: strip the bianry
@@ -353,12 +354,28 @@ func getPathToBazelBin(execFn ExecFn, pkgDir string, configArgs []string) (strin
 func stageBinary(
 	target string, platform Platform, bazelBin string, dir string, includePlatformSuffix bool,
 ) error {
+	return stageBinaryAs(target, "" /* name */, platform, bazelBin, dir, includePlatformSuffix)
+}
+
+// stageBinaryAs is like stageBinary, but gives the staged binary the given name
+// instead of the name of the target's output. An empty name keeps that name.
+func stageBinaryAs(
+	target string,
+	name string,
+	platform Platform,
+	bazelBin string,
+	dir string,
+	includePlatformSuffix bool,
+) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
 	rel := util.OutputOfBinaryRule(target, platform == PlatformWindows)
 	src := filepath.Join(bazelBin, rel)
 	dstBase, _ := TrimDotExe(filepath.Base(rel))
+	if name != "" {
+		dstBase = name
+	}
 	suffix := ""
 	if includePlatformSuffix {
 		suffix = SuffixFromPlatform(platform)
@@ -370,7 +387,7 @@ func stageBinary(
 		return err
 	}
 	defer closeFileOrPanic(srcF)
-	dstF, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE, 0755)
+	dstF, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
 		return err
 	}

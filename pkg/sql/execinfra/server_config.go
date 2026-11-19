@@ -281,9 +281,6 @@ type TestingKnobs struct {
 	// to incoming flows to register.
 	DrainFast bool
 
-	// Changefeed contains testing knobs specific to the changefeed system.
-	Changefeed base.ModuleTestingKnobs
-
 	// Export contains testing knobs for `EXPORT INTO ...`.
 	Export base.ModuleTestingKnobs
 
@@ -295,12 +292,6 @@ type TestingKnobs struct {
 
 	// JobsTestingKnobs is jobs infra specific testing knobs.
 	JobsTestingKnobs base.ModuleTestingKnobs
-
-	// BackupRestoreTestingKnobs are backup and restore specific testing knobs.
-	BackupRestoreTestingKnobs base.ModuleTestingKnobs
-
-	// StreamingTestingKnobs are backup and restore specific testing knobs.
-	StreamingTestingKnobs base.ModuleTestingKnobs
 
 	// IndexBackfillMergerTestingKnobs are the index backfill merger specific
 	// testing knobs.

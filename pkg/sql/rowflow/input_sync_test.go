@@ -116,10 +116,7 @@ func TestOrderedSync(t *testing.T) {
 		}
 		evalCtx := eval.NewTestingEvalContext(cluster.MakeTestingClusterSettings())
 		defer evalCtx.Stop(context.Background())
-		src, err := makeSerialSync(c.ordering, evalCtx, sources,
-			0,   /* serialSrcIndexExclusiveUpperBound */
-			nil, /* exceedsSrcIndexExclusiveUpperBoundErrorFunc */
-		)
+		src, err := makeSerialSync(c.ordering, evalCtx, sources)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -159,10 +156,7 @@ func TestOrderedSyncDrainBeforeNext(t *testing.T) {
 	ctx := context.Background()
 	evalCtx := eval.NewTestingEvalContext(cluster.MakeTestingClusterSettings())
 	defer evalCtx.Stop(ctx)
-	o, err := makeSerialSync(colinfo.ColumnOrdering{}, evalCtx, sources,
-		0,   /* serialSrcIndexExclusiveUpperBound */
-		nil, /* exceedsSrcIndexExclusiveUpperBoundErrorFunc */
-	)
+	o, err := makeSerialSync(colinfo.ColumnOrdering{}, evalCtx, sources)
 	if err != nil {
 		t.Fatal(err)
 	}

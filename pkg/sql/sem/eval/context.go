@@ -24,10 +24,8 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/kv/kvpb"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/concurrency/isolation"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/kvserverbase"
-	"github.com/cockroachdb/cockroach/pkg/repstream/streampb"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgwirecancel"
@@ -104,11 +102,6 @@ type Context struct {
 	// The region entry in this variable is the gateway region.
 	Locality roachpb.Locality
 
-	// OriginalLocality is the initial Locality at the time the connection was
-	// established. Since Locality may be overridden in some paths, this provides
-	// a means of restoring the original Locality.
-	OriginalLocality roachpb.Locality
-
 	Tracer *tracing.Tracer
 
 	// The statement timestamp. May be different for every statement.
@@ -156,8 +149,6 @@ type Context struct {
 
 	Planner Planner
 
-	StreamManagerFactory StreamManagerFactory
-
 	// Not using sql.JobExecContext type to avoid cycle dependency with sql package
 	JobExecContext interface{}
 
@@ -170,9 +161,6 @@ type Context struct {
 	Sequence SequenceOperators
 
 	Tenant TenantOperator
-
-	// Regions stores information about regions.
-	Regions RegionOperator
 
 	JoinTokenCreator JoinTokenCreator
 
@@ -269,16 +257,8 @@ type Context struct {
 	// RangeStatsFetcher is used to fetch RangeStats.
 	RangeStatsFetcher RangeStatsFetcher
 
-	// ChangefeedState stores the state (progress) of core changefeeds.
-	ChangefeedState ChangefeedState
-
 	// ParseHelper makes date parsing more efficient.
 	ParseHelper pgdate.ParseHelper
-
-	// RemoteRegions contains the slice of remote regions in a multiregion
-	// database which owns a table accessed by the current SQL request.
-	// This slice is only populated during the optbuild stage.
-	RemoteRegions catpb.RegionNames
 
 	// JobsProfiler is the interface for builtins to extract job specific
 	// execution details that may have been aggregated during a job's lifetime.
@@ -413,7 +393,6 @@ func MakeTestingEvalContextWithMon(st *cluster.Settings, monitor *mon.BytesMonit
 	monitor.Start(context.Background(), nil /* pool */, mon.NewStandaloneBudget(math.MaxInt64))
 	ctx.TestingMon = monitor
 	ctx.Planner = &fakePlannerWithMonitor{monitor: monitor}
-	ctx.StreamManagerFactory = &fakeStreamManagerFactory{}
 	ctx.deprecatedContext = context.TODO()
 	now := timeutil.Now()
 	ctx.SetTxnTimestamp(now)
@@ -431,16 +410,6 @@ func (p *fakePlannerWithMonitor) Mon() *mon.BytesMonitor {
 	return p.monitor
 }
 
-// IsANSIDML is part of the eval.Planner interface.
-func (p *fakePlannerWithMonitor) IsANSIDML() bool {
-	return false
-}
-
-// EnforceHomeRegion is part of the eval.Planner interface.
-func (p *fakePlannerWithMonitor) EnforceHomeRegion() bool {
-	return false
-}
-
 // MaybeReallocateAnnotations is part of the eval.Planner interface.
 func (p *fakePlannerWithMonitor) MaybeReallocateAnnotations(numAnnotations tree.AnnotationIdx) {
 }
@@ -450,20 +419,9 @@ func (p *fakePlannerWithMonitor) Optimizer() interface{} {
 	return nil
 }
 
-// PLpgSQLFetchCursor is part of the eval.Planner interface.
-func (p *fakePlannerWithMonitor) PLpgSQLFetchCursor(
-	ctx context.Context, cursorStmt *tree.CursorStmt,
-) (res tree.Datums, err error) {
-	return nil, nil
-}
-
 // AutoCommit is part of the eval.Planner interface.
 func (p *fakePlannerWithMonitor) AutoCommit() bool {
 	return false
-}
-
-type fakeStreamManagerFactory struct {
-	StreamManagerFactory
 }
 
 // SessionData returns the SessionData the current EvalCtx should use to eval.
@@ -775,12 +733,6 @@ func (ec *Context) GetDateStyle() pgdate.DateStyle {
 	return ec.SessionData().GetDateStyle()
 }
 
-// BoundedStaleness returns true if this query uses bounded staleness.
-func (ec *Context) BoundedStaleness() bool {
-	return ec.AsOfSystemTime != nil &&
-		ec.AsOfSystemTime.BoundedStaleness
-}
-
 // ensureExpectedType will return an error if a datum does not match the
 // provided type. If the expected type is Any or if the datum is a Null
 // type, then no error will be returned.
@@ -820,86 +772,4 @@ func UnwrapDatum(ctx context.Context, evalCtx *Context, d tree.Datum) tree.Datum
 		return ret
 	}
 	return d
-}
-
-// StreamManagerFactory stores methods that return the streaming managers.
-type StreamManagerFactory interface {
-	GetReplicationStreamManager(ctx context.Context) (ReplicationStreamManager, error)
-	GetStreamIngestManager(ctx context.Context) (StreamIngestManager, error)
-}
-
-// ReplicationStreamManager represents a collection of APIs that streaming replication supports
-// on the production side.
-type ReplicationStreamManager interface {
-	// StartReplicationStream starts a stream replication job for the specified
-	// tenant on the producer side.
-	StartReplicationStream(ctx context.Context, tenantName roachpb.TenantName, req streampb.ReplicationProducerRequest) (streampb.ReplicationProducerSpec, error)
-
-	// SetupSpanConfigsStream creates and plans a replication stream to stream the span config updates for a specific tenant.
-	SetupSpanConfigsStream(ctx context.Context, tenantName roachpb.TenantName) (ValueGenerator, error)
-
-	// HeartbeatReplicationStream sends a heartbeat to the replication stream producer, indicating
-	// consumer has consumed until the given 'frontier' timestamp. This updates the producer job
-	// progress and extends its life, and the new producer progress will be returned.
-	// If 'frontier' is hlc.MaxTimestamp, returns the producer progress without updating it.
-	HeartbeatReplicationStream(
-		ctx context.Context,
-		streamID streampb.StreamID,
-		frontier hlc.Timestamp,
-	) (streampb.StreamReplicationStatus, error)
-
-	// StreamPartition starts streaming replication on the producer side for the partition specified
-	// by opaqueSpec which contains serialized streampb.StreamPartitionSpec protocol message and
-	// returns a value generator which yields events for the specified partition.
-	StreamPartition(
-		streamID streampb.StreamID,
-		opaqueSpec []byte,
-	) (ValueGenerator, error)
-
-	// GetReplicationStreamSpec gets a stream replication spec on the producer side.
-	GetReplicationStreamSpec(
-		ctx context.Context,
-		streamID streampb.StreamID,
-	) (*streampb.ReplicationStreamSpec, error)
-
-	// CompleteReplicationStream completes a replication stream job on the producer side.
-	// 'successfulIngestion' indicates whether the stream ingestion finished successfully and
-	// determines the fate of the producer job, succeeded or canceled.
-	CompleteReplicationStream(
-		ctx context.Context,
-		streamID streampb.StreamID,
-		successfulIngestion bool,
-	) error
-}
-
-// StreamIngestManager represents a collection of APIs that streaming replication supports
-// on the ingestion side.
-type StreamIngestManager interface {
-	// CompleteStreamIngestion signals a running stream ingestion job to complete on the consumer side.
-	CompleteStreamIngestion(
-		ctx context.Context,
-		ingestionJobID jobspb.JobID,
-		cutoverTimestamp hlc.Timestamp,
-	) error
-
-	// GetStreamIngestionStats gets a statistics summary for a stream ingestion job.
-	GetStreamIngestionStats(
-		ctx context.Context,
-		streamIngestionDetails jobspb.StreamIngestionDetails,
-		jobProgress jobspb.Progress,
-	) (*streampb.StreamIngestionStats, error)
-
-	GetReplicationStatsAndStatus(
-		ctx context.Context,
-		ingestionJobID jobspb.JobID,
-	) (*streampb.StreamIngestionStats, string, error)
-
-	// RevertTenantToTimestamp reverts the given tenant to the given
-	// timestamp. This is a non-transactional destructive operation that
-	// should be used with care.
-	RevertTenantToTimestamp(
-		ctx context.Context,
-		tenantName roachpb.TenantName,
-		revertTo hlc.Timestamp,
-	) error
 }

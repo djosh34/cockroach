@@ -16,8 +16,6 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
-	// To enable the CCL-only functions.
-	"github.com/cockroachdb/cockroach/pkg/ccl"
 	"github.com/cockroachdb/cockroach/pkg/configprofiles"
 	"github.com/cockroachdb/cockroach/pkg/server/autoconfig/autoconfigpb"
 	"github.com/cockroachdb/cockroach/pkg/testutils/serverutils"
@@ -30,7 +28,6 @@ import (
 // configuration profile can be applied successfully on a new cluster.
 func TestProfilesValidSQL(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	defer ccl.TestingEnableEnterprise()() // allow usage of cluster replication
 
 	for profileName, tasks := range configprofiles.TestingGetProfiles() {
 		t.Run(profileName, func(t *testing.T) {

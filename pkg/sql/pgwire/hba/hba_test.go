@@ -99,6 +99,6 @@ func TestMatchConnType(t *testing.T) {
 	}
 }
 
-// TODO(mjibson): these are untested outside ccl +gss builds.
+// TODO(mjibson): these are untested.
 var _ = Entry.GetOption
 var _ = Entry.GetOptions

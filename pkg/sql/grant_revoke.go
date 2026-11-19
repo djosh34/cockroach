@@ -52,6 +52,9 @@ func (p *planner) Grant(ctx context.Context, n *tree.Grant) (planNode, error) {
 	if err := privilege.ValidatePrivileges(n.Privileges, grantOn); err != nil {
 		return nil, err
 	}
+	if err := privilege.ValidateGrantable(n.Privileges); err != nil {
+		return nil, err
+	}
 
 	grantees, err := decodeusername.FromRoleSpecList(
 		p.SessionData(), username.PurposeValidation, n.Grantees,

@@ -33,7 +33,6 @@ import (
 //   2. Once the above two are done, add a test where
 //      we drop an index with a dependent FK constraint and a
 //      dependent view to end-to-end test, scbuild test, scplan test.
-//   3. Check if requires CCL binary for eventual zone config removal.
 
 // DropIndex implements DROP INDEX.
 // It resolves the to-be-dropped index into elements and inform `BuildCtx`
@@ -95,7 +94,6 @@ func maybeDropIndex(
 				"use DROP CONSTRAINT ... PRIMARY KEY followed by ADD CONSTRAINT ... PRIMARY KEY in a transaction",
 		))
 	}
-	// TODO (Xiang): Check if requires CCL binary for eventual zone config removal.
 	_, _, sie := scpb.FindSecondaryIndex(toBeDroppedIndexElms)
 	if sie == nil {
 		panic(errors.AssertionFailedf("programming error: cannot find secondary index element."))

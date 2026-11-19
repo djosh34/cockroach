@@ -116,11 +116,9 @@ func (c *Column) HasOnUpdate() bool {
 }
 
 // UseOnUpdate returns true if there is an ON UPDATE expression which should be
-// updated as part of the session. This is to allow gating ON UPDATE
-// rehome_row() from triggering when on_update_rehome_row_enabled = false.
+// updated as part of the session.
 func (c *Column) UseOnUpdate(sd *sessiondata.SessionData) bool {
-	return c.onUpdateExpr != "" &&
-		(sd.OnUpdateRehomeRowEnabled || !strings.HasPrefix(c.onUpdateExpr, "rehome_row()"))
+	return c.onUpdateExpr != ""
 }
 
 // OnUpdateExprStr is set to the SQL expression string that describes the

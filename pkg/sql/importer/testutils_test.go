@@ -75,7 +75,6 @@ func descForTable(
 			ts,
 			priv,
 			tree.PersistencePermanent,
-			false, /* isMultiRegion */
 		)
 		if err != nil {
 			t.Fatal(err)

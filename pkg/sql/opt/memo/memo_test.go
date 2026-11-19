@@ -159,11 +159,8 @@ func TestMemoIsStale(t *testing.T) {
 	evalCtx.SessionData().SearchPath = sessiondata.MakeSearchPath([]string{"public"})
 	// MakeTestingEvalContext created a fake planner that can only provide the
 	// memory monitor and will encounter a nil-pointer error when other methods
-	// are accessed. In this test, GetDatabaseSurvivalGoal method will be called
-	// which can handle a case of nil planner but cannot a case when the
-	// planner's GetMultiregionConfig is nil, so we nil out the planner.
+	// are accessed, so we nil out the planner.
 	evalCtx.Planner = nil
-	evalCtx.StreamManagerFactory = nil
 
 	var o xform.Optimizer
 	opttestutils.BuildQuery(t, &o, catalog, &evalCtx, "SELECT a, b+one() FROM abcview WHERE c='foo'")
@@ -238,12 +235,6 @@ func TestMemoIsStale(t *testing.T) {
 	evalCtx.SessionData().OptimizerUseNotVisibleIndexes = false
 	notStale()
 
-	// Stale locality optimized search enable.
-	evalCtx.SessionData().LocalityOptimizedSearch = true
-	stale()
-	evalCtx.SessionData().LocalityOptimizedSearch = false
-	notStale()
-
 	// Stale safe updates.
 	evalCtx.SessionData().SafeUpdates = true
 	stale()
@@ -314,12 +305,6 @@ func TestMemoIsStale(t *testing.T) {
 	evalCtx.SessionData().UnconstrainedNonCoveringIndexScanEnabled = true
 	stale()
 	evalCtx.SessionData().UnconstrainedNonCoveringIndexScanEnabled = false
-	notStale()
-
-	// Stale enforce home region.
-	evalCtx.SessionData().EnforceHomeRegion = true
-	stale()
-	evalCtx.SessionData().EnforceHomeRegion = false
 	notStale()
 
 	// Stale inequality lookup joins enabled.

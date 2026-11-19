@@ -1290,9 +1290,6 @@ func (node *CreateTable) doc(p *PrettyCfg) pretty.Doc {
 	if node.As() {
 		clauses = append(clauses, p.Doc(node.AsSource))
 	}
-	if node.PartitionByTable != nil {
-		clauses = append(clauses, p.Doc(node.PartitionByTable))
-	}
 	if node.StorageParams != nil && !node.As() {
 		clauses = append(
 			clauses,
@@ -1301,9 +1298,6 @@ func (node *CreateTable) doc(p *PrettyCfg) pretty.Doc {
 				p.bracket(`(`, p.Doc(&node.StorageParams), `)`),
 			),
 		)
-	}
-	if node.Locality != nil {
-		clauses = append(clauses, p.Doc(node.Locality))
 	}
 	if len(clauses) == 0 {
 		return title
@@ -1471,145 +1465,6 @@ func (node *NullIfExpr) doc(p *PrettyCfg) pretty.Doc {
 		), ")", "")
 }
 
-func (node *PartitionByTable) doc(p *PrettyCfg) pretty.Doc {
-	// Final layout:
-	//
-	// PARTITION [ALL] BY NOTHING
-	//
-	// PARTITION [ALL] BY LIST (...)
-	//    ( ..values.. )
-	//
-	// PARTITION [ALL] BY RANGE (...)
-	//    ( ..values.. )
-	var kw string
-	kw = `PARTITION `
-	if node.All {
-		kw += `ALL `
-	}
-	return node.PartitionBy.docInner(p, kw+`BY `)
-}
-
-func (node *PartitionBy) doc(p *PrettyCfg) pretty.Doc {
-	// Final layout:
-	//
-	// PARTITION BY NOTHING
-	//
-	// PARTITION BY LIST (...)
-	//    ( ..values.. )
-	//
-	// PARTITION BY RANGE (...)
-	//    ( ..values.. )
-	return node.docInner(p, `PARTITION BY `)
-}
-
-func (node *PartitionBy) docInner(p *PrettyCfg, kw string) pretty.Doc {
-	if node == nil {
-		return pretty.Keyword(kw + `NOTHING`)
-	}
-	if len(node.List) > 0 {
-		kw += `LIST`
-	} else if len(node.Range) > 0 {
-		kw += `RANGE`
-	}
-	title := pretty.ConcatSpace(pretty.Keyword(kw),
-		p.bracket("(", p.Doc(&node.Fields), ")"))
-
-	inner := make([]pretty.Doc, 0, len(node.List)+len(node.Range))
-	for _, v := range node.List {
-		inner = append(inner, p.Doc(&v))
-	}
-	for _, v := range node.Range {
-		inner = append(inner, p.Doc(&v))
-	}
-	return p.nestUnder(title,
-		p.bracket("(", p.commaSeparated(inner...), ")"),
-	)
-}
-
-func (node *Locality) doc(p *PrettyCfg) pretty.Doc {
-	// Final layout:
-	//
-	// LOCALITY [GLOBAL | REGIONAL BY [TABLE [IN [PRIMARY REGION|region]]|ROW]]
-	localityKW := pretty.Keyword("LOCALITY")
-	switch node.LocalityLevel {
-	case LocalityLevelGlobal:
-		return pretty.ConcatSpace(localityKW, pretty.Keyword("GLOBAL"))
-	case LocalityLevelRow:
-		ret := pretty.ConcatSpace(localityKW, pretty.Keyword("REGIONAL BY ROW"))
-		if node.RegionalByRowColumn != "" {
-			return pretty.ConcatSpace(
-				ret,
-				pretty.ConcatSpace(
-					pretty.Keyword("AS"),
-					p.Doc(&node.RegionalByRowColumn),
-				),
-			)
-		}
-		return ret
-	case LocalityLevelTable:
-		byTable := pretty.ConcatSpace(localityKW, pretty.Keyword("REGIONAL BY TABLE IN"))
-		if node.TableRegion == "" {
-			return pretty.ConcatSpace(
-				byTable,
-				pretty.Keyword("PRIMARY REGION"),
-			)
-		}
-		return pretty.ConcatSpace(
-			byTable,
-			p.Doc(&node.TableRegion),
-		)
-	}
-	panic(fmt.Sprintf("unknown locality: %v", *node))
-}
-
-func (node *ListPartition) doc(p *PrettyCfg) pretty.Doc {
-	// Final layout:
-	//
-	// PARTITION name
-	//   VALUES IN ( ... )
-	//   [ .. subpartition ..]
-	//
-	title := pretty.ConcatSpace(pretty.Keyword("PARTITION"), p.Doc(&node.Name))
-
-	clauses := make([]pretty.Doc, 1, 2)
-	clauses[0] = pretty.ConcatSpace(
-		pretty.Keyword("VALUES IN"),
-		p.bracket("(", p.Doc(&node.Exprs), ")"),
-	)
-	if node.Subpartition != nil {
-		clauses = append(clauses, p.Doc(node.Subpartition))
-	}
-	return p.nestUnder(title, pretty.Group(pretty.Stack(clauses...)))
-}
-
-func (node *RangePartition) doc(p *PrettyCfg) pretty.Doc {
-	// Final layout:
-	//
-	// PARTITION name
-	//   VALUES FROM (...)
-	//   TO (...)
-	//   [ .. subpartition ..]
-	//
-	title := pretty.ConcatSpace(
-		pretty.Keyword("PARTITION"),
-		p.Doc(&node.Name),
-	)
-
-	clauses := make([]pretty.Doc, 2, 3)
-	clauses[0] = pretty.ConcatSpace(
-		pretty.Keyword("VALUES FROM"),
-		p.bracket("(", p.Doc(&node.From), ")"))
-	clauses[1] = pretty.ConcatSpace(
-		pretty.Keyword("TO"),
-		p.bracket("(", p.Doc(&node.To), ")"))
-
-	if node.Subpartition != nil {
-		clauses = append(clauses, p.Doc(node.Subpartition))
-	}
-
-	return p.nestUnder(title, pretty.Group(pretty.Stack(clauses...)))
-}
-
 func (node *ShardedIndexDef) doc(p *PrettyCfg) pretty.Doc {
 	// Final layout:
 	//
@@ -1670,9 +1525,6 @@ func (node *CreateIndex) doc(p *PrettyCfg) pretty.Doc {
 			p.Doc(&node.Storing),
 			")", "",
 		))
-	}
-	if node.PartitionByIndex != nil {
-		clauses = append(clauses, p.Doc(node.PartitionByIndex))
 	}
 	if node.StorageParams != nil {
 		clauses = append(clauses, p.bracketKeyword(
@@ -1749,9 +1601,6 @@ func (node *IndexTableDef) doc(p *PrettyCfg) pretty.Doc {
 			p.Doc(&node.Storing),
 			")", ""))
 	}
-	if node.PartitionByIndex != nil {
-		clauses = append(clauses, p.Doc(node.PartitionByIndex))
-	}
 	if node.StorageParams != nil {
 		clauses = append(
 			clauses,
@@ -1818,9 +1667,6 @@ func (node *UniqueConstraintTableDef) doc(p *PrettyCfg) pretty.Doc {
 			")", ""))
 	}
 
-	if node.PartitionByIndex != nil {
-		clauses = append(clauses, p.Doc(node.PartitionByIndex))
-	}
 	if node.Predicate != nil {
 		clauses = append(clauses, p.nestUnder(pretty.Keyword("WHERE"), p.Doc(node.Predicate)))
 	}
@@ -2145,82 +1991,6 @@ func (node *ReferenceActions) doc(p *PrettyCfg) pretty.Doc {
 		)
 	}
 	return pretty.Fold(pretty.ConcatSpace, docs...)
-}
-
-func (node *Backup) doc(p *PrettyCfg) pretty.Doc {
-	items := make([]pretty.TableRow, 0, 7)
-
-	items = append(items, p.row("BACKUP", pretty.Nil))
-	if node.Targets != nil {
-		items = append(items, node.Targets.docRow(p))
-	}
-	if node.Nested {
-		if node.Subdir != nil {
-			items = append(items, p.row("INTO ", p.Doc(node.Subdir)))
-			items = append(items, p.row(" IN ", p.Doc(&node.To)))
-		} else if node.AppendToLatest {
-			items = append(items, p.row("INTO LATEST IN", p.Doc(&node.To)))
-		} else {
-			items = append(items, p.row("INTO", p.Doc(&node.To)))
-		}
-	} else {
-		items = append(items, p.row("TO", p.Doc(&node.To)))
-	}
-
-	if node.AsOf.Expr != nil {
-		items = append(items, node.AsOf.docRow(p))
-	}
-	if node.IncrementalFrom != nil {
-		items = append(items, p.row("INCREMENTAL FROM", p.Doc(&node.IncrementalFrom)))
-	}
-	if !node.Options.IsDefault() {
-		items = append(items, p.row("WITH", p.Doc(&node.Options)))
-	}
-	return p.rlTable(items...)
-}
-
-func (node *Restore) doc(p *PrettyCfg) pretty.Doc {
-	items := make([]pretty.TableRow, 0, 6)
-
-	items = append(items, p.row("RESTORE", pretty.Nil))
-	if node.DescriptorCoverage == RequestedDescriptors {
-		items = append(items, node.Targets.docRow(p))
-	}
-	from := make([]pretty.Doc, len(node.From))
-	for i := range node.From {
-		from[i] = p.Doc(&node.From[i])
-	}
-	if node.Subdir != nil {
-		items = append(items, p.row("FROM", p.Doc(node.Subdir)))
-		items = append(items, p.row("IN", p.commaSeparated(from...)))
-	} else {
-		items = append(items, p.row("FROM", p.commaSeparated(from...)))
-	}
-
-	if node.AsOf.Expr != nil {
-		items = append(items, node.AsOf.docRow(p))
-	}
-	if !node.Options.IsDefault() {
-		items = append(items, p.row("WITH", p.Doc(&node.Options)))
-	}
-	return p.rlTable(items...)
-}
-
-func (node *BackupTargetList) doc(p *PrettyCfg) pretty.Doc {
-	return p.unrow(node.docRow(p))
-}
-
-func (node *BackupTargetList) docRow(p *PrettyCfg) pretty.TableRow {
-	if node.Databases != nil {
-		return p.row("DATABASE", p.Doc(&node.Databases))
-	}
-	if node.TenantID.Specified {
-		return p.row("TENANT", p.Doc(&node.TenantID))
-	}
-	if node.Tables.SequenceOnly {
-		return p.row("SEQUENCE", p.Doc(&node.Tables.TablePatterns))
-	}
-	return p.row("TABLE", p.Doc(&node.Tables.TablePatterns))
 }
 
 func (node *GrantTargetList) doc(p *PrettyCfg) pretty.Doc {

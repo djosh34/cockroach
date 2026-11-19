@@ -81,7 +81,6 @@ func TestBuilder(t *testing.T) {
 				evalCtx.SessionData().OptimizerUseForecasts = true
 				evalCtx.SessionData().OptimizerUseHistograms = true
 				evalCtx.SessionData().OptimizerUseMultiColStats = true
-				evalCtx.SessionData().LocalityOptimizedSearch = true
 
 				var o xform.Optimizer
 				o.Init(ctx, &evalCtx, catalog)

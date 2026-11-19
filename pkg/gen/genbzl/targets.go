@@ -79,7 +79,6 @@ in $og - filter(".*:.*(-gen|gen-).*", $og)`,
 		target: "schemachanger",
 		query: `
 kind("generated file", //pkg/sql/schemachanger/...:*)
-  + kind("generated file", //pkg/ccl/schemachangerccl:*)
   - labels("out", kind("_gomock_prog_gen rule", //pkg/sql/schemachanger/...:*))
 `,
 	},
@@ -119,7 +118,6 @@ kind("generated file", {{ .All }}) - (
 		// query requires fetching a lot of the JS stuff. We don't need to
 		// perform this query just to list these two genrules.
 		hardCodedQueryResults: []string{
-			"//pkg/ui/distccl:genassets",
 			"//pkg/ui/distoss:genassets",
 		},
 	},

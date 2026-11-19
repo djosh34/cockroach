@@ -37,7 +37,6 @@ go_library(
         "//pkg/util/randident",
         "//pkg/util/randident/randidentcfg",
         "//pkg/util/syncutil",
-        "//pkg/util/timeutil",
         "@com_github_cockroachdb_errors//:errors",
         "@com_github_lib_pq//oid",
     ],
@@ -56,7 +55,6 @@ go_test(
     embed = [":sqlsmith"],
     deps = [
         "//pkg/base",
-        "//pkg/ccl",
         "//pkg/security/securityassets",
         "//pkg/security/securitytest",
         "//pkg/server",

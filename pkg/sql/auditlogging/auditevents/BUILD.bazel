@@ -2,10 +2,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "auditevents",
-    srcs = [
-        "role_based_audit_event.go",
-        "sensitive_table_access.go",
-    ],
+    srcs = ["sensitive_table_access.go"],
     importpath = "github.com/cockroachdb/cockroach/pkg/sql/auditlogging/auditevents",
     visibility = ["//visibility:public"],
     deps = [

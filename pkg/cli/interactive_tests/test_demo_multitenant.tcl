@@ -34,12 +34,6 @@ end_test
 # the mt demo can at least start up.
 
 
-start_test "Check the default gateway region"
-send "SELECT gateway_region();\n"
-eexpect "us-east1"
-eexpect "defaultdb>"
-end_test
-
 start_test "Check that the demo add command adds a node with no error in ls"
 send "\\demo add region=us-east-1\r"
 eexpect "node 4 has been added"

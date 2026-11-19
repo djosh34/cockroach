@@ -2384,22 +2384,28 @@ func TestJobInTxn(t *testing.T) {
 	var jobID jobspb.JobID
 
 	defer sql.ClearPlanHooks()
-	// Piggy back on BACKUP to be able to create a succeeding test job.
+	// Piggy back on IMPORT to be able to create test jobs. IMPORT INTO a table
+	// named "failing" creates a job that fails; any other table name creates a
+	// job that succeeds.
 	sql.ClearPlanHooks()
 	sql.AddPlanHook(
 		"test",
 		func(_ context.Context, stmt tree.Statement, execCtx sql.PlanHookState,
 		) (sql.PlanHookRowFn, colinfo.ResultColumns, []sql.PlanNode, bool, error) {
-			st, ok := stmt.(*tree.Backup)
+			st, ok := stmt.(*tree.Import)
 			if !ok {
 				return nil, nil, nil, false, nil
+			}
+			description := st.String()
+			if st.Table.Object() == "failing" {
+				description = "failing"
 			}
 			fn := func(ctx context.Context, _ []sql.PlanNode, _ chan<- tree.Datums) error {
 				var err error
 				jobID = execCtx.ExtendedEvalContext().QueueJob(&jobs.Record{
-					Description: st.String(),
-					Details:     jobspb.BackupDetails{},
-					Progress:    jobspb.BackupProgress{},
+					Description: description,
+					Details:     jobspb.ImportDetails{},
+					Progress:    jobspb.ImportProgress{},
 					Username:    username.TestUserName(),
 				})
 				return err
@@ -2408,11 +2414,18 @@ func TestJobInTxn(t *testing.T) {
 		},
 		func(_ context.Context, stmt tree.Statement, execCtx sql.PlanHookState,
 		) (matched bool, _ colinfo.ResultColumns, _ error) {
-			_, matched = stmt.(*tree.Backup)
+			_, matched = stmt.(*tree.Import)
 			return matched, nil, nil
 		},
 	)
-	jobs.RegisterConstructor(jobspb.TypeBackup, func(job *jobs.Job, _ *cluster.Settings) jobs.Resumer {
+	jobs.RegisterConstructor(jobspb.TypeImport, func(job *jobs.Job, _ *cluster.Settings) jobs.Resumer {
+		if job.Payload().Description == "failing" {
+			return jobstest.FakeResumer{
+				OnResume: func(_ context.Context) error {
+					return errors.New("job failed")
+				},
+			}
+		}
 		return jobstest.FakeResumer{
 			OnResume: func(ctx context.Context) error {
 				t.Logf("Resuming job: %+v", job.Payload())
@@ -2425,47 +2438,13 @@ func TestJobInTxn(t *testing.T) {
 			},
 		}
 	}, jobs.UsesTenantCostControl)
-	// Piggy back on RESTORE to be able to create a failing test job.
-	sql.AddPlanHook(
-		"test",
-		func(_ context.Context, stmt tree.Statement, execCtx sql.PlanHookState,
-		) (sql.PlanHookRowFn, colinfo.ResultColumns, []sql.PlanNode, bool, error) {
-			_, ok := stmt.(*tree.Restore)
-			if !ok {
-				return nil, nil, nil, false, nil
-			}
-			fn := func(ctx context.Context, _ []sql.PlanNode, _ chan<- tree.Datums) error {
-				var err error
-				jobID = execCtx.ExtendedEvalContext().QueueJob(&jobs.Record{
-					Description: "RESTORE",
-					Details:     jobspb.RestoreDetails{},
-					Progress:    jobspb.RestoreProgress{},
-					Username:    username.TestUserName(),
-				})
-				return err
-			}
-			return fn, nil, nil, false, nil
-		},
-		func(_ context.Context, stmt tree.Statement, execCtx sql.PlanHookState,
-		) (matched bool, _ colinfo.ResultColumns, _ error) {
-			_, matched = stmt.(*tree.Restore)
-			return matched, nil, nil
-		},
-	)
-	jobs.RegisterConstructor(jobspb.TypeRestore, func(job *jobs.Job, _ *cluster.Settings) jobs.Resumer {
-		return jobstest.FakeResumer{
-			OnResume: func(_ context.Context) error {
-				return errors.New("RESTORE failed")
-			},
-		}
-	}, jobs.UsesTenantCostControl)
 
 	t.Run("rollback txn", func(t *testing.T) {
 		start := timeutil.Now()
 
 		txn, err := sqlDB.Begin()
 		require.NoError(t, err)
-		_, err = txn.Exec("BACKUP tobeaborted TO doesnotmattter")
+		_, err = txn.Exec("IMPORT INTO tobeaborted CSV DATA ('doesnotmatter')")
 		require.NoError(t, err)
 
 		// If we rollback then the job should not run
@@ -2490,7 +2469,7 @@ func TestJobInTxn(t *testing.T) {
 		// Now let's actually commit the transaction and check that the job ran.
 		txn, err := sqlDB.Begin()
 		require.NoError(t, err)
-		_, err = txn.Exec("BACKUP tocommit TO foo")
+		_, err = txn.Exec("IMPORT INTO tocommit CSV DATA ('foo')")
 		require.NoError(t, err)
 		// Committing will block and wait for all jobs to run.
 		require.NoError(t, txn.Commit())
@@ -2512,10 +2491,10 @@ func TestJobInTxn(t *testing.T) {
 		require.NoError(t, err)
 
 		// Add a succeeding job.
-		_, err = txn.Exec("BACKUP doesnotmatter TO doesnotmattter")
+		_, err = txn.Exec("IMPORT INTO doesnotmatter CSV DATA ('doesnotmatter')")
 		require.NoError(t, err)
-		// We hooked up a failing test job to RESTORE.
-		_, err = txn.Exec("RESTORE TABLE tbl FROM somewhere")
+		// Add a failing job.
+		_, err = txn.Exec("IMPORT INTO failing CSV DATA ('somewhere')")
 		require.NoError(t, err)
 
 		// Now let's actually commit the transaction and check that there is a

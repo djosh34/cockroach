@@ -170,6 +170,11 @@ func (n *alterDefaultPrivilegesNode) startExec(params runParams) error {
 	); err != nil {
 		return err
 	}
+	if n.n.IsGrant {
+		if err := privilege.ValidateGrantable(privileges); err != nil {
+			return err
+		}
+	}
 
 	if len(n.schemaDescs) == 0 {
 		return n.alterDefaultPrivilegesForDatabase(params, targetRoles, objectType, grantees, privileges, grantOption)

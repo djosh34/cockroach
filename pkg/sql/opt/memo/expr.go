@@ -22,7 +22,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/constraint"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/props"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/props/physical"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree/treewindow"
@@ -293,18 +292,6 @@ func (e *DistributeExpr) GetDistributions() (target, source physical.Distributio
 	return physical.Distribution{}, physical.Distribution{}, false
 }
 
-// HasHomeRegion returns true if the operation tree being distributed has a home
-// region.
-func (e *DistributeExpr) HasHomeRegion() bool {
-	inputDistributionProvidedPhysical := e.Input.ProvidedPhysical()
-
-	if inputDistributionProvidedPhysical != nil {
-		inputDistribution := inputDistributionProvidedPhysical.Distribution
-		return len(inputDistribution.Regions) == 1
-	}
-	return false
-}
-
 // GetRegionOfDistribution returns the single region name of the provided
 // distribution, if there is exactly one.
 func (e *DistributeExpr) GetRegionOfDistribution() (region string, ok bool) {
@@ -312,17 +299,6 @@ func (e *DistributeExpr) GetRegionOfDistribution() (region string, ok bool) {
 
 	if distributionProvidedPhysical != nil {
 		return distributionProvidedPhysical.Distribution.GetSingleRegion()
-	}
-	return "", false
-}
-
-// GetInputHomeRegion returns the single region name of the home region of the
-// input expression tree to the Distribute operation, if there is exactly one.
-func (e *DistributeExpr) GetInputHomeRegion() (inputHomeRegion string, ok bool) {
-	inputDistributionProvidedPhysical := e.Input.ProvidedPhysical()
-
-	if inputDistributionProvidedPhysical != nil {
-		return inputDistributionProvidedPhysical.Distribution.GetSingleRegion()
 	}
 	return "", false
 }
@@ -727,36 +703,6 @@ type UDFDefinition struct {
 	// should be optimized if it is rebuilt. Each props corresponds to the RelExpr
 	// at the same position in Body.
 	BodyProps []*physical.Required
-
-	// ExceptionBlock contains information needed for exception-handling when the
-	// body of this routine returns an error. It can be unset.
-	ExceptionBlock *ExceptionBlock
-
-	// BlockState is shared between the routines that encapsulate a PLpgSQL block.
-	// It is used to coordinate between the nested routines during exception
-	// handling.
-	BlockState *tree.BlockState
-
-	// CursorDeclaration contains the information needed to open a SQL cursor with
-	// the result of the *first* body statement. If it is set, there will be at
-	// least two body statements - one to open the cursor, and one to evaluate the
-	// result of the routine. This invariant is enforced when the PLpgSQL routine
-	// is built. CursorDeclaration may be unset.
-	CursorDeclaration *tree.RoutineOpenCursor
-}
-
-// ExceptionBlock contains the information needed to match and handle errors in
-// the EXCEPTION block of a routine defined with PLpgSQL.
-type ExceptionBlock struct {
-	// Codes is a list of pgcode strings (see pgcode/codes.go). When the body of a
-	// routine with an ExceptionBlock returns an error, the code of that error is
-	// compared against the Codes slice for a match. As a special case, the code
-	// may be "OTHERS", indicating that (almost) any error code should be matched.
-	Codes []pgcode.Code
-
-	// Actions contains routine definitions that represent exception handlers for
-	// each code in the Codes slice.
-	Actions []*UDFDefinition
 }
 
 // WindowFrame denotes the definition of a window frame for an individual
@@ -817,8 +763,7 @@ func (f *WindowFrame) String() string {
 func (s *ScanPrivate) IsCanonical() bool {
 	return s.Index == cat.PrimaryIndex &&
 		s.Constraint == nil &&
-		s.HardLimit == 0 &&
-		!s.LocalityOptimized
+		s.HardLimit == 0
 }
 
 // IsUnfiltered returns true if the ScanPrivate will produce all rows in the

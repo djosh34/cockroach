@@ -592,17 +592,6 @@ func RenameColumnInTable(
 		maybeUpdateShardedDesc(&idx.IndexDesc().Sharded)
 	}
 
-	// Rename the REGIONAL BY ROW column reference.
-	if tableDesc.IsLocalityRegionalByRow() {
-		rbrColName, err := tableDesc.GetRegionalByRowTableRegionColumnName()
-		if err != nil {
-			return err
-		}
-		if rbrColName == col.ColName() {
-			tableDesc.SetTableLocalityRegionalByRow(newName)
-		}
-	}
-
 	// Rename the column name in the column, the column family, the indexes...
 	tableDesc.RenameColumnDescriptor(col, string(newName))
 

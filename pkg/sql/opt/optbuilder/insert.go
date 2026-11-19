@@ -360,11 +360,10 @@ func (b *Builder) buildInsert(ins *tree.Insert, inScope *scope) (outScope *scope
 //
 //  1. There are no secondary indexes. Existing values are needed to delete
 //     secondary index rows when the update causes them to move.
-//  2. There are no implicit partitioning columns in the primary index.
-//  3. All non-key columns (including mutation columns) have insert and update
+//  2. All non-key columns (including mutation columns) have insert and update
 //     values specified for them.
-//  4. Each update value is the same as the corresponding insert value.
-//  5. There are no inbound foreign keys containing non-key columns.
+//  3. Each update value is the same as the corresponding insert value.
+//  4. There are no inbound foreign keys containing non-key columns.
 //
 // TODO(andyk): The fast path is currently only enabled when the UPSERT alias
 // is explicitly selected by the user. It's possible to fast path some queries
@@ -373,13 +372,6 @@ func (b *Builder) buildInsert(ins *tree.Insert, inScope *scope) (outScope *scope
 // this support was removed and needs to re-enabled. See #14482.
 func (mb *mutationBuilder) needExistingRows() bool {
 	if mb.tab.DeletableIndexCount() > 1 {
-		return true
-	}
-
-	// If there are any implicit partitioning columns in the primary index,
-	// these columns will need to be fetched.
-	primaryIndex := mb.tab.Index(cat.PrimaryIndex)
-	if primaryIndex.ImplicitPartitioningColumnCount() > 0 {
 		return true
 	}
 
@@ -880,11 +872,9 @@ func (mb *mutationBuilder) setUpsertCols(insertCols tree.NameList) {
 		}
 	}
 
-	// Never update primary key columns. Implicit partitioning columns are not
-	// considered part of the primary key in this case.
+	// Never update primary key columns.
 	conflictIndex := mb.tab.Index(cat.PrimaryIndex)
-	skipCols := conflictIndex.ImplicitPartitioningColumnCount()
-	for i, n := skipCols, conflictIndex.KeyColumnCount(); i < n; i++ {
+	for i, n := 0, conflictIndex.KeyColumnCount(); i < n; i++ {
 		mb.updateColIDs[conflictIndex.Column(i).Ordinal()] = 0
 	}
 }

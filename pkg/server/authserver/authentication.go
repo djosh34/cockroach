@@ -23,23 +23,19 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
-	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/security"
 	"github.com/cockroachdb/cockroach/pkg/security/password"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
 	"github.com/cockroachdb/cockroach/pkg/server/srverrors"
 	"github.com/cockroachdb/cockroach/pkg/settings"
-	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
-	"github.com/cockroachdb/cockroach/pkg/ui"
 	"github.com/cockroachdb/cockroach/pkg/util/grpcutil"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/protoutil"
-	"github.com/cockroachdb/cockroach/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/logtags"
 	gwruntime "github.com/grpc-ecosystem/grpc-gateway/runtime"
@@ -62,36 +58,6 @@ const (
 	// DemoLoginPath is the demo shell auto-login URL.
 	DemoLoginPath = "/demologin"
 )
-
-type noOIDCConfigured struct{}
-
-var _ ui.OIDCUI = &noOIDCConfigured{}
-
-func (c *noOIDCConfigured) GetOIDCConf() ui.OIDCUIConf {
-	return ui.OIDCUIConf{
-		Enabled: false,
-	}
-}
-
-// OIDC is an interface that an OIDC-based authentication module should implement to integrate with
-// the rest of the node's functionality
-type OIDC interface {
-	ui.OIDCUI
-}
-
-// ConfigureOIDC is a hook for the `oidcccl` library to add OIDC login support. It's called during
-// server startup to initialize a client for OIDC support.
-var ConfigureOIDC = func(
-	ctx context.Context,
-	st *cluster.Settings,
-	locality roachpb.Locality,
-	handleHTTP func(pattern string, handler http.Handler),
-	userLoginFromSSO func(ctx context.Context, username string) (*http.Cookie, error),
-	ambientCtx log.AmbientContext,
-	cluster uuid.UUID,
-) (OIDC, error) {
-	return &noOIDCConfigured{}, nil
-}
 
 // WebSessionTimeout is the cluster setting for web session TTL.
 var WebSessionTimeout = settings.RegisterDurationSetting(
@@ -238,34 +204,6 @@ var errWebAuthenticationFailure = status.Errorf(
 	codes.Unauthenticated,
 	"the provided credentials did not match any account on the server",
 )
-
-// UserLoginFromSSO is part of the Server interface.
-func (s *authenticationServer) UserLoginFromSSO(
-	ctx context.Context, reqUsername string,
-) (*http.Cookie, error) {
-	// In CockroachDB SQL, unlike in PostgreSQL, usernames are
-	// case-insensitive. Therefore we need to normalize the username
-	// here, so that the normalized username is retained in the session
-	// table: the APIs extract the username from the session table
-	// without further normalization.
-	username, _ := username.MakeSQLUsernameFromUserInput(reqUsername, username.PurposeValidation)
-
-	exists, _, canLoginDBConsole, _, _, _, _, err := sql.GetUserSessionInitInfo(
-		ctx,
-		s.sqlServer.ExecutorConfig(),
-		username,
-		"", /* databaseName */
-	)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "failed creating session for username")
-	}
-	if !exists || !canLoginDBConsole {
-		return nil, errWebAuthenticationFailure
-	}
-
-	return s.createSessionFor(ctx, username)
-}
 
 // createSessionFor creates a login cookie for the given user.
 //

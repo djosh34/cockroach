@@ -191,8 +191,8 @@ func collectFuncOptions(
 			}
 
 		case tree.RoutineLanguage:
-			if t != tree.RoutineLangSQL && t != tree.RoutineLangPLpgSQL {
-				panic(fmt.Errorf("LANGUAGE must be SQL or plpgsql"))
+			if t != tree.RoutineLangSQL {
+				panic(fmt.Errorf("LANGUAGE must be SQL"))
 			}
 			language = t
 

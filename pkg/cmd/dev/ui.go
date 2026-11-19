@@ -22,12 +22,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	// ossFlag is the name of the boolean long (GNU-style) flag that builds only
-	// the open-source parts of the UI.
-	ossFlag = "oss"
-)
-
 // makeUICmd initializes the top-level 'ui' subcommand.
 func makeUICmd(d *dev) *cobra.Command {
 	uiCmd := &cobra.Command{
@@ -63,8 +57,6 @@ type UIDirectories struct {
 	eslintPlugin string
 	// protoOss is the absolute path to ./pkg/ui/workspaces/db-console/src/js/.
 	protoOss string
-	// protoCcl is the absolute path to ./pkg/ui/workspaces/db-console/ccl/src/js/.
-	protoCcl string
 }
 
 // getUIDirs computes the absolute path to the root of each UI sub-project.
@@ -82,7 +74,6 @@ func getUIDirs(d *dev) (*UIDirectories, error) {
 		e2eTests:     filepath.Join(workspace, "./pkg/ui/workspaces/e2e-tests"),
 		eslintPlugin: filepath.Join(workspace, "./pkg/ui/workspaces/eslint-plugin-crdb"),
 		protoOss:     filepath.Join(workspace, "./pkg/ui/workspaces/db-console/src/js"),
-		protoCcl:     filepath.Join(workspace, "./pkg/ui/workspaces/db-console/ccl/src/js"),
 	}, nil
 }
 
@@ -103,7 +94,7 @@ func (d *dev) assertNoLinkedNpmDeps(targets []buildTarget) error {
 		// 'somepath(${target.fullName}, //pkg/ui/workspaces/db-console:*)' or
 		// similar, but with only two eligible targets it doesn't seem quite
 		// worth it.
-		if target.fullName == cockroachTarget || target.fullName == cockroachTargetOss {
+		if target.fullName == cockroachTargetOss {
 			uiWillBeBuilt = true
 			break
 		}
@@ -124,7 +115,6 @@ func (d *dev) assertNoLinkedNpmDeps(targets []buildTarget) error {
 		uiDirs.root,
 		uiDirs.eslintPlugin,
 		uiDirs.protoOss,
-		uiDirs.protoCcl,
 		uiDirs.clusterUI,
 		uiDirs.dbConsole,
 		uiDirs.e2eTests,
@@ -292,11 +282,6 @@ Replaces 'make ui-watch'.`,
 				return err
 			}
 
-			isOss, err := cmd.Flags().GetBool(ossFlag)
-			if err != nil {
-				return err
-			}
-
 			// Ensure node dependencies are up-to-date.
 			err = d.exec.CommandContextInheritingStdStreams(
 				ctx,
@@ -314,9 +299,6 @@ Replaces 'make ui-watch'.`,
 				"build",
 				"//pkg/ui/workspaces/cluster-ui:cluster-ui-lib",
 			}
-			if !isOss {
-				args = append(args, "//pkg/ui/workspaces/db-console/ccl/src/js:crdb-protobuf-client-ccl-lib")
-			}
 			logCommand("bazel", args...)
 			err = d.exec.CommandContextInheritingStdStreams(ctx, "bazel", args...)
 
@@ -325,7 +307,7 @@ Replaces 'make ui-watch'.`,
 				return err
 			}
 
-			if err := arrangeFilesForWatchers(d, isOss); err != nil {
+			if err := arrangeFilesForWatchers(d); err != nil {
 				log.Fatalf("failed to arrange files for watchers: %v", err)
 				return err
 			}
@@ -382,13 +364,6 @@ Replaces 'make ui-watch'.`,
 				}
 			}
 
-			var webpackDist string
-			if isOss {
-				webpackDist = "oss"
-			} else {
-				webpackDist = "ccl"
-			}
-
 			args = []string{
 				"--dir",
 				dirs.dbConsole,
@@ -399,7 +374,7 @@ Replaces 'make ui-watch'.`,
 				// Polyfill WEBPACK_SERVE for webpack v4; it's set in webpack v5 via
 				// `webpack serve`.
 				"--env.WEBPACK_SERVE",
-				"--env.dist=" + webpackDist,
+				"--env.dist=oss",
 				"--env.target=" + dbTarget,
 				"--port", port,
 			}
@@ -425,7 +400,6 @@ Replaces 'make ui-watch'.`,
 	watchCmd.Flags().Int16P(portFlag, "p", 3000, "port to serve UI on")
 	watchCmd.Flags().String(dbTargetFlag, "http://localhost:8080", "url to proxy DB requests to")
 	watchCmd.Flags().Bool(secureFlag, false, "serve via HTTPS")
-	watchCmd.Flags().Bool(ossFlag, false, "build only the open-source parts of the UI")
 	watchCmd.Flags().StringArray(
 		clusterUiDestinationsFlag,
 		[]string{},
@@ -462,17 +436,17 @@ func makeUIStorybookCmd(d *dev) *cobra.Command {
 				"bazel",
 				"fetch",
 				"//pkg/ui/workspaces/cluster-ui:cluster-ui",
-				"//pkg/ui/workspaces/db-console:db-console-ccl",
+				"//pkg/ui/workspaces/db-console:db-console-oss",
 			)
 			if err != nil {
 				log.Fatalf("failed to fetch node dependencies: %v", err)
 			}
 
-			// Build prerequisites for Storybook. It runs Db Console with CCL license.
+			// Build prerequisites for Storybook.
 			args := []string{
 				"build",
 				"//pkg/ui/workspaces/cluster-ui:cluster-ui",
-				"//pkg/ui/workspaces/db-console/ccl/src/js:crdb-protobuf-client-ccl",
+				"//pkg/ui/workspaces/db-console/src/js:crdb-protobuf-client",
 			}
 
 			logCommand("bazel", args...)
@@ -482,7 +456,7 @@ func makeUIStorybookCmd(d *dev) *cobra.Command {
 				return err
 			}
 
-			if err := arrangeFilesForWatchers(d /* ossOnly */, false); err != nil {
+			if err := arrangeFilesForWatchers(d); err != nil {
 				log.Fatalf("failed to arrange files for watchers: %v", err)
 				return err
 			}
@@ -619,8 +593,6 @@ func makeUICleanCmd(d *dev) *cobra.Command {
 			pathsToDelete := []string{
 				filepath.Join(uiDirs.dbConsole, "src", "js", "protos.js"),
 				filepath.Join(uiDirs.dbConsole, "src", "js", "protos.d.ts"),
-				filepath.Join(uiDirs.dbConsole, "ccl", "src", "js", "protos.js"),
-				filepath.Join(uiDirs.dbConsole, "ccl", "src", "js", "protos.d.ts"),
 				filepath.Join(uiDirs.dbConsole, "dist"),
 				filepath.Join(uiDirs.clusterUI, "dist"),
 				filepath.Join(uiDirs.eslintPlugin, "dist"),
@@ -636,7 +608,6 @@ func makeUICleanCmd(d *dev) *cobra.Command {
 					filepath.Join(workspace, "pkg", "ui", "node_modules"),
 					filepath.Join(uiDirs.dbConsole, "node_modules"),
 					filepath.Join(uiDirs.dbConsole, "src", "js", "node_modules"),
-					filepath.Join(uiDirs.dbConsole, "ccl", "src", "js", "node_modules"),
 					filepath.Join(uiDirs.clusterUI, "node_modules"),
 					filepath.Join(uiDirs.e2eTests, "node_modules"),
 					filepath.Join(uiDirs.eslintPlugin, "node_modules"),
@@ -673,21 +644,19 @@ func makeUICleanCmd(d *dev) *cobra.Command {
 // mode) to be executed from directly within a pkg/ui/workspaces/... directory.
 //
 // See https://github.com/bazelbuild/rules_nodejs/issues/2028
-func arrangeFilesForWatchers(d *dev, ossOnly bool) error {
+func arrangeFilesForWatchers(d *dev) error {
 	bazelBin, err := d.getBazelBin(d.cli.Context(), []string{})
 	if err != nil {
 		return err
 	}
 
 	dbConsoleSrc := filepath.Join(bazelBin, "pkg", "ui", "workspaces", "db-console")
-	dbConsoleCclSrc := filepath.Join(dbConsoleSrc, "ccl")
 
 	dstDirs, err := getUIDirs(d)
 	if err != nil {
 		return err
 	}
 	dbConsoleDst := dstDirs.dbConsole
-	dbConsoleCclDst := filepath.Join(dbConsoleDst, "ccl")
 
 	protoFiles := []string{
 		filepath.Join("src", "js", "protos.js"),
@@ -696,17 +665,8 @@ func arrangeFilesForWatchers(d *dev, ossOnly bool) error {
 
 	// Recreate protobuf client files that were previously copied out of the sandbox
 	for _, relPath := range protoFiles {
-		ossDst := filepath.Join(dbConsoleDst, relPath)
-		if err := d.os.CopyFile(filepath.Join(dbConsoleSrc, relPath), ossDst); err != nil {
-			return err
-		}
-
-		if ossOnly {
-			continue
-		}
-
-		cclDst := filepath.Join(dbConsoleCclDst, relPath)
-		if err := d.os.CopyFile(filepath.Join(dbConsoleCclSrc, relPath), cclDst); err != nil {
+		dst := filepath.Join(dbConsoleDst, relPath)
+		if err := d.os.CopyFile(filepath.Join(dbConsoleSrc, relPath), dst); err != nil {
 			return err
 		}
 	}
@@ -763,7 +723,7 @@ Replaces 'make ui-test' and 'make ui-test-watch'.`,
 				args := []string{
 					"build",
 					"//pkg/ui/workspaces/cluster-ui:cluster-ui",
-					"//pkg/ui/workspaces/db-console/ccl/src/js:crdb-protobuf-client-ccl",
+					"//pkg/ui/workspaces/db-console/src/js:crdb-protobuf-client",
 				}
 				logCommand("bazel", args...)
 				err := d.exec.CommandContextInheritingStdStreams(ctx, "bazel", args...)
@@ -773,7 +733,7 @@ Replaces 'make ui-test' and 'make ui-test-watch'.`,
 					return err
 				}
 
-				err = arrangeFilesForWatchers(d, false /* ossOnly */)
+				err = arrangeFilesForWatchers(d)
 				if err != nil {
 					// nolint:errwrap
 					return fmt.Errorf("unable to arrange files properly for watch-mode testing: %+v", err)
@@ -898,7 +858,7 @@ launching test in a real browser. Extra flags are passed directly to the
 			// Build cockroach (relying on Bazel to short-circuit repeated builds)
 			buildCockroachArgv := []string{
 				"build",
-				"//pkg/cmd/cockroach:cockroach",
+				"//pkg/cmd/cockroach-oss:cockroach-oss",
 			}
 			logCommand("bazel", buildCockroachArgv...)
 			err = d.exec.CommandContextInheritingStdStreams(ctx, "bazel", buildCockroachArgv...)

@@ -16,8 +16,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/deprecatedshowranges"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/cat"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/util/errorutil/unimplemented"
@@ -88,17 +86,11 @@ func TryDelegate(
 	case *tree.ShowConstraints:
 		return d.delegateShowConstraints(t)
 
-	case *tree.ShowPartitions:
-		return d.delegateShowPartitions(t)
-
 	case *tree.ShowGrants:
 		return d.delegateShowGrants(t)
 
 	case *tree.ShowJobs:
 		return d.delegateShowJobs(t)
-
-	case *tree.ShowChangefeedJobs:
-		return d.delegateShowChangefeedJobs(t)
 
 	case *tree.ShowQueries:
 		return d.delegateShowQueries(t)
@@ -115,12 +107,6 @@ func TryDelegate(
 
 	case *tree.ShowRangeForRow:
 		return d.delegateShowRangeForRow(t)
-
-	case *tree.ShowSurvivalGoal:
-		return d.delegateShowSurvivalGoal(t)
-
-	case *tree.ShowRegions:
-		return d.delegateShowRegions(t)
 
 	case *tree.ShowRoleGrants:
 		return d.delegateShowRoleGrants(t)
@@ -188,13 +174,6 @@ func TryDelegate(
 	case *tree.ShowSavepointStatus:
 		return nil, unimplemented.NewWithIssue(
 			47333, "cannot use SHOW SAVEPOINT STATUS as a statement source")
-
-	// SHOW TRANSFER STATE cannot be rewritten as a low-level query due to
-	// the format of its output (e.g. transfer key echoed back, and errors are
-	// returned in the form of a SQL value).
-	case *tree.ShowTransferState:
-		return nil, pgerror.Newf(pgcode.FeatureNotSupported,
-			"cannot use SHOW TRANSFER STATE as a statement source")
 
 	default:
 		return nil, nil

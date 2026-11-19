@@ -105,7 +105,7 @@ func TestValidateDatabaseDesc(t *testing.T) {
 			},
 		},
 		{
-			`primary region unset on a multi-region db 200`,
+			`multi-region databases are unsupported`,
 			descpb.DatabaseDescriptor{
 				Name:         "multi-region-db",
 				ID:           200,
@@ -204,7 +204,7 @@ func TestValidateCrossDatabaseReferences(t *testing.T) {
 			},
 		},
 		{ // 5
-			err: `multi-region enum: referenced type ID 500: referenced descriptor not found`,
+			err: `multi-region databases are unsupported`,
 			desc: descpb.DatabaseDescriptor{
 				ID:   51,
 				Name: "db1",
@@ -215,7 +215,7 @@ func TestValidateCrossDatabaseReferences(t *testing.T) {
 			},
 		},
 		{ // 6
-			err: `multi-region enum: parentID is actually 500`,
+			err: `multi-region databases are unsupported`,
 			desc: descpb.DatabaseDescriptor{
 				ID:   51,
 				Name: "db1",
@@ -244,7 +244,7 @@ func TestValidateCrossDatabaseReferences(t *testing.T) {
 			},
 		},
 		{ // 8
-			err: `multi-region enum: referenced type ID 53: descriptor is a *schemadesc.immutable: unexpected descriptor type`,
+			err: `multi-region databases are unsupported`,
 			desc: descpb.DatabaseDescriptor{
 				ID:   51,
 				Name: "db1",

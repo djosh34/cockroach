@@ -221,10 +221,6 @@ func interestingOrderingsForJoin(rel memo.RelExpr) props.OrderingSet {
 }
 
 func interestingOrderingsForSetOp(rel memo.RelExpr) props.OrderingSet {
-	if rel.Op() == opt.LocalityOptimizedSearchOp {
-		// LocalityOptimizedSearchOp does not support passing through orderings.
-		return nil
-	}
 	leftChild := rel.Child(0).(memo.RelExpr)
 	rightChild := rel.Child(1).(memo.RelExpr)
 	ordLeft := DeriveInterestingOrderings(leftChild)

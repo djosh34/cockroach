@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# This is used through bazel when generating sql.go and plpgsql.go.
-# Look at BUILD.bazel in pkg/sql/parser or pkg/plpgsql/parser for
+# This is used through bazel when generating sql.go and pgrepl.go.
+# Look at BUILD.bazel in pkg/sql/parser or pkg/sql/pgrepl/pgreplparser for
 # usage.
 
 set -euo pipefail
@@ -17,7 +17,7 @@ GENYACC=$LANG-gen.y
         awk '{print $0")>_\\1 <union> /* <\\2> */_"}' > types_regex.tmp
 
     sed -E -f types_regex.tmp < $1 | \
-        if [ $LANG != plpgsql ] && [ $LANG != pgrepl ]; then \
+        if [ $LANG != pgrepl ]; then \
             awk -f $3 | \
           sed -Ee 's,//.*$$,,g;s,/[*]([^*]|[*][^/])*[*]/, ,g;s/ +$$//g' > $GENYACC
         else

@@ -263,8 +263,8 @@ const statementsDefault = [
   },
   {
     aggregatedFingerprintID: "641287435601027145",
-    label: 'SET CLUSTER SETTING "enterprise.license" = $1',
-    summary: 'SET CLUSTER SETTING "enterprise.license" = $1',
+    label: 'SET CLUSTER SETTING "cluster.organization" = $1',
+    summary: 'SET CLUSTER SETTING "cluster.organization" = $1',
   },
   {
     aggregatedFingerprintID: "16743225271705059729",

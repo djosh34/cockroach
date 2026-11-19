@@ -327,6 +327,30 @@ func ValidatePrivileges(privileges List, objectType ObjectType) error {
 	return nil
 }
 
+// Grantable reports whether privilege k can still be granted. BACKUP, RESTORE
+// and CHANGEFEED belonged to removed features. Their bits stay valid so that
+// stored privilege descriptors keep decoding and existing grants can still be
+// revoked, but ALL no longer stands for them.
+func Grantable(k Kind) bool {
+	switch k {
+	case BACKUP, RESTORE, CHANGEFEED:
+		return false
+	}
+	return true
+}
+
+// ValidateGrantable returns an error if any privilege in privileges can no
+// longer be granted. See Grantable.
+func ValidateGrantable(privileges List) error {
+	for _, priv := range privileges {
+		if !Grantable(priv) {
+			return pgerror.Newf(pgcode.FeatureNotSupported,
+				"privilege %s is unsupported", priv.DisplayName())
+		}
+	}
+	return nil
+}
+
 // GetValidPrivilegesForObject returns the list of valid privileges for the
 // specified object type.
 func GetValidPrivilegesForObject(objectType ObjectType) (List, error) {

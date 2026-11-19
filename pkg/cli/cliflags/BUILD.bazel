@@ -2,10 +2,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "cliflags",
-    srcs = [
-        "flags.go",
-        "flags_mt.go",
-    ],
+    srcs = ["flags.go"],
     importpath = "github.com/cockroachdb/cockroach/pkg/cli/cliflags",
     visibility = ["//visibility:public"],
     deps = [

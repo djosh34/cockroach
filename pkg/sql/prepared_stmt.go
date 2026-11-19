@@ -68,15 +68,6 @@ type PreparedStatement struct {
 	// memo that is used as a starting point for optimization of custom plans.
 	BaseMemo *memo.Memo
 
-	// GenericMemo, if present, is a fully-optimized memo that can be executed
-	// as-is.
-	// TODO(mgartner): Put all fully-optimized plans in the GenericMemo field to
-	// reduce confusion.
-	GenericMemo *memo.Memo
-
-	// Costs tracks the costs of previously optimized custom and generic plans.
-	Costs planCosts
-
 	// refCount keeps track of the number of references to this PreparedStatement.
 	// New references are registered through incRef().
 	// Once refCount hits 0 (through calls to decRef()), the following memAcc is
@@ -104,9 +95,6 @@ func (p *PreparedStatement) MemoryEstimate() int64 {
 	if p.BaseMemo != nil {
 		size += p.BaseMemo.MemoryEstimate()
 	}
-	if p.GenericMemo != nil {
-		size += p.GenericMemo.MemoryEstimate()
-	}
 	return size
 }
 
@@ -125,75 +113,6 @@ func (p *PreparedStatement) incRef(ctx context.Context) {
 		log.Fatal(ctx, "corrupt PreparedStatement refcount")
 	}
 	p.refCount++
-}
-
-const (
-	// CustomPlanThreshold is the maximum number of custom plan costs tracked by
-	// planCosts. It is also the number of custom plans executed when
-	// plan_cache_mode=auto before attempting to generate a generic plan.
-	CustomPlanThreshold = 5
-)
-
-// planCosts tracks costs of generic and custom plans.
-type planCosts struct {
-	generic memo.Cost
-	custom  struct {
-		nextIdx int
-		length  int
-		costs   [CustomPlanThreshold]memo.Cost
-	}
-}
-
-// Generic returns the cost of the generic plan.
-func (p *planCosts) Generic() memo.Cost {
-	return p.generic
-}
-
-// SetGeneric sets the cost of the generic plan.
-func (p *planCosts) SetGeneric(cost memo.Cost) {
-	p.generic = cost
-}
-
-// AddCustom adds a custom plan cost to the planCosts, evicting the oldest cost
-// if necessary.
-func (p *planCosts) AddCustom(cost memo.Cost) {
-	p.custom.costs[p.custom.nextIdx] = cost
-	p.custom.nextIdx++
-	if p.custom.nextIdx >= CustomPlanThreshold {
-		p.custom.nextIdx = 0
-	}
-	if p.custom.length < CustomPlanThreshold {
-		p.custom.length++
-	}
-}
-
-// NumCustom returns the number of custom plan costs in the planCosts.
-func (p *planCosts) NumCustom() int {
-	return p.custom.length
-}
-
-// AvgCustom returns the average cost of all the custom plan costs in planCosts.
-// If there are no custom plan costs, it returns 0.
-func (p *planCosts) AvgCustom() memo.Cost {
-	if p.custom.length == 0 {
-		return 0
-	}
-	var sum memo.Cost
-	for i := 0; i < p.custom.length; i++ {
-		sum += p.custom.costs[i]
-	}
-	return sum / memo.Cost(p.custom.length)
-}
-
-// ClearGeneric clears the generic cost.
-func (p *planCosts) ClearGeneric() {
-	p.generic = 0
-}
-
-// ClearCustom clears any previously added custom costs.
-func (p *planCosts) ClearCustom() {
-	p.custom.nextIdx = 0
-	p.custom.length = 0
 }
 
 // preparedStatementsAccessor gives a planner access to a session's collection

@@ -1557,8 +1557,8 @@ message StoreDetails {
   // - settings
   // - encryption settings
 
-  // encryption_status is a serialized
-  // ccl/storageccl/engineccl/enginepbccl/stats.go::EncryptionStatus protobuf.
+  // encryption_status was a serialized EncryptionStatus protobuf. Encrypted
+  // stores are unsupported, so it is never set.
   bytes encryption_status = 2;
 
   // Basic file stats when encryption is enabled.

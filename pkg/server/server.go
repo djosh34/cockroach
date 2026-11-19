@@ -17,7 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"sync"
 	"time"
 
@@ -414,13 +413,6 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 	// Save a reference to this sampler for use by additional servers
 	// started via the server controller.
 	cfg.RuntimeStatSampler = runtimeSampler
-
-	appRegistry.AddMetric(metric.NewFunctionalGauge(base.LicenseTTLMetadata, func() int64 {
-		return base.GetLicenseTTL(ctx, cfg.Settings, timeutil.DefaultTimeSource{})
-	}))
-	appRegistry.AddMetric(metric.NewFunctionalGauge(base.AdditionalLicenseTTLMetadata, func() int64 {
-		return base.GetLicenseTTL(ctx, cfg.Settings, timeutil.DefaultTimeSource{})
-	}))
 
 	// Create and add KV metric rules.
 	kvserver.CreateAndAddRules(ctx, ruleRegistry)
@@ -907,9 +899,6 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 		updates.TestingKnobs = &cfg.TestingKnobs.Server.(*TestingKnobs).DiagnosticsTestingKnobs
 	}
 
-	tenantUsage := NewTenantUsageServer(st, db, insqlDB)
-	nodeRegistry.AddMetricStruct(tenantUsage.Metrics())
-
 	tenantSettingsWatcher := tenantsettingswatcher.New(
 		clock, rangeFeedFactory, stopper, st,
 	)
@@ -925,7 +914,6 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 		gcoords.Regular.GetWorkQueue(admission.KVWork),
 		gcoords.Elastic,
 		gcoords.Stores,
-		tenantUsage,
 		tenantSettingsWatcher,
 		tenantCapabilitiesWatcher,
 		spanConfig.kvAccessor,
@@ -1158,7 +1146,6 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 		rangeFeedFactory:         rangeFeedFactory,
 		sqlStatusServer:          sStatus,
 		tenantStatusServer:       sStatus,
-		tenantUsageServer:        tenantUsage,
 		monitorAndMetrics:        sqlMonitorAndMetrics,
 		settingsStorage:          settingsWriter,
 		eventsExporter:           eventsExporter,
@@ -1635,13 +1622,9 @@ func (s *topLevelServer) PreStart(ctx context.Context) error {
 		listenHTTP:   s.cfg.HTTPAdvertiseAddr,
 	}.Iter()
 
-	encryptedStore := false
 	for _, storeSpec := range s.cfg.Stores.Specs {
 		if storeSpec.InMemory {
 			continue
-		}
-		if storeSpec.IsEncrypted() {
-			encryptedStore = true
 		}
 
 		for name, val := range listenerFiles {
@@ -1864,11 +1847,10 @@ func (s *topLevelServer) PreStart(ctx context.Context) error {
 	// Configure the Sentry reporter to add some additional context to reports.
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetTags(map[string]string{
-			"cluster":         s.StorageClusterID().String(),
-			"node":            s.NodeID().String(),
-			"server_id":       fmt.Sprintf("%s-%s", s.StorageClusterID().Short(), s.NodeID()),
-			"engine_type":     s.cfg.StorageEngine.String(),
-			"encrypted_store": strconv.FormatBool(encryptedStore),
+			"cluster":     s.StorageClusterID().String(),
+			"node":        s.NodeID().String(),
+			"server_id":   fmt.Sprintf("%s-%s", s.StorageClusterID().Short(), s.NodeID()),
+			"engine_type": s.cfg.StorageEngine.String(),
 		})
 	})
 

@@ -12,7 +12,6 @@ package cli
 
 import (
 	"context"
-	"io"
 	"os"
 	"strconv"
 	"time"
@@ -103,8 +102,6 @@ func setServerContextDefaults() {
 	st := cluster.MakeClusterSettings()
 	logcrash.SetGlobalSettings(&st.SV)
 	serverCfg.SetDefaults(context.Background(), st)
-
-	serverCfg.TenantKVAddrs = []string{"127.0.0.1:26257"}
 
 	// Attempt to default serverCfg.MemoryPoolSize to 25% if possible.
 	if bytes, _ := memoryPercentResolver(25); bytes != 0 {
@@ -284,15 +281,6 @@ func setCertContextDefaults() {
 
 var sqlExecCtx = clisqlexec.Context{
 	CliCtx: &cliCtx.Context,
-}
-
-// PrintQueryOutput takes a list of column names and a list of row
-// contents writes a formatted table to 'w'.
-//
-// This binds PrintQueryOutput to this package's common/global
-// CLI configuration, for use by other packages like the CCL CLI.
-func PrintQueryOutput(w io.Writer, cols []string, allRows clisqlexec.RowStrIter) error {
-	return sqlExecCtx.PrintQueryOutput(w, stderr, cols, allRows)
 }
 
 // setSQLConnContextDefaults set the default values in sqlConnCtx.  This
@@ -633,8 +621,7 @@ func setConvContextDefaults() {
 // See below for defaults.
 var demoCtx = struct {
 	democluster.Context
-	disableEnterpriseFeatures bool
-	pidFile                   string
+	pidFile string
 
 	demoNodeCacheSizeValue  bytesOrPercentageValue
 	demoNodeSQLMemSizeValue bytesOrPercentageValue
@@ -655,7 +642,6 @@ func setDemoContextDefaults() {
 	demoCtx.SimulateLatency = false
 	demoCtx.RunWorkload = false
 	demoCtx.Localities = nil
-	demoCtx.GeoPartitionedReplicas = false
 	demoCtx.DefaultKeySize = defaultKeySize
 	demoCtx.DefaultCALifetime = defaultCALifetime
 	demoCtx.DefaultCertLifetime = defaultCertLifetime
@@ -669,7 +655,6 @@ func setDemoContextDefaults() {
 	demoCtx.AutoConfigProvider = acprovider.NoTaskProvider{}
 
 	demoCtx.pidFile = ""
-	demoCtx.disableEnterpriseFeatures = false
 
 	demoCtx.demoNodeCacheSizeValue = makeBytesOrPercentageValue(
 		&demoCtx.CacheSize,
@@ -722,14 +707,4 @@ var userfileCtx struct {
 // every test that exercises command-line parsing.
 func setUserfileContextDefaults() {
 	userfileCtx.recursive = false
-}
-
-// GetServerCfgStores provides direct public access to the StoreSpecList inside
-// serverCfg. This is used by CCL code to populate some fields.
-//
-// WARNING: consider very carefully whether you should be using this.
-// If you are not writing CCL code that performs command-line flag
-// parsing, you probably should not be using this.
-func GetServerCfgStores() base.StoreSpecList {
-	return serverCfg.Stores
 }

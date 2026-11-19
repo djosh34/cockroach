@@ -37,14 +37,13 @@ func (tc *Catalog) CreateIndex(stmt *tree.CreateIndex, version descpb.IndexDescr
 	// Convert stmt to a tree.IndexTableDef so that Table.addIndex can be used
 	// to add the index to the table.
 	indexTableDef := &tree.IndexTableDef{
-		Name:             stmt.Name,
-		Columns:          stmt.Columns,
-		Sharded:          stmt.Sharded,
-		Storing:          stmt.Storing,
-		Inverted:         stmt.Inverted,
-		PartitionByIndex: stmt.PartitionByIndex,
-		Predicate:        stmt.Predicate,
-		Invisibility:     stmt.Invisibility,
+		Name:         stmt.Name,
+		Columns:      stmt.Columns,
+		Sharded:      stmt.Sharded,
+		Storing:      stmt.Storing,
+		Inverted:     stmt.Inverted,
+		Predicate:    stmt.Predicate,
+		Invisibility: stmt.Invisibility,
 	}
 
 	idxType := nonUniqueIndex

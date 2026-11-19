@@ -41,7 +41,6 @@ func TestRandomizedCast(t *testing.T) {
 	evalCtx := eval.MakeTestingEvalContext(st)
 	defer evalCtx.Stop(ctx)
 	evalCtx.Planner = &faketreeeval.DummyEvalPlanner{}
-	evalCtx.StreamManagerFactory = &faketreeeval.DummyStreamManagerFactory{}
 	rng, _ := randutil.NewTestRand()
 
 	getValidSupportedCast := func() (from, to *types.T) {

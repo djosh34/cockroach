@@ -1,12 +1,10 @@
-CockroachDB is variously licensed under the Business Source License 1.1 (BSL)
-and/or the CockroachDB Community License (CCL). You can see which license
-applies to the various CockroachDB features on this page:
-https://www.cockroachlabs.com/docs/stable/licensing-faqs#feature-licensing. The
-default license for anything not listed is the CCL.
+Source code in this repository is licensed under the Apache License, Version
+2.0 (licenses/APL.txt), unless the beginning of a file says otherwise.
 
-The CockroachDB Community License is available at
-https://www.cockroachlabs.com/cockroachdb-community-license/.
+Files with the Business Source License 1.1 header are Apache 2.0 as well. Their
+Change Date, 2026-10-01 (licenses/BSL.txt), has passed, and their Change
+License is the Apache License, Version 2.0.
 
-You can find the applicable Business Source License by reviewing the BSL
-license in the Licenses folder for the applicable version of CockroachDB at
-https://github.com/cockroachdb/cockroach.
+Third-party code keeps the MIT, BSD-style and other licenses named in the
+source code and in the licenses folder. The copyright of the CockroachDB code
+belongs to The Cockroach Authors unless the beginning of a file says otherwise.

@@ -115,10 +115,6 @@ type Builder struct {
 	// flags tracks various properties of the plan accumulated while building.
 	flags exec.PlanFlags
 
-	// containsBoundedStalenessScan is true if the query uses bounded
-	// staleness and contains a scan.
-	containsBoundedStalenessScan bool
-
 	// MaxFullScanRows is the maximum number of rows scanned by a full scan, as
 	// estimated by the optimizer.
 	MaxFullScanRows float64
@@ -153,19 +149,6 @@ type Builder struct {
 	// ScanCounts records the number of times scans were used in the query.
 	ScanCounts [exec.NumScanCountTypes]int
 
-	// builtScans collects all scans in the operation tree so post-build checking
-	// for non-local execution can be done.
-	builtScans []*memo.ScanExpr
-
-	// doScanExprCollection, when true, causes buildScan to add any ScanExprs it
-	// processes to the builtScans slice.
-	doScanExprCollection bool
-
-	// IsANSIDML is true if the AST the execbuilder is working on is one of the
-	// 4 DML statements, SELECT, UPDATE, INSERT, DELETE, or an EXPLAIN of one of
-	// these statements.
-	IsANSIDML bool
-
 	// IndexesUsed list the indexes used in query with the format tableID@indexID.
 	IndexesUsed []string
 }
@@ -190,7 +173,6 @@ func New(
 	semaCtx *tree.SemaContext,
 	evalCtx *eval.Context,
 	allowAutoCommit bool,
-	isANSIDML bool,
 ) *Builder {
 	b := &Builder{
 		factory:                factory,
@@ -203,7 +185,6 @@ func New(
 		evalCtx:                evalCtx,
 		allowAutoCommit:        allowAutoCommit,
 		initialAllowAutoCommit: allowAutoCommit,
-		IsANSIDML:              isANSIDML,
 	}
 	if evalCtx != nil {
 		sd := evalCtx.SessionData()
@@ -339,11 +320,6 @@ func (b *Builder) findBuiltWithExpr(id opt.WithID) *builtWithExpr {
 		}
 	}
 	return nil
-}
-
-// boundedStaleness returns true if this query uses bounded staleness.
-func (b *Builder) boundedStaleness() bool {
-	return b.evalCtx != nil && b.evalCtx.BoundedStaleness()
 }
 
 // mdVarContainer is an eval.IndexedVarContainer implementation used by

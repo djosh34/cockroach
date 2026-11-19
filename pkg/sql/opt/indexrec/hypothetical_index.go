@@ -208,11 +208,6 @@ func (hi *hypotheticalIndex) ImplicitColumnCount() int {
 	return 0
 }
 
-// ImplicitPartitioningColumnCount is part of the cat.Index interface.
-func (hi *hypotheticalIndex) ImplicitPartitioningColumnCount() int {
-	return 0
-}
-
 // GeoConfig is part of the cat.Index interface.
 func (hi *hypotheticalIndex) GeoConfig() geoindex.Config {
 	if hi.IsInverted() {
@@ -230,16 +225,6 @@ func (hi *hypotheticalIndex) GeoConfig() geoindex.Config {
 // Version is part of the cat.Index interface.
 func (hi *hypotheticalIndex) Version() descpb.IndexDescriptorVersion {
 	return descpb.LatestIndexDescriptorVersion
-}
-
-// PartitionCount is part of the cat.Index interface.
-func (hi *hypotheticalIndex) PartitionCount() int {
-	return 0
-}
-
-// Partition is part of the cat.Index interface.
-func (hi *hypotheticalIndex) Partition(i int) cat.Partition {
-	return nil
 }
 
 // hasSameExplicitCols checks whether the given existing index has identical

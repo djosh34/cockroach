@@ -52,13 +52,6 @@ type joinReaderStrategy interface {
 	// getLookupRowsBatchSizeHint returns the size in bytes of the batch of lookup
 	// rows.
 	getLookupRowsBatchSizeHint(*sessiondata.SessionData) int64
-	// generateRemoteSpans generates spans targeting remote nodes for the current
-	// batch of input rows. Returns an error if this is not a locality optimized
-	// lookup join.
-	generateRemoteSpans() (roachpb.Spans, []int, error)
-	// generatedRemoteSpans returns true if generateRemoteSpans has been called on
-	// the current batch of input rows.
-	generatedRemoteSpans() bool
 	// processLookupRows consumes the rows the joinReader has buffered and returns
 	// the lookup spans.
 	//
@@ -117,9 +110,8 @@ type joinReaderStrategy interface {
 type joinReaderNoOrderingStrategy struct {
 	*joinerBase
 	joinReaderSpanGenerator
-	isPartialJoin        bool
-	inputRows            []rowenc.EncDatumRow
-	remoteSpansGenerated bool
+	isPartialJoin bool
+	inputRows     []rowenc.EncDatumRow
 
 	scratchMatchingInputRowIndices []int
 
@@ -181,32 +173,10 @@ func (s *joinReaderNoOrderingStrategy) getLookupRowsBatchSizeHint(
 	return sd.JoinReaderNoOrderingStrategyBatchSize
 }
 
-func (s *joinReaderNoOrderingStrategy) generateRemoteSpans() (roachpb.Spans, []int, error) {
-	gen, ok := s.joinReaderSpanGenerator.(*localityOptimizedSpanGenerator)
-	if !ok {
-		return nil, nil, errors.AssertionFailedf("generateRemoteSpans can only be called for locality optimized lookup joins")
-	}
-
-	if s.EvalCtx.Planner.EnforceHomeRegion() {
-		err := noHomeRegionError
-		if s.EvalCtx.SessionData().EnforceHomeRegionFollowerReadsEnabled {
-			err = execinfra.NewDynamicQueryHasNoHomeRegionError(err)
-		}
-		return nil, nil, err
-	}
-	s.remoteSpansGenerated = true
-	return gen.generateRemoteSpans(s.Ctx(), s.inputRows)
-}
-
-func (s *joinReaderNoOrderingStrategy) generatedRemoteSpans() bool {
-	return s.remoteSpansGenerated
-}
-
 func (s *joinReaderNoOrderingStrategy) processLookupRows(
 	rows []rowenc.EncDatumRow,
 ) (roachpb.Spans, []int, error) {
 	s.inputRows = rows
-	s.remoteSpansGenerated = false
 	s.emitState.unmatchedInputRowIndicesInitialized = false
 	return s.generateSpans(s.Ctx(), s.inputRows)
 }
@@ -401,14 +371,6 @@ func (s *joinReaderIndexJoinStrategy) getLookupRowsBatchSizeHint(
 	return execinfra.GetIndexJoinBatchSize(sd)
 }
 
-func (s *joinReaderIndexJoinStrategy) generateRemoteSpans() (roachpb.Spans, []int, error) {
-	return nil, nil, errors.AssertionFailedf("generateRemoteSpans called on an index join")
-}
-
-func (s *joinReaderIndexJoinStrategy) generatedRemoteSpans() bool {
-	return false
-}
-
 func (s *joinReaderIndexJoinStrategy) processLookupRows(
 	rows []rowenc.EncDatumRow,
 ) (roachpb.Spans, []int, error) {
@@ -492,8 +454,7 @@ type joinReaderOrderingStrategy struct {
 	joinReaderSpanGenerator
 	isPartialJoin bool
 
-	inputRows            []rowenc.EncDatumRow
-	remoteSpansGenerated bool
+	inputRows []rowenc.EncDatumRow
 
 	// inputRowIdxToLookedUpRowIndices is a multimap from input row indices to
 	// corresponding looked up row indices (indexes into the lookedUpRows
@@ -594,26 +555,6 @@ func (s *joinReaderOrderingStrategy) getLookupRowsBatchSizeHint(sd *sessiondata.
 	return sd.JoinReaderOrderingStrategyBatchSize
 }
 
-func (s *joinReaderOrderingStrategy) generateRemoteSpans() (roachpb.Spans, []int, error) {
-	gen, ok := s.joinReaderSpanGenerator.(*localityOptimizedSpanGenerator)
-	if !ok {
-		return nil, nil, errors.AssertionFailedf("generateRemoteSpans can only be called for locality optimized lookup joins")
-	}
-	if s.EvalCtx.Planner.EnforceHomeRegion() {
-		err := noHomeRegionError
-		if s.EvalCtx.SessionData().EnforceHomeRegionFollowerReadsEnabled {
-			err = execinfra.NewDynamicQueryHasNoHomeRegionError(err)
-		}
-		return nil, nil, err
-	}
-	s.remoteSpansGenerated = true
-	return gen.generateRemoteSpans(s.Ctx(), s.inputRows)
-}
-
-func (s *joinReaderOrderingStrategy) generatedRemoteSpans() bool {
-	return s.remoteSpansGenerated
-}
-
 func (s *joinReaderOrderingStrategy) processLookupRows(
 	rows []rowenc.EncDatumRow,
 ) (roachpb.Spans, []int, error) {
@@ -656,7 +597,6 @@ func (s *joinReaderOrderingStrategy) processLookupRows(
 	s.accountedFor.sliceOverhead = sliceOverhead
 
 	s.inputRows = rows
-	s.remoteSpansGenerated = false
 	return s.generateSpans(s.Ctx(), s.inputRows)
 }
 

@@ -13,7 +13,6 @@ package tpcc
 import (
 	gosql "database/sql"
 	"fmt"
-	"strings"
 
 	"github.com/cockroachdb/errors"
 	"golang.org/x/sync/errgroup"
@@ -173,19 +172,12 @@ const (
 	deprecatedTpccOrderLineSchemaFkSuffix = `
 		index order_line_stock_fk_idx (ol_supply_w_id, ol_i_id)`
 
-	localityRegionalByRowSuffix = `
-		locality regional by row`
-	localityGlobalSuffix = `
-		locality global`
-
 	endSchema = "\n\t)"
 )
 
 type schemaOptions struct {
-	fkClause       string
-	familyClause   string
-	columnClause   string
-	localityClause string
+	fkClause     string
+	familyClause string
 }
 
 type makeSchemaOption func(o *schemaOptions)
@@ -206,32 +198,6 @@ func maybeAddColumnFamiliesSuffix(separateColumnFamilies bool, suffix string) ma
 	}
 }
 
-func maybeAddLocalityRegionalByRow(
-	multiRegionCfg multiRegionConfig, partColName string,
-) makeSchemaOption {
-	return func(o *schemaOptions) {
-		if len(multiRegionCfg.regions) > 0 {
-			// We mod the ID by the number of partitions.
-			// This gives an even distribution of rows in each region.
-			// Note new regions being added after initialization time
-			// will not automatically have any data in its partitions.
-			var b strings.Builder
-			fmt.Fprintf(&b, `
-               crdb_region crdb_internal_region NOT VISIBLE NOT NULL AS (
-                       CASE %s %% %d`, partColName, len(multiRegionCfg.regions))
-			for i, region := range multiRegionCfg.regions {
-				fmt.Fprintf(&b, `
-                       WHEN %d THEN '%s'`, i, region)
-			}
-			b.WriteString(`
-                       END
-               ) STORED`)
-			o.columnClause = b.String()
-			o.localityClause = localityRegionalByRowSuffix
-		}
-	}
-}
-
 func makeSchema(base string, opts ...makeSchemaOption) string {
 	var o schemaOptions
 	for _, opt := range opts {
@@ -244,13 +210,7 @@ func makeSchema(base string, opts ...makeSchemaOption) string {
 	if o.familyClause != "" {
 		ret += "," + o.familyClause
 	}
-	if o.columnClause != "" {
-		ret += "," + o.columnClause
-	}
 	ret += endSchema
-	if o.localityClause != "" {
-		ret += o.localityClause
-	}
 	return ret
 }
 

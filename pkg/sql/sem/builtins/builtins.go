@@ -36,7 +36,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/build"
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
-	"github.com/cockroachdb/cockroach/pkg/config/zonepb"
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
 	"github.com/cockroachdb/cockroach/pkg/keys"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvpb"
@@ -46,7 +45,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/telemetry"
 	"github.com/cockroachdb/cockroach/pkg/settings"
-	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql/appstatspb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catalogkeys"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
@@ -2707,14 +2705,8 @@ months and years, use the timestamptz subtraction operator.`,
 against a follower replica.
 
 This function is intended to be used with an AS OF SYSTEM TIME clause to perform
-historical reads against a time which is recent but sufficiently old for reads
-to be performed against the closest replica as opposed to the currently
-leaseholder for a given range.
-
-Note that this function requires an enterprise license on a CCL distribution to
-return a result that is less likely the closest replica. It is otherwise
-hardcoded as %s from the statement time, which may not result in reading from the
-nearest replica.`, builtinconstants.DefaultFollowerReadDuration),
+historical reads against a time which is recent but sufficiently old. It returns
+the statement time plus %s.`, builtinconstants.DefaultFollowerReadDuration),
 			Volatility: volatility.Volatile,
 		},
 	),
@@ -2726,76 +2718,6 @@ nearest replica.`, builtinconstants.DefaultFollowerReadDuration),
 			ReturnType: tree.FixedReturnType(types.TimestampTZ),
 			Fn:         followerReadTimestamp,
 			Info:       fmt.Sprintf("Same as %s. This name is deprecated.", asof.FollowerReadTimestampFunctionName),
-			Volatility: volatility.Volatile,
-		},
-	),
-
-	asof.WithMinTimestampFunctionName: makeBuiltin(
-		defProps(),
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "min_timestamp", Typ: types.TimestampTZ},
-			},
-			ReturnType: tree.FixedReturnType(types.TimestampTZ),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				ts, ok := tree.AsDTimestampTZ(args[0])
-				if !ok {
-					return nil, pgerror.New(pgcode.InvalidParameterValue, "expected timestamptz argument for min_timestamp")
-				}
-				return withMinTimestamp(ctx, evalCtx, ts.Time)
-			},
-			Info:       withMinTimestampInfo(false /* nearestOnly */),
-			Volatility: volatility.Volatile,
-		},
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "min_timestamp", Typ: types.TimestampTZ},
-				{Name: "nearest_only", Typ: types.Bool},
-			},
-			ReturnType: tree.FixedReturnType(types.TimestampTZ),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				ts, ok := tree.AsDTimestampTZ(args[0])
-				if !ok {
-					return nil, pgerror.New(pgcode.InvalidParameterValue, "expected timestamptz argument for min_timestamp")
-				}
-				return withMinTimestamp(ctx, evalCtx, ts.Time)
-			},
-			Info:       withMinTimestampInfo(true /* nearestOnly */),
-			Volatility: volatility.Volatile,
-		},
-	),
-
-	asof.WithMaxStalenessFunctionName: makeBuiltin(
-		defProps(),
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "max_staleness", Typ: types.Interval},
-			},
-			ReturnType: tree.FixedReturnType(types.TimestampTZ),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				interval, ok := tree.AsDInterval(args[0])
-				if !ok {
-					return nil, pgerror.New(pgcode.InvalidParameterValue, "expected interval argument for max_staleness")
-				}
-				return withMaxStaleness(ctx, evalCtx, interval.Duration)
-			},
-			Info:       withMaxStalenessInfo(false /* nearestOnly */),
-			Volatility: volatility.Volatile,
-		},
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "max_staleness", Typ: types.Interval},
-				{Name: "nearest_only", Typ: types.Bool},
-			},
-			ReturnType: tree.FixedReturnType(types.TimestampTZ),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				interval, ok := tree.AsDInterval(args[0])
-				if !ok {
-					return nil, pgerror.New(pgcode.InvalidParameterValue, "expected interval argument for max_staleness")
-				}
-				return withMaxStaleness(ctx, evalCtx, interval.Duration)
-			},
-			Info:       withMaxStalenessInfo(true /* nearestOnly */),
 			Volatility: volatility.Volatile,
 		},
 	),
@@ -6866,90 +6788,6 @@ Parameters:` + randgencfg.ConfigDoc,
 		},
 	),
 
-	// Used to configure the tenant token bucket. See UpdateTenantResourceLimits.
-	"crdb_internal.update_tenant_resource_limits": makeBuiltin(
-		tree.FunctionProperties{
-			Category:     builtinconstants.CategoryMultiTenancy,
-			Undocumented: true,
-		},
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "tenant_id", Typ: types.Int},
-				{Name: "available_request_units", Typ: types.Float},
-				{Name: "refill_rate", Typ: types.Float},
-				{Name: "max_burst_request_units", Typ: types.Float},
-				{Name: "as_of", Typ: types.Timestamp},
-				{Name: "as_of_consumed_request_units", Typ: types.Float},
-			},
-			ReturnType: tree.FixedReturnType(types.Int),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				sTenID, err := mustBeDIntInTenantRange(args[0])
-				if err != nil {
-					return nil, err
-				}
-				availableRU := float64(tree.MustBeDFloat(args[1]))
-				refillRate := float64(tree.MustBeDFloat(args[2]))
-				maxBurstRU := float64(tree.MustBeDFloat(args[3]))
-				asOf := tree.MustBeDTimestamp(args[4]).Time
-				asOfConsumed := float64(tree.MustBeDFloat(args[5]))
-
-				if err := evalCtx.Tenant.UpdateTenantResourceLimits(
-					ctx,
-					uint64(sTenID),
-					availableRU,
-					refillRate,
-					maxBurstRU,
-					asOf,
-					asOfConsumed,
-				); err != nil {
-					return nil, err
-				}
-				return args[0], nil
-			},
-			Info:       "Updates resource limits for the tenant with the provided ID. Must be run by the System tenant.",
-			Volatility: volatility.Volatile,
-		},
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "tenant_name", Typ: types.String},
-				{Name: "available_request_units", Typ: types.Float},
-				{Name: "refill_rate", Typ: types.Float},
-				{Name: "max_burst_request_units", Typ: types.Float},
-				{Name: "as_of", Typ: types.Timestamp},
-				{Name: "as_of_consumed_request_units", Typ: types.Float},
-			},
-			ReturnType: tree.FixedReturnType(types.Int),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				tenantName := roachpb.TenantName(tree.MustBeDString(args[0]))
-				tenantID, err := evalCtx.Tenant.LookupTenantID(ctx, tenantName)
-				if err != nil {
-					return nil, err
-				}
-
-				availableRU := float64(tree.MustBeDFloat(args[1]))
-				refillRate := float64(tree.MustBeDFloat(args[2]))
-				maxBurstRU := float64(tree.MustBeDFloat(args[3]))
-				asOf := tree.MustBeDTimestamp(args[4]).Time
-				asOfConsumed := float64(tree.MustBeDFloat(args[5]))
-
-				if err := evalCtx.Tenant.UpdateTenantResourceLimits(
-					ctx,
-					tenantID.ToUint64(),
-					availableRU,
-					refillRate,
-					maxBurstRU,
-					asOf,
-					asOfConsumed,
-				); err != nil {
-					return nil, err
-				}
-				return tree.NewDInt(tree.DInt((tenantID.ToUint64()))), nil
-			},
-			Info:       "Updates resource limits for the tenant with the provided name. Must be run by the System tenant.",
-			Volatility: volatility.Volatile,
-		},
-	),
-
 	"crdb_internal.compact_engine_span": makeBuiltin(
 		tree.FunctionProperties{
 			Category:         builtinconstants.CategorySystemRepair,
@@ -7064,211 +6902,6 @@ Parameters:` + randgencfg.ConfigDoc,
 		},
 	),
 
-	builtinconstants.GatewayRegionBuiltinName: makeBuiltin(
-		tree.FunctionProperties{
-			Category: builtinconstants.CategoryMultiRegion,
-			// We should always evaluate this built-in at the gateway.
-			DistsqlBlocklist: true,
-		},
-		tree.Overload{
-			Types:      tree.ParamTypes{},
-			ReturnType: tree.FixedReturnType(types.String),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, arg tree.Datums) (tree.Datum, error) {
-				region, found := evalCtx.Locality.Find("region")
-				if !found {
-					return nil, pgerror.Newf(
-						pgcode.ConfigFile,
-						"no region set on the locality flag on this node",
-					)
-				}
-				return tree.NewDString(region), nil
-			},
-			Info: `Returns the region of the connection's current node as defined by
-the locality flag on node startup. Returns an error if no region is set.`,
-			Volatility: volatility.Stable,
-		},
-	),
-	builtinconstants.DefaultToDatabasePrimaryRegionBuiltinName: makeBuiltin(
-		tree.FunctionProperties{
-			Category:         builtinconstants.CategoryMultiRegion,
-			DistsqlBlocklist: true, // applicable only on the gateway
-		},
-		stringOverload1(
-			func(ctx context.Context, evalCtx *eval.Context, s string) (tree.Datum, error) {
-				regionConfig, err := evalCtx.Regions.CurrentDatabaseRegionConfig(ctx)
-				if err != nil {
-					return nil, err
-				}
-				if regionConfig == nil {
-					return nil, pgerror.Newf(
-						pgcode.InvalidDatabaseDefinition,
-						"current database %s is not multi-region enabled",
-						evalCtx.SessionData().Database,
-					)
-				}
-				if regionConfig.IsValidRegionNameString(s) {
-					return tree.NewDString(s), nil
-				}
-				primaryRegion := regionConfig.PrimaryRegionString()
-				return tree.NewDString(primaryRegion), nil
-			},
-			types.String,
-			`Returns the given region if the region has been added to the current database.
-	Otherwise, this will return the primary region of the current database.
-	This will error if the current database is not a multi-region database.`,
-			volatility.Stable,
-		),
-	),
-	builtinconstants.RehomeRowBuiltinName: makeBuiltin(
-		tree.FunctionProperties{
-			Category:         builtinconstants.CategoryMultiRegion,
-			DistsqlBlocklist: true, // applicable only on the gateway
-		},
-		tree.Overload{
-			Types:      tree.ParamTypes{},
-			ReturnType: tree.FixedReturnType(types.String),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, arg tree.Datums) (tree.Datum, error) {
-				regionConfig, err := evalCtx.Regions.CurrentDatabaseRegionConfig(ctx)
-				if err != nil {
-					return nil, err
-				}
-				if regionConfig == nil {
-					return nil, pgerror.Newf(
-						pgcode.InvalidDatabaseDefinition,
-						"current database %s is not multi-region enabled",
-						evalCtx.SessionData().Database,
-					)
-				}
-				gatewayRegion, found := evalCtx.Locality.Find("region")
-				if !found {
-					return nil, pgerror.Newf(
-						pgcode.ConfigFile,
-						"no region set on the locality flag on this node",
-					)
-				}
-				if regionConfig.IsValidRegionNameString(gatewayRegion) {
-					return tree.NewDString(gatewayRegion), nil
-				}
-				primaryRegion := regionConfig.PrimaryRegionString()
-				return tree.NewDString(primaryRegion), nil
-			},
-			Info: `Returns the region of the connection's current node as defined by
-the locality flag on node startup. Returns an error if no region is set.`,
-			Volatility:       volatility.Stable,
-			DistsqlBlocklist: true,
-		},
-	),
-	"crdb_internal.validate_multi_region_zone_configs": makeBuiltin(
-		tree.FunctionProperties{
-			Category:         builtinconstants.CategoryMultiRegion,
-			DistsqlBlocklist: true, // applicable only on the gateway
-		},
-		tree.Overload{
-			Types:      tree.ParamTypes{},
-			ReturnType: tree.FixedReturnType(types.Bool),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				if err := evalCtx.Regions.ValidateAllMultiRegionZoneConfigsInCurrentDatabase(
-					ctx,
-				); err != nil {
-					return nil, err
-				}
-				return tree.MakeDBool(true), nil
-			},
-			Info: `Validates all multi-region zone configurations are correctly setup
-			for the current database, including all tables, indexes and partitions underneath.
-			Returns an error if validation fails. This builtin uses un-leased versions of the
-			each descriptor, requiring extra round trips.`,
-			Volatility: volatility.Volatile,
-		},
-	),
-	"crdb_internal.reset_multi_region_zone_configs_for_table": makeBuiltin(
-		tree.FunctionProperties{
-			Category:         builtinconstants.CategoryMultiRegion,
-			DistsqlBlocklist: true, // applicable only on the gateway
-		},
-		tree.Overload{
-			Types:      tree.ParamTypes{{Name: "id", Typ: types.Int}},
-			ReturnType: tree.FixedReturnType(types.Bool),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				id := int64(*args[0].(*tree.DInt))
-
-				if err := evalCtx.Regions.ResetMultiRegionZoneConfigsForTable(
-					ctx,
-					id,
-				); err != nil {
-					return nil, err
-				}
-				return tree.MakeDBool(true), nil
-			},
-			Info: `Resets the zone configuration for a multi-region table to
-match its original state. No-ops if the given table ID is not a multi-region
-table.`,
-			Volatility: volatility.Volatile,
-		},
-	),
-	"crdb_internal.reset_multi_region_zone_configs_for_database": makeBuiltin(
-		tree.FunctionProperties{
-			Category:         builtinconstants.CategoryMultiRegion,
-			DistsqlBlocklist: true, // applicable only on the gateway
-		},
-		tree.Overload{
-			Types:      tree.ParamTypes{{Name: "id", Typ: types.Int}},
-			ReturnType: tree.FixedReturnType(types.Bool),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				id := int64(*args[0].(*tree.DInt))
-
-				if err := evalCtx.Regions.ResetMultiRegionZoneConfigsForDatabase(
-					ctx,
-					id,
-				); err != nil {
-					return nil, err
-				}
-				return tree.MakeDBool(true), nil
-			},
-			Info: `Resets the zone configuration for a multi-region database to
-match its original state. No-ops if the given database ID is not multi-region
-enabled.`,
-			Volatility: volatility.Volatile,
-		},
-	),
-	"crdb_internal.filter_multiregion_fields_from_zone_config_sql": makeBuiltin(
-		tree.FunctionProperties{
-			Category:         builtinconstants.CategoryMultiRegion,
-			DistsqlBlocklist: true, // applicable only on the gateway
-		},
-		stringOverload1(
-			func(_ context.Context, _ *eval.Context, s string) (tree.Datum, error) {
-				stmt, err := parser.ParseOne(s)
-				if err != nil {
-					// Return the same statement if it does not parse.
-					// This can happen for invalid zone config state, in which case
-					// it is better not to error as opposed to blocking SHOW CREATE TABLE.
-					return tree.NewDString(s), nil //nolint:returnerrcheck
-				}
-				zs, ok := stmt.AST.(*tree.SetZoneConfig)
-				if !ok {
-					return nil, errors.Newf("invalid CONFIGURE ZONE statement (type %T): %s", stmt.AST, stmt)
-				}
-				newKVOptions := zs.Options[:0]
-				for _, opt := range zs.Options {
-					if _, ok := zonepb.MultiRegionZoneConfigFieldsSet[opt.Key]; !ok {
-						newKVOptions = append(newKVOptions, opt)
-					}
-				}
-				if len(newKVOptions) == 0 {
-					return tree.DNull, nil
-				}
-				zs.Options = newKVOptions
-				return tree.NewDString(zs.String()), nil
-			},
-			types.String,
-			`Takes in a CONFIGURE ZONE SQL statement and returns a modified
-SQL statement omitting multi-region related zone configuration fields.
-If the CONFIGURE ZONE statement can be inferred by the database's or
-table's zone configuration this will return NULL.`,
-			volatility.Stable,
-		),
-	),
 	"crdb_internal.reset_index_usage_stats": makeBuiltin(
 		tree.FunctionProperties{
 			Category:         builtinconstants.CategorySystemInfo,
@@ -7433,36 +7066,6 @@ table's zone configuration this will return NULL.`,
 				return evalCtx.Planner.DeserializeSessionState(ctx, tree.NewDBytes(state))
 			},
 			Info:       `This function deserializes the serialized variables into the current session.`,
-			Volatility: volatility.Volatile,
-		},
-	),
-
-	"crdb_internal.create_session_revival_token": makeBuiltin(
-		tree.FunctionProperties{
-			Category: builtinconstants.CategorySystemInfo,
-		},
-		tree.Overload{
-			Types:      tree.ParamTypes{},
-			ReturnType: tree.FixedReturnType(types.Bytes),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				return evalCtx.Planner.CreateSessionRevivalToken()
-			},
-			Info:       `Generate a token that can be used to create a new session for the current user.`,
-			Volatility: volatility.Volatile,
-		},
-	),
-	"crdb_internal.validate_session_revival_token": makeBuiltin(
-		tree.FunctionProperties{
-			Category: builtinconstants.CategorySystemInfo,
-		},
-		tree.Overload{
-			Types:      tree.ParamTypes{{Name: "token", Typ: types.Bytes}},
-			ReturnType: tree.FixedReturnType(types.Bool),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				token := tree.MustBeDBytes(args[0])
-				return evalCtx.Planner.ValidateSessionRevivalToken(&token)
-			},
-			Info:       `Validate a token that was created by create_session_revival_token. Intended for testing.`,
 			Volatility: volatility.Volatile,
 		},
 	),
@@ -8336,82 +7939,6 @@ specified store on the node it's run from. One of 'mvccGC', 'merge', 'split',
 			Volatility: volatility.Immutable,
 		},
 	),
-	"crdb_internal.plpgsql_raise": makeBuiltin(tree.FunctionProperties{
-		Category:     builtinconstants.CategoryString,
-		Undocumented: true,
-	},
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "severity", Typ: types.String},
-				{Name: "message", Typ: types.String},
-				{Name: "detail", Typ: types.String},
-				{Name: "hint", Typ: types.String},
-				{Name: "code", Typ: types.String},
-			},
-			ReturnType: tree.FixedReturnType(types.Int),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				argStrings := make([]string, len(args))
-				for i := range args {
-					if args[i] == tree.DNull {
-						return nil, pgerror.New(
-							pgcode.NullValueNotAllowed, "RAISE statement option cannot be null",
-						)
-					}
-					s, ok := tree.AsDString(args[i])
-					if !ok {
-						return nil, errors.Newf("expected string value, got %T", args[i])
-					}
-					argStrings[i] = string(s)
-				}
-				// Build the error.
-				severity := strings.ToUpper(argStrings[0])
-				if _, ok := pgnotice.ParseDisplaySeverity(severity); !ok {
-					return nil, pgerror.Newf(
-						pgcode.InvalidParameterValue, "severity %s is invalid", severity,
-					)
-				}
-				message := argStrings[1]
-				err := errors.Newf("%s", message)
-				err = pgerror.WithSeverity(err, severity)
-				if detail := argStrings[2]; detail != "" {
-					err = errors.WithDetail(err, detail)
-				}
-				if hint := argStrings[3]; hint != "" {
-					err = errors.WithHint(err, hint)
-				}
-				if codeString := argStrings[4]; codeString != "" {
-					var code string
-					if pgcode.IsValidPGCode(codeString) {
-						code = codeString
-					} else {
-						// The supplied string may be a condition name.
-						if candidates, ok := pgcode.PLpgSQLConditionNameToCode[codeString]; ok {
-							// Some condition names map to more than one code, but postgres
-							// seems to just use the first (smallest) one.
-							code = candidates[0]
-						} else {
-							return nil, pgerror.Newf(pgcode.UndefinedObject,
-								"unrecognized exception condition: \"%s\"", codeString,
-							)
-						}
-					}
-					err = pgerror.WithCandidateCode(err, pgcode.MakeCode(code))
-				}
-				if severity == "ERROR" {
-					// Directly return the error from the function call.
-					return nil, err
-				}
-				// Send the error as a notice to the client, then return NULL.
-				if sendErr := crdbInternalSendNotice(ctx, evalCtx, err); sendErr != nil {
-					return nil, sendErr
-				}
-				return tree.DNull, nil
-			},
-			Info:              "This function is used internally to implement the PLpgSQL RAISE statement.",
-			Volatility:        volatility.Volatile,
-			CalledOnNullInput: true,
-		},
-	),
 	"bitmask_or": makeBuiltin(tree.FunctionProperties{Category: builtinconstants.CategoryString},
 		stringOverload2(
 			"a",
@@ -8605,102 +8132,6 @@ specified store on the node it's run from. One of 'mvccGC', 'merge', 'split',
 			},
 			Info:       "Calculates bitwise XOR value of unsigned bit arrays 'a' and 'b' that may have different lengths.",
 			Volatility: volatility.Immutable,
-		},
-	),
-	"crdb_internal.plpgsql_gen_cursor_name": makeBuiltin(tree.FunctionProperties{
-		Category:     builtinconstants.CategoryIDGeneration,
-		Undocumented: true,
-	},
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "name", Typ: types.RefCursor},
-			},
-			ReturnType: tree.FixedReturnType(types.RefCursor),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				if args[0] == tree.DNull {
-					name := evalCtx.Planner.GenUniqueCursorName()
-					return tree.NewDRefCursor(string(name)), nil
-				}
-				return args[0], nil
-			},
-			Info:              "This function is used internally to generate unique names for PLpgSQL cursors.",
-			Volatility:        volatility.Volatile,
-			CalledOnNullInput: true,
-		},
-	),
-	"crdb_internal.plpgsql_close": makeBuiltin(tree.FunctionProperties{
-		Category:     builtinconstants.CategoryString,
-		Undocumented: true,
-	},
-		tree.Overload{
-			Types:      tree.ParamTypes{{Name: "name", Typ: types.RefCursor}},
-			ReturnType: tree.FixedReturnType(types.Int),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				if args[0] == tree.DNull {
-					return nil, pgerror.New(
-						pgcode.NullValueNotAllowed, "cursor name for CLOSE statement cannot be null",
-					)
-				}
-				return tree.DNull, evalCtx.Planner.PLpgSQLCloseCursor(tree.Name(tree.MustBeDString(args[0])))
-			},
-			Info:              "This function is used internally to implement the PLpgSQL CLOSE statement.",
-			Volatility:        volatility.Volatile,
-			CalledOnNullInput: true,
-		},
-	),
-	"crdb_internal.plpgsql_fetch": makeBuiltin(tree.FunctionProperties{
-		Category:     builtinconstants.CategoryString,
-		Undocumented: true,
-	},
-		tree.Overload{
-			Types: tree.ParamTypes{
-				{Name: "name", Typ: types.RefCursor},
-				{Name: "direction", Typ: types.Int},
-				{Name: "count", Typ: types.Int},
-				{Name: "resultTypes", Typ: types.Any},
-			},
-			ReturnType: tree.IdentityReturnType(3),
-			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				for i := range args {
-					if args[i] == tree.DNull {
-						return nil, pgerror.New(
-							pgcode.NullValueNotAllowed, "FETCH statement option cannot be null",
-						)
-					}
-				}
-				cursorName := tree.MustBeDString(args[0])
-				cursorDir := tree.MustBeDInt(args[1])
-				cursorCount := tree.MustBeDInt(args[2])
-				resultTypes := args[3].(tree.TypedExpr).ResolvedType().TupleContents()
-				if cursorDir < 0 || cursorDir > tree.DInt(tree.FetchBackwardAll) {
-					return nil, pgerror.Newf(pgcode.InvalidParameterValue, "invalid fetch/move direction: %d", cursorDir)
-				}
-				cursor := &tree.CursorStmt{
-					Name:      tree.Name(cursorName),
-					FetchType: tree.FetchType(cursorDir),
-					Count:     int64(cursorCount),
-				}
-				row, err := evalCtx.Planner.PLpgSQLFetchCursor(ctx, cursor)
-				if err != nil {
-					return nil, err
-				}
-				res := make(tree.Datums, len(resultTypes))
-				for i := 0; i < len(resultTypes); i++ {
-					if i < len(row) {
-						res[i], err = eval.PerformCastNoTruncate(ctx, evalCtx, row[i], resultTypes[i])
-						if err != nil {
-							return nil, err
-						}
-					} else {
-						res[i] = tree.DNull
-					}
-				}
-				tup := tree.MakeDTuple(types.MakeTuple(resultTypes), res...)
-				return &tup, nil
-			},
-			Info:              "This function is used internally to implement the PLpgSQL FETCH and MOVE statements.",
-			Volatility:        volatility.Volatile,
-			CalledOnNullInput: true,
 		},
 	),
 }
@@ -11286,118 +10717,11 @@ var errInsufficientPriv = pgerror.New(
 	pgcode.InsufficientPrivilege, "insufficient privilege",
 )
 
-// EvalFollowerReadOffset is a function used often with AS OF SYSTEM TIME queries
-// to determine the appropriate offset from now which is likely to be safe for
-// follower reads. It is injected by followerreadsccl. An error may be returned
-// if an enterprise license is not installed.
-var EvalFollowerReadOffset func(logicalClusterID uuid.UUID, _ *cluster.Settings) (time.Duration, error)
-
-func recentTimestamp(ctx context.Context, evalCtx *eval.Context) (time.Time, error) {
-	if EvalFollowerReadOffset == nil {
-		telemetry.Inc(sqltelemetry.FollowerReadDisabledCCLCounter)
-		evalCtx.ClientNoticeSender.BufferClientNotice(
-			ctx,
-			pgnotice.Newf("follower reads disabled because you are running a non-CCL distribution"),
-		)
-		return evalCtx.StmtTimestamp.Add(builtinconstants.DefaultFollowerReadDuration), nil
-	}
-	offset, err := EvalFollowerReadOffset(evalCtx.ClusterID, evalCtx.Settings)
-	if err != nil {
-		if code := pgerror.GetPGCode(err); code == pgcode.CCLValidLicenseRequired {
-			telemetry.Inc(sqltelemetry.FollowerReadDisabledNoEnterpriseLicense)
-			evalCtx.ClientNoticeSender.BufferClientNotice(
-				ctx, pgnotice.Newf("follower reads disabled: %s", err.Error()),
-			)
-			return evalCtx.StmtTimestamp.Add(builtinconstants.DefaultFollowerReadDuration), nil
-		}
-		return time.Time{}, err
-	}
-	return evalCtx.StmtTimestamp.Add(offset), nil
-}
-
 func followerReadTimestamp(
-	ctx context.Context, evalCtx *eval.Context, _ tree.Datums,
+	_ context.Context, evalCtx *eval.Context, _ tree.Datums,
 ) (tree.Datum, error) {
-	ts, err := recentTimestamp(ctx, evalCtx)
-	if err != nil {
-		return nil, err
-	}
+	ts := evalCtx.StmtTimestamp.Add(builtinconstants.DefaultFollowerReadDuration)
 	return tree.MakeDTimestampTZ(ts, time.Microsecond)
-}
-
-var (
-	// WithMinTimestamp is an injectable function containing the implementation of the
-	// with_min_timestamp builtin.
-	WithMinTimestamp = func(_ context.Context, _ *eval.Context, t time.Time) (time.Time, error) {
-		return time.Time{}, pgerror.Newf(
-			pgcode.CCLRequired,
-			"%s can only be used with a CCL distribution",
-			asof.WithMinTimestampFunctionName,
-		)
-	}
-	// WithMaxStaleness is an injectable function containing the implementation of the
-	// with_max_staleness builtin.
-	WithMaxStaleness = func(_ context.Context, _ *eval.Context, d duration.Duration) (time.Time, error) {
-		return time.Time{}, pgerror.Newf(
-			pgcode.CCLRequired,
-			"%s can only be used with a CCL distribution",
-			asof.WithMaxStalenessFunctionName,
-		)
-	}
-)
-
-const nearestOnlyInfo = `
-
-If nearest_only is set to true, reads that cannot be served using the nearest
-available replica will error.
-`
-
-func withMinTimestampInfo(nearestOnly bool) string {
-	var nearestOnlyText string
-	if nearestOnly {
-		nearestOnlyText = nearestOnlyInfo
-	}
-	return fmt.Sprintf(
-		`When used in the AS OF SYSTEM TIME clause of an single-statement,
-read-only transaction, CockroachDB chooses the newest timestamp before the min_timestamp
-that allows execution of the reads at the nearest available replica without blocking.%s
-
-Note this function requires an enterprise license on a CCL distribution.`,
-		nearestOnlyText,
-	)
-}
-
-func withMaxStalenessInfo(nearestOnly bool) string {
-	var nearestOnlyText string
-	if nearestOnly {
-		nearestOnlyText = nearestOnlyInfo
-	}
-	return fmt.Sprintf(
-		`When used in the AS OF SYSTEM TIME clause of an single-statement,
-read-only transaction, CockroachDB chooses the newest timestamp within the staleness
-bound that allows execution of the reads at the nearest available replica without blocking.%s
-
-Note this function requires an enterprise license on a CCL distribution.`,
-		nearestOnlyText,
-	)
-}
-
-func withMinTimestamp(ctx context.Context, evalCtx *eval.Context, t time.Time) (tree.Datum, error) {
-	t, err := WithMinTimestamp(ctx, evalCtx, t)
-	if err != nil {
-		return nil, err
-	}
-	return tree.MakeDTimestampTZ(t, time.Microsecond)
-}
-
-func withMaxStaleness(
-	ctx context.Context, evalCtx *eval.Context, d duration.Duration,
-) (tree.Datum, error) {
-	t, err := WithMaxStaleness(ctx, evalCtx, d)
-	if err != nil {
-		return nil, err
-	}
-	return tree.MakeDTimestampTZ(t, time.Microsecond)
 }
 
 func jsonNumInvertedIndexEntries(_ *eval.Context, val tree.Datum) (tree.Datum, error) {

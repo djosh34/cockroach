@@ -72,7 +72,6 @@ func TestingSaveRegistry() func() {
 var systemSettingsWithPreviousApplicationClass = map[InternalKey]struct{}{
 	// Changed in v23.2.
 	"cluster.organization":                        {},
-	"enterprise.license":                          {},
 	"kv.bulk_io_write.concurrent_export_requests": {},
 	"kv.closed_timestamp.propagation_slack":       {},
 	"kv.closed_timestamp.side_transport_interval": {},
@@ -227,6 +226,21 @@ var retiredSettings = map[InternalKey]struct{}{
 	"trace.jaeger.agent":                                       {},
 	"bulkio.restore.use_simple_import_spans":                   {},
 	"bulkio.restore.remove_regions.enabled":                    {},
+
+	// removed with multi-region, partitioning, changefeeds and session revival.
+	"server.user_login.session_revival_token.enabled":                    {},
+	"sql.defaults.experimental_auto_rehoming.enabled":                    {},
+	"sql.defaults.experimental_implicit_column_partitioning.enabled":     {},
+	"sql.defaults.locality_optimized_partitioned_index_scan.enabled":     {},
+	"sql.defaults.multiregion_placement_policy.enabled":                  {},
+	"sql.defaults.on_update_rehome_row.enabled":                          {},
+	"sql.defaults.override_alter_primary_region_in_super_region.enabled": {},
+	"sql.defaults.override_multi_region_zone_config.enabled":             {},
+	"sql.defaults.primary_region":                                        {},
+	"sql.defaults.super_regions.enabled":                                 {},
+	"sql.multi_region.allow_abstractions_for_secondary_tenants.enabled":  {},
+	"sql.multiregion.drop_primary_region.enabled":                        {},
+	"sql.ttl.changefeed_replication.disabled":                            {},
 }
 
 // sqlDefaultSettings is the list of "grandfathered" existing sql.defaults

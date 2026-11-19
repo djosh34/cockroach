@@ -721,12 +721,7 @@ func TestServeIndexHTML(t *testing.T) {
 			require.NoError(t, err)
 
 			respString := string(respBytes)
-			// Since server test package links ccl, build.GetInfo() says that we
-			// think we're using CCL distribution (even though this test file is
-			// in `server` and not in `server_test`). However, serverutils
-			// doesn't link ccl, so it says it uses OSS distribution. Reconcile
-			// this mismatch.
-			buildInfo := strings.Replace(build.GetInfo().Short(), "CockroachDB CCL", "CockroachDB OSS", 1)
+			buildInfo := build.GetInfo().Short()
 			expected := fmt.Sprintf(`<!DOCTYPE html>
 <title>CockroachDB</title>
 Binary built without web UI.
@@ -757,7 +752,7 @@ Binary built without web UI.
 			respBytes, err = io.ReadAll(resp.Body)
 			require.NoError(t, err)
 			expected := fmt.Sprintf(
-				`{"Insecure":true,"LoggedInUser":null,"Tag":"%s","Version":"%s","NodeID":"%d","OIDCAutoLogin":false,"OIDCLoginEnabled":false,"OIDCButtonText":"","FeatureFlags":{"can_view_kv_metric_dashboards":true},"OIDCGenerateJWTAuthTokenEnabled":false,"LicenseType":"OSS","SecondsUntilLicenseExpiry":0}`,
+				`{"Insecure":true,"LoggedInUser":null,"Tag":"%s","Version":"%s","NodeID":"%d","FeatureFlags":{"can_view_kv_metric_dashboards":true}}`,
 				build.GetInfo().Tag,
 				build.BinaryVersionPrefix(),
 				1,
@@ -785,7 +780,7 @@ Binary built without web UI.
 			{
 				loggedInClient,
 				fmt.Sprintf(
-					`{"Insecure":false,"LoggedInUser":"authentic_user","Tag":"%s","Version":"%s","NodeID":"%d","OIDCAutoLogin":false,"OIDCLoginEnabled":false,"OIDCButtonText":"","FeatureFlags":{"can_view_kv_metric_dashboards":true},"OIDCGenerateJWTAuthTokenEnabled":false,"LicenseType":"OSS","SecondsUntilLicenseExpiry":0}`,
+					`{"Insecure":false,"LoggedInUser":"authentic_user","Tag":"%s","Version":"%s","NodeID":"%d","FeatureFlags":{"can_view_kv_metric_dashboards":true}}`,
 					build.GetInfo().Tag,
 					build.BinaryVersionPrefix(),
 					1,
@@ -794,7 +789,7 @@ Binary built without web UI.
 			{
 				loggedOutClient,
 				fmt.Sprintf(
-					`{"Insecure":false,"LoggedInUser":null,"Tag":"%s","Version":"%s","NodeID":"%d","OIDCAutoLogin":false,"OIDCLoginEnabled":false,"OIDCButtonText":"","FeatureFlags":{"can_view_kv_metric_dashboards":true},"OIDCGenerateJWTAuthTokenEnabled":false,"LicenseType":"OSS","SecondsUntilLicenseExpiry":0}`,
+					`{"Insecure":false,"LoggedInUser":null,"Tag":"%s","Version":"%s","NodeID":"%d","FeatureFlags":{"can_view_kv_metric_dashboards":true}}`,
 					build.GetInfo().Tag,
 					build.BinaryVersionPrefix(),
 					1,

@@ -332,49 +332,12 @@ func (p *planner) dropIndexByName(
 		return nil
 	}
 
-	if tableDesc.IsLocalityRegionalByRow() {
-		if err := p.checkNoRegionChangeUnderway(
-			ctx,
-			tableDesc.GetParentID(),
-			"DROP INDEX on a REGIONAL BY ROW table",
-		); err != nil {
-			return err
-		}
-	}
-
 	if idx.IsUnique() && behavior != tree.DropCascade && constraintBehavior != ignoreIdxConstraint && !idx.IsCreatedExplicitly() {
 		return errors.WithHint(
 			pgerror.Newf(pgcode.DependentObjectsStillExist,
 				"index %q is in use as unique constraint", idx.GetName()),
 			"use CASCADE if you really want to drop it.",
 		)
-	}
-
-	// Check if requires CCL binary for eventual zone config removal.
-	_, zone, _, err := GetZoneConfigInTxn(
-		ctx, p.txn, p.Descriptors(), tableDesc.ID, nil /* index */, "", false,
-	)
-	if err != nil {
-		return err
-	}
-
-	for _, s := range zone.Subzones {
-		if s.IndexID != uint32(idx.GetID()) {
-			_, err = GenerateSubzoneSpans(
-				p.ExecCfg().Settings,
-				p.ExecCfg().NodeInfo.LogicalClusterID(),
-				p.ExecCfg().Codec,
-				tableDesc,
-				zone.Subzones,
-				false, /* newSubzones */
-			)
-			if sqlerrors.IsCCLRequiredError(err) {
-				return sqlerrors.NewCCLRequiredError(fmt.Errorf("schema change requires a CCL binary "+
-					"because table %q has at least one remaining index or partition with a zone config",
-					tableDesc.Name))
-			}
-			break
-		}
 	}
 
 	// Remove all foreign key references and backreferences from the index.

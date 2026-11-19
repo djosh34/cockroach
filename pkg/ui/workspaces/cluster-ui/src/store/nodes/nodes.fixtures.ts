@@ -45,7 +45,7 @@ export const getNodeStatus = (): INodeStatus => {
       revision: "a51f2e212a71ee356a01f14510238baac65e76e7",
       cgo_compiler: "Apple LLVM 12.0.0 (clang-1200.0.32.28)",
       platform: "darwin amd64",
-      distribution: "CCL",
+      distribution: "OSS",
       type: "development",
       channel: "unknown",
       cgo_target_triple: "x86_64-apple-darwin20.2.0",

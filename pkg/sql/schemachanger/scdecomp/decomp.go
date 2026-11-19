@@ -149,12 +149,6 @@ func (w *walkCtx) walkDatabase(db catalog.DatabaseDescriptor) {
 			Comment:    comment,
 		})
 	}
-	if db.IsMultiRegion() {
-		w.ev(scpb.Status_PUBLIC, &scpb.DatabaseRegionConfig{
-			DatabaseID:       db.GetID(),
-			RegionEnumTypeID: db.GetRegionConfig().RegionEnumID,
-		})
-	}
 	w.ev(scpb.Status_PUBLIC, &scpb.DatabaseData{DatabaseID: db.GetID()})
 	_ = db.ForEachSchema(func(id descpb.ID, name string) error {
 		w.backRefs.Add(id)
@@ -190,9 +184,8 @@ func (w *walkCtx) walkType(typ catalog.TypeDescriptor) {
 		})
 	} else if enum := typ.AsEnumTypeDescriptor(); enum != nil {
 		w.ev(descriptorStatus(enum), &scpb.EnumType{
-			TypeID:        enum.GetID(),
-			ArrayTypeID:   enum.GetArrayTypeID(),
-			IsMultiRegion: enum.AsRegionEnumTypeDescriptor() != nil,
+			TypeID:      enum.GetID(),
+			ArrayTypeID: enum.GetArrayTypeID(),
 		})
 		for ord := 0; ord < enum.NumEnumMembers(); ord++ {
 			w.ev(descriptorStatus(enum), &scpb.EnumTypeValue{
@@ -351,9 +344,6 @@ func (w *walkCtx) walkRelation(tbl catalog.TableDescriptor) {
 			TableID: tbl.GetID(),
 		})
 	}
-	if l := tbl.GetLocalityConfig(); l != nil {
-		w.walkLocality(tbl, l)
-	}
 	{
 		if comment, ok := w.commentReader.GetTableComment(tbl.GetID()); ok {
 			w.ev(scpb.Status_PUBLIC, &scpb.TableComment{
@@ -431,43 +421,6 @@ func (w *walkCtx) walkRelation(tbl catalog.TableDescriptor) {
 	}
 	if tbl.IsSchemaLocked() {
 		w.ev(scpb.Status_PUBLIC, &scpb.TableSchemaLocked{TableID: tbl.GetID()})
-	}
-}
-
-func (w *walkCtx) walkLocality(tbl catalog.TableDescriptor, l *catpb.LocalityConfig) {
-	if g := l.GetGlobal(); g != nil {
-		w.ev(scpb.Status_PUBLIC, &scpb.TableLocalityGlobal{
-			TableID: tbl.GetID(),
-		})
-		return
-	} else if rbr := l.GetRegionalByRow(); rbr != nil {
-		var as string
-		if rbr.As != nil {
-			as = *rbr.As
-		}
-		w.ev(scpb.Status_PUBLIC, &scpb.TableLocalityRegionalByRow{
-			TableID: tbl.GetID(),
-			As:      as,
-		})
-	} else if rbt := l.GetRegionalByTable(); rbt != nil {
-		if rgn := rbt.Region; rgn != nil {
-			parent := w.lookupFn(tbl.GetParentID())
-			db, err := catalog.AsDatabaseDescriptor(parent)
-			if err != nil {
-				panic(err)
-			}
-			id, err := db.MultiRegionEnumID()
-			if err != nil {
-				panic(err)
-			}
-			w.ev(scpb.Status_PUBLIC, &scpb.TableLocalitySecondaryRegion{
-				TableID:          tbl.GetID(),
-				RegionName:       *rgn,
-				RegionEnumTypeID: id,
-			})
-		} else {
-			w.ev(scpb.Status_PUBLIC, &scpb.TableLocalityPrimaryRegion{TableID: tbl.GetID()})
-		}
 	}
 }
 

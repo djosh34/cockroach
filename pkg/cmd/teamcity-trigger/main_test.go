@@ -25,10 +25,7 @@ func TestGetMaxTime(t *testing.T) {
 		"//pkg/kv/kvserver": {
 			maxTime: 3 * time.Hour,
 		},
-		"//pkg/ccl/backupccl": {
-			maxTime: 2 * time.Hour,
-		},
-		"//pkg/ccl/logictestccl/tests/3node-tenant": {
+		"//pkg/sql/logictest/tests/local": {
 			maxTime: 2 * time.Hour,
 		},
 		"//some/recursive/path": {
@@ -48,7 +45,7 @@ func TestGetMaxTime(t *testing.T) {
 			out: 3 * time.Hour,
 		},
 		{
-			in:  "//pkg/ccl/backupccl:backupccl_test",
+			in:  "//pkg/sql/logictest/tests/local:local_test",
 			out: 2 * time.Hour,
 		},
 		{

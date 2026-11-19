@@ -28,7 +28,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
-	plpgsql "github.com/cockroachdb/cockroach/pkg/sql/plpgsql/parser"
 	"github.com/cockroachdb/cockroach/pkg/sql/privilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/schemachanger/scbuild/internal/scbuildstmt"
 	"github.com/cockroachdb/cockroach/pkg/sql/schemachanger/scdecomp"
@@ -37,8 +36,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/schemachanger/screl"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catid"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/plpgsqltree"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/plpgsqltree/utils"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlerrors"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
@@ -506,98 +503,6 @@ func (b *builderState) nextIndexID(id catid.DescID) (ret catid.IndexID) {
 			}
 		}
 	})
-	return ret
-}
-
-// IndexPartitioningDescriptor implements the scbuildstmt.TableHelpers
-// interface.
-func (b *builderState) IndexPartitioningDescriptor(
-	indexName string, index *scpb.Index, columns []*scpb.IndexColumn, partBy *tree.PartitionBy,
-) catpb.PartitioningDescriptor {
-	b.ensureDescriptor(index.TableID)
-	bd := b.descCache[index.TableID]
-	desc := bd.desc
-	tbl, ok := desc.(catalog.TableDescriptor)
-	if !ok {
-		panic(errors.AssertionFailedf("Expected table descriptor for ID %d, instead got %s",
-			desc.GetID(), desc.DescriptorType()))
-	}
-	var oldNumImplicitColumns int
-
-	scpb.ForEachIndexPartitioning(
-		b.QueryByID(index.TableID),
-		func(_ scpb.Status, _ scpb.TargetStatus, p *scpb.IndexPartitioning) {
-			if p.IndexID == index.IndexID {
-				oldNumImplicitColumns = int(p.PartitioningDescriptor.NumImplicitColumns)
-			}
-		},
-	)
-
-	keyColumns := make([]*scpb.IndexColumn, 0, len(columns))
-	for _, column := range columns {
-		if column.Kind != scpb.IndexColumn_KEY {
-			continue
-		}
-		keyColumns = append(keyColumns, column)
-	}
-	sort.Slice(keyColumns, func(i, j int) bool {
-		return keyColumns[i].OrdinalInKind < keyColumns[j].OrdinalInKind
-	})
-	oldKeyColumnNames := make([]string, len(keyColumns))
-	for i, ic := range keyColumns {
-		scpb.ForEachColumnName(
-			b.QueryByID(index.TableID),
-			func(_ scpb.Status, _ scpb.TargetStatus, cn *scpb.ColumnName) {
-				if cn.ColumnID != ic.ColumnID {
-					return
-				}
-				oldKeyColumnNames[i] = cn.Name
-			},
-		)
-	}
-	var allowedNewColumnNames []tree.Name
-	scpb.ForEachColumnName(
-		b.QueryByID(index.TableID),
-		func(current scpb.Status, target scpb.TargetStatus, cn *scpb.ColumnName) {
-			if current != scpb.Status_PUBLIC && target == scpb.ToPublic {
-				allowedNewColumnNames = append(allowedNewColumnNames, tree.Name(cn.Name))
-			}
-		},
-	)
-	allowImplicitPartitioning := b.evalCtx.SessionData().ImplicitColumnPartitioningEnabled ||
-		tbl.IsLocalityRegionalByRow()
-	_, ret, err := b.createPartCCL(
-		b.ctx,
-		b.clusterSettings,
-		b.evalCtx,
-		func(name tree.Name) (catalog.Column, error) {
-			return catalog.MustFindColumnByTreeName(tbl, name)
-		},
-		oldNumImplicitColumns,
-		oldKeyColumnNames,
-		partBy,
-		allowedNewColumnNames,
-		allowImplicitPartitioning, /* allowImplicitPartitioning */
-	)
-	if err != nil {
-		panic(err)
-	}
-	// Validate the index partitioning descriptor.
-	partitionNames := make(map[string]struct{})
-	for _, rangePart := range ret.Range {
-		if _, ok := partitionNames[rangePart.Name]; ok {
-			panic(pgerror.Newf(pgcode.InvalidObjectDefinition, "PARTITION %s: name must be unique (used twice in index %q)",
-				rangePart.Name, indexName))
-		}
-		partitionNames[rangePart.Name] = struct{}{}
-	}
-	for _, listPart := range ret.List {
-		if _, ok := partitionNames[listPart.Name]; ok {
-			panic(pgerror.Newf(pgcode.InvalidObjectDefinition, "PARTITION %s: name must be unique (used twice in index %q)",
-				listPart.Name, indexName))
-		}
-		partitionNames[listPart.Name] = struct{}{}
-	}
 	return ret
 }
 
@@ -1576,19 +1481,8 @@ func (b *builderState) replaceSeqNamesWithIDs(
 			fmtCtx.FormatNode(newStmt)
 			fmtCtx.WriteString(";")
 		}
-	case catpb.Function_PLPGSQL:
-		var stmts plpgsqltree.Statement
-		plstmt, err := plpgsql.Parse(queryStr)
-		if err != nil {
-			panic(errors.Wrap(err, "failed to parse query string"))
-		}
-		stmts = plstmt.AST
-
-		v := utils.SQLStmtVisitor{Fn: replaceSeqFunc}
-		newStmt := plpgsqltree.Walk(&v, stmts)
-		fmtCtx.FormatNode(newStmt)
 	default:
-		panic(errors.AssertionFailedf("unexpected function language: %s", lang))
+		panic(pgerror.Newf(pgcode.FeatureNotSupported, "routine language %s is unsupported", lang))
 	}
 	return fmtCtx.String()
 }
@@ -1645,29 +1539,6 @@ func (b *builderState) serializeUserDefinedTypes(
 		}
 		return false, parsedExpr, nil
 	}
-	// replaceTypeFunc is a visitor function that replaces type annotations
-	// containing user defined types with their IDs. This is currently only
-	// necessary for some kinds of PLpgSQL statements.
-	replaceTypeFunc := func(typ tree.ResolvableTypeReference) (newTyp tree.ResolvableTypeReference, err error) {
-		if typ == nil {
-			return typ, nil
-		}
-		// semaCtx may be nil if this is a virtual view being created at
-		// init time.
-		var typeResolver tree.TypeReferenceResolver
-		if b.semaCtx != nil {
-			typeResolver = b.semaCtx.TypeResolver
-		}
-		var t *types.T
-		t, err = tree.ResolveType(b.ctx, typ, typeResolver)
-		if err != nil {
-			return typ, err
-		}
-		if !t.UserDefined() {
-			return typ, nil
-		}
-		return &tree.OIDTypeReference{OID: t.Oid()}, nil
-	}
 
 	fmtCtx := tree.NewFmtCtx(tree.FmtSimple)
 	switch lang {
@@ -1692,25 +1563,8 @@ func (b *builderState) serializeUserDefinedTypes(
 			fmtCtx.FormatNode(newStmt)
 			fmtCtx.WriteString(";")
 		}
-	case catpb.Function_PLPGSQL:
-		var stmts plpgsqltree.Statement
-		plstmt, err := plpgsql.Parse(queryStr)
-		if err != nil {
-			panic(errors.Wrap(err, "failed to parse query string"))
-		}
-		stmts = plstmt.AST
-
-		v := utils.SQLStmtVisitor{Fn: replaceFunc}
-		newStmt := plpgsqltree.Walk(&v, stmts)
-		// Some PLpgSQL statements (i.e., declarations), may contain type
-		// annotations containing the UDT. We need to walk the AST to replace them,
-		// too.
-		v2 := utils.TypeRefVisitor{Fn: replaceTypeFunc}
-		newStmt = plpgsqltree.Walk(&v2, newStmt)
-		fmtCtx.FormatNode(newStmt)
-		fmtCtx.WriteString(";")
 	default:
-		panic(errors.AssertionFailedf("unexpected function language: %s", lang))
+		panic(pgerror.Newf(pgcode.FeatureNotSupported, "routine language %s is unsupported", lang))
 	}
 	return fmtCtx.CloseAndGetString()
 }

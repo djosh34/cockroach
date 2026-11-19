@@ -6,9 +6,9 @@ dir="$(dirname $(dirname $(dirname $(dirname "${0}"))))"
 
 if [ -z "${TAGS-}" ]
 then
-    TAGS=bazel,gss
+    TAGS=bazel
 else
-    TAGS="bazel,gss,$TAGS"
+    TAGS="bazel,$TAGS"
 fi
 
 GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)

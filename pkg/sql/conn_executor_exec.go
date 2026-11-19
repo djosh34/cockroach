@@ -13,7 +13,6 @@ package sql
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"fmt"
 	"runtime/pprof"
 	"strings"
@@ -44,7 +43,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgnotice"
 	"github.com/cockroachdb/cockroach/pkg/sql/physicalplan"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/asof"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
@@ -569,12 +567,6 @@ func (ex *connExecutor) execStmtInOpenState(
 				}
 			}
 		}
-
-		// Enforce license policies. Throttling can occur if there is no valid
-		// license or if it has expired.
-		if err := ex.server.cfg.LicenseEnforcer.MaybeFailIfThrottled(ctx, curOpen); err != nil {
-			return makeErrEvent(err)
-		}
 	}
 
 	// Special top-level handling for EXPLAIN ANALYZE.
@@ -1089,38 +1081,6 @@ func (ex *connExecutor) execStmtInOpenState(
 		stmtCtx = ctx
 	}
 
-	var rollbackHomeRegionSavepoint *tree.RollbackToSavepoint
-	var releaseHomeRegionSavepoint *tree.ReleaseSavepoint
-	enforceHomeRegion := p.EnforceHomeRegion()
-	_, isSelectStmt := stmt.AST.(*tree.Select)
-	// TODO(sql-sessions): ensure this is not broken for pausable portals.
-	// https://github.com/cockroachdb/cockroach/issues/99408
-	if enforceHomeRegion && ex.state.mu.txn.IsOpen() && isSelectStmt {
-		// Create a savepoint at a point before which rows were read so that we can
-		// roll back to it, which will allow the txn to be modified with a
-		// historical timestamp (so that the locality-optimized ops used for error
-		// reporting can run locally and not incur latency). This is currently only
-		// supported for SELECT statements.
-		// Add some unprintable ASCII characters to the name of the savepoint to
-		// decrease the likelihood of collision with a user-created savepoint.
-		const enforceHomeRegionSavepointName = "enforce_home_region_sp\x11\x12\x13"
-		s := &tree.Savepoint{Name: enforceHomeRegionSavepointName}
-		var event fsm.Event
-		var eventPayload fsm.EventPayload
-		if event, eventPayload, err = ex.execSavepointInOpenState(ctx, s, res); err != nil {
-			return event, eventPayload, err
-		}
-
-		releaseHomeRegionSavepoint = &tree.ReleaseSavepoint{Savepoint: enforceHomeRegionSavepointName}
-		rollbackHomeRegionSavepoint = &tree.RollbackToSavepoint{Savepoint: enforceHomeRegionSavepointName}
-		defer func() {
-			// The default case is to roll back the internally-generated savepoint
-			// after every request. We only need it if a retryable "query has no home
-			// region" error occurs.
-			ex.execRelease(ctx, releaseHomeRegionSavepoint, res)
-		}()
-	}
-
 	if ex.state.mu.txn.IsoLevel() == isolation.ReadCommitted &&
 		!ex.implicitTxn() &&
 		ex.executorType != executorTypeInternal {
@@ -1161,54 +1121,6 @@ func (ex *connExecutor) execStmtInOpenState(
 	}
 
 	if err = res.Err(); err != nil {
-		setErrorAndRestoreLocality := func(err error) {
-			res.SetError(err)
-			// We won't be faking the gateway region any more. Restore the original
-			// locality.
-			p.EvalContext().Locality = p.EvalContext().OriginalLocality
-		}
-		if execinfra.IsDynamicQueryHasNoHomeRegionError(err) {
-			if rollbackHomeRegionSavepoint != nil {
-				// A retryable "query has no home region" error has occurred.
-				// Roll back to the internal savepoint in preparation for the next
-				// planning and execution of this query with a different gateway region
-				// (as considered by the optimizer).
-				p.StmtNoConstantsWithHomeRegionEnforced = p.stmt.StmtNoConstants
-				event, eventPayload := ex.execRollbackToSavepointInOpenState(
-					ctx, rollbackHomeRegionSavepoint, res,
-				)
-				_, isTxnRestart := event.(eventTxnRestart)
-				rollbackToSavepointFailed := !isTxnRestart || eventPayload != nil
-				if ex.implicitTxn() && rollbackToSavepointFailed {
-					err = errors.AssertionFailedf(
-						"unable to roll back to internal savepoint for enforce_home_region",
-					)
-					setErrorAndRestoreLocality(err)
-				} else if rollbackToSavepointFailed || int(ex.state.mu.autoRetryCounter) == len(ex.planner.EvalContext().RemoteRegions) {
-					// If rollback to savepoint in the transaction failed (perhaps because
-					// the txn was aborted) and we're in an explicit transaction, or we
-					// have retried the statement using each remote region as a fake
-					// gateway region, then give up and return the generic "query has no
-					// home region" error message.
-					err = execinfra.MaybeGetNonRetryableDynamicQueryHasNoHomeRegionError(err)
-					setErrorAndRestoreLocality(err)
-				}
-			} else {
-				err = execinfra.MaybeGetNonRetryableDynamicQueryHasNoHomeRegionError(err)
-				setErrorAndRestoreLocality(err)
-			}
-		} else if execinfra.IsDynamicQueryHasNoHomeRegionError(ex.state.mu.autoRetryReason) {
-			// If we are retrying a dynamic "query has no home region" error and
-			// we get a different error message when executing with locality-optimized
-			// ops using a different local region (for example, relation does not
-			// exist, due to the AOST read), return the original error message in
-			// non-retryable form.
-			errorMessage := err.Error()
-			if !strings.HasPrefix(errorMessage, execinfra.QueryNotRunningInHomeRegionMessagePrefix) {
-				err = execinfra.MaybeGetNonRetryableDynamicQueryHasNoHomeRegionError(ex.state.mu.autoRetryReason)
-				setErrorAndRestoreLocality(err)
-			}
-		}
 		return makeErrEvent(err)
 	}
 
@@ -1245,23 +1157,6 @@ func (ex *connExecutor) handleAOST(ctx context.Context, stmt tree.Statement) err
 		return errors.AssertionFailedf(
 			"cannot handle AOST clause without a transaction",
 		)
-	} else if execinfra.IsDynamicQueryHasNoHomeRegionError(ex.state.mu.autoRetryReason) {
-		asOfClause := tree.AsOfClause{Expr: followerReadTimestampExpr}
-		// Set the timestamp used by current_timestamp().
-		asOf, err := p.EvalAsOfTimestamp(ctx, asOfClause, asof.OptionAllowBoundedStaleness)
-		if err != nil {
-			return errors.AssertionFailedf(
-				"problem evaluating follower read timestamp for enforce_home_region dynamic error checking",
-			)
-		}
-		// Set up AOST in the txn so re-running of the query with different possible
-		// home regions does not have to read rows from remote regions.
-		p.extendedEvalCtx.SetTxnTimestamp(asOf.Timestamp.GoTime())
-		if err := ex.state.setHistoricalTimestamp(ctx, asOf.Timestamp); err != nil {
-			// If the table was just created, we may not be able to set a historical
-			// timestamp.
-			return execinfra.MaybeGetNonRetryableDynamicQueryHasNoHomeRegionError(ex.state.mu.autoRetryReason)
-		}
 	}
 	asOf, err := p.isAsOf(ctx, stmt)
 	if err != nil {
@@ -1276,11 +1171,9 @@ func (ex *connExecutor) handleAOST(ctx context.Context, stmt tree.Statement) err
 	if ex.implicitTxn() && !ex.extraTxnState.firstStmtExecuted {
 		if p.extendedEvalCtx.AsOfSystemTime == nil {
 			p.extendedEvalCtx.AsOfSystemTime = asOf
-			if !asOf.BoundedStaleness {
-				p.extendedEvalCtx.SetTxnTimestamp(asOf.Timestamp.GoTime())
-				if err := ex.state.setHistoricalTimestamp(ctx, asOf.Timestamp); err != nil {
-					return err
-				}
+			p.extendedEvalCtx.SetTxnTimestamp(asOf.Timestamp.GoTime())
+			if err := ex.state.setHistoricalTimestamp(ctx, asOf.Timestamp); err != nil {
+				return err
 			}
 			if err := ex.state.setReadOnlyMode(tree.ReadOnly); err != nil {
 				return err
@@ -1291,14 +1184,6 @@ func (ex *connExecutor) handleAOST(ctx context.Context, stmt tree.Statement) err
 		if *p.extendedEvalCtx.AsOfSystemTime == *asOf {
 			// In most cases, the AOST timestamps are expected to match.
 			return nil
-		}
-		if p.extendedEvalCtx.AsOfSystemTime.BoundedStaleness {
-			if !p.extendedEvalCtx.AsOfSystemTime.MaxTimestampBound.IsEmpty() {
-				// This has to be a bounded staleness read with nearest_only=True during
-				// a retry. The AOST read timestamps are expected to differ.
-				return nil
-			}
-			return errors.AssertionFailedf("expected bounded_staleness set with a max_timestamp_bound")
 		}
 		return pgerror.Newf(
 			pgcode.FeatureNotSupported,
@@ -1311,12 +1196,6 @@ func (ex *connExecutor) handleAOST(ctx context.Context, stmt tree.Statement) err
 	// the transaction's timestamp. This is useful for running AOST statements
 	// using the Executor inside an external transaction; one might want
 	// to do that to force p.avoidLeasedDescriptors to be set below.
-	if asOf.BoundedStaleness {
-		return pgerror.Newf(
-			pgcode.FeatureNotSupported,
-			"cannot use a bounded staleness query in a transaction",
-		)
-	}
 	if readTs := ex.state.getReadTimestamp(); asOf.Timestamp != readTs {
 		err = pgerror.Newf(pgcode.FeatureNotSupported,
 			"inconsistent AS OF SYSTEM TIME timestamp; expected: %s, got: %s", readTs, asOf.Timestamp)
@@ -1384,14 +1263,10 @@ func (ex *connExecutor) resetTransactionOnSchemaChangeRetry(ctx context.Context)
 	ex.state.mu.Lock()
 	defer ex.state.mu.Unlock()
 	userPriority := ex.state.mu.txn.UserPriority()
-	omitInRangefeeds := ex.state.mu.txn.GetOmitInRangefeeds()
 	newTxn := kv.NewTxnWithSteppingEnabled(ctx, ex.transitionCtx.db,
 		ex.transitionCtx.nodeIDOrZero, ex.QualityOfService())
 	if err := newTxn.SetUserPriority(userPriority); err != nil {
 		return err
-	}
-	if omitInRangefeeds {
-		newTxn.SetOmitInRangefeeds()
 	}
 	ex.state.mu.txn = newTxn
 	return nil
@@ -1520,11 +1395,7 @@ func (ex *connExecutor) commitSQLTransactionInternal(ctx context.Context) (retEr
 	}
 
 	if ex.extraTxnState.descCollection.HasUncommittedDescriptors() {
-		zoneConfigValidator := newZoneConfigValidator(ex.state.mu.txn,
-			ex.extraTxnState.descCollection,
-			ex.planner.regionsProvider(),
-			ex.planner.execCfg)
-		if err := ex.extraTxnState.descCollection.ValidateUncommittedDescriptors(ctx, ex.state.mu.txn, ex.extraTxnState.validateDbZoneConfig, zoneConfigValidator); err != nil {
+		if err := ex.extraTxnState.descCollection.ValidateUncommittedDescriptors(ctx, ex.state.mu.txn); err != nil {
 			return err
 		}
 
@@ -1822,12 +1693,12 @@ func (ex *connExecutor) dispatchToExecutionEngine(
 				},
 			})
 		} else {
-			// Note that for bulk job query (IMPORT, BACKUP and RESTORE), we don't
+			// Note that for bulk job query (IMPORT), we don't
 			// use this numRows entry. We emit the number of changed rows when the job
 			// completes. (see the usages of logutil.LogJobCompletion()).
 			nonBulkJobNumRows := res.RowsAffected()
 			switch planner.stmt.AST.(type) {
-			case *tree.Import, *tree.Restore, *tree.Backup:
+			case *tree.Import:
 				bulkJobId = res.GetBulkJobId()
 			}
 			planner.maybeLogStatement(
@@ -2011,36 +1882,6 @@ func (ex *connExecutor) dispatchToExecutionEngine(
 
 	if limitsErr := ex.handleTxnRowsWrittenReadLimits(ctx); limitsErr != nil && res.Err() == nil {
 		res.SetError(limitsErr)
-	}
-	if res.Err() == nil && err == nil {
-		autoRetryReason := ex.state.mu.autoRetryReason
-		if execinfra.IsDynamicQueryHasNoHomeRegionError(autoRetryReason) {
-			if homeRegion, ok := planner.EvalContext().Locality.Find("region"); ok &&
-				planner.StmtNoConstantsWithHomeRegionEnforced == planner.stmt.StmtNoConstants {
-				// If this is the same query as ran when the dynamic "query has no home
-				// region" error occurred, but this time it didn't error out, report
-				// back the query's home region.
-				err = pgerror.Newf(pgcode.QueryNotRunningInHomeRegion,
-					`%s. Try running the query from region '%s'. %s`,
-					execinfra.QueryNotRunningInHomeRegionMessagePrefix,
-					homeRegion,
-					sqlerrors.EnforceHomeRegionFurtherInfo,
-				)
-				res.SetError(err)
-				// We won't be faking the gateway region any more. Restore the original
-				// locality.
-				planner.EvalContext().Locality = planner.EvalContext().OriginalLocality
-				return nil
-			}
-			// If for some reason we're not running the same query as before, report
-			// the original "query has no home region" error in non-retryable form.
-			err = execinfra.MaybeGetNonRetryableDynamicQueryHasNoHomeRegionError(autoRetryReason)
-			res.SetError(err)
-			// We won't be faking the gateway region any more. Restore the original
-			// locality.
-			planner.EvalContext().Locality = planner.EvalContext().OriginalLocality
-			return nil
-		}
 	}
 
 	return err
@@ -2560,7 +2401,6 @@ func (ex *connExecutor) execStmtInNoTxnState(
 				ex.transitionCtx,
 				ex.QualityOfService(),
 				ex.txnIsolationLevelToKV(ctx, s.Modes.Isolation),
-				ex.omitInRangefeeds(),
 			)
 	case *tree.ShowCommitTimestamp:
 		return ex.execShowCommitTimestampInNoTxnState(ctx, s, res)
@@ -2587,7 +2427,6 @@ func (ex *connExecutor) execStmtInNoTxnState(
 				ex.transitionCtx,
 				ex.QualityOfService(),
 				ex.txnIsolationLevelToKV(ctx, tree.UnspecifiedIsolation),
-				ex.omitInRangefeeds(),
 			)
 	}
 }
@@ -2620,7 +2459,6 @@ func (ex *connExecutor) beginImplicitTxn(
 			ex.transitionCtx,
 			qos,
 			ex.txnIsolationLevelToKV(ctx, tree.UnspecifiedIsolation),
-			ex.omitInRangefeeds(),
 		)
 }
 
@@ -2738,8 +2576,6 @@ func (ex *connExecutor) runObserverStatement(
 		return nil
 	case *tree.ShowLastQueryStatistics:
 		return ex.runShowLastQueryStatistics(ctx, res, sqlStmt)
-	case *tree.ShowTransferState:
-		return ex.runShowTransferState(ctx, res, sqlStmt)
 	case *tree.ShowCompletions:
 		return ex.runShowCompletions(ctx, sqlStmt, res)
 	default:
@@ -2777,93 +2613,6 @@ func (ex *connExecutor) runShowTransactionState(
 
 	state := fmt.Sprintf("%s", ex.machine.CurState())
 	return res.AddRow(ctx, tree.Datums{tree.NewDString(state)})
-}
-
-// sessionStateBase64 returns the serialized session state in a base64 form.
-// See runShowTransferState for more information.
-//
-// Note: Do not use a planner here because this is used in the context of an
-// observer statement.
-func (ex *connExecutor) sessionStateBase64() (tree.Datum, error) {
-	// Observer statements do not use implicit transactions at all, so
-	// we look at CurState() directly.
-	_, isNoTxn := ex.machine.CurState().(stateNoTxn)
-	state, err := serializeSessionState(
-		!isNoTxn, &ex.extraTxnState.prepStmtsNamespace, ex.sessionData(),
-		ex.server.cfg,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return tree.NewDString(base64.StdEncoding.EncodeToString([]byte(*state))), nil
-}
-
-// sessionRevivalTokenBase64 creates a session revival token and returns it in
-// a base64 form. See runShowTransferState for more information.
-//
-// Note: Do not use a planner here because this is used in the context of an
-// observer statement.
-func (ex *connExecutor) sessionRevivalTokenBase64() (tree.Datum, error) {
-	cm, err := ex.server.cfg.RPCContext.SecurityContext.GetCertificateManager()
-	if err != nil {
-		return nil, err
-	}
-	token, err := createSessionRevivalToken(
-		AllowSessionRevival.Get(&ex.server.cfg.Settings.SV) && !ex.server.cfg.Codec.ForSystemTenant(),
-		ex.sessionData(),
-		cm,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return tree.NewDString(base64.StdEncoding.EncodeToString([]byte(*token))), nil
-}
-
-// runShowTransferState executes a SHOW TRANSFER STATE statement.
-//
-// If an error is returned, the connection needs to stop processing queries.
-func (ex *connExecutor) runShowTransferState(
-	ctx context.Context, res RestrictedCommandResult, stmt *tree.ShowTransferState,
-) error {
-	// The transfer_key column must always be the last.
-	colNames := []string{
-		"error", "session_state_base64", "session_revival_token_base64",
-	}
-	if stmt.TransferKey != nil {
-		colNames = append(colNames, "transfer_key")
-	}
-	cols := make(colinfo.ResultColumns, len(colNames))
-	for i := 0; i < len(colNames); i++ {
-		cols[i] = colinfo.ResultColumn{Name: colNames[i], Typ: types.String}
-	}
-	res.SetColumns(ctx, cols)
-
-	var sessionState, sessionRevivalToken tree.Datum
-	var row tree.Datums
-	err := func() error {
-		// NOTE: These functions are executed in the context of an observer
-		// statement, and observer statements do not get planned, so a planner
-		// should not be used.
-		var err error
-		if sessionState, err = ex.sessionStateBase64(); err != nil {
-			return err
-		}
-		if sessionRevivalToken, err = ex.sessionRevivalTokenBase64(); err != nil {
-			return err
-		}
-		return nil
-	}()
-	if err != nil {
-		// When an error occurs, only show the error column (plus transfer_key
-		// column if it exists), and NULL for everything else.
-		row = []tree.Datum{tree.NewDString(err.Error()), tree.DNull, tree.DNull}
-	} else {
-		row = []tree.Datum{tree.DNull, sessionState, sessionRevivalToken}
-	}
-	if stmt.TransferKey != nil {
-		row = append(row, tree.NewDString(stmt.TransferKey.RawString()))
-	}
-	return res.AddRow(ctx, row)
 }
 
 // runShowCompletions executes a SHOW COMPLETIONS statement.

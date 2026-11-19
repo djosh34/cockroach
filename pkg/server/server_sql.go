@@ -57,7 +57,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/autoconfig"
 	"github.com/cockroachdb/cockroach/pkg/server/diagnostics"
-	"github.com/cockroachdb/cockroach/pkg/server/license"
 	"github.com/cockroachdb/cockroach/pkg/server/pgurl"
 	"github.com/cockroachdb/cockroach/pkg/server/serverctl"
 	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
@@ -74,7 +73,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/spanconfig/spanconfigsqltranslator"
 	"github.com/cockroachdb/cockroach/pkg/spanconfig/spanconfigsqlwatcher"
 	"github.com/cockroachdb/cockroach/pkg/sql"
-	"github.com/cockroachdb/cockroach/pkg/sql/auditlogging"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catalogkeys"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catsessiondata"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descidgen"
@@ -387,7 +385,6 @@ type sqlServerArgs struct {
 	tenantStatusServer serverpb.TenantStatusServer
 
 	// Used for multi-tenant cost control (on the storage cluster side).
-	tenantUsageServer multitenant.TenantUsageServer
 
 	// Used for multi-tenant cost control (on the tenant side).
 	costController multitenant.TenantSideCostController
@@ -662,7 +659,6 @@ func newSQLServer(ctx context.Context, cfg sqlServerArgs) (*SQLServer, error) {
 			},
 			jobAdoptionStopFile,
 			jobsKnobs,
-			cfg.CidrLookup,
 		)
 	}
 	cfg.registry.AddMetricStruct(jobRegistry.MetricsStruct())
@@ -976,9 +972,6 @@ func newSQLServer(ctx context.Context, cfg sqlServerArgs) (*SQLServer, error) {
 		SessionInitCache: sessioninit.NewCache(
 			serverCacheMemoryMonitor.MakeBoundAccount(), cfg.stopper,
 		),
-		AuditConfig: &auditlogging.AuditConfigLock{
-			Config: auditlogging.EmptyAuditConfig(),
-		},
 		RootMemoryMonitor:           rootSQLMemoryMonitor,
 		TestingKnobs:                sqlExecutorTestingKnobs,
 		CompactEngineSpanFunc:       storageEngineClient.CompactEngineSpan,
@@ -986,7 +979,6 @@ func newSQLServer(ctx context.Context, cfg sqlServerArgs) (*SQLServer, error) {
 		GetTableMetricsFunc:         storageEngineClient.GetTableMetrics,
 		ScanStorageInternalKeysFunc: storageEngineClient.ScanStorageInternalKeys,
 		TraceCollector:              traceCollector,
-		TenantUsageServer:           cfg.tenantUsageServer,
 		KVStoresIterator:            cfg.kvStoresIterator,
 		InspectzServer:              cfg.inspectzServer,
 		RangeDescIteratorFactory:    cfg.rangeDescIteratorFactory,
@@ -1037,7 +1029,6 @@ func newSQLServer(ctx context.Context, cfg sqlServerArgs) (*SQLServer, error) {
 		NodeDescs:                  cfg.nodeDescs,
 		TenantCapabilitiesReader:   cfg.tenantCapabilitiesReader,
 		AutoConfigProvider:         cfg.AutoConfigProvider,
-		LicenseEnforcer:            license.GetEnforcerInstance(),
 		CidrLookup:                 cfg.BaseConfig.CidrLookup,
 	}
 
@@ -1084,12 +1075,6 @@ func newSQLServer(ctx context.Context, cfg sqlServerArgs) (*SQLServer, error) {
 	}
 	if tenantKnobs := cfg.TestingKnobs.TenantTestingKnobs; tenantKnobs != nil {
 		execCfg.TenantTestingKnobs = tenantKnobs.(*sql.TenantTestingKnobs)
-	}
-	if backupRestoreKnobs := cfg.TestingKnobs.BackupRestore; backupRestoreKnobs != nil {
-		execCfg.BackupRestoreTestingKnobs = backupRestoreKnobs.(*sql.BackupRestoreTestingKnobs)
-	}
-	if streamTestingKnobs := cfg.TestingKnobs.Streaming; streamTestingKnobs != nil {
-		execCfg.StreamingTestingKnobs = streamTestingKnobs.(*sql.StreamingTestingKnobs)
 	}
 	if ttlKnobs := cfg.TestingKnobs.TTL; ttlKnobs != nil {
 		execCfg.TTLTestingKnobs = ttlKnobs.(*sql.TTLTestingKnobs)
@@ -1380,8 +1365,6 @@ func newSQLServer(ctx context.Context, cfg sqlServerArgs) (*SQLServer, error) {
 	vmoduleSetting.SetOnChange(&cfg.Settings.SV, fn)
 	fn(ctx)
 
-	auditlogging.ConfigureRoleBasedAuditClusterSettings(ctx, execCfg.AuditConfig, execCfg.Settings, &execCfg.Settings.SV)
-
 	return &SQLServer{
 		ambientCtx:                     cfg.BaseConfig.AmbientCtx,
 		stopper:                        cfg.stopper,
@@ -1480,31 +1463,26 @@ func (s *SQLServer) preStart(
 		return errors.Wrap(err, "initializing settings")
 	}
 
-	// Load the multi-region enum by reading the system database's descriptor.
-	// This also serves as a simple check to see if a tenant exist (i.e. by
-	// checking whether the system db has been bootstrapped).
-	regionPhysicalRep, err := startup.RunIdempotentWithRetryEx(ctx,
+	// Read the system database's descriptor. This serves as a simple check to
+	// see if a tenant exists (i.e. by checking whether the system db has been
+	// bootstrapped).
+	if _, err := startup.RunIdempotentWithRetryEx(ctx,
 		stopper.ShouldQuiesce(),
-		"sql get locality",
-		func(ctx context.Context) ([]byte, error) {
-			res, err := sql.GetLocalityRegionEnumPhysicalRepresentation(
-				ctx, s.internalDB, keys.SystemDatabaseID, s.distSQLServer.Locality,
-			)
-			if errors.Is(err, sql.ErrNotMultiRegionDatabase) {
-				err = nil
-			}
-			return res, err
-		})
-	if err != nil {
+		"sql get system database",
+		func(ctx context.Context) (struct{}, error) {
+			return struct{}{}, s.internalDB.DescsTxn(ctx, func(ctx context.Context, txn descs.Txn) error {
+				_, err := txn.Descriptors().ByID(txn.KV()).Get().Database(ctx, keys.SystemDatabaseID)
+				return err
+			})
+		}); err != nil {
 		return err
 	}
 
-	s.leaseMgr.SetRegionPrefix(regionPhysicalRep)
-
 	s.execCfg.ContentionRegistry.Start(ctx, stopper)
 
-	// Start the sql liveness subsystem. We'll need it to get a session.
-	s.sqlLivenessProvider.Start(ctx, regionPhysicalRep)
+	// Start the sql liveness subsystem. We'll need it to get a session. The
+	// system database has a single region, so the default region prefix is used.
+	s.sqlLivenessProvider.Start(ctx, nil /* regionPhysicalRep */)
 
 	session, err := s.sqlLivenessProvider.Session(ctx)
 	if err != nil {
@@ -1514,7 +1492,7 @@ func (s *SQLServer) preStart(
 
 	// Start instance ID reclaim loop.
 	if err := s.sqlInstanceStorage.RunInstanceIDReclaimLoop(
-		ctx, stopper, timeutil.DefaultTimeSource{}, s.internalDB, session,
+		ctx, stopper, timeutil.DefaultTimeSource{}, session,
 	); err != nil {
 		return err
 	}
@@ -1710,8 +1688,6 @@ func (s *SQLServer) preStart(
 	)
 	s.execCfg.SyntheticPrivilegeCache.Start(ctx)
 
-	s.startLicenseEnforcer(ctx, knobs)
-
 	// Report a warning if the server is being shut down via the stopper
 	// before it was gracefully drained. This warning may be innocuous
 	// in tests where there is no use of the test server/cluster after
@@ -1905,34 +1881,6 @@ func (s *SQLServer) SQLInstanceID() base.SQLInstanceID {
 // testing.
 func (s *SQLServer) StartDiagnostics(ctx context.Context) {
 	s.diagnosticsReporter.PeriodicallyReportDiagnostics(ctx, s.stopper)
-}
-
-func (s *SQLServer) startLicenseEnforcer(ctx context.Context, knobs base.TestingKnobs) {
-	// Start the license enforcer. This is only started for the system tenant since
-	// it requires access to the system keyspace. For secondary tenants, this struct
-	// is shared to provide access to the values cached from the KV read.
-	if s.execCfg.Codec.ForSystemTenant() {
-		licenseEnforcer := s.execCfg.LicenseEnforcer
-		if knobs.Server != nil {
-			s.execCfg.LicenseEnforcer.SetTestingKnobs(&knobs.Server.(*TestingKnobs).LicenseTestingKnobs)
-		}
-		licenseEnforcer.SetTelemetryStatusReporter(s.diagnosticsReporter)
-		// TODO(spilchen): we need to tell the license enforcer about the
-		// diagnostics reporter. This will be handled in CRDB-39991
-		err := startup.RunIdempotentWithRetry(ctx, s.stopper.ShouldQuiesce(), "license enforcer start",
-			func(ctx context.Context) error {
-				return licenseEnforcer.Start(ctx, s.cfg.Settings, s.internalDB)
-			})
-		// This is not a critical component. If it fails to start, we log a warning
-		// rather than prevent the entire server from starting.
-		if err != nil {
-			log.Warningf(ctx, "failed to start the license enforcer: %v", err)
-		}
-	}
-}
-
-func (s *SQLServer) disableLicenseEnforcement(ctx context.Context) {
-	s.execCfg.LicenseEnforcer.Disable(ctx)
 }
 
 // AnnotateCtx annotates the given context with the server tracer and tags.

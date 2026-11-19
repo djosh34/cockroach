@@ -18,16 +18,13 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catenumpb"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catsessiondata"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/multiregion"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/tabledesc"
 	"github.com/cockroachdb/cockroach/pkg/sql/paramparse"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgnotice"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlerrors"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqltelemetry"
@@ -35,28 +32,8 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-// alterPrimaryKeyLocalitySwap contains metadata on a locality swap for
-// AlterPrimaryKey.
-type alterPrimaryKeyLocalitySwap struct {
-	localityConfigSwap descpb.PrimaryKeySwap_LocalityConfigSwap
-	// mutationIdxAllowedInSameTxn is the index of the mutation which is
-	// allowed to exist in the same transaction as an ALTER PRIMARY KEY.
-	// It is required for the case where we're adding a column to the table
-	// (the implicit crdb_internal_region column) as part of a PRIMARY KEY
-	// change, when transitioning a table to REGIONAL BY ROW.
-	// It is nilable to prevent the 0 index from being used in case the struct
-	// is initialized with values improperly set.
-	mutationIdxAllowedInSameTxn *int
-	// newColumnName is set if we are creating a new column before doing the
-	// ALTER PRIMARY KEY, for similar reasons as above.
-	newColumnName *tree.Name
-}
-
 func (p *planner) AlterPrimaryKey(
-	ctx context.Context,
-	tableDesc *tabledesc.Mutable,
-	alterPKNode tree.AlterTableAlterPrimaryKey,
-	alterPrimaryKeyLocalitySwap *alterPrimaryKeyLocalitySwap,
+	ctx context.Context, tableDesc *tabledesc.Mutable, alterPKNode tree.AlterTableAlterPrimaryKey,
 ) error {
 	if err := paramparse.ValidateUniqueConstraintParams(
 		alterPKNode.StorageParams,
@@ -68,24 +45,6 @@ func (p *planner) AlterPrimaryKey(
 		return err
 	}
 
-	if alterPrimaryKeyLocalitySwap != nil {
-		if err := p.checkNoRegionChangeUnderway(
-			ctx,
-			tableDesc.GetParentID(),
-			"perform this locality change",
-		); err != nil {
-			return err
-		}
-	} else if tableDesc.IsLocalityRegionalByRow() {
-		if err := p.checkNoRegionChangeUnderway(
-			ctx,
-			tableDesc.GetParentID(),
-			"perform a primary key change on a REGIONAL BY ROW table",
-		); err != nil {
-			return err
-		}
-	}
-
 	// Ensure that other schema changes on this table are not currently
 	// executing, and that other schema changes have not been performed
 	// in the current transaction.
@@ -93,18 +52,9 @@ func (p *planner) AlterPrimaryKey(
 	for i := range tableDesc.Mutations {
 		mut := &tableDesc.Mutations[i]
 		if mut.MutationID == currentMutationID {
-			errBase := "primary key"
-			if alterPrimaryKeyLocalitySwap != nil {
-				allowIdx := alterPrimaryKeyLocalitySwap.mutationIdxAllowedInSameTxn
-				if allowIdx != nil && *allowIdx == i {
-					continue
-				}
-				errBase = "locality"
-			}
 			return unimplemented.NewWithIssuef(
 				45510,
-				"cannot perform a %[1]s change on %[2]s with other schema changes on %[2]s in the same transaction",
-				errBase,
+				"cannot perform a primary key change on %[1]s with other schema changes on %[1]s in the same transaction",
 				tableDesc.Name,
 			)
 		}
@@ -154,7 +104,7 @@ func (p *planner) AlterPrimaryKey(
 	// primary index, which would mean nothing needs to be modified
 	// here.
 	{
-		requiresIndexChange, err := p.shouldCreateIndexes(ctx, tableDesc, &alterPKNode, alterPrimaryKeyLocalitySwap)
+		requiresIndexChange, err := p.shouldCreateIndexes(ctx, tableDesc, &alterPKNode)
 		if err != nil {
 			return err
 		}
@@ -255,132 +205,11 @@ func (p *planner) AlterPrimaryKey(
 		return err
 	}
 
-	var allowedNewColumnNames []tree.Name
 	var err error
-	// isNewPartitionAllBy is set if a new PARTITION ALL BY statement is introduced.
-	isNewPartitionAllBy := false
-	var partitionAllBy *tree.PartitionBy
-	// dropPartitionAllBy is set if we should be dropping the PARTITION ALL BY component.
-	dropPartitionAllBy := false
-
-	allowImplicitPartitioning := false
-
-	if alterPrimaryKeyLocalitySwap != nil {
-		localityConfigSwap := alterPrimaryKeyLocalitySwap.localityConfigSwap
-		switch to := localityConfigSwap.NewLocalityConfig.Locality.(type) {
-		case *catpb.LocalityConfig_RegionalByRow_:
-			// Check we are migrating from a known locality.
-			switch localityConfigSwap.OldLocalityConfig.Locality.(type) {
-			case *catpb.LocalityConfig_RegionalByRow_:
-				// We want to drop the old PARTITION ALL BY clause in this case for all
-				// the indexes if we were from a REGIONAL BY ROW.
-				dropPartitionAllBy = true
-			case *catpb.LocalityConfig_Global_,
-				*catpb.LocalityConfig_RegionalByTable_:
-			default:
-				return errors.AssertionFailedf(
-					"unknown locality config swap: %T to %T",
-					localityConfigSwap.OldLocalityConfig.Locality,
-					localityConfigSwap.NewLocalityConfig.Locality,
-				)
-			}
-
-			isNewPartitionAllBy = true
-			allowImplicitPartitioning = true
-			colName := tree.RegionalByRowRegionDefaultColName
-			if as := to.RegionalByRow.As; as != nil {
-				colName = tree.Name(*as)
-			}
-			regionConfig, err := SynthesizeRegionConfig(
-				ctx, p.txn, tableDesc.GetParentID(), p.Descriptors(),
-			)
-			if err != nil {
-				return err
-			}
-			partitionAllBy = multiregion.PartitionByForRegionalByRow(
-				regionConfig,
-				colName,
-			)
-			if alterPrimaryKeyLocalitySwap.newColumnName != nil {
-				allowedNewColumnNames = append(
-					allowedNewColumnNames,
-					*alterPrimaryKeyLocalitySwap.newColumnName,
-				)
-			}
-		case *catpb.LocalityConfig_Global_,
-			*catpb.LocalityConfig_RegionalByTable_:
-			// We should only migrating from a REGIONAL BY ROW.
-			if localityConfigSwap.OldLocalityConfig.GetRegionalByRow() == nil {
-				return errors.AssertionFailedf(
-					"unknown locality config swap: %T to %T",
-					localityConfigSwap.OldLocalityConfig.Locality,
-					localityConfigSwap.NewLocalityConfig.Locality,
-				)
-			}
-			// We don't want a PARTITION ALL BY anymore.
-			dropPartitionAllBy = true
-		default:
-			return errors.AssertionFailedf(
-				"unknown locality config swap: %T to %T",
-				localityConfigSwap.OldLocalityConfig.Locality,
-				localityConfigSwap.NewLocalityConfig.Locality,
-			)
-		}
-	} else if tableDesc.IsPartitionAllBy() {
-		allowImplicitPartitioning = true
-		partitionAllBy, err = partitionByFromTableDesc(p.ExecCfg().Codec, tableDesc)
-		if err != nil {
-			return err
-		}
-	}
-
-	if partitionAllBy != nil {
-		newImplicitCols, newPartitioning, err := CreatePartitioning(
-			ctx,
-			p.ExecCfg().Settings,
-			p.EvalContext(),
-			tableDesc,
-			*newPrimaryIndexDesc,
-			partitionAllBy,
-			allowedNewColumnNames,
-			allowImplicitPartitioning,
-		)
-		if err != nil {
-			return err
-		}
-		tabledesc.UpdateIndexPartitioning(
-			newPrimaryIndexDesc, true, /* isIndexPrimary */
-			newImplicitCols, newPartitioning,
-		)
-
-		// We need to now also update the partitioning for the new temp primary
-		// index. If we didn't, it wouldn't be partitioned, and writes which
-		// were merged into the new primary index will be wrong.
-		//
-		// We know that the temp index will have the subsequent index ID.
-		// This is hacky, sure, but it's about as good of an invariant
-		// as most of this code relies upon for correctness. This code will
-		// all be replaced by code in the declarative schema changer before
-		// too long where we'll model this all correctly.
-		newTempPrimaryIndex, err := catalog.MustFindIndexByID(tableDesc, newPrimaryIndexDesc.ID+1)
-		if err != nil {
-			return errors.NewAssertionErrorWithWrappedErrf(err,
-				"failed to find newly created temporary index for backfill")
-		}
-		tabledesc.UpdateIndexPartitioning(
-			newTempPrimaryIndex.IndexDesc(), true, /* isIndexPrimary */
-			newImplicitCols, newPartitioning,
-		)
-	}
-
 	// We have to rewrite all indexes that either:
 	// * depend on uniqueness from the old primary key (inverted, non-unique, or unique with nulls).
 	// * don't store or index all columns in the new primary key.
-	// * is affected by a locality config swap.
 	shouldRewriteIndex := func(idx catalog.Index) (bool, error) {
-		if alterPrimaryKeyLocalitySwap != nil {
-			return true, nil
-		}
 		colIDs := idx.CollectKeyColumnIDs()
 		if !idx.Primary() {
 			colIDs.UnionWith(idx.CollectSecondaryStoredColumnIDs())
@@ -484,29 +313,6 @@ func (p *planner) AlterPrimaryKey(
 		newIndex := idx.IndexDescDeepCopy()
 		basename := newIndex.Name + "_rewrite_for_primary_key_change"
 
-		// Drop any PARTITION ALL BY clause.
-		if dropPartitionAllBy {
-			tabledesc.UpdateIndexPartitioning(&newIndex, idx.Primary(), nil /* newImplicitCols */, catpb.PartitioningDescriptor{})
-		}
-
-		// Create partitioning if we are newly adding a PARTITION BY ALL statement.
-		if isNewPartitionAllBy {
-			newImplicitCols, newPartitioning, err := CreatePartitioning(
-				ctx,
-				p.ExecCfg().Settings,
-				p.EvalContext(),
-				tableDesc,
-				newIndex,
-				partitionAllBy,
-				allowedNewColumnNames,
-				allowImplicitPartitioning,
-			)
-			if err != nil {
-				return err
-			}
-			tabledesc.UpdateIndexPartitioning(&newIndex, idx.Primary(), newImplicitCols, newPartitioning)
-		}
-
 		newIndex.Name = tabledesc.GenerateUniqueName(basename, nameExists)
 		// TODO(postamar): bump version to LatestIndexDescriptorVersion in 22.2
 		// This is not possible until then because of a limitation in 21.2 which
@@ -523,7 +329,7 @@ func (p *planner) AlterPrimaryKey(
 
 	// Create a new index that indexes everything the old primary index
 	// does, but doesn't store anything.
-	if shouldCopyPrimaryKey(tableDesc, newPrimaryIndexDesc, alterPrimaryKeyLocalitySwap) {
+	if shouldCopyPrimaryKey(tableDesc, newPrimaryIndexDesc) {
 		newUniqueIdx := tableDesc.GetPrimaryIndex().IndexDescDeepCopy()
 		// Clear the following fields so that they get generated by AllocateIDs.
 		newUniqueIdx.ID = 0
@@ -542,16 +348,6 @@ func (p *planner) AlterPrimaryKey(
 		newUniqueIdx.EncodingType = catenumpb.SecondaryIndexEncoding
 		if err := addIndexMutationWithSpecificPrimaryKey(ctx, tableDesc, &newUniqueIdx, newPrimaryIndexDesc, p.ExecCfg().Settings); err != nil {
 			return err
-		}
-		// Copy the old zone configuration into the newly created unique index for PARTITION ALL BY.
-		if tableDesc.IsLocalityRegionalByRow() {
-			if err := p.configureZoneConfigForNewIndexPartitioning(
-				ctx,
-				tableDesc,
-				newUniqueIdx,
-			); err != nil {
-				return err
-			}
 		}
 	}
 
@@ -576,9 +372,6 @@ func (p *planner) AlterPrimaryKey(
 		OldIndexes:          oldIndexIDs,
 		NewPrimaryIndexName: string(alterPKNode.Name),
 	}
-	if alterPrimaryKeyLocalitySwap != nil {
-		swapArgs.LocalityConfigSwap = &alterPrimaryKeyLocalitySwap.localityConfigSwap
-	}
 	tableDesc.AddPrimaryKeySwapMutation(swapArgs)
 
 	dvmp := catsessiondata.NewDescriptorSessionDataProvider(p.SessionData())
@@ -598,17 +391,6 @@ func (p *planner) AlterPrimaryKey(
 	// actually occurs. Deletions will get enqueued in the phase when
 	// the swap happens.
 
-	// Send a notice to users about how this job is asynchronous.
-	// TODO(knz): Mention the job ID in the client notice.
-	if alterPrimaryKeyLocalitySwap != nil {
-		p.BufferClientNotice(
-			ctx,
-			pgnotice.Newf(
-				"LOCALITY changes will be finalized asynchronously; "+
-					"further schema changes on this table may be restricted until the job completes"),
-		)
-	}
-
 	return nil
 }
 
@@ -617,10 +399,7 @@ func (p *planner) AlterPrimaryKey(
 // equivalent and if any index creation operations are needed
 // by comparing properties.
 func (p *planner) shouldCreateIndexes(
-	ctx context.Context,
-	desc *tabledesc.Mutable,
-	alterPKNode *tree.AlterTableAlterPrimaryKey,
-	alterPrimaryKeyLocalitySwap *alterPrimaryKeyLocalitySwap,
+	ctx context.Context, desc *tabledesc.Mutable, alterPKNode *tree.AlterTableAlterPrimaryKey,
 ) (requiresIndexChange bool, err error) {
 	oldPK := desc.GetPrimaryIndex()
 
@@ -664,20 +443,6 @@ func (p *planner) shouldCreateIndexes(
 			return true, nil
 		}
 	}
-
-	// Check partitioning changes based on primary key locality,
-	// either the config changes, or the region column is changed
-	// then recreate indexes.
-	if alterPrimaryKeyLocalitySwap != nil {
-		localitySwapConfig := alterPrimaryKeyLocalitySwap.localityConfigSwap
-		if !localitySwapConfig.NewLocalityConfig.Equal(localitySwapConfig.OldLocalityConfig) {
-			return true, nil
-		}
-		if localitySwapConfig.NewRegionalByRowColumnID != nil &&
-			*localitySwapConfig.NewRegionalByRowColumnID != oldPK.GetKeyColumnID(0) {
-			return true, nil
-		}
-	}
 	return false, nil
 }
 
@@ -688,13 +453,8 @@ func (p *planner) shouldCreateIndexes(
 //   - The primary key is not the default rowid primary key.
 //   - The new primary key isn't the same set of columns and directions
 //     other than hash sharding.
-//   - There is no partitioning change.
 //   - There is no existing secondary index on the old primary key columns.
-func shouldCopyPrimaryKey(
-	desc *tabledesc.Mutable,
-	newPK *descpb.IndexDescriptor,
-	alterPrimaryKeyLocalitySwap *alterPrimaryKeyLocalitySwap,
-) bool {
+func shouldCopyPrimaryKey(desc *tabledesc.Mutable, newPK *descpb.IndexDescriptor) bool {
 
 	columnIDsAndDirsWithoutSharded := func(idx *descpb.IndexDescriptor) (
 		columnIDs descpb.ColumnIDs,
@@ -754,8 +514,7 @@ func shouldCopyPrimaryKey(
 		return false
 	}
 	oldPK := desc.GetPrimaryIndex().IndexDesc()
-	return alterPrimaryKeyLocalitySwap == nil &&
-		desc.HasPrimaryKey() &&
+	return desc.HasPrimaryKey() &&
 		!desc.IsPrimaryIndexDefaultRowID() &&
 		!idsAndDirsMatch(oldPK, newPK) &&
 		!alreadyHasSecondaryIndexOnPKColumns(desc)

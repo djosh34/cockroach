@@ -39,13 +39,6 @@ func TestDockerCLI_test_cert_advisory_validation(t *testing.T) {
 	runTestDockerCLI(t, "test_cert_advisory_validation", "../cli/interactive_tests/test_cert_advisory_validation.tcl")
 }
 
-func TestDockerCLI_test_changefeed(t *testing.T) {
-	s := log.Scope(t)
-	defer s.Close(t)
-
-	runTestDockerCLI(t, "test_changefeed", "../cli/interactive_tests/test_changefeed.tcl")
-}
-
 func TestDockerCLI_test_client_side_checking(t *testing.T) {
 	s := log.Scope(t)
 	defer s.Close(t)
@@ -93,13 +86,6 @@ func TestDockerCLI_test_demo(t *testing.T) {
 	defer s.Close(t)
 
 	runTestDockerCLI(t, "test_demo", "../cli/interactive_tests/test_demo.tcl")
-}
-
-func TestDockerCLI_test_demo_changefeeds(t *testing.T) {
-	s := log.Scope(t)
-	defer s.Close(t)
-
-	runTestDockerCLI(t, "test_demo_changefeeds", "../cli/interactive_tests/test_demo_changefeeds.tcl")
 }
 
 func TestDockerCLI_test_demo_cli_integration(t *testing.T) {
@@ -158,13 +144,6 @@ func TestDockerCLI_test_demo_node_cmds(t *testing.T) {
 	runTestDockerCLI(t, "test_demo_node_cmds", "../cli/interactive_tests/test_demo_node_cmds.tcl")
 }
 
-func TestDockerCLI_test_demo_partitioning(t *testing.T) {
-	s := log.Scope(t)
-	defer s.Close(t)
-
-	runTestDockerCLI(t, "test_demo_partitioning", "../cli/interactive_tests/test_demo_partitioning.tcl")
-}
-
 func TestDockerCLI_test_demo_telemetry(t *testing.T) {
 	s := log.Scope(t)
 	defer s.Close(t)
@@ -191,13 +170,6 @@ func TestDockerCLI_test_dump_sig(t *testing.T) {
 	defer s.Close(t)
 
 	runTestDockerCLI(t, "test_dump_sig", "../cli/interactive_tests/test_dump_sig.tcl")
-}
-
-func TestDockerCLI_test_encryption(t *testing.T) {
-	s := log.Scope(t)
-	defer s.Close(t)
-
-	runTestDockerCLI(t, "test_encryption", "../cli/interactive_tests/test_encryption.tcl")
 }
 
 func TestDockerCLI_test_error_handling(t *testing.T) {

@@ -10,10 +10,7 @@
 
 package statements
 
-import (
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/plpgsqltree"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
-)
+import "github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 
 type AST interface {
 }
@@ -51,22 +48,8 @@ type Statement[T any] struct {
 	NumAnnotations tree.AnnotationIdx
 }
 
-// IsANSIDML returns true if the AST is one of the 4 DML statements,
-// SELECT, UPDATE, INSERT, DELETE, or an EXPLAIN of one of these statements.
-func IsANSIDML(stmt tree.Statement) bool {
-	switch t := stmt.(type) {
-	case *tree.Select, *tree.ParenSelect, *tree.Delete, *tree.Insert, *tree.Update:
-		return true
-	case *tree.Explain:
-		return IsANSIDML(t.Statement)
-	}
-	return false
-}
-
 // Statements is a list of parsed statements.
 type Statements []Statement[tree.Statement]
-
-type PLpgStatement Statement[*plpgsqltree.Block]
 
 // String returns the AST formatted as a string.
 func (stmts Statements) String() string {
@@ -85,21 +68,9 @@ func (stmts Statements) StringWithFlags(flags tree.FmtFlags) string {
 	return ctx.CloseAndGetString()
 }
 
-func (stmt PLpgStatement) String() string {
-	return stmt.StringWithFlags(tree.FmtSimple)
-}
-
-// StringWithFlags returns the AST formatted as a string (with the given flags).
-func (stmt PLpgStatement) StringWithFlags(flags tree.FmtFlags) string {
-	ctx := tree.NewFmtCtx(flags)
-	stmt.AST.Format(ctx)
-	return ctx.CloseAndGetString()
-}
-
 type ParsedStmts interface {
 	String() string
 	StringWithFlags(flags tree.FmtFlags) string
 }
 
 var _ ParsedStmts = Statements{}
-var _ ParsedStmts = PLpgStatement{}

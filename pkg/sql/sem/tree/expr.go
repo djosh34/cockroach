@@ -761,22 +761,6 @@ func (node DefaultVal) Format(ctx *FmtCtx) {
 // ResolvedType implements the TypedExpr interface.
 func (DefaultVal) ResolvedType() *types.T { return nil }
 
-// PartitionMaxVal represents the MAXVALUE expression.
-type PartitionMaxVal struct{}
-
-// Format implements the NodeFormatter interface.
-func (node PartitionMaxVal) Format(ctx *FmtCtx) {
-	ctx.WriteString("MAXVALUE")
-}
-
-// PartitionMinVal represents the MINVALUE expression.
-type PartitionMinVal struct{}
-
-// Format implements the NodeFormatter interface.
-func (node PartitionMinVal) Format(ctx *FmtCtx) {
-	ctx.WriteString("MINVALUE")
-}
-
 // Placeholder represents a named placeholder.
 type Placeholder struct {
 	Idx PlaceholderIdx
@@ -1787,8 +1771,6 @@ func (node *TupleStar) String() string        { return AsString(node) }
 func (node *AnnotateTypeExpr) String() string { return AsString(node) }
 func (node *UnaryExpr) String() string        { return AsString(node) }
 func (node DefaultVal) String() string        { return AsString(node) }
-func (node PartitionMaxVal) String() string   { return AsString(node) }
-func (node PartitionMinVal) String() string   { return AsString(node) }
 func (node *Placeholder) String() string      { return AsString(node) }
 func (node dNull) String() string             { return AsString(node) }
 func (list *NameList) String() string         { return AsString(list) }

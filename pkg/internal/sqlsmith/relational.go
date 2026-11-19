@@ -105,8 +105,6 @@ var (
 		{1, makeBegin},
 		{2, makeRollback},
 		{6, makeCommit},
-		{1, makeBackup},
-		{1, makeRestore},
 		{1, makeExport},
 		{1, makeImport},
 		{1, makeCreateFunc},

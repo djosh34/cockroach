@@ -80,10 +80,7 @@ Typical usage:
         Run TestParse in pkg/sql/parser.
 
     dev testlogic
-        Run all base, opt exec builder, and ccl logic tests.
-
-    dev testlogic ccl
-        Run all ccl logic tests.
+        Run all base and opt exec builder logic tests.
 
     dev testlogic opt
         Run all opt exec builder logic tests.
@@ -132,7 +129,6 @@ Typical usage:
 		makeLintCmd(ret.lint),
 		makeTestCmd(ret.test),
 		makeUICmd(&ret),
-		makeRoachprodStressCmd(ret.roachprodStress),
 		makeTestBinariesCmd(ret.testBinaries),
 	)
 

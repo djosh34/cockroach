@@ -18,7 +18,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/constraint"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/memo"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/norm"
-	"github.com/cockroachdb/cockroach/pkg/sql/opt/partition"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
@@ -1105,7 +1104,6 @@ func (ic *Instance) Init(
 	consolidate bool,
 	evalCtx *eval.Context,
 	factory *norm.Factory,
-	ps partition.PrefixSorter,
 	checkCancellation func(),
 ) {
 	// This initialization pattern ensures that fields are not unwittingly
@@ -1144,7 +1142,7 @@ func (ic *Instance) Init(
 	// we have [/1/1 - /1/2].
 	if consolidate {
 		ic.consolidatedConstraint = ic.constraint
-		ic.consolidatedConstraint.ConsolidateSpans(evalCtx, ps)
+		ic.consolidatedConstraint.ConsolidateSpans(evalCtx)
 		ic.consolidated = true
 	}
 	ic.initialized = true

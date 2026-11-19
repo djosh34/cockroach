@@ -75,14 +75,12 @@ func (p *planner) DropType(ctx context.Context, n *tree.DropType) (planNode, err
 				name,
 			)
 		case descpb.TypeDescriptor_MULTIREGION_ENUM:
-			// Multi-region enums are not directly droppable.
-			return nil, errors.WithHintf(
-				pgerror.Newf(
-					pgcode.DependentObjectsStillExist,
-					"%q is a multi-region enum and cannot be modified directly",
-					name,
-				),
-				"try ALTER DATABASE DROP REGION %s", name)
+			// Stored multi-region enums are not directly droppable.
+			return nil, pgerror.Newf(
+				pgcode.DependentObjectsStillExist,
+				"%q is a multi-region enum and cannot be modified directly",
+				name,
+			)
 		case descpb.TypeDescriptor_ENUM:
 			sqltelemetry.IncrementEnumCounter(sqltelemetry.EnumDrop)
 		case descpb.TypeDescriptor_TABLE_IMPLICIT_RECORD_TYPE:
@@ -197,11 +195,7 @@ func (p *planner) removeTypeBackReferences(
 func (p *planner) addBackRefsFromAllTypesInTable(
 	ctx context.Context, desc *tabledesc.Mutable,
 ) error {
-	dbDesc, err := p.Descriptors().ByID(p.txn).WithoutNonPublic().Get().Database(ctx, desc.GetParentID())
-	if err != nil {
-		return err
-	}
-	typeIDs, _, err := desc.GetAllReferencedTypeIDs(dbDesc, func(id descpb.ID) (catalog.TypeDescriptor, error) {
+	typeIDs, _, err := desc.GetAllReferencedTypeIDs(func(id descpb.ID) (catalog.TypeDescriptor, error) {
 		mutDesc, err := p.Descriptors().MutableByID(p.txn).Type(ctx, id)
 		if err != nil {
 			return nil, err
@@ -223,11 +217,7 @@ func (p *planner) addBackRefsFromAllTypesInTable(
 func (p *planner) removeBackRefsFromAllTypesInTable(
 	ctx context.Context, desc *tabledesc.Mutable,
 ) error {
-	dbDesc, err := p.Descriptors().ByID(p.txn).WithoutNonPublic().Get().Database(ctx, desc.GetParentID())
-	if err != nil {
-		return err
-	}
-	typeIDs, _, err := desc.GetAllReferencedTypeIDs(dbDesc, func(id descpb.ID) (catalog.TypeDescriptor, error) {
+	typeIDs, _, err := desc.GetAllReferencedTypeIDs(func(id descpb.ID) (catalog.TypeDescriptor, error) {
 		mutDesc, err := p.Descriptors().MutableByID(p.txn).Type(ctx, id)
 		if err != nil {
 			return nil, err

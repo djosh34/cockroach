@@ -311,7 +311,7 @@ func (p *PrivilegeDescriptor) Revoke(
 		}
 		userPriv.Privileges = 0
 		for _, v := range validPrivs {
-			if v != privilege.ALL {
+			if v != privilege.ALL && privilege.Grantable(v) {
 				userPriv.Privileges |= v.Mask()
 			}
 		}
@@ -327,7 +327,7 @@ func (p *PrivilegeDescriptor) Revoke(
 		}
 		userPriv.WithGrantOption = 0
 		for _, v := range validPrivs {
-			if v != privilege.ALL {
+			if v != privilege.ALL && privilege.Grantable(v) {
 				userPriv.WithGrantOption |= v.Mask()
 			}
 		}
@@ -555,7 +555,7 @@ func (p PrivilegeDescriptor) HasAllPrivileges(
 		return false, err
 	}
 	for _, priv := range validPrivileges {
-		if priv == privilege.ALL {
+		if priv == privilege.ALL || !privilege.Grantable(priv) {
 			continue
 		}
 		if !p.CheckPrivilege(user, priv) {

@@ -7,11 +7,11 @@ SELECT id FROM system.namespace WHERE name='a'
 statement ok
 CREATE TABLE b (id INT PRIMARY KEY)
 
-query TTTTIT rowsort
+query TTTTI rowsort
 SHOW TABLES FROM test
 ----
-public  a  table  root  0  NULL
-public  b  table  root  0  NULL
+public  a  table  root  0
+public  b  table  root  0
 
 statement ok
 INSERT INTO a VALUES (3),(7),(2)
@@ -47,10 +47,10 @@ SELECT replace(job_type, 'NEW SCHEMA CHANGE', 'SCHEMA CHANGE'), status
 SCHEMA CHANGE     succeeded
 SCHEMA CHANGE GC  running
 
-query TTTTIT
+query TTTTI
 SHOW TABLES FROM test
 ----
-public  b  table  root  0  NULL
+public  b  table  root  0
 
 statement error pgcode 42P01 relation "a" does not exist
 SELECT * FROM a

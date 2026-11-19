@@ -49,20 +49,18 @@ func (b buildCtx) EvalCtx() *eval.Context {
 
 func newEvalCtx(ctx context.Context, d Dependencies) *eval.Context {
 	evalCtx := &eval.Context{
-		ClusterID:            d.ClusterID(),
-		SessionDataStack:     sessiondata.NewStack(d.SessionData()),
-		Planner:              &faketreeeval.DummyEvalPlanner{},
-		StreamManagerFactory: &faketreeeval.DummyStreamManagerFactory{},
-		PrivilegedAccessor:   &faketreeeval.DummyPrivilegedAccessor{},
-		SessionAccessor:      &faketreeeval.DummySessionAccessor{},
-		ClientNoticeSender:   d.ClientNoticeSender(),
-		Sequence:             &faketreeeval.DummySequenceOperators{},
-		Tenant:               &faketreeeval.DummyTenantOperator{},
-		Regions:              &faketreeeval.DummyRegionOperator{},
-		Settings:             d.ClusterSettings(),
-		Codec:                d.Codec(),
-		DescIDGenerator:      d.DescIDGenerator(),
-		ULIDEntropy:          ulid.Monotonic(crypto_rand.Reader, 0),
+		ClusterID:          d.ClusterID(),
+		SessionDataStack:   sessiondata.NewStack(d.SessionData()),
+		Planner:            &faketreeeval.DummyEvalPlanner{},
+		PrivilegedAccessor: &faketreeeval.DummyPrivilegedAccessor{},
+		SessionAccessor:    &faketreeeval.DummySessionAccessor{},
+		ClientNoticeSender: d.ClientNoticeSender(),
+		Sequence:           &faketreeeval.DummySequenceOperators{},
+		Tenant:             &faketreeeval.DummyTenantOperator{},
+		Settings:           d.ClusterSettings(),
+		Codec:              d.Codec(),
+		DescIDGenerator:    d.DescIDGenerator(),
+		ULIDEntropy:        ulid.Monotonic(crypto_rand.Reader, 0),
 	}
 	evalCtx.SetDeprecatedContext(ctx)
 	return evalCtx

@@ -30,7 +30,6 @@ go_library(
         "//pkg/sql/rowenc",
         "//pkg/sql/rowenc/valueside",
         "//pkg/sql/sem/cast",
-        "//pkg/sql/sem/eval",
         "//pkg/sql/sem/tree",
         "//pkg/sql/sem/tree/treebin",
         "//pkg/sql/sem/tree/treecmp",
@@ -51,7 +50,6 @@ go_library(
         "//pkg/util/tsearch",
         "//pkg/util/uint128",
         "//pkg/util/uuid",
-        "@com_github_cockroachdb_apd_v3//:apd",
         "@com_github_cockroachdb_errors//:errors",
         "@com_github_lib_pq//oid",
         "@com_github_twpayne_go_geom//:go-geom",
@@ -70,7 +68,6 @@ go_test(
     embed = [":randgen"],
     deps = [
         "//pkg/base",
-        "//pkg/ccl",
         "//pkg/security/securityassets",
         "//pkg/security/securitytest",
         "//pkg/server",

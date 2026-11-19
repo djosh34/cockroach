@@ -101,8 +101,6 @@ export const stmtPerformanceRules = docsURL(
 // link to the most up-to-date documentation available.
 export const upgradeCockroachVersion =
   "https://www.cockroachlabs.com/docs/stable/upgrade-cockroach-version.html";
-export const enterpriseLicensing =
-  "https://www.cockroachlabs.com/docs/stable/enterprise-licensing.html";
 
 // Explain plan
 export const explainPlan = docsURL("explain.html");
@@ -133,8 +131,6 @@ export const mvccGarbage = docsURLNoVersion(
   "architecture/storage-layer.html#mvcc",
 );
 
-// Not actually a docs URL.
-export const startTrial = "https://www.cockroachlabs.com/pricing/start-trial/";
 export const transactionsTable = docsURL("ui-transactions-page.html");
 export const performanceTuningRecipes = docsURLNoVersion(
   "performance-recipes.html#fix-slow-writes",

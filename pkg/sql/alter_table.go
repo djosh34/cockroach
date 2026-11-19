@@ -249,7 +249,6 @@ func (n *alterTableNode) startExec(params runParams) error {
 						params.ctx,
 						n.tableDesc,
 						*alterPK,
-						nil, /* localityConfigSwap */
 					); err != nil {
 						return err
 					}
@@ -330,15 +329,6 @@ func (n *alterTableNode) startExec(params runParams) error {
 					idx.Predicate = expr
 				}
 
-				idx, err = params.p.configureIndexDescForNewIndexPartitioning(
-					params.ctx,
-					n.tableDesc,
-					idx,
-					d.PartitionByIndex,
-				)
-				if err != nil {
-					return err
-				}
 				foundIndex := catalog.FindIndexByName(n.tableDesc, string(d.Name))
 				if foundIndex != nil && foundIndex.Dropped() {
 					return pgerror.Newf(pgcode.ObjectNotInPrerequisiteState,
@@ -355,23 +345,6 @@ func (n *alterTableNode) startExec(params runParams) error {
 				version := params.ExecCfg().Settings.Version.ActiveVersion(params.ctx)
 				if err := n.tableDesc.AllocateIDs(params.ctx, version); err != nil {
 					return err
-				}
-				if err := params.p.configureZoneConfigForNewIndexPartitioning(
-					params.ctx,
-					n.tableDesc,
-					idx,
-				); err != nil {
-					return err
-				}
-
-				if n.tableDesc.IsLocalityRegionalByRow() {
-					if err := params.p.checkNoRegionChangeUnderway(
-						params.ctx,
-						n.tableDesc.GetParentID(),
-						"create an UNIQUE CONSTRAINT on a REGIONAL BY ROW table",
-					); err != nil {
-						return err
-					}
 				}
 			case *tree.CheckConstraintTableDef:
 				var err error
@@ -488,7 +461,6 @@ func (n *alterTableNode) startExec(params runParams) error {
 				params.ctx,
 				n.tableDesc,
 				*t,
-				nil, /* localityConfigSwap */
 			); err != nil {
 				return err
 			}
@@ -643,70 +615,6 @@ func (n *alterTableNode) startExec(params runParams) error {
 				return err
 			}
 			descriptorChanged = true
-
-		case *tree.AlterTablePartitionByTable:
-			if t.All {
-				return unimplemented.NewWithIssue(58736, "PARTITION ALL BY not yet implemented")
-			}
-			if n.tableDesc.GetLocalityConfig() != nil {
-				return pgerror.Newf(
-					pgcode.FeatureNotSupported,
-					"cannot set PARTITION BY on a table in a multi-region enabled database",
-				)
-			}
-			if n.tableDesc.IsPartitionAllBy() {
-				return unimplemented.NewWithIssue(58736, "changing partition of table with PARTITION ALL BY not yet implemented")
-			}
-			if n.tableDesc.GetPrimaryIndex().IsSharded() {
-				return pgerror.New(
-					pgcode.FeatureNotSupported,
-					"cannot set explicit partitioning with PARTITION BY on hash sharded primary key",
-				)
-			}
-			oldPartitioning := n.tableDesc.GetPrimaryIndex().GetPartitioning().DeepCopy()
-			if oldPartitioning.NumImplicitColumns() > 0 {
-				return unimplemented.NewWithIssue(
-					58731,
-					"cannot ALTER TABLE PARTITION BY on a table which already has implicit column partitioning",
-				)
-			}
-			newPrimaryIndexDesc := n.tableDesc.GetPrimaryIndex().IndexDescDeepCopy()
-			newImplicitCols, newPartitioning, err := CreatePartitioning(
-				params.ctx, params.p.ExecCfg().Settings,
-				params.EvalContext(),
-				n.tableDesc,
-				newPrimaryIndexDesc,
-				t.PartitionBy,
-				nil, /* allowedNewColumnNames */
-				params.p.EvalContext().SessionData().ImplicitColumnPartitioningEnabled ||
-					n.tableDesc.IsLocalityRegionalByRow(),
-			)
-			if err != nil {
-				return err
-			}
-			if newPartitioning.NumImplicitColumns > 0 {
-				return unimplemented.NewWithIssue(
-					58731,
-					"cannot ALTER TABLE and change the partitioning to contain implicit columns",
-				)
-			}
-			isIndexAltered := tabledesc.UpdateIndexPartitioning(&newPrimaryIndexDesc, true /* isIndexPrimary */, newImplicitCols, newPartitioning)
-			if isIndexAltered {
-				n.tableDesc.SetPrimaryIndex(newPrimaryIndexDesc)
-				descriptorChanged = true
-				if err := deleteRemovedPartitionZoneConfigs(
-					params.ctx,
-					params.p.InternalSQLTxn(),
-					n.tableDesc,
-					n.tableDesc.GetPrimaryIndexID(),
-					oldPartitioning,
-					n.tableDesc.GetPrimaryIndex().GetPartitioning(),
-					params.extendedEvalCtx.ExecCfg,
-					params.extendedEvalCtx.Tracing.KVTracingEnabled(),
-				); err != nil {
-					return err
-				}
-			}
 
 		case *tree.AlterTableSetAudit:
 			changed, err := params.p.setAuditMode(params.ctx, n.tableDesc, t.Mode)
@@ -1610,23 +1518,6 @@ func dropColumnImpl(
 	rowLevelTTL *catpb.RowLevelTTL,
 	t *tree.AlterTableDropColumn,
 ) (droppedViews []string, err error) {
-	if tableDesc.IsLocalityRegionalByRow() {
-		rbrColName, err := tableDesc.GetRegionalByRowTableRegionColumnName()
-		if err != nil {
-			return nil, err
-		}
-		if rbrColName == t.Column {
-			return nil, errors.WithHintf(
-				pgerror.Newf(
-					pgcode.InvalidColumnReference,
-					"cannot drop column %s as it is used to store the region in a REGIONAL BY ROW table",
-					t.Column,
-				),
-				"You must change the table locality before dropping this table or alter the table to use a different column to use for the region.",
-			)
-		}
-	}
-
 	colToDrop, err := catalog.MustFindColumnByTreeName(tableDesc, t.Column)
 	if err != nil {
 		if t.IfExists {

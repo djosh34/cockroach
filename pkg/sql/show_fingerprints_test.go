@@ -18,12 +18,15 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
-	"github.com/cockroachdb/cockroach/pkg/ccl/changefeedccl/schemafeed/schematestutils"
+	"github.com/cockroachdb/cockroach/pkg/kv/kvclient"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvpb"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/spanconfig/spanconfigptsreader"
+	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catalogkeys"
+	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descbuilder"
+	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/testutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/serverutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/sqlutils"
@@ -125,11 +128,42 @@ func TestShowFingerprintsDuringSchemaChange(t *testing.T) {
 
 	// At version 5, there are non-public indexes.
 	sqlDB.Exec(t, `ALTER TABLE foo ADD COLUMN c INT DEFAULT -1`)
-	ts := schematestutils.FetchDescVersionModificationTime(
-		t, s, "d", "public", "foo", 5)
+	var tableID descpb.ID
+	sqlDB.QueryRow(t, `SELECT 'd.public.foo'::regclass::oid`).Scan(&tableID)
+	ts := descVersionModificationTime(ctx, t, s.ApplicationLayer(), tableID, 5)
 	sqlDB.Exec(t, fmt.Sprintf(
 		`SELECT * FROM [SHOW EXPERIMENTAL_FINGERPRINTS FROM TABLE foo] AS OF SYSTEM TIME %s`,
 		ts.AsOfSystemTime()))
+}
+
+// descVersionModificationTime returns the MVCC timestamp at which the
+// descriptor with the given ID was written with the given version.
+func descVersionModificationTime(
+	ctx context.Context,
+	t *testing.T,
+	s serverutils.ApplicationLayerInterface,
+	id descpb.ID,
+	version descpb.DescriptorVersion,
+) hlc.Timestamp {
+	key := catalogkeys.MakeDescMetadataKey(s.Codec(), id)
+	revs := make(chan []kvclient.VersionedValues, 16)
+	require.NoError(t, kvclient.GetAllRevisions(
+		ctx, s.DB(), key, key.PrefixEnd(), hlc.Timestamp{}, s.Clock().Now(), revs,
+	))
+	close(revs)
+	for res := range revs {
+		for _, kv := range res {
+			for i := range kv.Values {
+				b, err := descbuilder.FromSerializedValue(&kv.Values[i])
+				require.NoError(t, err)
+				if b != nil && b.BuildImmutable().GetVersion() == version {
+					return kv.Values[i].Timestamp
+				}
+			}
+		}
+	}
+	t.Fatalf("descriptor %d never had version %d", id, version)
+	return hlc.Timestamp{}
 }
 
 // TestShowTenantFingerprintsProtectsTimestamp tests that we actually

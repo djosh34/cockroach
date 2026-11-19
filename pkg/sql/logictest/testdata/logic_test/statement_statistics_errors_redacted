@@ -31,13 +31,13 @@ SELECT last_error_code, last_error FROM crdb_internal.node_statement_statistics 
 22012  <redacted>
 
 # Test 2: database does not exist. Error code "3D000" should be added.
-query TTTTTT colnames,rowsort
+query TT colnames,rowsort
 SHOW DATABASES
 ----
-database_name  owner  primary_region  secondary_region  regions  survival_goal
-defaultdb      root   NULL            NULL              {}       NULL
-postgres       root   NULL            NULL              {}       NULL
-test           root   NULL            NULL              {}       NULL
+database_name  owner
+defaultdb      root
+postgres       root
+test           root
 
 statement error pq: database "posgres" does not exist
 use posgres

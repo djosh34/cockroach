@@ -58,7 +58,7 @@ func TestParseDatadriven(t *testing.T) {
 		datadriven.RunTest(t, path, func(t *testing.T, d *datadriven.TestData) string {
 			switch d.Cmd {
 			case "parse":
-				return sqlutils.VerifyParseFormat(t, d.Input, false /* plpgsql */)
+				return sqlutils.VerifyParseFormat(t, d.Input)
 			case "parse-no-verify":
 				_, err := parser.Parse(d.Input)
 				if err != nil {

@@ -156,21 +156,10 @@ func (s *httpServer) setupRoutes(
 	apiServer http.Handler,
 	flags serverpb.FeatureFlags,
 ) error {
-	// OIDC Configuration must happen prior to the UI Handler being defined below so that we have
-	// the system settings initialized for it to pick up from the oidcAuthenticationServer.
-	oidc, err := authserver.ConfigureOIDC(
-		ctx, s.cfg.Settings, s.cfg.Locality,
-		s.mux.Handle, authnServer.UserLoginFromSSO, s.cfg.AmbientCtx, s.cfg.ClusterIDContainer.Get(),
-	)
-	if err != nil {
-		return err
-	}
-
 	// Define the http.Handler for UI assets.
 	assetHandler := ui.Handler(ui.Config{
 		Insecure: s.cfg.InsecureWebAccess(),
 		NodeID:   s.cfg.IDContainer,
-		OIDC:     oidc,
 		GetUser: func(ctx context.Context) *string {
 			if user, ok := authserver.MaybeUserFromHTTPAuthInfoContext(ctx); ok {
 				ustring := user.Normalized()

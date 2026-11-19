@@ -20,17 +20,17 @@ changes (see package 'settingswatcher').
 
 To add a new setting, call one of the `Register` methods in `registry.go` and
 save the accessor created by the register function in the package where the
-setting is to be used. For example, to add an "enterprise" flag, adding into
-license_check.go:
+setting is to be used. For example, to add a "widgets" flag, adding into
+widgets.go:
 
-	var enterpriseEnabled = settings.RegisterBoolSetting(
+	var widgetsEnabled = settings.RegisterBoolSetting(
 		settings.ApplicationLevel,
-		"enterprise.enabled",
+		"widgets.enabled",
 		"some doc for the setting",
 		false,
 	)
 
-Then use with `if enterpriseEnabled.Get(...) ...`
+Then use with `if widgetsEnabled.Get(...) ...`
 
 # Setting names
 

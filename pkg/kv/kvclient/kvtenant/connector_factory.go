@@ -20,8 +20,8 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/retry"
 )
 
-// Factory is a hook for binaries that include CCL code to inject a
-// ConnectorFactory.
+// Factory creates tenant connectors. Servers accept only a loopback address;
+// tests replace it with InitTestConnectorFactory.
 var Factory ConnectorFactory = connectorFactory{}
 
 // ConnectorConfig encompasses the configuration required to create a Connector.

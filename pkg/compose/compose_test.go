@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/build/bazel"
-	"github.com/cockroachdb/cockroach/pkg/util/envutil"
 )
 
 var (
@@ -156,7 +155,6 @@ func TestComposeCompare(t *testing.T) {
 		fmt.Sprintf("LIBGEOS_DIR_PATH=%s", libGeosDir),
 		fmt.Sprintf("COMPARE_DIR_PATH=%s", compareDir),
 		fmt.Sprintf("ARTIFACTS=%s", *flagArtifacts),
-		fmt.Sprintf("COCKROACH_DEV_LICENSE=%s", envutil.EnvOrDefaultString("COCKROACH_DEV_LICENSE", "")),
 		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 	}
 	t.Logf("running: %s", cmd)

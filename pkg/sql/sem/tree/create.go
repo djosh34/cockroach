@@ -45,13 +45,7 @@ type CreateDatabase struct {
 	Collate         string
 	CType           string
 	ConnectionLimit int32
-	PrimaryRegion   Name
-	Regions         NameList
-	SurvivalGoal    SurvivalGoal
-	Placement       DataPlacement
 	Owner           RoleSpec
-	SuperRegion     SuperRegion
-	SecondaryRegion Name
 }
 
 // Format implements the NodeFormatter interface.
@@ -102,35 +96,9 @@ func (node *CreateDatabase) Format(ctx *FmtCtx) {
 			ctx.WriteString(strconv.Itoa(int(node.ConnectionLimit)))
 		}
 	}
-	if node.PrimaryRegion != "" {
-		ctx.WriteString(" PRIMARY REGION ")
-		ctx.FormatNode(&node.PrimaryRegion)
-	}
-	if node.Regions != nil {
-		ctx.WriteString(" REGIONS = ")
-		ctx.FormatNode(&node.Regions)
-	}
-	if node.SurvivalGoal != SurvivalGoalDefault {
-		ctx.WriteString(" ")
-		ctx.FormatNode(&node.SurvivalGoal)
-	}
-	if node.Placement != DataPlacementUnspecified {
-		ctx.WriteString(" ")
-		ctx.FormatNode(&node.Placement)
-	}
-
 	if node.Owner.Name != "" {
 		ctx.WriteString(" OWNER = ")
 		ctx.FormatNode(&node.Owner)
-	}
-
-	if node.SuperRegion.Name != "" {
-		ctx.FormatNode(&node.SuperRegion)
-	}
-
-	if node.SecondaryRegion != "" {
-		ctx.WriteString(" SECONDARY REGION ")
-		ctx.FormatNode(&node.SecondaryRegion)
 	}
 }
 
@@ -244,12 +212,11 @@ type CreateIndex struct {
 	Sharded     *ShardedIndexDef
 	// Extra columns to be stored together with the indexed ones as an optimization
 	// for improved reading performance.
-	Storing          NameList
-	PartitionByIndex *PartitionByIndex
-	StorageParams    StorageParams
-	Predicate        Expr
-	Concurrently     bool
-	Invisibility     IndexInvisibility
+	Storing       NameList
+	StorageParams StorageParams
+	Predicate     Expr
+	Concurrently  bool
+	Invisibility  IndexInvisibility
 }
 
 // Format implements the NodeFormatter interface.
@@ -288,9 +255,6 @@ func (node *CreateIndex) Format(ctx *FmtCtx) {
 		ctx.WriteString(" STORING (")
 		ctx.FormatNode(&node.Storing)
 		ctx.WriteByte(')')
-	}
-	if node.PartitionByIndex != nil {
-		ctx.FormatNode(node.PartitionByIndex)
 	}
 	if node.StorageParams != nil {
 		ctx.WriteString(" WITH (")
@@ -1031,15 +995,14 @@ type ColumnFamilyConstraint struct {
 // IndexTableDef represents an index definition within a CREATE TABLE
 // statement.
 type IndexTableDef struct {
-	Name             Name
-	Columns          IndexElemList
-	Sharded          *ShardedIndexDef
-	Storing          NameList
-	Inverted         bool
-	PartitionByIndex *PartitionByIndex
-	StorageParams    StorageParams
-	Predicate        Expr
-	Invisibility     IndexInvisibility
+	Name          Name
+	Columns       IndexElemList
+	Sharded       *ShardedIndexDef
+	Storing       NameList
+	Inverted      bool
+	StorageParams StorageParams
+	Predicate     Expr
+	Invisibility  IndexInvisibility
 }
 
 // Format implements the NodeFormatter interface.
@@ -1062,9 +1025,6 @@ func (node *IndexTableDef) Format(ctx *FmtCtx) {
 		ctx.WriteString(" STORING (")
 		ctx.FormatNode(&node.Storing)
 		ctx.WriteByte(')')
-	}
-	if node.PartitionByIndex != nil {
-		ctx.FormatNode(node.PartitionByIndex)
 	}
 	if node.StorageParams != nil {
 		ctx.WriteString(" WITH (")
@@ -1150,9 +1110,6 @@ func (node *UniqueConstraintTableDef) Format(ctx *FmtCtx) {
 		ctx.WriteString(" STORING (")
 		ctx.FormatNode(&node.Storing)
 		ctx.WriteByte(')')
-	}
-	if node.PartitionByIndex != nil {
-		ctx.FormatNode(node.PartitionByIndex)
 	}
 	if node.Predicate != nil {
 		ctx.WriteString(" WHERE ")
@@ -1291,154 +1248,6 @@ func (node *ShardedIndexDef) Format(ctx *FmtCtx) {
 	ctx.FormatNode(node.ShardBuckets)
 }
 
-// PartitionByType is an enum of each type of partitioning (LIST/RANGE).
-type PartitionByType string
-
-const (
-	// PartitionByList indicates a PARTITION BY LIST clause.
-	PartitionByList PartitionByType = "LIST"
-	// PartitionByRange indicates a PARTITION BY LIST clause.
-	PartitionByRange PartitionByType = "RANGE"
-)
-
-// PartitionByIndex represents a PARTITION BY definition within
-// a CREATE/ALTER INDEX statement.
-type PartitionByIndex struct {
-	*PartitionBy
-}
-
-// ContainsPartitions determines if the partition by table contains
-// a partition clause which is not PARTITION BY NOTHING.
-func (node *PartitionByIndex) ContainsPartitions() bool {
-	return node != nil && node.PartitionBy != nil
-}
-
-// ContainsPartitioningClause determines if the partition by table contains
-// a partitioning clause, including PARTITION BY NOTHING.
-func (node *PartitionByIndex) ContainsPartitioningClause() bool {
-	return node != nil
-}
-
-// PartitionByTable represents a PARTITION [ALL] BY definition within
-// a CREATE/ALTER TABLE statement.
-type PartitionByTable struct {
-	// All denotes PARTITION ALL BY.
-	All bool
-
-	*PartitionBy
-}
-
-// Format implements the NodeFormatter interface.
-func (node *PartitionByTable) Format(ctx *FmtCtx) {
-	if node == nil {
-		ctx.WriteString(` PARTITION BY NOTHING`)
-		return
-	}
-	ctx.WriteString(` PARTITION `)
-	if node.All {
-		ctx.WriteString(`ALL `)
-	}
-	ctx.WriteString(`BY `)
-	node.PartitionBy.formatListOrRange(ctx)
-}
-
-// ContainsPartitions determines if the partition by table contains
-// a partition clause which is not PARTITION BY NOTHING.
-func (node *PartitionByTable) ContainsPartitions() bool {
-	return node != nil && node.PartitionBy != nil
-}
-
-// ContainsPartitioningClause determines if the partition by table contains
-// a partitioning clause, including PARTITION BY NOTHING.
-func (node *PartitionByTable) ContainsPartitioningClause() bool {
-	return node != nil
-}
-
-// PartitionBy represents an PARTITION BY definition within a CREATE/ALTER
-// TABLE/INDEX statement or within a subpartition statement.
-// This is wrapped by top level PartitionByTable/PartitionByIndex
-// structs for table and index definitions respectively.
-type PartitionBy struct {
-	Fields NameList
-	// Exactly one of List or Range is required to be non-empty.
-	List  []ListPartition
-	Range []RangePartition
-}
-
-// Format implements the NodeFormatter interface.
-func (node *PartitionBy) Format(ctx *FmtCtx) {
-	ctx.WriteString(` PARTITION BY `)
-	node.formatListOrRange(ctx)
-}
-
-func (node *PartitionBy) formatListOrRange(ctx *FmtCtx) {
-	if node == nil {
-		ctx.WriteString(`NOTHING`)
-		return
-	}
-	if len(node.List) > 0 {
-		ctx.WriteString(`LIST (`)
-	} else if len(node.Range) > 0 {
-		ctx.WriteString(`RANGE (`)
-	}
-	ctx.FormatNode(&node.Fields)
-	ctx.WriteString(`) (`)
-	for i := range node.List {
-		if i > 0 {
-			ctx.WriteString(", ")
-		}
-		ctx.FormatNode(&node.List[i])
-	}
-	for i := range node.Range {
-		if i > 0 {
-			ctx.WriteString(", ")
-		}
-		ctx.FormatNode(&node.Range[i])
-	}
-	ctx.WriteString(`)`)
-}
-
-// ListPartition represents a PARTITION definition within a PARTITION BY LIST.
-type ListPartition struct {
-	Name         Name
-	Exprs        Exprs
-	Subpartition *PartitionBy
-}
-
-// Format implements the NodeFormatter interface.
-func (node *ListPartition) Format(ctx *FmtCtx) {
-	ctx.WriteString(`PARTITION `)
-	ctx.FormatNode(&node.Name)
-	ctx.WriteString(` VALUES IN (`)
-	ctx.FormatNode(&node.Exprs)
-	ctx.WriteByte(')')
-	if node.Subpartition != nil {
-		ctx.FormatNode(node.Subpartition)
-	}
-}
-
-// RangePartition represents a PARTITION definition within a PARTITION BY RANGE.
-type RangePartition struct {
-	Name         Name
-	From         Exprs
-	To           Exprs
-	Subpartition *PartitionBy
-}
-
-// Format implements the NodeFormatter interface.
-func (node *RangePartition) Format(ctx *FmtCtx) {
-	ctx.WriteString(`PARTITION `)
-	ctx.FormatNode(&node.Name)
-	ctx.WriteString(` VALUES FROM (`)
-	ctx.FormatNode(&node.From)
-	ctx.WriteString(`) TO (`)
-	ctx.FormatNode(&node.To)
-	ctx.WriteByte(')')
-	if node.Subpartition != nil {
-		ctx.FormatNode(node.Subpartition)
-	}
-}
-
 // StorageParam is a key-value parameter for table storage.
 type StorageParam struct {
 	Key   string
@@ -1488,18 +1297,16 @@ const (
 
 // CreateTable represents a CREATE TABLE statement.
 type CreateTable struct {
-	IfNotExists      bool
-	Table            TableName
-	PartitionByTable *PartitionByTable
-	Persistence      Persistence
-	StorageParams    StorageParams
-	OnCommit         CreateTableOnCommitSetting
+	IfNotExists   bool
+	Table         TableName
+	Persistence   Persistence
+	StorageParams StorageParams
+	OnCommit      CreateTableOnCommitSetting
 	// In CREATE...AS queries, Defs represents a list of ColumnTableDefs, one for
 	// each column, and a ConstraintTableDef for each constraint on a subset of
 	// these columns.
 	Defs     TableDefs
 	AsSource *Select
-	Locality *Locality
 }
 
 // As returns true if this table represents a CREATE TABLE ... AS statement,
@@ -1560,17 +1367,10 @@ func (node *CreateTable) FormatBody(ctx *FmtCtx) {
 		ctx.WriteString(" (")
 		ctx.FormatNode(&node.Defs)
 		ctx.WriteByte(')')
-		if node.PartitionByTable != nil {
-			ctx.FormatNode(node.PartitionByTable)
-		}
 		if node.StorageParams != nil {
 			ctx.WriteString(` WITH (`)
 			ctx.FormatNode(&node.StorageParams)
 			ctx.WriteByte(')')
-		}
-		if node.Locality != nil {
-			ctx.WriteString(" ")
-			ctx.FormatNode(node.Locality)
 		}
 	}
 }
@@ -2207,146 +2007,4 @@ func (node *LikeTenantSpec) Format(ctx *FmtCtx) {
 	}
 	ctx.WriteString(" LIKE ")
 	ctx.FormatNode(node.OtherTenant)
-}
-
-// CreateTenantFromReplication represents a CREATE VIRTUAL CLUSTER...FROM REPLICATION
-// statement.
-type CreateTenantFromReplication struct {
-	IfNotExists bool
-	TenantSpec  *TenantSpec
-
-	// ReplicationSourceTenantName is the name of the tenant that
-	// we are replicating into the newly created tenant.
-	// Note: even though this field can only be a name
-	// (this is guaranteed during parsing), we still want
-	// to use the TenantSpec type. This supports the auto-promotion
-	// of simple identifiers to strings.
-	ReplicationSourceTenantName *TenantSpec
-	// ReplicationSourceAddress is the address of the source cluster that we are
-	// replicating data from.
-	ReplicationSourceAddress Expr
-
-	Options TenantReplicationOptions
-
-	Like *LikeTenantSpec
-}
-
-// TenantReplicationOptions  options for the CREATE VIRTUAL CLUSTER FROM REPLICATION command.
-type TenantReplicationOptions struct {
-	Retention       Expr
-	ResumeTimestamp Expr
-}
-
-var _ NodeFormatter = &TenantReplicationOptions{}
-
-// Format implements the NodeFormatter interface.
-func (node *CreateTenantFromReplication) Format(ctx *FmtCtx) {
-	ctx.WriteString("CREATE VIRTUAL CLUSTER ")
-	if node.IfNotExists {
-		ctx.WriteString("IF NOT EXISTS ")
-	}
-	// NB: we do not anonymize the tenant name because we assume that tenant names
-	// do not contain sensitive information.
-	ctx.FormatNode(node.TenantSpec)
-	ctx.FormatNode(node.Like)
-
-	if node.ReplicationSourceAddress != nil {
-		ctx.WriteString(" FROM REPLICATION OF ")
-		ctx.FormatNode(node.ReplicationSourceTenantName)
-		ctx.WriteString(" ON ")
-		_, canOmitParentheses := node.ReplicationSourceAddress.(alreadyDelimitedAsSyntacticDExpr)
-		if !canOmitParentheses {
-			ctx.WriteByte('(')
-		}
-		ctx.FormatNode(node.ReplicationSourceAddress)
-		if !canOmitParentheses {
-			ctx.WriteByte(')')
-		}
-
-	}
-	if !node.Options.IsDefault() {
-		ctx.WriteString(" WITH ")
-		ctx.FormatNode(&node.Options)
-	}
-}
-
-// Format implements the NodeFormatter interface
-func (o *TenantReplicationOptions) Format(ctx *FmtCtx) {
-	var addSep bool
-	maybeAddSep := func() {
-		if addSep {
-			ctx.WriteString(", ")
-		}
-		addSep = true
-	}
-	if o.Retention != nil {
-		maybeAddSep()
-		ctx.WriteString("RETENTION = ")
-		_, canOmitParentheses := o.Retention.(alreadyDelimitedAsSyntacticDExpr)
-		if !canOmitParentheses {
-			ctx.WriteByte('(')
-		}
-		ctx.FormatNode(o.Retention)
-		if !canOmitParentheses {
-			ctx.WriteByte(')')
-		}
-	}
-	if o.ResumeTimestamp != nil {
-		maybeAddSep()
-		ctx.WriteString("RESUME TIMESTAMP = ")
-		_, canOmitParentheses := o.ResumeTimestamp.(alreadyDelimitedAsSyntacticDExpr)
-		if !canOmitParentheses {
-			ctx.WriteByte('(')
-		}
-		ctx.FormatNode(o.ResumeTimestamp)
-		if !canOmitParentheses {
-			ctx.WriteByte(')')
-		}
-	}
-}
-
-// CombineWith merges other TenantReplicationOptions into this struct.
-// An error is returned if the same option merged multiple times.
-func (o *TenantReplicationOptions) CombineWith(other *TenantReplicationOptions) error {
-	if o.Retention != nil {
-		if other.Retention != nil {
-			return errors.New("RETENTION option specified multiple times")
-		}
-	} else {
-		o.Retention = other.Retention
-	}
-
-	if o.ResumeTimestamp != nil {
-		if other.ResumeTimestamp != nil {
-			return errors.New("RESUME TIMESTAMP option specified multiple times")
-		}
-	} else {
-		o.ResumeTimestamp = other.ResumeTimestamp
-	}
-
-	return nil
-}
-
-// IsDefault returns true if this backup options struct has default value.
-func (o TenantReplicationOptions) IsDefault() bool {
-	options := TenantReplicationOptions{}
-	return o.Retention == options.Retention &&
-		o.ResumeTimestamp == options.ResumeTimestamp
-}
-
-type SuperRegion struct {
-	Name    Name
-	Regions NameList
-}
-
-func (node *SuperRegion) Format(ctx *FmtCtx) {
-	ctx.WriteString(" SUPER REGION ")
-	ctx.FormatNode(&node.Name)
-	ctx.WriteString(" VALUES ")
-	for i := range node.Regions {
-		if i != 0 {
-			ctx.WriteString(",")
-		}
-		ctx.FormatNode(&node.Regions[i])
-	}
 }

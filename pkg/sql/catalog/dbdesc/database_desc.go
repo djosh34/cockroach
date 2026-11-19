@@ -21,7 +21,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catprivilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/multiregion"
 	"github.com/cockroachdb/cockroach/pkg/sql/privilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/schemachanger/scpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
@@ -160,29 +159,6 @@ func (desc *Mutable) NewBuilder() catalog.DescriptorBuilder {
 	return b
 }
 
-// IsMultiRegion implements the DatabaseDescriptor interface.
-func (desc *immutable) IsMultiRegion() bool {
-	return desc.RegionConfig != nil
-}
-
-// PrimaryRegionName implements the DatabaseDescriptor interface.
-func (desc *immutable) PrimaryRegionName() (catpb.RegionName, error) {
-	if !desc.IsMultiRegion() {
-		return "", errors.AssertionFailedf(
-			"can not get the primary region of a non multi-region database")
-	}
-	return desc.RegionConfig.PrimaryRegion, nil
-}
-
-// MultiRegionEnumID implements the DatabaseDescriptor interface.
-func (desc *immutable) MultiRegionEnumID() (descpb.ID, error) {
-	if !desc.IsMultiRegion() {
-		return descpb.InvalidID, errors.AssertionFailedf(
-			"can not get multi-region enum ID of a non multi-region database")
-	}
-	return desc.RegionConfig.RegionEnumID, nil
-}
-
 // SetName sets the name on the descriptor.
 func (desc *Mutable) SetName(name string) {
 	desc.Name = name
@@ -237,6 +213,9 @@ func (desc *immutable) ValidateSelf(vea catalog.ValidationErrorAccumulator) {
 	if desc.GetID() == descpb.InvalidID {
 		vea.Report(fmt.Errorf("invalid database ID %d", desc.GetID()))
 	}
+	if desc.RegionConfig != nil {
+		vea.Report(errors.New("multi-region databases are unsupported"))
+	}
 
 	// Validate the privilege descriptor.
 	if desc.Privileges == nil {
@@ -251,23 +230,7 @@ func (desc *immutable) ValidateSelf(vea catalog.ValidationErrorAccumulator) {
 		vea.Report(catprivilege.ValidateDefaultPrivileges(*desc.GetDefaultPrivileges()))
 	}
 
-	if desc.IsMultiRegion() {
-		desc.validateMultiRegion(vea)
-	}
-
 	desc.maybeValidateSystemDatabaseSchemaVersion(vea)
-}
-
-// validateMultiRegion performs checks specific to multi-region DBs.
-func (desc *immutable) validateMultiRegion(vea catalog.ValidationErrorAccumulator) {
-	if desc.RegionConfig.PrimaryRegion == "" {
-		vea.Report(errors.AssertionFailedf(
-			"primary region unset on a multi-region db %d", desc.GetID()))
-	}
-	if desc.RegionConfig.PrimaryRegion == desc.RegionConfig.SecondaryRegion {
-		vea.Report(errors.AssertionFailedf(
-			"primary region is same as secondary region on multi-region db %d", desc.GetID()))
-	}
 }
 
 func (desc *immutable) maybeValidateSystemDatabaseSchemaVersion(
@@ -308,13 +271,6 @@ func (desc *immutable) maybeValidateSystemDatabaseSchemaVersion(
 // this descriptor, including itself.
 func (desc *immutable) GetReferencedDescIDs() (catalog.DescriptorIDSet, error) {
 	ids := catalog.MakeDescriptorIDSet(desc.GetID())
-	if desc.IsMultiRegion() {
-		id, err := desc.MultiRegionEnumID()
-		if err != nil {
-			return catalog.DescriptorIDSet{}, err
-		}
-		ids.Add(id)
-	}
 	for _, schema := range desc.Schemas {
 		ids.Add(schema.ID)
 	}
@@ -325,27 +281,6 @@ func (desc *immutable) GetReferencedDescIDs() (catalog.DescriptorIDSet, error) {
 func (desc *immutable) ValidateForwardReferences(
 	vea catalog.ValidationErrorAccumulator, vdg catalog.ValidationDescGetter,
 ) {
-	// Check multi-region enum type.
-	if !desc.IsMultiRegion() {
-		return
-	}
-	if enumID, err := desc.MultiRegionEnumID(); err == nil {
-		report := func(err error) {
-			vea.Report(errors.Wrap(err, "multi-region enum"))
-		}
-		typ, err := vdg.GetTypeDescriptor(enumID)
-		if err != nil {
-			report(err)
-			return
-		}
-		if typ.Dropped() {
-			report(errors.Errorf("type descriptor is dropped"))
-		}
-		if typ.GetParentID() != desc.GetID() {
-			report(errors.Errorf("parentID is actually %d", typ.GetParentID()))
-		}
-		// Further validation should be handled by the type descriptor itself.
-	}
 }
 
 // ValidateBackReferences implements the catalog.Descriptor interface.
@@ -453,42 +388,6 @@ func (desc *Mutable) SetDropped() {
 func (desc *Mutable) SetOffline(reason string) {
 	desc.State = descpb.DescriptorState_OFFLINE
 	desc.OfflineReason = reason
-}
-
-// UnsetMultiRegionConfig removes the stored multi-region config from the
-// database descriptor.
-func (desc *Mutable) UnsetMultiRegionConfig() {
-	desc.RegionConfig = nil
-}
-
-// SetInitialMultiRegionConfig initializes and sets a RegionConfig on a database
-// descriptor. It returns an error if a RegionConfig already exists.
-func (desc *Mutable) SetInitialMultiRegionConfig(config *multiregion.RegionConfig) error {
-	// We only should be doing this for the initial multi-region configuration.
-	if desc.RegionConfig != nil {
-		return errors.AssertionFailedf(
-			"expected no region config on database %q with ID %d",
-			desc.GetName(),
-			desc.GetID(),
-		)
-	}
-	desc.RegionConfig = &descpb.DatabaseDescriptor_RegionConfig{
-		SurvivalGoal:  config.SurvivalGoal(),
-		PrimaryRegion: config.PrimaryRegion(),
-		RegionEnumID:  config.RegionEnumID(),
-	}
-	return nil
-}
-
-// SetRegionConfig sets the region configuration of a database descriptor.
-func (desc *Mutable) SetRegionConfig(cfg *descpb.DatabaseDescriptor_RegionConfig) {
-	desc.RegionConfig = cfg
-}
-
-// SetPlacement sets the placement on the region config for a database
-// descriptor.
-func (desc *Mutable) SetPlacement(placement descpb.DataPlacement) {
-	desc.RegionConfig.Placement = placement
 }
 
 // GetPostDeserializationChanges returns if the MutableDescriptor was changed after running

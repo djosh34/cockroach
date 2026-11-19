@@ -28,7 +28,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/memo"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/optbuilder"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/xform"
-	"github.com/cockroachdb/cockroach/pkg/sql/parser/statements"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/physicalplan"
@@ -67,7 +66,7 @@ func (p *planner) prepareUsingOptimizer(
 	}
 
 	switch t := stmt.AST.(type) {
-	case *tree.AlterIndex, *tree.AlterIndexVisible, *tree.AlterTable, *tree.AlterSequence,
+	case *tree.AlterIndexVisible, *tree.AlterTable, *tree.AlterSequence,
 		*tree.Analyze,
 		*tree.BeginTransaction,
 		*tree.CommentOnColumn, *tree.CommentOnConstraint, *tree.CommentOnDatabase, *tree.CommentOnIndex, *tree.CommentOnTable, *tree.CommentOnSchema,
@@ -166,8 +165,8 @@ func (p *planner) prepareUsingOptimizer(
 		opc.flags.Set(planFlagOptCacheMiss)
 	}
 
-	// Build the memo. Do not attempt to build a generic plan at PREPARE-time.
-	memo, _, err := opc.buildReusableMemo(ctx, false /* buildGeneric */)
+	// Build the memo.
+	memo, err := opc.buildReusableMemo(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -376,11 +375,8 @@ func (opc *optPlanningCtx) reset(ctx context.Context) {
 		// descriptor versions are bumped at most once per transaction, even if there
 		// are multiple DDL operations; and transactions can be aborted leading to
 		// potential reuse of versions. To avoid these issues, we prevent saving a
-		// memo (for prepare) or reusing a saved memo (for execute). If
-		// RemoteRegions is set in the eval context we're building a memo for the
-		// purposes of generating the proper error message, and memo reuse or
-		// caching should not be done.
-		opc.allowMemoReuse = !p.Descriptors().HasUncommittedTables() && len(p.EvalContext().RemoteRegions) == 0
+		// memo (for prepare) or reusing a saved memo (for execute).
+		opc.allowMemoReuse = !p.Descriptors().HasUncommittedTables()
 		opc.useCache = opc.allowMemoReuse && queryCacheEnabled.Get(&p.execCfg.Settings.SV)
 
 		if _, isCanned := p.stmt.AST.(*tree.CannedOptPlan); isCanned {
@@ -403,15 +399,6 @@ func (opc *optPlanningCtx) log(ctx context.Context, msg redact.SafeString) {
 	}
 }
 
-type memoType int
-
-const (
-	memoTypeUnknown memoType = iota
-	memoTypeCustom
-	memoTypeGeneric
-	memoTypeIdealGeneric
-)
-
 // buildReusableMemo builds the statement into a memo that can be stored for
 // prepared statements and can later be used as a starting point for
 // optimization. The returned memo is fully optimized if:
@@ -419,33 +406,29 @@ const (
 //  1. The statement does not contain placeholders nor fold-able stable
 //     operators.
 //  2. Or, the placeholder fast path is used.
-//  3. Or, buildGeneric is true and the plan is fully optimized as best as
-//     possible in the presence of placeholders.
 //
 // The returned memo is fully detached from the planner and can be used with
 // reuseMemo independently and concurrently by multiple threads.
-func (opc *optPlanningCtx) buildReusableMemo(
-	ctx context.Context, buildGeneric bool,
-) (*memo.Memo, memoType, error) {
+func (opc *optPlanningCtx) buildReusableMemo(ctx context.Context) (*memo.Memo, error) {
 	p := opc.p
 
 	_, isCanned := opc.p.stmt.AST.(*tree.CannedOptPlan)
 	if isCanned {
 		if !p.EvalContext().SessionData().AllowPrepareAsOptPlan {
-			return nil, memoTypeUnknown, pgerror.New(pgcode.InsufficientPrivilege,
+			return nil, pgerror.New(pgcode.InsufficientPrivilege,
 				"PREPARE AS OPT PLAN is a testing facility that should not be used directly",
 			)
 		}
 
 		if !p.SessionData().User().IsRootUser() {
-			return nil, memoTypeUnknown, pgerror.New(pgcode.InsufficientPrivilege,
+			return nil, pgerror.New(pgcode.InsufficientPrivilege,
 				"PREPARE AS OPT PLAN may only be used by root",
 			)
 		}
 	}
 
 	if p.SessionData().SaveTablesPrefix != "" && !p.SessionData().User().IsRootUser() {
-		return nil, memoTypeUnknown, pgerror.New(pgcode.InsufficientPrivilege,
+		return nil, pgerror.New(pgcode.InsufficientPrivilege,
 			"sub-expression tables creation may only be used by root",
 		)
 	}
@@ -463,7 +446,7 @@ func (opc *optPlanningCtx) buildReusableMemo(
 		bld.SkipAOST = true
 	}
 	if err := bld.Build(); err != nil {
-		return nil, memoTypeUnknown, err
+		return nil, err
 	}
 
 	if bld.DisableMemoReuse {
@@ -477,12 +460,12 @@ func (opc *optPlanningCtx) buildReusableMemo(
 			// We don't support placeholders inside the canned plan. The main reason
 			// is that they would be invisible to the parser (which reports the number
 			// of placeholders, used to initialize the relevant structures).
-			return nil, memoTypeUnknown, pgerror.Newf(pgcode.Syntax,
+			return nil, pgerror.Newf(pgcode.Syntax,
 				"placeholders are not supported with PREPARE AS OPT PLAN")
 		}
 		// With a canned plan, we don't want to optimize the memo. Since we
 		// won't optimize it, we consider it an ideal generic plan.
-		return opc.optimizer.DetachMemo(ctx), memoTypeIdealGeneric, nil
+		return opc.optimizer.DetachMemo(ctx), nil
 	}
 
 	// If the memo doesn't have placeholders and did not encounter any stable
@@ -491,36 +474,27 @@ func (opc *optPlanningCtx) buildReusableMemo(
 	if !f.Memo().HasPlaceholders() && !f.FoldingControl().PreventedStableFold() {
 		opc.log(ctx, "optimizing (no placeholders)")
 		if _, err := opc.optimizer.Optimize(); err != nil {
-			return nil, memoTypeUnknown, err
+			return nil, err
 		}
 		opc.flags.Set(planFlagOptimized)
-		return opc.optimizer.DetachMemo(ctx), memoTypeIdealGeneric, nil
+		return opc.optimizer.DetachMemo(ctx), nil
 	}
 
 	// If the memo has placeholders, first try the placeholder fast path.
 	_, ok, err := opc.optimizer.TryPlaceholderFastPath()
 	if err != nil {
-		return nil, memoTypeUnknown, err
+		return nil, err
 	}
 	if ok {
 		opc.log(ctx, "placeholder fast path")
 		opc.flags.Set(planFlagOptimized)
-		return opc.optimizer.DetachMemo(ctx), memoTypeIdealGeneric, nil
-	} else if buildGeneric {
-		// Build a generic query plan if the placeholder fast path failed and a
-		// generic plan was requested.
-		opc.log(ctx, "optimizing (generic)")
-		if _, err := opc.optimizer.Optimize(); err != nil {
-			return nil, memoTypeUnknown, err
-		}
-		opc.flags.Set(planFlagOptimized)
-		return opc.optimizer.DetachMemo(ctx), memoTypeGeneric, nil
+		return opc.optimizer.DetachMemo(ctx), nil
 	}
 
 	// Detach the prepared memo from the factory and transfer its ownership
 	// to the prepared statement. DetachMemo will re-initialize the optimizer
 	// to an empty memo.
-	return opc.optimizer.DetachMemo(ctx), memoTypeCustom, nil
+	return opc.optimizer.DetachMemo(ctx), nil
 }
 
 // reuseMemo returns an optimized memo using a cached memo as a starting point.
@@ -533,7 +507,6 @@ func (opc *optPlanningCtx) buildReusableMemo(
 func (opc *optPlanningCtx) reuseMemo(
 	ctx context.Context, cachedMemo *memo.Memo,
 ) (*memo.Memo, error) {
-	opc.incPlanTypeTelemetry(cachedMemo)
 	if cachedMemo.IsOptimized() {
 		// The query could have been already fully optimized in
 		// buildReusableMemo, in which case it is considered a "generic" plan.
@@ -553,212 +526,13 @@ func (opc *optPlanningCtx) reuseMemo(
 		return nil, err
 	}
 	opc.flags.Set(planFlagOptimized)
-	mem := f.Memo()
-	if prep := opc.p.stmt.Prepared; opc.allowMemoReuse && prep != nil {
-		prep.Costs.AddCustom(mem.RootExpr().(memo.RelExpr).Cost() + mem.OptimizationCost())
-	}
-	return mem, nil
+	return f.Memo(), nil
 }
 
-// incPlanTypeTelemetry increments the telemetry counters for the type of the
-// plan: generic or custom.
-func (opc *optPlanningCtx) incPlanTypeTelemetry(cachedMemo *memo.Memo) {
-	switch opc.p.SessionData().PlanCacheMode {
-	case sessiondatapb.PlanCacheModeForceCustom:
-		telemetry.Inc(sqltelemetry.PlanTypeForceCustomCounter)
-	case sessiondatapb.PlanCacheModeForceGeneric:
-		telemetry.Inc(sqltelemetry.PlanTypeForceGenericCounter)
-	case sessiondatapb.PlanCacheModeAuto:
-		if cachedMemo.IsOptimized() {
-			// A fully optimized memo is generic.
-			telemetry.Inc(sqltelemetry.PlanTypeAutoGenericCounter)
-		} else {
-			telemetry.Inc(sqltelemetry.PlanTypeAutoCustomCounter)
-		}
-	}
-}
-
-// useGenericPlan returns true if a generic query plan should be used instead of
-// a custom plan.
-func (opc *optPlanningCtx) useGenericPlan() bool {
-	switch opc.p.SessionData().PlanCacheMode {
-	case sessiondatapb.PlanCacheModeForceGeneric:
-		return true
-	case sessiondatapb.PlanCacheModeAuto:
-		prep := opc.p.stmt.Prepared
-		// We need to build CustomPlanThreshold custom plans before considering
-		// a generic plan.
-		if prep.Costs.NumCustom() < CustomPlanThreshold {
-			return false
-		}
-		// A generic plan should be used if we have CustomPlanThreshold custom
-		// plan costs and:
-		//
-		//   1. The generic cost is unknown because a generic plan has not been
-		//      built.
-		//   2. Or, the cost of the generic plan is less than or equal to the
-		//      average cost of the custom plans.
-		//
-		return prep.Costs.Generic() == 0 || prep.Costs.Generic() < prep.Costs.AvgCustom()
-	default:
-		return false
-	}
-}
-
-// chooseValidPreparedMemo returns an optimized memo that is equal to, or built
-// from, baseMemo or genericMemo. It returns nil if both memos are stale. It
-// selects baseMemo or genericMemo based on the following rules, in order:
-//
-//  1. If baseMemo is fully optimized and not stale, it is returned as-is.
-//  2. If plan_cache_mode=force_generic_plan is true then genericMemo is
-//     returned as-is if it is not stale.
-//  3. If plan_cache_mode=auto, there have been at least 5 custom plans
-//     generated, and the cost of the generic memo is less than the average cost
-//     of the custom plans, then the generic memo is returned as-is if it is not
-//     stale. If the cost of the generic memo is greater than or equal to the
-//     average cost of the custom plans, then the baseMemo is returned if it is
-//     not stale.
-//  4. If plan_cache_mode=force_custom_plan, baseMemo is returned if it is not
-//     stale.
-//  5. Otherwise, nil is returned and the caller is responsible for building a
-//     new memo.
-//
-// The logic is structured to avoid unnecessary (*memo.Memo).IsStale calls,
-// since they can be expensive.
-func (opc *optPlanningCtx) chooseValidPreparedMemo(
-	ctx context.Context, baseMemo *memo.Memo, genericMemo *memo.Memo,
-) (*memo.Memo, error) {
-	// First check for a fully optimized, non-stale, base memo.
-	if baseMemo != nil && baseMemo.IsOptimized() {
-		isStale, err := baseMemo.IsStale(ctx, opc.p.EvalContext(), opc.catalog)
-		if err != nil {
-			return nil, err
-		} else if !isStale {
-			return baseMemo, nil
-		}
-	}
-
-	prep := opc.p.stmt.Prepared
-	reuseGeneric := opc.useGenericPlan()
-
-	// Next check for a non-stale, generic memo.
-	if reuseGeneric && genericMemo != nil {
-		isStale, err := genericMemo.IsStale(ctx, opc.p.EvalContext(), opc.catalog)
-		if err != nil {
-			return nil, err
-		} else if !isStale {
-			return genericMemo, nil
-		} else {
-			// Clear the generic cost if the memo is stale. DDL or new stats
-			// could drastically change the cost of generic and custom plans, so
-			// we should re-consider which to use.
-			prep.Costs.ClearGeneric()
-		}
-	}
-
-	// Next, check for a non-stale, normalized memo, if a generic memo should
-	// not be reused.
-	if !reuseGeneric && baseMemo != nil && !baseMemo.IsOptimized() {
-		isStale, err := baseMemo.IsStale(ctx, opc.p.EvalContext(), opc.catalog)
-		if err != nil {
-			return nil, err
-		} else if !isStale {
-			return baseMemo, nil
-		} else {
-			// Clear the custom costs if the memo is stale. DDL or new stats
-			// could drastically change the cost of generic and custom plans, so
-			// we should re-consider which to use.
-			prep.Costs.ClearCustom()
-		}
-	}
-
-	// A valid memo was not found.
-	return nil, nil
-}
-
-// fetchPreparedMemo attempts to fetch a memo from the prepared statement
-// struct. If a valid (i.e., non-stale) memo is found, it is used. Otherwise, a
-// new statement will be built.
-//
-// The plan_cache_mode session setting controls how this function decides
-// between what type of memo to use or reuse:
-//
-//   - force_custom_plan: A fully optimized generic memo will be used if it
-//     either has no placeholders nor fold-able stable expressions, or it
-//     utilizes the placeholder fast-path. Otherwise, a normalized memo will be
-//     fetched or rebuilt, copied into a new memo with placeholders replaced
-//     with values, and re-optimized.
-//
-//   - force_generic_plan: A fully optimized generic memo will always be used.
-//     The BaseMemo will be used if it is fully optimized. Otherwise, the
-//     GenericMemo will be used.
-//
-//   - auto: A "custom plan" will be optimized for first five executions of the
-//     prepared statement. On the sixth execution, a "generic plan" will be
-//     generated. If its cost is less than the average cost of the custom plans
-//     (plus some optimization overhead cost), then the generic plan will be
-//     used. Otherwise, a custom plan will be used.
-func (opc *optPlanningCtx) fetchPreparedMemo(ctx context.Context) (_ *memo.Memo, err error) {
-	p := opc.p
-	prep := p.stmt.Prepared
-	if !opc.allowMemoReuse || prep == nil {
-		return nil, nil
-	}
-
-	// If the statement was previously prepared, check for a reusable memo.
-	// First check for a valid (non-stale) memo.
-	validMemo, err := opc.chooseValidPreparedMemo(ctx, prep.BaseMemo, prep.GenericMemo)
-	if err != nil {
-		return nil, err
-	}
-	if validMemo != nil {
-		opc.log(ctx, "reusing cached memo")
-		return opc.reuseMemo(ctx, validMemo)
-	}
-
-	// Otherwise, we need to rebuild the memo.
-	//
-	// TODO(mgartner): If we have a non-stale, normalized base memo, we can
-	// build a generic memo from it instead of building the memo from
-	// scratch.
-	opc.log(ctx, "rebuilding cached memo")
-	buildGeneric := opc.useGenericPlan()
-	newMemo, typ, err := opc.buildReusableMemo(ctx, buildGeneric)
-	if err != nil {
-		return nil, err
-	}
-	switch typ {
-	case memoTypeIdealGeneric:
-		// If we have an "ideal" generic memo, store it as a base memo. It will
-		// always be used regardless of plan_cache_mode, so there is no need to
-		// set GenericCost.
-		prep.BaseMemo = newMemo
-	case memoTypeGeneric:
-		prep.GenericMemo = newMemo
-		prep.Costs.SetGeneric(newMemo.RootExpr().(memo.RelExpr).Cost())
-		// Now that the cost of the generic plan is known, we need to
-		// re-evaluate the decision to use a generic or custom plan.
-		if !opc.useGenericPlan() {
-			// The generic plan that we just built is too expensive, so we need
-			// to build a custom plan. We recursively call fetchPreparedMemo in
-			// case we have a custom plan that can be reused as a starting point
-			// for optimization. The function should not recurse more than once.
-			return opc.fetchPreparedMemo(ctx)
-		}
-	case memoTypeCustom:
-		prep.BaseMemo = newMemo
-	default:
-		return nil, errors.AssertionFailedf("unexpected memo type %v", typ)
-	}
-
-	// Re-optimize the memo, if necessary.
-	return opc.reuseMemo(ctx, newMemo)
-}
-
-// fetchPreparedMemoLegacy attempts to fetch a prepared memo. If a valid (i.e.,
+// fetchPreparedMemo attempts to fetch a prepared memo. If a valid (i.e.,
 // non-stale) memo is found, it is used. Otherwise, a new statement will be
 // built. If memo reuse is not allowed, nil is returned.
-func (opc *optPlanningCtx) fetchPreparedMemoLegacy(ctx context.Context) (_ *memo.Memo, err error) {
+func (opc *optPlanningCtx) fetchPreparedMemo(ctx context.Context) (_ *memo.Memo, err error) {
 	prepared := opc.p.stmt.Prepared
 	p := opc.p
 	if opc.allowMemoReuse && prepared != nil && prepared.BaseMemo != nil {
@@ -771,7 +545,7 @@ func (opc *optPlanningCtx) fetchPreparedMemoLegacy(ctx context.Context) (_ *memo
 			return nil, err
 		} else if isStale {
 			opc.log(ctx, "rebuilding cached memo")
-			prepared.BaseMemo, _, err = opc.buildReusableMemo(ctx, false /* buildGeneric */)
+			prepared.BaseMemo, err = opc.buildReusableMemo(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -790,26 +564,10 @@ func (opc *optPlanningCtx) fetchPreparedMemoLegacy(ctx context.Context) (_ *memo
 // current statement.
 func (opc *optPlanningCtx) buildExecMemo(ctx context.Context) (_ *memo.Memo, _ error) {
 	p := opc.p
-	if p.SessionData().PlanCacheMode == sessiondatapb.PlanCacheModeForceCustom {
-		// Fallback to the legacy logic for reusing memos if plan_cache_mode is
-		// set to force_custom_plan.
-		m, err := opc.fetchPreparedMemoLegacy(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if m != nil {
-			return m, nil
-		}
-	} else {
-		// Use new logic for reusing memos if plan_cache_mode is set to
-		// force_generic_plan or auto.
-		m, err := opc.fetchPreparedMemo(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if m != nil {
-			return m, nil
-		}
+	if m, err := opc.fetchPreparedMemo(ctx); err != nil {
+		return nil, err
+	} else if m != nil {
+		return m, nil
 	}
 
 	if opc.useCache {
@@ -820,7 +578,7 @@ func (opc *optPlanningCtx) buildExecMemo(ctx context.Context) (_ *memo.Memo, _ e
 				return nil, err
 			} else if isStale {
 				opc.log(ctx, "query cache hit but needed update")
-				cachedData.Memo, _, err = opc.buildReusableMemo(ctx, false /* buildGeneric */)
+				cachedData.Memo, err = opc.buildReusableMemo(ctx)
 				if err != nil {
 					return nil, err
 				}
@@ -915,7 +673,7 @@ func (opc *optPlanningCtx) runExecBuilder(
 	if !planTop.instrumentation.ShouldBuildExplainPlan() {
 		bld = execbuilder.New(
 			ctx, f, &opc.optimizer, mem, opc.catalog, mem.RootExpr(),
-			semaCtx, evalCtx, allowAutoCommit, statements.IsANSIDML(stmt.AST),
+			semaCtx, evalCtx, allowAutoCommit,
 		)
 		plan, err := bld.Build()
 		if err != nil {
@@ -927,7 +685,7 @@ func (opc *optPlanningCtx) runExecBuilder(
 		explainFactory := explain.NewFactory(f, semaCtx, evalCtx)
 		bld = execbuilder.New(
 			ctx, explainFactory, &opc.optimizer, mem, opc.catalog, mem.RootExpr(),
-			semaCtx, evalCtx, allowAutoCommit, statements.IsANSIDML(stmt.AST),
+			semaCtx, evalCtx, allowAutoCommit,
 		)
 		plan, err := bld.Build()
 		if err != nil {
@@ -1051,7 +809,7 @@ func (opc *optPlanningCtx) makeQueryIndexRecommendation(
 		savedMemo.RootProps(),
 		f.CopyWithoutAssigningPlaceholders,
 	)
-	opc.optimizer.Memo().Metadata().UpdateTableMeta(f.EvalContext(), hypTables)
+	opc.optimizer.Memo().Metadata().UpdateTableMeta(hypTables)
 	if _, err = opc.optimizer.Optimize(); err != nil {
 		return nil, err
 	}
@@ -1066,7 +824,7 @@ func (opc *optPlanningCtx) makeQueryIndexRecommendation(
 	// update the saved memo's metadata with the original table information.
 	// Prepare to re-optimize and create an executable plan.
 	opc.optimizer.Init(ctx, f.EvalContext(), opc.catalog)
-	savedMemo.Metadata().UpdateTableMeta(f.EvalContext(), optTables)
+	savedMemo.Metadata().UpdateTableMeta(optTables)
 	f.CopyAndReplace(
 		savedMemo.RootExpr().(memo.RelExpr),
 		savedMemo.RootProps(),

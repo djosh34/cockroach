@@ -10,44 +10,6 @@
 
 package tree
 
-// ReplicationCutoverTime represent the user-specified cutover time
-type ReplicationCutoverTime struct {
-	Timestamp Expr
-	Latest    bool
-}
-
-// AlterTenantReplication represents an ALTER VIRTUAL CLUSTER REPLICATION statement.
-type AlterTenantReplication struct {
-	TenantSpec *TenantSpec
-	Command    JobCommand
-	Cutover    *ReplicationCutoverTime
-	Options    TenantReplicationOptions
-}
-
-var _ Statement = &AlterTenantReplication{}
-
-// Format implements the NodeFormatter interface.
-func (n *AlterTenantReplication) Format(ctx *FmtCtx) {
-	ctx.WriteString("ALTER VIRTUAL CLUSTER ")
-	ctx.FormatNode(n.TenantSpec)
-	ctx.WriteByte(' ')
-	if n.Cutover != nil {
-		ctx.WriteString("COMPLETE REPLICATION TO ")
-		if n.Cutover.Latest {
-			ctx.WriteString("LATEST")
-		} else {
-			ctx.WriteString("SYSTEM TIME ")
-			ctx.FormatNode(n.Cutover.Timestamp)
-		}
-	} else if !n.Options.IsDefault() {
-		ctx.WriteString("SET REPLICATION ")
-		ctx.FormatNode(&n.Options)
-	} else if n.Command == PauseJob || n.Command == ResumeJob {
-		ctx.WriteString(JobCommandToStatement[n.Command])
-		ctx.WriteString(" REPLICATION")
-	}
-}
-
 // TenantCapability is a key-value parameter representing a tenant capability.
 type TenantCapability struct {
 	Name  string

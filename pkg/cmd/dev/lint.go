@@ -111,11 +111,9 @@ func (d *dev) lint(cmd *cobra.Command, commandLine []string) error {
 	if !short && filter == "" {
 		args := []string{
 			"build",
-			"//pkg/cmd/cockroach-short",
+			"//pkg/cmd/cockroach-oss",
 			"//pkg/cmd/dev",
 			"//pkg/obsservice/cmd/obsservice",
-			"//pkg/cmd/roachprod",
-			"//pkg/cmd/roachtest",
 			"--//build/toolchains:nogo_flag",
 		}
 		if numCPUs != 0 {
@@ -124,7 +122,7 @@ func (d *dev) lint(cmd *cobra.Command, commandLine []string) error {
 		logCommand("bazel", args...)
 		return d.exec.CommandContextInheritingStdStreams(ctx, "bazel", args...)
 	} else if !short {
-		log.Printf("Skipping building cockroach-short with nogo due to provided test filter")
+		log.Printf("Skipping building cockroach-oss with nogo due to provided test filter")
 	}
 	return nil
 }

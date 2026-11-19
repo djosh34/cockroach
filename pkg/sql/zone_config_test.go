@@ -136,11 +136,15 @@ func TestGetZoneConfig(t *testing.T) {
 				}
 			}
 
-			// Verify sql.GetZoneConfigInTxn.
+			// Verify sql.GetZoneConfigInTxn. SQL no longer looks up partition
+			// subzones, so only the KV lookup above covers them.
+			if tc.partitionName != "" {
+				continue
+			}
 			dummyIndex := systemschema.CommentsTable.GetPrimaryIndex()
 			if err := sql.TestingDescsTxn(context.Background(), s, func(ctx context.Context, txn isql.Txn, col *descs.Collection) error {
 				_, zoneCfg, subzone, err := sql.GetZoneConfigInTxn(
-					ctx, txn.KV(), col, descpb.ID(tc.objectID), dummyIndex, tc.partitionName, false,
+					ctx, txn.KV(), col, descpb.ID(tc.objectID), dummyIndex, false,
 				)
 				if err != nil {
 					return err
@@ -372,11 +376,15 @@ func TestCascadingZoneConfig(t *testing.T) {
 				}
 			}
 
-			// Verify sql.GetZoneConfigInTxn.
+			// Verify sql.GetZoneConfigInTxn. SQL no longer looks up partition
+			// subzones, so only the KV lookup above covers them.
+			if tc.partitionName != "" {
+				continue
+			}
 			dummyIndex := systemschema.CommentsTable.GetPrimaryIndex()
 			if err := sql.TestingDescsTxn(context.Background(), s, func(ctx context.Context, txn isql.Txn, col *descs.Collection) error {
 				_, zoneCfg, subzone, err := sql.GetZoneConfigInTxn(
-					ctx, txn.KV(), col, descpb.ID(tc.objectID), dummyIndex, tc.partitionName, false,
+					ctx, txn.KV(), col, descpb.ID(tc.objectID), dummyIndex, false,
 				)
 				if err != nil {
 					return err

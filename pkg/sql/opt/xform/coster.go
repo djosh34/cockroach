@@ -187,18 +187,6 @@ const (
 	//               region in a distribution and the gateway region.
 	DistributeCost = 200
 
-	// LargeDistributeCost is the cost to use for Distribute operations when a
-	// session mode is set to error out on access of rows from remote regions.
-	LargeDistributeCost = hugeCost
-
-	// LargeDistributeCostWithHomeRegion is the cost to use for Distribute
-	// operations when a session mode is set to error out on access of rows from
-	// remote regions, and the query plan has a home region.
-	// TODO(msirek): Is there a better way of preferring plans that have a home
-	//               region instead of relying on costing, which may not guarantee
-	//               the correct plan is found?
-	LargeDistributeCostWithHomeRegion = LargeDistributeCost / 2
-
 	// preferLookupJoinFactor is a scale factor for the cost of a lookup join when
 	// we have a hint for preferring a lookup join.
 	preferLookupJoinFactor = 1e-6
@@ -574,7 +562,7 @@ func (c *coster) ComputeCost(candidate memo.RelExpr, required *physical.Required
 		cost = c.computeZigzagJoinCost(candidate.(*memo.ZigzagJoinExpr))
 
 	case opt.UnionOp, opt.IntersectOp, opt.ExceptOp,
-		opt.UnionAllOp, opt.IntersectAllOp, opt.ExceptAllOp, opt.LocalityOptimizedSearchOp:
+		opt.UnionAllOp, opt.IntersectAllOp, opt.ExceptAllOp:
 		cost = c.computeSetCost(candidate, required)
 
 	case opt.GroupByOp, opt.ScalarGroupByOp, opt.DistinctOnOp, opt.EnsureDistinctOnOp,
@@ -741,14 +729,6 @@ func (c *coster) computeDistributeCost(
 			return c.distributionCost(source)
 		}
 	}
-	if c.evalCtx != nil && c.evalCtx.Planner.EnforceHomeRegion() {
-		if distribute.HasHomeRegion() {
-			// Query plans with a home region are favored over those without one.
-			return LargeDistributeCostWithHomeRegion
-		}
-		return LargeDistributeCost
-	}
-
 	// TODO(rytaft,msirek): Compute a real cost here. Currently this is a rough
 	//                      estimate of latency overhead, but actual measurements
 	//                      would be useful.
@@ -830,16 +810,6 @@ func (c *coster) computeScanCost(scan *memo.ScanExpr, required *physical.Require
 	// plans for very small tables.
 	if isUnfiltered {
 		rowCount += fullScanRowCountPenalty
-
-		// For tables with multiple partitions, add the cost of visiting each
-		// partition.
-		// TODO(rytaft): In the future we should take latency into account here.
-		index := c.mem.Metadata().Table(scan.Table).Index(scan.Index)
-		if partitionCount := index.PartitionCount(); partitionCount > 1 {
-			// Subtract 1 since we already accounted for the first partition when
-			// counting spans.
-			baseCost += memo.Cost(partitionCount-1) * randIOCostFactor
-		}
 	}
 
 	// Add a penalty if the cardinality exceeds the row count estimate. Adding a
@@ -862,10 +832,7 @@ func (c *coster) computeScanCost(scan *memo.ScanExpr, required *physical.Require
 		regionsAccessed = scan.Distribution
 	} else {
 		tabMeta := scan.Memo().Metadata().TableMeta(scan.Table)
-		regionsAccessed.FromIndexScan(c.ctx, c.evalCtx, tabMeta, scan.Index, scan.Constraint)
-	}
-	if scan.LocalityOptimized {
-		return cost
+		regionsAccessed.FromIndexScan(tabMeta, scan.Index)
 	}
 	extraCost := c.distributionCost(regionsAccessed)
 	cost += extraCost
@@ -905,14 +872,6 @@ func (c *coster) distributionCost(regionsAccessed physical.Distribution) (cost m
 		// `regionsAccessed.Any()` is true because query planning can't be done in
 		// that case to try and avoid the distribution anyway.
 		extraCost = memo.Cost(SmallDistributeCost)
-	} else if !regionsAccessed.Any() && c.evalCtx != nil &&
-		c.evalCtx.Planner.EnforceHomeRegion() {
-		if len(regionsAccessed.Regions) == 1 {
-			// Query plans with a home region are favored over those without one.
-			extraCost = LargeDistributeCostWithHomeRegion
-		} else {
-			extraCost = LargeDistributeCost
-		}
 	}
 	return extraCost
 }
@@ -1053,7 +1012,6 @@ func (c *coster) computeIndexJoinCost(
 		join.Table,
 		cat.PrimaryIndex,
 		memo.JoinFlags(0),
-		false, /* localityOptimized */
 	)
 }
 
@@ -1072,10 +1030,8 @@ func (c *coster) computeLookupJoinCost(
 		join.Table,
 		join.Index,
 		join.Flags,
-		join.LocalityOptimized,
 	)
-	_, provided := distribution.BuildLookupJoinLookupTableDistribution(
-		c.ctx, c.evalCtx, join, required, c.MaybeGetBestCostRelation)
+	provided := distribution.BuildLookupJoinLookupTableDistribution(join)
 	extraCost := c.distributionCost(provided)
 	cost += extraCost
 	return cost
@@ -1090,7 +1046,6 @@ func (c *coster) computeIndexLookupJoinCost(
 	table opt.TableID,
 	index cat.IndexOrdinal,
 	flags memo.JoinFlags,
-	localityOptimized bool,
 ) memo.Cost {
 	input := join.Child(0).(memo.RelExpr)
 	lookupCount := input.Relational().Statistics().RowCount
@@ -1161,14 +1116,6 @@ func (c *coster) computeIndexLookupJoinCost(
 		cost *= preferLookupJoinFactor
 	}
 
-	// If this lookup join is locality optimized, divide the cost by 2.5 in order to make
-	// the total cost of the two lookup joins in the locality optimized plan less than
-	// the cost of the single lookup join in the non-locality optimized plan.
-	// TODO(rytaft): This is hacky. We should really be making this determination
-	// based on the latency between regions.
-	if localityOptimized {
-		cost /= 2.5
-	}
 	return cost
 }
 
@@ -1233,7 +1180,7 @@ func (c *coster) computeInvertedJoinCost(
 
 	cost += memo.Cost(rowsProcessed) * perRowCost
 
-	provided := distribution.BuildInvertedJoinLookupTableDistribution(c.ctx, c.evalCtx, join)
+	provided := distribution.BuildInvertedJoinLookupTableDistribution(join)
 	extraCost := c.distributionCost(provided)
 	cost += extraCost
 	return cost
@@ -1366,15 +1313,14 @@ func (c *coster) computeSetCost(set memo.RelExpr, required *physical.Required) m
 	}
 	cost := memo.Cost(outputRowCount) * cpuCostFactor
 
-	// A set operation must process every row from both tables once. UnionAll and
-	// LocalityOptimizedSearch can avoid any extra computation, but all other set
-	// operations must perform a hash table lookup or update for each input row.
+	// A set operation must process every row from both tables once. UnionAll
+	// can avoid any extra computation, but all other set operations must perform a hash table lookup or update for each input row.
 	//
 	// The exception is if this is a streaming set operation, in which case there
 	// is no need to build a hash table. We can detect that this is a streaming
 	// operation by checking whether the ordering is defined in the set private
 	// (see isStreamingSetOperator).
-	if set.Op() != opt.UnionAllOp && set.Op() != opt.LocalityOptimizedSearchOp &&
+	if set.Op() != opt.UnionAllOp &&
 		!isStreamingSetOperator(set) {
 		leftRowCount := set.Child(0).(memo.RelExpr).Relational().Statistics().RowCount
 		rightRowCount := set.Child(1).(memo.RelExpr).Relational().Statistics().RowCount

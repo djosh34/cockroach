@@ -20,12 +20,9 @@
 package tree
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/lexbase"
-	"github.com/cockroachdb/errors"
-	"github.com/google/go-cmp/cmp"
 )
 
 // ShowVar represents a SHOW statement.
@@ -73,298 +70,6 @@ func (node *ShowClusterSettingList) Format(ctx *FmtCtx) {
 	}
 	ctx.WriteString(qual)
 	ctx.WriteString(" CLUSTER SETTINGS")
-}
-
-// ShowBackupDetails represents the type of details to display for a SHOW BACKUP
-// statement.
-type ShowBackupDetails int
-
-const (
-	// BackupDefaultDetails identifies a bare SHOW BACKUP statement.
-	BackupDefaultDetails ShowBackupDetails = iota
-	// BackupRangeDetails identifies a SHOW BACKUP RANGES statement.
-	BackupRangeDetails
-	// BackupFileDetails identifies a SHOW BACKUP FILES statement.
-	BackupFileDetails
-	// BackupSchemaDetails identifies a SHOW BACKUP SCHEMAS statement.
-	BackupSchemaDetails
-	// BackupValidateDetails identifies a SHOW BACKUP VALIDATION
-	// statement.
-	BackupValidateDetails
-	// BackupConnectionTest identifies a SHOW BACKUP CONNECTION statement
-	BackupConnectionTest
-)
-
-// TODO (msbutler): 22.2 after removing old style show backup syntax, rename
-// Path to Subdir and InCollection to Dest.
-
-// ShowBackup represents a SHOW BACKUP statement.
-//
-// TODO(msbutler): implement a walkableStmt for ShowBackup.
-type ShowBackup struct {
-	Path         Expr
-	InCollection StringOrPlaceholderOptList
-	From         bool
-	Details      ShowBackupDetails
-	Options      ShowBackupOptions
-}
-
-// Format implements the NodeFormatter interface.
-func (node *ShowBackup) Format(ctx *FmtCtx) {
-	if node.InCollection != nil && node.Path == nil {
-		ctx.WriteString("SHOW BACKUPS IN ")
-		ctx.FormatURIs(node.InCollection)
-		return
-	}
-	ctx.WriteString("SHOW BACKUP ")
-
-	switch node.Details {
-	case BackupRangeDetails:
-		ctx.WriteString("RANGES ")
-	case BackupFileDetails:
-		ctx.WriteString("FILES ")
-	case BackupSchemaDetails:
-		ctx.WriteString("SCHEMAS ")
-	case BackupConnectionTest:
-		ctx.WriteString("CONNECTION ")
-	}
-
-	if node.From {
-		ctx.WriteString("FROM ")
-	}
-
-	if node.InCollection != nil {
-		ctx.FormatNode(node.Path)
-		ctx.WriteString(" IN ")
-		ctx.FormatURIs(node.InCollection)
-	} else {
-		ctx.FormatURI(node.Path)
-	}
-	if !node.Options.IsDefault() {
-		ctx.WriteString(" WITH OPTIONS (")
-		ctx.FormatNode(&node.Options)
-		ctx.WriteString(")")
-	}
-}
-
-type ShowBackupOptions struct {
-	AsJson               bool
-	CheckFiles           bool
-	DebugIDs             bool
-	IncrementalStorage   StringOrPlaceholderOptList
-	DecryptionKMSURI     StringOrPlaceholderOptList
-	EncryptionPassphrase Expr
-	Privileges           bool
-	SkipSize             bool
-
-	// EncryptionInfoDir is a hidden option used when the user wants to run the deprecated
-	//
-	// SHOW BACKUP <incremental_dir>
-	//
-	// on an encrypted incremental backup will need to pass their full backup's
-	// directory to the encryption_info_dir parameter because the
-	// `ENCRYPTION-INFO` file necessary to decode the incremental backup lives in
-	// the full backup dir.
-	EncryptionInfoDir Expr
-	DebugMetadataSST  bool
-
-	CheckConnectionTransferSize Expr
-	CheckConnectionDuration     Expr
-	CheckConnectionConcurrency  Expr
-}
-
-var _ NodeFormatter = &ShowBackupOptions{}
-
-func (o *ShowBackupOptions) Format(ctx *FmtCtx) {
-	var addSep bool
-	maybeAddSep := func() {
-		if addSep {
-			ctx.WriteString(", ")
-		}
-		addSep = true
-	}
-	if o.AsJson {
-		ctx.WriteString("as_json")
-		addSep = true
-	}
-	if o.CheckFiles {
-		maybeAddSep()
-		ctx.WriteString("check_files")
-	}
-	if o.DebugIDs {
-		maybeAddSep()
-		ctx.WriteString("debug_ids")
-	}
-	if o.EncryptionPassphrase != nil {
-		maybeAddSep()
-		ctx.WriteString("encryption_passphrase = ")
-		if ctx.flags.HasFlags(FmtShowPasswords) {
-			ctx.FormatNode(o.EncryptionPassphrase)
-		} else {
-			ctx.WriteString(PasswordSubstitution)
-		}
-	}
-	if o.IncrementalStorage != nil {
-		maybeAddSep()
-		ctx.WriteString("incremental_location = ")
-		ctx.FormatURIs(o.IncrementalStorage)
-	}
-
-	if o.Privileges {
-		maybeAddSep()
-		ctx.WriteString("privileges")
-	}
-
-	if o.EncryptionInfoDir != nil {
-		maybeAddSep()
-		ctx.WriteString("encryption_info_dir = ")
-		ctx.FormatNode(o.EncryptionInfoDir)
-	}
-	if o.DecryptionKMSURI != nil {
-		maybeAddSep()
-		ctx.WriteString("kms = ")
-		ctx.FormatURIs(o.DecryptionKMSURI)
-	}
-	if o.SkipSize {
-		maybeAddSep()
-		ctx.WriteString("skip size")
-	}
-	if o.DebugMetadataSST {
-		maybeAddSep()
-		ctx.WriteString("debug_dump_metadata_sst")
-	}
-
-	// The following are only used in connection-check SHOW.
-	if o.CheckConnectionConcurrency != nil {
-		maybeAddSep()
-		ctx.WriteString("CONCURRENTLY = ")
-		ctx.FormatNode(o.CheckConnectionConcurrency)
-	}
-	if o.CheckConnectionTransferSize != nil {
-		maybeAddSep()
-		ctx.WriteString("TRANSFER = ")
-		ctx.FormatNode(o.CheckConnectionTransferSize)
-	}
-	if o.CheckConnectionDuration != nil {
-		maybeAddSep()
-		ctx.WriteString("TIME = ")
-		ctx.FormatNode(o.CheckConnectionDuration)
-	}
-}
-
-func (o ShowBackupOptions) IsDefault() bool {
-	options := ShowBackupOptions{}
-	return o.AsJson == options.AsJson &&
-		o.CheckFiles == options.CheckFiles &&
-		o.DebugIDs == options.DebugIDs &&
-		cmp.Equal(o.IncrementalStorage, options.IncrementalStorage) &&
-		cmp.Equal(o.DecryptionKMSURI, options.DecryptionKMSURI) &&
-		o.EncryptionPassphrase == options.EncryptionPassphrase &&
-		o.Privileges == options.Privileges &&
-		o.SkipSize == options.SkipSize &&
-		o.DebugMetadataSST == options.DebugMetadataSST &&
-		o.EncryptionInfoDir == options.EncryptionInfoDir &&
-		o.CheckConnectionTransferSize == options.CheckConnectionTransferSize &&
-		o.CheckConnectionDuration == options.CheckConnectionDuration &&
-		o.CheckConnectionConcurrency == options.CheckConnectionConcurrency
-}
-
-func combineBools(v1 bool, v2 bool, label string) (bool, error) {
-	if v2 && v1 {
-		return false, errors.Newf("% option specified multiple times", label)
-	}
-	return v2 || v1, nil
-}
-func combineExpr(v1 Expr, v2 Expr, label string) (Expr, error) {
-	if v1 != nil {
-		if v2 != nil {
-			return v1, errors.Newf("% option specified multiple times", label)
-		}
-		return v1, nil
-	}
-	return v2, nil
-}
-func combineStringOrPlaceholderOptList(
-	v1 StringOrPlaceholderOptList, v2 StringOrPlaceholderOptList, label string,
-) (StringOrPlaceholderOptList, error) {
-	if v1 != nil {
-		if v2 != nil {
-			return v1, errors.Newf("% option specified multiple times", label)
-		}
-		return v1, nil
-	}
-	return v2, nil
-}
-
-// CombineWith merges other backup options into this backup options struct.
-// An error is returned if the same option merged multiple times.
-func (o *ShowBackupOptions) CombineWith(other *ShowBackupOptions) error {
-	var err error
-	o.AsJson, err = combineBools(o.AsJson, other.AsJson, "as_json")
-	if err != nil {
-		return err
-	}
-	o.CheckFiles, err = combineBools(o.CheckFiles, other.CheckFiles, "check_files")
-	if err != nil {
-		return err
-	}
-	o.DebugIDs, err = combineBools(o.DebugIDs, other.DebugIDs, "debug_ids")
-	if err != nil {
-		return err
-	}
-	o.EncryptionPassphrase, err = combineExpr(o.EncryptionPassphrase, other.EncryptionPassphrase,
-		"encryption_passphrase")
-	if err != nil {
-		return err
-	}
-	o.IncrementalStorage, err = combineStringOrPlaceholderOptList(o.IncrementalStorage,
-		other.IncrementalStorage, "incremental_location")
-	if err != nil {
-		return err
-	}
-	o.DecryptionKMSURI, err = combineStringOrPlaceholderOptList(o.DecryptionKMSURI,
-		other.DecryptionKMSURI, "kms")
-	if err != nil {
-		return err
-	}
-	o.Privileges, err = combineBools(o.Privileges, other.Privileges, "privileges")
-	if err != nil {
-		return err
-	}
-	o.SkipSize, err = combineBools(o.SkipSize, other.SkipSize, "skip size")
-	if err != nil {
-		return err
-	}
-	o.DebugMetadataSST, err = combineBools(o.DebugMetadataSST, other.DebugMetadataSST,
-		"debug_dump_metadata_sst")
-	if err != nil {
-		return err
-	}
-	o.EncryptionInfoDir, err = combineExpr(o.EncryptionInfoDir, other.EncryptionInfoDir,
-		"encryption_info_dir")
-	if err != nil {
-		return err
-	}
-
-	o.CheckConnectionTransferSize, err = combineExpr(o.CheckConnectionTransferSize, other.CheckConnectionTransferSize,
-		"transfer")
-	if err != nil {
-		return err
-	}
-
-	o.CheckConnectionDuration, err = combineExpr(o.CheckConnectionDuration, other.CheckConnectionDuration,
-		"time")
-	if err != nil {
-		return err
-	}
-
-	o.CheckConnectionConcurrency, err = combineExpr(o.CheckConnectionConcurrency, other.CheckConnectionConcurrency,
-		"concurrently")
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // ShowColumns represents a SHOW COLUMNS statement.
@@ -557,81 +262,6 @@ func (s *ShowJobOptions) CombineWith(other *ShowJobOptions) error {
 }
 
 var _ NodeFormatter = &ShowJobOptions{}
-
-// ShowChangefeedJobs represents a SHOW CHANGEFEED JOBS statement
-type ShowChangefeedJobs struct {
-	// If non-nil, a select statement that provides the job ids to be shown.
-	Jobs *Select
-}
-
-// Format implements the NodeFormatter interface.
-func (node *ShowChangefeedJobs) Format(ctx *FmtCtx) {
-	ctx.WriteString("SHOW CHANGEFEED JOBS")
-	if node.Jobs != nil {
-		ctx.WriteString(" ")
-		ctx.FormatNode(node.Jobs)
-	}
-}
-
-// ShowSurvivalGoal represents a SHOW SURVIVAL GOAL statement
-type ShowSurvivalGoal struct {
-	DatabaseName Name
-}
-
-// Format implements the NodeFormatter interface.
-func (node *ShowSurvivalGoal) Format(ctx *FmtCtx) {
-	ctx.WriteString("SHOW SURVIVAL GOAL FROM DATABASE")
-	if node.DatabaseName != "" {
-		ctx.WriteString(" ")
-		ctx.FormatNode(&node.DatabaseName)
-	}
-}
-
-// ShowRegionsFrom denotes what kind of SHOW REGIONS command is being used.
-type ShowRegionsFrom int
-
-const (
-	// ShowRegionsFromCluster represents SHOW REGIONS FROM CLUSTER.
-	ShowRegionsFromCluster ShowRegionsFrom = iota
-	// ShowRegionsFromDatabase represents SHOW REGIONS FROM DATABASE.
-	ShowRegionsFromDatabase
-	// ShowRegionsFromAllDatabases represents SHOW REGIONS FROM ALL DATABASES.
-	ShowRegionsFromAllDatabases
-	// ShowRegionsFromDefault represents SHOW REGIONS.
-	ShowRegionsFromDefault
-	// ShowSuperRegionsFromDatabase represents SHOW SUPER REGIONS FROM DATABASE.
-	ShowSuperRegionsFromDatabase
-)
-
-// ShowRegions represents a SHOW REGIONS statement
-type ShowRegions struct {
-	ShowRegionsFrom ShowRegionsFrom
-	DatabaseName    Name
-}
-
-// Format implements the NodeFormatter interface.
-func (node *ShowRegions) Format(ctx *FmtCtx) {
-	if node.ShowRegionsFrom == ShowSuperRegionsFromDatabase {
-		ctx.WriteString("SHOW SUPER REGIONS")
-	} else {
-		ctx.WriteString("SHOW REGIONS")
-	}
-	switch node.ShowRegionsFrom {
-	case ShowRegionsFromDefault:
-	case ShowRegionsFromAllDatabases:
-		ctx.WriteString(" FROM ALL DATABASES")
-	case ShowRegionsFromDatabase, ShowSuperRegionsFromDatabase:
-		ctx.WriteString(" FROM DATABASE")
-		if node.DatabaseName != "" {
-			ctx.WriteString(" ")
-			ctx.FormatNode(&node.DatabaseName)
-		}
-	case ShowRegionsFromCluster:
-		ctx.WriteString(" FROM CLUSTER")
-	default:
-		panic(fmt.Sprintf("unknown ShowRegionsFrom: %v", node.ShowRegionsFrom))
-	}
-}
 
 // ShowSessions represents a SHOW SESSIONS statement
 type ShowSessions struct {
@@ -1147,7 +777,6 @@ func (node *ShowTableStats) Format(ctx *FmtCtx) {
 
 // ShowTenantOptions represents the WITH clause in SHOW VIRTUAL CLUSTER.
 type ShowTenantOptions struct {
-	WithReplication  bool
 	WithCapabilities bool
 }
 
@@ -1163,9 +792,6 @@ func (node *ShowTenant) Format(ctx *FmtCtx) {
 	ctx.FormatNode(node.TenantSpec)
 
 	withs := []string{}
-	if node.WithReplication {
-		withs = append(withs, "REPLICATION STATUS")
-	}
 	if node.WithCapabilities {
 		withs = append(withs, "CAPABILITIES")
 	}
@@ -1185,32 +811,6 @@ func (node *ShowHistogram) Format(ctx *FmtCtx) {
 	ctx.Printf("SHOW HISTOGRAM %d", node.HistogramID)
 }
 
-// ShowPartitions represents a SHOW PARTITIONS statement.
-type ShowPartitions struct {
-	IsDB     bool
-	Database Name
-
-	IsIndex bool
-	Index   TableIndexName
-
-	IsTable bool
-	Table   *UnresolvedObjectName
-}
-
-// Format implements the NodeFormatter interface.
-func (node *ShowPartitions) Format(ctx *FmtCtx) {
-	if node.IsDB {
-		ctx.Printf("SHOW PARTITIONS FROM DATABASE ")
-		ctx.FormatNode(&node.Database)
-	} else if node.IsIndex {
-		ctx.Printf("SHOW PARTITIONS FROM INDEX ")
-		ctx.FormatNode(&node.Index)
-	} else {
-		ctx.Printf("SHOW PARTITIONS FROM TABLE ")
-		ctx.FormatNode(node.Table)
-	}
-}
-
 // ScheduledJobExecutorType is a type identifying the names of
 // the supported scheduled job executors.
 type ScheduledJobExecutorType int
@@ -1218,10 +818,6 @@ type ScheduledJobExecutorType int
 const (
 	// InvalidExecutor is a placeholder for an invalid executor type.
 	InvalidExecutor ScheduledJobExecutorType = iota
-
-	// ScheduledBackupExecutor is an executor responsible for
-	// the execution of the scheduled backups.
-	ScheduledBackupExecutor
 
 	// ScheduledSQLStatsCompactionExecutor is an executor responsible for the
 	// execution of the scheduled SQL Stats compaction.
@@ -1234,19 +830,13 @@ const (
 	// ScheduledSchemaTelemetryExecutor is an executor responsible for the logging
 	// of schema telemetry.
 	ScheduledSchemaTelemetryExecutor
-
-	// ScheduledChangefeedExecutor is an executor responsible for
-	// the execution of the scheduled changefeeds.
-	ScheduledChangefeedExecutor
 )
 
 var scheduleExecutorInternalNames = map[ScheduledJobExecutorType]string{
 	InvalidExecutor:                     "unknown-executor",
-	ScheduledBackupExecutor:             "scheduled-backup-executor",
 	ScheduledSQLStatsCompactionExecutor: "scheduled-sql-stats-compaction-executor",
 	ScheduledRowLevelTTLExecutor:        "scheduled-row-level-ttl-executor",
 	ScheduledSchemaTelemetryExecutor:    "scheduled-schema-telemetry-executor",
-	ScheduledChangefeedExecutor:         "scheduled-changefeed-executor",
 }
 
 // InternalName returns an internal executor name.
@@ -1258,16 +848,12 @@ func (t ScheduledJobExecutorType) InternalName() string {
 // UserName returns a user friendly executor name.
 func (t ScheduledJobExecutorType) UserName() string {
 	switch t {
-	case ScheduledBackupExecutor:
-		return "BACKUP"
 	case ScheduledSQLStatsCompactionExecutor:
 		return "SQL STATISTICS"
 	case ScheduledRowLevelTTLExecutor:
 		return "ROW LEVEL TTL"
 	case ScheduledSchemaTelemetryExecutor:
 		return "SCHEMA TELEMETRY"
-	case ScheduledChangefeedExecutor:
-		return "CHANGEFEED"
 	}
 	return "unsupported-executor"
 }
@@ -1368,20 +954,6 @@ func (n *ShowDefaultPrivileges) Format(ctx *FmtCtx) {
 	if n.Schema != Name("") {
 		ctx.WriteString("IN SCHEMA ")
 		ctx.FormatNode(&n.Schema)
-	}
-}
-
-// ShowTransferState represents a SHOW TRANSFER STATE statement.
-type ShowTransferState struct {
-	TransferKey *StrVal
-}
-
-// Format implements the NodeFormatter interface.
-func (node *ShowTransferState) Format(ctx *FmtCtx) {
-	ctx.WriteString("SHOW TRANSFER STATE")
-	if node.TransferKey != nil {
-		ctx.WriteString(" WITH ")
-		ctx.FormatNode(node.TransferKey)
 	}
 }
 

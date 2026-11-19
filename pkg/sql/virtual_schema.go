@@ -198,7 +198,6 @@ func (t virtualSchemaTable) initVirtualTableDesc(
 		nil,
 		sc,
 		id,
-		nil,       /* regionConfig */
 		startTime, /* creationTime */
 		catpb.NewPrivilegeDescriptor(
 			username.PublicRoleName(),
@@ -363,8 +362,7 @@ func (v virtualSchemaView) initVirtualTableDesc(
 		&eval.Context{Settings: st}, /* evalCtx */
 		st,
 		tree.PersistencePermanent,
-		false, // isMultiRegion
-		nil,   // sc
+		nil, // sc
 	)
 	return mutDesc.TableDescriptor, err
 }

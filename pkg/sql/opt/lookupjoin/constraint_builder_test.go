@@ -326,7 +326,7 @@ func formatScalar(
 	execBld := execbuilder.New(
 		context.Background(), nil /* execFactory */, nil, /* optimizer */
 		f.Memo(), nil /* catalog */, e, semaCtx, evalCtx,
-		false /* allowAutoCommit */, false, /* isANSIDML */
+		false, /* allowAutoCommit */
 	)
 	expr, err := execBld.BuildScalar()
 	if err != nil {

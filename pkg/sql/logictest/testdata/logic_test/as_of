@@ -22,7 +22,7 @@ SELECT * FROM t AS OF SYSTEM TIME -( parse_interval('1000' || 'us') )
 ----
 2
 
-statement error pq: AS OF SYSTEM TIME: only constant expressions, with_min_timestamp, with_max_staleness, or follower_read_timestamp are allowed
+statement error pq: AS OF SYSTEM TIME: only constant expressions or follower_read_timestamp are allowed
 SELECT * FROM t AS OF SYSTEM TIME cluster_logical_timestamp()
 
 statement error pq: subqueries are not allowed in AS OF SYSTEM TIME
@@ -35,19 +35,15 @@ query T noticetrace
 SELECT pg_sleep(5) -- we need to sleep so that the 4.8s elapses and the SELECT * FROM t returns something.
 ----
 
-# Notices print twice -- once during planning and once during execution.
-# There's no nice way of reducing this to once without some hacks -- so left as is.
-skipif config 3node-tenant-default-configs
-query T noticetrace,nosort
+query I
 SELECT * FROM t AS OF SYSTEM TIME follower_read_timestamp()
 ----
-NOTICE: follower reads disabled because you are running a non-CCL distribution
-NOTICE: follower reads disabled because you are running a non-CCL distribution
+2
 
 statement error pq: unknown signature: follower_read_timestamp\(string\) \(desired <timestamptz>\)
 SELECT * FROM t AS OF SYSTEM TIME follower_read_timestamp('boom')
 
-statement error pq: AS OF SYSTEM TIME: only constant expressions, with_min_timestamp, with_max_staleness, or follower_read_timestamp are allowed
+statement error pq: AS OF SYSTEM TIME: only constant expressions or follower_read_timestamp are allowed
 SELECT * FROM t AS OF SYSTEM TIME now()
 
 statement error pq: AS OF SYSTEM TIME: interval value '10s' too large, AS OF interval must be <= -1µs
@@ -94,30 +90,6 @@ skipif config 3node-tenant-default-configs
 # a placeholder (#56488).
 statement error pq: no value provided for placeholder: \$1
 SELECT * FROM t AS OF SYSTEM TIME $1
-
-skipif config 3node-tenant-default-configs
-statement error pgcode XXC01 with_min_timestamp can only be used with a CCL distribution
-SELECT with_min_timestamp('2020-01-15 15:16:17')
-
-skipif config 3node-tenant-default-configs
-statement error pgcode XXC01 with_min_timestamp can only be used with a CCL distribution
-SELECT with_min_timestamp(statement_timestamp())
-
-skipif config 3node-tenant-default-configs
-statement error pgcode XXC01 with_max_staleness can only be used with a CCL distribution
-SELECT with_max_staleness('1s')
-
-skipif config 3node-tenant-default-configs
-statement error pgcode XXC01 with_min_timestamp can only be used with a CCL distribution
-SELECT * FROM t AS OF SYSTEM TIME with_min_timestamp('2020-01-15 15:16:17')
-
-skipif config 3node-tenant-default-configs
-statement error pgcode XXC01 with_min_timestamp can only be used with a CCL distribution
-SELECT * FROM t AS OF SYSTEM TIME with_min_timestamp(statement_timestamp())
-
-skipif config 3node-tenant-default-configs
-statement error pgcode XXC01 with_max_staleness can only be used with a CCL distribution
-SELECT * FROM t AS OF SYSTEM TIME with_max_staleness('1s'::interval)
 
 statement ok
 BEGIN

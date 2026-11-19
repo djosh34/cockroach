@@ -14,12 +14,6 @@ spawn $argv demo --no-line-editor --no-example-database --nodes 9 --global --mul
 # Ensure db is defaultdb.
 eexpect "defaultdb>"
 
-# Ensure regions display correctly.
-send "SELECT region, zones FROM \[SHOW REGIONS FROM CLUSTER\] ORDER BY region;\r"
-eexpect "  europe-west1 | {b,c,d}"
-eexpect "  us-east1     | {b,c,d}"
-eexpect "  us-west1     | {a,b,c}"
-
 # Test we cannot add or restart nodes.
 send "\\demo add region=europe-west1\r"
 eexpect "adding nodes is not supported in --global configurations"

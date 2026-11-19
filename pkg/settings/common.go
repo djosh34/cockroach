@@ -164,9 +164,9 @@ type internalSetting interface {
 	// included in user-facing reports such as that produced by SHOW ALL
 	// CLUSTER SETTINGS.
 	// This only affects reports though; direct access is unconstrained.
-	// For example, `enterprise.license` is non-reportable:
+	// For example, `cluster.secret` is non-reportable:
 	// it cannot be listed, but can be accessed with `SHOW CLUSTER
-	// SETTING enterprise.license` or SET CLUSTER SETTING.
+	// SETTING cluster.secret` or SET CLUSTER SETTING.
 	isReportable() bool
 }
 

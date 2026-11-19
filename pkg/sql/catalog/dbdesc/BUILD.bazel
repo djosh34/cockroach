@@ -17,7 +17,6 @@ go_library(
         "//pkg/sql/catalog/catpb",
         "//pkg/sql/catalog/catprivilege",
         "//pkg/sql/catalog/descpb",
-        "//pkg/sql/catalog/multiregion",
         "//pkg/sql/privilege",
         "//pkg/sql/schemachanger/scpb",
         "//pkg/sql/sem/catconstants",

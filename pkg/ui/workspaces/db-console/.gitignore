@@ -12,7 +12,6 @@ yarn-error.log
 # Generated intermediates
 .cache-loader
 dist*/**
-!distccl/distccl.go
 !distoss/distoss.go
 *manifest.json
 

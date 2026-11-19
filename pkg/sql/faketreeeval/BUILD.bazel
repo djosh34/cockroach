@@ -9,7 +9,6 @@ go_library(
         "//pkg/clusterversion",
         "//pkg/roachpb",
         "//pkg/security/username",
-        "//pkg/sql/catalog/descpb",
         "//pkg/sql/pgwire/pgcode",
         "//pkg/sql/pgwire/pgerror",
         "//pkg/sql/pgwire/pgnotice",

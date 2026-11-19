@@ -17,22 +17,16 @@ import (
 	"net/http/httptest"
 	"regexp"
 	"strings"
-	"time"
 
-	"github.com/cockroachdb/cockroach/pkg/sql/randgen"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
-	"github.com/cockroachdb/cockroach/pkg/sql/types"
-	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 )
 
 func (s *Smither) bulkIOEnabled() bool {
 	return s.bulkSrv != nil
 }
 
-// enableBulkIO enables bulk IO statements. The smither database must pass
-// the CCL check (either it must have a license or the check is disabled
-// in a test). It works by starting an in-memory fileserver to hold the
-// data for backups and exports.
+// enableBulkIO enables bulk IO statements. It works by starting an in-memory
+// fileserver to hold the data for imports and exports.
 func (s *Smither) enableBulkIO() {
 	s.bulkSrv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.lock.Lock()
@@ -62,98 +56,6 @@ func (s *Smither) enableBulkIO() {
 		}
 	}))
 	s.bulkFiles = map[string][]byte{}
-	s.bulkBackups = map[string]tree.BackupTargetList{}
-}
-
-func makeAsOf(s *Smither) tree.AsOfClause {
-	var expr tree.Expr
-	switch s.rnd.Intn(10) {
-	case 1:
-		expr = tree.NewStrVal("-2s")
-	case 2:
-		expr = tree.NewStrVal(timeutil.Now().Add(-2 * time.Second).Format(timeutil.FullTimeFormat))
-	case 3:
-		expr = randgen.RandDatum(s.rnd, types.Interval, false /* nullOk */)
-	case 4:
-		datum := randgen.RandDatum(s.rnd, types.Timestamp, false /* nullOk */)
-		str := strings.TrimSuffix(datum.String(), `+00:00'`)
-		str = strings.TrimPrefix(str, `'`)
-		expr = tree.NewStrVal(str)
-	default:
-		// Most of the time leave this empty.
-	}
-	return tree.AsOfClause{
-		Expr: expr,
-	}
-}
-
-func makeBackup(s *Smither) (tree.Statement, bool) {
-	name := fmt.Sprintf("%s/%s", s.bulkSrv.URL, s.name("backup"))
-	var targets tree.BackupTargetList
-	seen := map[tree.TableName]bool{}
-	for len(targets.Tables.TablePatterns) < 1 || s.coin() {
-		table, ok := s.getRandTable()
-		if !ok {
-			return nil, false
-		}
-		if seen[*table.TableName] {
-			continue
-		}
-		seen[*table.TableName] = true
-		targets.Tables.TablePatterns = append(targets.Tables.TablePatterns, table.TableName)
-	}
-	s.lock.Lock()
-	s.bulkBackups[name] = targets
-	s.lock.Unlock()
-
-	coinD := tree.DBoolFalse
-	if s.coin() {
-		coinD = tree.DBoolTrue
-	}
-
-	return &tree.Backup{
-		Targets: &targets,
-		To:      tree.StringOrPlaceholderOptList{tree.NewStrVal(name)},
-		AsOf:    makeAsOf(s),
-		Options: tree.BackupOptions{CaptureRevisionHistory: coinD},
-	}, true
-}
-
-func makeRestore(s *Smither) (tree.Statement, bool) {
-	var name string
-	var targets tree.BackupTargetList
-	func() {
-		s.lock.Lock()
-		defer s.lock.Unlock()
-		for name, targets = range s.bulkBackups {
-			break
-		}
-		// Only restore each backup once.
-		delete(s.bulkBackups, name)
-	}()
-
-	if name == "" {
-		return nil, false
-	}
-	// Choose some random subset of tables.
-	s.rnd.Shuffle(len(targets.Tables.TablePatterns), func(i, j int) {
-		targets.Tables.TablePatterns[i], targets.Tables.TablePatterns[j] = targets.Tables.TablePatterns[j], targets.Tables.TablePatterns[i]
-	})
-	targets.Tables.TablePatterns = targets.Tables.TablePatterns[:1+s.rnd.Intn(len(targets.Tables.TablePatterns))]
-
-	db := s.name("db")
-	if _, err := s.db.Exec(fmt.Sprintf(`CREATE DATABASE %s`, db)); err != nil {
-		return nil, false
-	}
-
-	return &tree.Restore{
-		Targets: targets,
-		From:    []tree.StringOrPlaceholderOptList{{tree.NewStrVal(name)}},
-		AsOf:    makeAsOf(s),
-		Options: tree.RestoreOptions{
-			IntoDB: tree.NewStrVal("into_db"),
-		},
-	}, true
 }
 
 const exportSchema = "/create.sql"

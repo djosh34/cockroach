@@ -15,7 +15,6 @@ import (
 	gosql "database/sql"
 	"fmt"
 	"math"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -28,15 +27,9 @@ import (
 	"golang.org/x/exp/rand"
 )
 
-// maybeFormatWithCity formats %[1]s with `city,` and %[2]s with `vehicle_city`
-// if we are not using a multi-region movr.
-func (g *movr) maybeFormatWithCity(fmtString string) string {
-	var posOne, posTwo string
-	if !g.multiRegion {
-		posOne = "city, "
-		posTwo = "vehicle_city, "
-	}
-	return fmt.Sprintf(fmtString, posOne, posTwo)
+// formatWithCity formats %[1]s with `city,` and %[2]s with `vehicle_city`.
+func formatWithCity(fmtString string) string {
+	return fmt.Sprintf(fmtString, "city, ", "vehicle_city, ")
 }
 
 // Indexes into the slice returned by `Tables`.
@@ -50,7 +43,7 @@ const (
 )
 
 func (g *movr) movrUsersSchema() string {
-	return g.maybeFormatWithCity(`(
+	return formatWithCity(`(
   id UUID NOT NULL,
   city VARCHAR NOT NULL,
   name VARCHAR NULL,
@@ -67,7 +60,7 @@ const (
 )
 
 func (g *movr) movrVehiclesSchema() string {
-	return g.maybeFormatWithCity(`(
+	return formatWithCity(`(
   id UUID NOT NULL,
   city VARCHAR NOT NULL,
   type VARCHAR NULL,
@@ -89,7 +82,7 @@ const (
 )
 
 func (g *movr) movrRidesSchema() string {
-	return g.maybeFormatWithCity(`(
+	return formatWithCity(`(
   id UUID NOT NULL,
   city VARCHAR NOT NULL,
   vehicle_city VARCHAR NULL,
@@ -114,7 +107,7 @@ const (
 )
 
 func (g *movr) movrVehicleLocationHistoriesSchema() string {
-	return g.maybeFormatWithCity(`(
+	return formatWithCity(`(
   city VARCHAR NOT NULL,
   ride_id UUID NOT NULL,
   "timestamp" TIMESTAMP NOT NULL,
@@ -134,7 +127,7 @@ const movrPromoCodesSchema = `(
 )`
 
 func (g *movr) movrUserPromoCodesSchema() string {
-	return g.maybeFormatWithCity(`(
+	return formatWithCity(`(
   city VARCHAR NOT NULL,
   user_id UUID NOT NULL,
   code VARCHAR NOT NULL,
@@ -142,18 +135,6 @@ func (g *movr) movrUserPromoCodesSchema() string {
   usage_count INT NULL,
   PRIMARY KEY (%[1]suser_id ASC, code ASC)
 )`)
-}
-
-var rbrTables = []string{
-	"users",
-	"vehicles",
-	"rides",
-	"vehicle_location_histories",
-	"user_promo_codes",
-}
-
-var globalTables = []string{
-	"promo_codes",
 }
 
 const (
@@ -186,10 +167,6 @@ type movr struct {
 	numUserPromoCodes                 int
 	ranges                            int
 
-	multiRegion           bool
-	inferCRDBRegionColumn bool
-	survivalGoal          string
-
 	creationTime time.Time
 
 	fakerOnce sync.Once
@@ -211,25 +188,6 @@ var movrMeta = workload.Meta{
 		g.flags.IntVar(&g.users.numRows, `num-users`, 50, `Initial number of users.`)
 		g.flags.IntVar(&g.vehicles.numRows, `num-vehicles`, 15, `Initial number of vehicles.`)
 		g.flags.IntVar(&g.rides.numRows, `num-rides`, 500, `Initial number of rides.`)
-		g.flags.BoolVar(
-			&g.multiRegion,
-			`multi-region`,
-			false,
-			`Whether to use the multi-region configuration for partitions.`,
-		)
-		g.flags.BoolVar(
-			&g.inferCRDBRegionColumn,
-			`infer-crdb-region-column`,
-			true,
-			`Whether to infer crdb_region for multi-region REGIONAL BY ROW columns using the city column.
-Otherwise defaults to the gateway_region.`,
-		)
-		g.flags.StringVar(
-			&g.survivalGoal,
-			"survive",
-			"az",
-			"Survival goal for multi-region workloads. Supported goals: az, region.",
-		)
 		g.flags.IntVar(&g.histories.numRows, `num-histories`, 1000,
 			`Initial number of ride location histories.`)
 		g.flags.IntVar(&g.numPromoCodes, `num-promo-codes`, 1000, `Initial number of promo codes.`)
@@ -271,23 +229,23 @@ func (g *movr) Hooks() workload.Hooks {
 		},
 		PostLoad: func(_ context.Context, db *gosql.DB) error {
 			fkStmts := []string{
-				g.maybeFormatWithCity(
+				formatWithCity(
 					`ALTER TABLE vehicles ADD FOREIGN KEY
 						(%[1]sowner_id) REFERENCES users (%[1]sid)`,
 				),
-				g.maybeFormatWithCity(
+				formatWithCity(
 					`ALTER TABLE rides ADD FOREIGN KEY
 						(%[1]srider_id) REFERENCES users (%[1]sid)`,
 				),
-				g.maybeFormatWithCity(
+				formatWithCity(
 					`ALTER TABLE rides ADD FOREIGN KEY
 						(%[2]svehicle_id) REFERENCES vehicles (%[1]sid)`,
 				),
-				g.maybeFormatWithCity(
+				formatWithCity(
 					`ALTER TABLE vehicle_location_histories ADD FOREIGN KEY
 						(%[1]sride_id) REFERENCES rides (%[1]sid)`,
 				),
-				g.maybeFormatWithCity(
+				formatWithCity(
 					`ALTER TABLE user_promo_codes ADD FOREIGN KEY
 						(%[1]suser_id) REFERENCES users (%[1]sid)`,
 				),
@@ -301,177 +259,6 @@ func (g *movr) Hooks() workload.Hooks {
 					if !strings.Contains(err.Error(), duplicateFKErr) {
 						return err
 					}
-				}
-			}
-			return nil
-		},
-		// This partitioning step is intended for a 3 region cluster, which have the localities region=us-east1,
-		// region=us-west1, region=europe-west1.
-		Partition: func(db *gosql.DB) error {
-			if g.multiRegion {
-				var survivalGoal string
-				switch g.survivalGoal {
-				case "az":
-					survivalGoal = "ZONE"
-				case "region":
-					survivalGoal = "REGION"
-				default:
-					return errors.Errorf("unsupported survival goal: %s", g.survivalGoal)
-				}
-				qs := fmt.Sprintf(
-					`
-ALTER DATABASE %[1]s SET PRIMARY REGION "us-east1";
-ALTER DATABASE %[1]s ADD REGION "us-west1";
-ALTER DATABASE %[1]s ADD REGION "europe-west1";
-ALTER DATABASE %[1]s SURVIVE %s FAILURE
-`,
-					g.Meta().Name,
-					survivalGoal,
-				)
-				for _, q := range strings.Split(qs, ";") {
-					if _, err := db.Exec(q); err != nil {
-						return err
-					}
-				}
-				for _, rbrTable := range rbrTables {
-					if g.inferCRDBRegionColumn {
-						regionToCities := make(map[string][]string)
-						for _, city := range cities {
-							regionToCities[city.region] = append(regionToCities[city.region], city.city)
-						}
-						cityClauses := make([]string, 0, len(regionToCities))
-						for region, cities := range regionToCities {
-							cityClauses = append(
-								cityClauses,
-								fmt.Sprintf(
-									`WHEN city IN (%s) THEN '%s'`,
-									`'`+strings.Join(cities, `', '`)+`'`,
-									region,
-								),
-							)
-						}
-						sort.Strings(cityClauses)
-						if _, err := db.Exec(
-							fmt.Sprintf(
-								`ALTER TABLE %s ADD COLUMN crdb_region crdb_internal_region NOT NULL AS (
-								CASE
-									%s
-									ELSE 'us-east1'
-							END) STORED`,
-								rbrTable,
-								strings.Join(cityClauses, "\n"),
-							),
-						); err != nil {
-							return err
-						}
-					}
-					if _, err := db.Exec(
-						fmt.Sprintf(
-							`ALTER TABLE %s SET LOCALITY REGIONAL BY ROW`,
-							rbrTable,
-						),
-					); err != nil {
-						return err
-					}
-				}
-				for _, globalTable := range globalTables {
-					if _, err := db.Exec(
-						fmt.Sprintf(
-							`ALTER TABLE %s SET LOCALITY GLOBAL`,
-							globalTable,
-						),
-					); err != nil {
-						return err
-					}
-				}
-
-				return nil
-			}
-
-			qs := []string{
-				// Create us-west, us-east and europe-west partitions.
-				`ALTER TABLE users PARTITION BY LIST (city) (
-					PARTITION us_west VALUES IN ('seattle', 'san francisco', 'los angeles'),
-					PARTITION us_east VALUES IN ('new york', 'boston', 'washington dc'),
-					PARTITION europe_west VALUES IN ('amsterdam', 'paris', 'rome')
-				);`,
-				`ALTER TABLE vehicles PARTITION BY LIST (city) (
-					PARTITION us_west VALUES IN ('seattle', 'san francisco', 'los angeles'),
-					PARTITION us_east VALUES IN ('new york', 'boston', 'washington dc'),
-					PARTITION europe_west VALUES IN ('amsterdam', 'paris', 'rome')
-				);`,
-				`ALTER INDEX vehicles_auto_index_fk_city_ref_users PARTITION BY LIST (city) (
-					PARTITION us_west VALUES IN ('seattle', 'san francisco', 'los angeles'),
-					PARTITION us_east VALUES IN ('new york', 'boston', 'washington dc'),
-					PARTITION europe_west VALUES IN ('amsterdam', 'paris', 'rome')
-				);`,
-				`ALTER TABLE rides PARTITION BY LIST (city) (
-					PARTITION us_west VALUES IN ('seattle', 'san francisco', 'los angeles'),
-					PARTITION us_east VALUES IN ('new york', 'boston', 'washington dc'),
-					PARTITION europe_west VALUES IN ('amsterdam', 'paris', 'rome')
-				);`,
-				`ALTER INDEX rides_auto_index_fk_city_ref_users PARTITION BY LIST (city) (
-					PARTITION us_west VALUES IN ('seattle', 'san francisco', 'los angeles'),
-					PARTITION us_east VALUES IN ('new york', 'boston', 'washington dc'),
-					PARTITION europe_west VALUES IN ('amsterdam', 'paris', 'rome')
-				);`,
-				`ALTER INDEX rides_auto_index_fk_vehicle_city_ref_vehicles PARTITION BY LIST (vehicle_city) (
-					PARTITION us_west VALUES IN ('seattle', 'san francisco', 'los angeles'),
-					PARTITION us_east VALUES IN ('new york', 'boston', 'washington dc'),
-					PARTITION europe_west VALUES IN ('amsterdam', 'paris', 'rome')
-				);`,
-				`ALTER TABLE user_promo_codes PARTITION BY LIST (city) (
-					PARTITION us_west VALUES IN ('seattle', 'san francisco', 'los angeles'),
-					PARTITION us_east VALUES IN ('new york', 'boston', 'washington dc'),
-					PARTITION europe_west VALUES IN ('amsterdam', 'paris', 'rome')
-				);`,
-				`ALTER TABLE vehicle_location_histories PARTITION BY LIST (city) (
-					PARTITION us_west VALUES IN ('seattle', 'san francisco', 'los angeles'),
-					PARTITION us_east VALUES IN ('new york', 'boston', 'washington dc'),
-					PARTITION europe_west VALUES IN ('amsterdam', 'paris', 'rome')
-				);`,
-
-				// Alter the partitions to place replicas in the appropriate zones.
-				`ALTER PARTITION us_west OF INDEX users@* CONFIGURE ZONE USING CONSTRAINTS='["+region=us-west1"]';`,
-				`ALTER PARTITION us_east OF INDEX users@* CONFIGURE ZONE USING CONSTRAINTS='["+region=us-east1"]';`,
-				`ALTER PARTITION europe_west OF INDEX users@* CONFIGURE ZONE USING CONSTRAINTS='["+region=europe-west1"]';`,
-
-				`ALTER PARTITION us_west OF INDEX vehicles@* CONFIGURE ZONE USING CONSTRAINTS='["+region=us-west1"]';`,
-				`ALTER PARTITION us_east OF INDEX vehicles@* CONFIGURE ZONE USING CONSTRAINTS='["+region=us-east1"]';`,
-				`ALTER PARTITION europe_west OF INDEX vehicles@* CONFIGURE ZONE USING CONSTRAINTS='["+region=europe-west1"]';`,
-
-				`ALTER PARTITION us_west OF INDEX rides@* CONFIGURE ZONE USING CONSTRAINTS='["+region=us-west1"]';`,
-				`ALTER PARTITION us_east OF INDEX rides@* CONFIGURE ZONE USING CONSTRAINTS='["+region=us-east1"]';`,
-				`ALTER PARTITION europe_west OF INDEX rides@* CONFIGURE ZONE USING CONSTRAINTS='["+region=europe-west1"]';`,
-
-				`ALTER PARTITION us_west OF INDEX user_promo_codes@* CONFIGURE ZONE USING CONSTRAINTS='["+region=us-west1"]';`,
-				`ALTER PARTITION us_east OF INDEX user_promo_codes@* CONFIGURE ZONE USING CONSTRAINTS='["+region=us-east1"]';`,
-				`ALTER PARTITION europe_west OF INDEX user_promo_codes@* CONFIGURE ZONE USING CONSTRAINTS='["+region=europe-west1"]';`,
-
-				`ALTER PARTITION us_west OF INDEX vehicle_location_histories@* CONFIGURE ZONE USING CONSTRAINTS='["+region=us-west1"]';`,
-				`ALTER PARTITION us_east OF INDEX vehicle_location_histories@* CONFIGURE ZONE USING CONSTRAINTS='["+region=us-east1"]';`,
-				`ALTER PARTITION europe_west OF INDEX vehicle_location_histories@* CONFIGURE ZONE USING CONSTRAINTS='["+region=europe-west1"]';`,
-
-				// Create some duplicate indexes for the promo_codes table.
-				`CREATE INDEX promo_codes_idx_us_west ON promo_codes (code) STORING (description, creation_time,expiration_time, rules);`,
-				`CREATE INDEX promo_codes_idx_europe_west ON promo_codes (code) STORING (description, creation_time, expiration_time, rules);`,
-
-				// Apply configurations to the index for fast reads.
-				`ALTER TABLE promo_codes CONFIGURE ZONE USING num_replicas = 3,
-					constraints = '{"+region=us-east1": 1}',
-					lease_preferences = '[[+region=us-east1]]';`,
-				`ALTER INDEX promo_codes@promo_codes_idx_us_west CONFIGURE ZONE USING
-					num_replicas = 3,
-					constraints = '{"+region=us-west1": 1}',
-					lease_preferences = '[[+region=us-west1]]';`,
-				`ALTER INDEX promo_codes@promo_codes_idx_europe_west CONFIGURE ZONE USING
-					num_replicas = 3,
-					constraints = '{"+region=europe-west1": 1}',
-					lease_preferences = '[[+region=europe-west1]]';`,
-			}
-			for _, q := range qs {
-				if _, err := db.Exec(q); err != nil {
-					return err
 				}
 			}
 			return nil
@@ -496,9 +283,6 @@ func (g *movr) Tables() []workload.Table {
 			g.ranges-1,
 			func(splitIdx int) []interface{} {
 				row := g.movrUsersInitialRow((splitIdx + 1) * (g.users.numRows / g.ranges))
-				if g.multiRegion {
-					return []interface{}{row[usersIDIdx]}
-				}
 				// The split tuples returned must be valid primary key columns.
 				return []interface{}{row[usersCityIdx], row[usersIDIdx]}
 			},
@@ -515,9 +299,6 @@ func (g *movr) Tables() []workload.Table {
 			g.ranges-1,
 			func(splitIdx int) []interface{} {
 				row := g.movrVehiclesInitialRow((splitIdx + 1) * (g.vehicles.numRows / g.ranges))
-				if g.multiRegion {
-					return []interface{}{row[vehiclesIDIdx]}
-				}
 				// The split tuples returned must be valid primary key columns.
 				return []interface{}{row[vehiclesCityIdx], row[vehiclesIDIdx]}
 			},
@@ -534,9 +315,6 @@ func (g *movr) Tables() []workload.Table {
 			g.ranges-1,
 			func(splitIdx int) []interface{} {
 				row := g.movrRidesInitialRow((splitIdx + 1) * (g.rides.numRows / g.ranges))
-				if g.multiRegion {
-					return []interface{}{row[ridesIDIdx]}
-				}
 				// The split tuples returned must be valid primary key columns.
 				return []interface{}{row[ridesCityIdx], row[ridesIDIdx]}
 			},

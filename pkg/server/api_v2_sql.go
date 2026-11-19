@@ -35,8 +35,7 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-// SQLAPIClock is exposed for override by tests. Tenant tests are in
-// the serverccl package.
+// SQLAPIClock is exposed for override by tests.
 var SQLAPIClock timeutil.TimeSource = timeutil.DefaultTimeSource{}
 
 // swagger:operation POST /sql/ execSQL

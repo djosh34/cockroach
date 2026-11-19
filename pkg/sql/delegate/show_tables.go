@@ -70,23 +70,21 @@ SELECT ns.nspname AS schema_name,
        WHEN pc.relkind = 'S' THEN 'sequence'
        ELSE 'table'
        END AS type,
-       rl.rolname AS owner,
-			 %[5]s
-       ct.locality AS locality
+       rl.rolname AS owner
+       %[5]s
        %[3]s
 FROM %[1]s.pg_catalog.pg_class AS pc
 LEFT JOIN %[1]s.pg_catalog.pg_roles AS rl on (pc.relowner = rl.oid)
 JOIN %[1]s.pg_catalog.pg_namespace AS ns ON (ns.oid = pc.relnamespace)
 %[4]s
 %[6]s
-LEFT JOIN crdb_internal.tables AS ct ON (pc.oid::int8 = ct.table_id AND ct.database_name = %[7]s AND ct.drop_time IS NULL)
 WHERE pc.relkind IN ('r', 'v', 'S', 'm') %[2]s
 ORDER BY schema_name, table_name
 `
 	var estimatedRowCount string
 	var estimatedRowCountJoin string
 	if showEstimatedRowCountClusterSetting.Get(&d.evalCtx.Settings.SV) {
-		estimatedRowCount = "s.estimated_row_count AS estimated_row_count, "
+		estimatedRowCount = ", s.estimated_row_count AS estimated_row_count"
 		estimatedRowCountJoin = fmt.Sprintf(
 			`LEFT JOIN %[1]s.crdb_internal.table_row_statistics AS s on (s.table_id = pc.oid::INT8)`,
 			&name.CatalogName,
@@ -110,7 +108,6 @@ ORDER BY schema_name, table_name
 		descJoin,
 		estimatedRowCount,
 		estimatedRowCountJoin,
-		lexbase.EscapeSQLString(string(name.CatalogName)),
 	)
 	return d.parse(query)
 }

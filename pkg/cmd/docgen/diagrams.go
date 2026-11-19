@@ -363,28 +363,6 @@ var specs = []stmtSpec{
 		unlink:  []string{"table_name"},
 	},
 	{
-		name: "alter_backup",
-		stmt: "alter_backup_stmt",
-		replace: map[string]string{
-			"'ALTER' 'BACKUP' string_or_placeholder":                   "'ALTER' 'BACKUP' ( 'LATEST' | subdirectory ) 'IN' collectionURI",
-			"'IN' string_or_placeholder":                               "",
-			"alter_backup_cmds":                                        "'ADD' 'NEW_KMS' kmsURI 'WITH' 'OLD_KMS' kmsURI",
-			"'ALTER' 'BACKUP' string_or_placeholder alter_backup_cmds": "",
-		},
-		unlink: []string{"subdirectory", "collectionURI", "kmsURI"},
-	},
-	{
-		name:    "alter_backup_schedule",
-		replace: map[string]string{"iconst64": "schedule_id", "alter_backup_schedule_cmds": "options ( ',' options )*", "options": "'SET' ( 'LABEL' schedule_label | 'INTO' collectionURI | 'WITH' option | 'RECURRING' crontab | 'FULL BACKUP' ( crontab | 'ALWAYS' ) | 'SCHEDULE OPTION' schedule_option )"},
-		unlink:  []string{"schedule_id", "options", "option", "schedule_label", "collectionURI", "crontab", "schedule_option"},
-	},
-	{
-		name:    "alter_changefeed",
-		stmt:    "alter_changefeed_stmt",
-		replace: map[string]string{"a_expr": "job_id", "alter_changefeed_cmds": "( 'ADD' target ( ( ',' target ) )* ( 'WITH' ( initial_scan | no_initial_scan ) )? | 'DROP' target ( ( ',' target ) )* | ( 'SET' | 'UNSET' ) option ( ( ',' option ) )* )+"},
-		unlink:  []string{"job_id", "target", "option", "initial_scan", "no_initial_scan"},
-	},
-	{
 		name:   "alter_column",
 		stmt:   "alter_onetable_stmt",
 		inline: []string{"alter_table_cmds", "alter_table_cmd", "opt_column", "alter_column_default", "opt_set_data", "opt_collate", "opt_alter_column_using"},
@@ -402,18 +380,9 @@ var specs = []stmtSpec{
 	{
 		name:    "alter_database",
 		stmt:    "alter_database_stmt",
-		inline:  []string{"alter_rename_database_stmt", "alter_zone_database_stmt", "alter_database_owner", "alter_database_to_schema_stmt", "alter_database_add_region_stmt", "alter_database_drop_region_stmt", "alter_database_survival_goal_stmt", "alter_database_set_stmt", "alter_database_primary_region_stmt", "alter_database_placement_stmt", "opt_equal", "alter_database_add_super_region", "alter_database_alter_super_region", "alter_database_drop_super_region", "alter_database_set_secondary_region_stmt", "alter_database_drop_secondary_region", "alter_database_set_zone_config_extension_stmt", "set_zone_config", "var_set_list", "survival_goal_clause", "primary_region_clause", "placement_clause", "secondary_region_clause", "set_or_reset_clause", "set_rest", "generic_set", "var_list", "to_or_eq"},
-		replace: map[string]string{"'RENAME' 'TO' database_name": "'RENAME' 'TO' database_new_name", "'SUPER' 'REGION' name": "'SUPER' 'REGION' region_name", "'VALUES' name_list": "'VALUES' region_name_list", "var_name": "variable", "var_value": "value"},
-		unlink:  []string{"database_new_name", "region_name_list", "variable", "value"},
-	},
-	{
-		name:   "alter_database_primary_region",
-		stmt:   "alter_database_primary_region_stmt",
-		inline: []string{"primary_region_clause", "opt_equal"},
-	},
-	{
-		name: "alter_database_drop_region",
-		stmt: "alter_database_drop_region_stmt",
+		inline:  []string{"alter_rename_database_stmt", "alter_zone_database_stmt", "alter_database_owner", "alter_database_to_schema_stmt", "alter_database_set_stmt", "opt_equal", "set_zone_config", "var_set_list", "set_or_reset_clause", "set_rest", "generic_set", "var_list", "to_or_eq"},
+		replace: map[string]string{"'RENAME' 'TO' database_name": "'RENAME' 'TO' database_new_name", "var_name": "variable", "var_value": "value"},
+		unlink:  []string{"database_new_name", "variable", "value"},
 	},
 	{
 		name:    "alter_default_privileges_stmt",
@@ -423,7 +392,7 @@ var specs = []stmtSpec{
 	{
 		name:    "alter_index",
 		stmt:    "alter_index_stmt",
-		inline:  []string{"alter_oneindex_stmt", "alter_index_cmds", "alter_index_cmd", "partition_by_index", "partition_by_inner", "partition_by", "table_index_name", "alter_split_index_stmt", "alter_unsplit_index_stmt", "alter_rename_index_stmt", "alter_zone_index_stmt", "var_set_list", "alter_index_visible_stmt", "set_zone_config", "alter_index_visible"},
+		inline:  []string{"table_index_name", "alter_split_index_stmt", "alter_unsplit_index_stmt", "alter_rename_index_stmt", "alter_zone_index_stmt", "var_set_list", "alter_index_visible_stmt", "set_zone_config", "alter_index_visible"},
 		exclude: []*regexp.Regexp{regexp.MustCompile("alter_scatter_index_stmt")},
 		replace: map[string]string{"standalone_index_name": "index_name", "var_name": "variable", "var_value": "value", "'RENAME' 'TO' index_name": "'RENAME' 'TO' index_new_name"},
 		unlink:  []string{"index_new_name", "variable", "value"},
@@ -470,9 +439,7 @@ var specs = []stmtSpec{
 		stmt:   "create_table_stmt",
 		inline: []string{"opt_table_elem_list", "opt_table_with", "opt_with_storage_parameter_list", "storage_parameter_list", "storage_parameter"},
 		replace: map[string]string{
-			"opt_partition_by_table":     "",
 			"opt_create_table_on_commit": "",
-			"opt_locality":               "",
 			"opt_persistence_temp_table": "",
 			"table_elem_list":            "table_definition",
 		},
@@ -489,7 +456,6 @@ var specs = []stmtSpec{
 			"opt_index_access_method ": "",
 			"opt_hash_sharded ":        "",
 			"opt_storing ":             "",
-			"opt_partition_by_index ":  "",
 			"opt_where_clause":         "",
 		},
 		nosplit: true,
@@ -551,14 +517,14 @@ var specs = []stmtSpec{
 	{
 		name:    "alter_table",
 		stmt:    "alter_table_stmt",
-		inline:  []string{"alter_onetable_stmt", "alter_table_cmds", "alter_split_stmt", "alter_unsplit_stmt", "alter_zone_table_stmt", "alter_rename_table_stmt", "alter_table_set_schema_stmt", "alter_table_locality_stmt", "alter_table_owner_stmt", "set_zone_config", "var_set_list"},
+		inline:  []string{"alter_onetable_stmt", "alter_table_cmds", "alter_split_stmt", "alter_unsplit_stmt", "alter_zone_table_stmt", "alter_rename_table_stmt", "alter_table_set_schema_stmt", "alter_table_owner_stmt", "set_zone_config", "var_set_list"},
 		exclude: []*regexp.Regexp{regexp.MustCompile("alter_scatter_stmt")},
 		replace: map[string]string{"relation_expr": "table_name", "'RENAME' 'TO' table_name": "'RENAME' 'TO' table_new_name", "var_name": "variable", "var_value": "value"},
 		unlink:  []string{"table_name", "table_new_name", "variable", "value"},
 	},
 	{
 		name:    "alter_table_cmds",
-		inline:  []string{"alter_table_cmd", "column_table_def", "col_qual_list", "opt_column", "opt_validate_behavior", "table_constraint", "alter_column_default", "alter_column_visible", "opt_set_data", "opt_collate", "opt_alter_column_using", "alter_column_on_update", "opt_hash_sharded", "opt_with_storage_parameter_list", "opt_drop_behavior", "audit_mode", "partition_by", "partition_by_table", "partition_by_inner", "storage_parameter_list", "storage_parameter", "storage_parameter_key_list"},
+		inline:  []string{"alter_table_cmd", "column_table_def", "col_qual_list", "opt_column", "opt_validate_behavior", "table_constraint", "alter_column_default", "alter_column_visible", "opt_set_data", "opt_collate", "opt_alter_column_using", "alter_column_on_update", "opt_hash_sharded", "opt_with_storage_parameter_list", "opt_drop_behavior", "audit_mode", "storage_parameter_list", "storage_parameter", "storage_parameter_key_list"},
 		replace: map[string]string{"'RENAME' ( 'COLUMN' |  ) column_name 'TO' column_name": "'RENAME' ( 'COLUMN' |  ) column_name 'TO' column_new_name", "'RENAME' 'CONSTRAINT' column_name 'TO' column_name": "'RENAME' 'CONSTRAINT' constraint_name 'TO' constraint_new_name", "opt_hash_sharded_bucket_count ": "", "var_name": "variable", "var_value": "value"},
 		unlink:  []string{"column_new_name", "constraint_name", "constraint_new_name", "variable", "value"},
 		nosplit: true,
@@ -602,29 +568,7 @@ var specs = []stmtSpec{
 		unlink:  []string{"variable", "value"},
 	},
 	{
-		name:    "alter_zone_partition_stmt",
-		inline:  []string{"table_index_name", "set_zone_config", "var_set_list"},
-		replace: map[string]string{"var_name": "variable", "var_value": "value", "standalone_index_name": "index_name"},
-		unlink:  []string{"variable", "value"},
-	},
-	{
 		name: "analyze_stmt",
-	},
-	{
-		name:   "backup",
-		stmt:   "backup_stmt",
-		inline: []string{"opt_backup_targets", "opt_with_backup_options", "opt_as_of_clause", "as_of_clause", "backup_options_list"},
-		match:  []*regexp.Regexp{regexp.MustCompile("'BACKUP' backup_targets 'INTO'")},
-		replace: map[string]string{
-			"grant_targets":                  "( | 'TABLE' table_pattern ( ( ',' table_pattern ) )* | 'DATABASE' database_name ( ( ',' database_name ) )* )",
-			"backup_targets":                 "( | 'TABLE' table_pattern ( ( ',' table_pattern ) )* | 'DATABASE' database_name ( ( ',' database_name ) )* )",
-			"string_or_placeholder_opt_list": "( collectionURI | '(' localityURI ( ',' localityURI )* ')' )",
-			"'INTO'":                         "'INTO' ( | subdirectory 'IN' | 'LATEST' 'IN')",
-			"sconst_or_placeholder":          "subdirectory",
-			"a_expr":                         "timestamp",
-		},
-		unlink:  []string{"backup_targets", "collectionURI", "destination", "timestamp", "localityURI", "subdirectory"},
-		exclude: []*regexp.Regexp{regexp.MustCompile("'IN'")},
 	},
 	{
 		name: "begin_stmt",
@@ -726,25 +670,12 @@ var specs = []stmtSpec{
 	},
 	{
 		name:   "create_database_stmt",
-		inline: []string{"opt_with", "opt_encoding_clause", "opt_connection_limit", "opt_equal", "opt_primary_region_clause", "primary_region_clause", "opt_regions_list", "region_or_regions", "opt_survival_goal_clause", "survival_goal_clause", "opt_equal"},
+		inline: []string{"opt_with", "opt_encoding_clause", "opt_connection_limit", "opt_equal"},
 		replace: map[string]string{
 			"non_reserved_word_or_sconst": "encoding",
 			"signed_iconst":               "limit"},
 		unlink:  []string{"non_reserved_word_or_sconst", "signed_iconst", "encoding", "limit"},
 		nosplit: true,
-	},
-	{
-		name:   "create_changefeed_stmt",
-		inline: []string{"changefeed_targets", "opt_changefeed_sink", "opt_with_options", "kv_option_list", "kv_option"},
-		replace: map[string]string{
-			"table_option":                 "table_name",
-			"'INTO' string_or_placeholder": "'INTO' sink",
-			"name":                         "option",
-			"'SCONST'":                     "option",
-			"'=' string_or_placeholder":    "'=' value"},
-		exclude: []*regexp.Regexp{
-			regexp.MustCompile("'OPTIONS'")},
-		unlink: []string{"table_name", "sink", "option", "value"},
 	},
 	{
 		name:    "create_external_connection_stmt",
@@ -758,7 +689,6 @@ var specs = []stmtSpec{
 			"'ON' a_expr":                    "'ON' column_name",
 			"opt_hash_sharded_bucket_count ": "",
 			"opt_nulls_order":                "",
-			"opt_partition_by_index":         "( 'PARTITION' ( 'ALL' | ) 'BY' partition_by_inner | )",
 		},
 		regreplace: map[string]string{
 			".* 'CREATE' .* 'INVERTED' 'INDEX' .*": "",
@@ -771,32 +701,9 @@ var specs = []stmtSpec{
 		match:  []*regexp.Regexp{regexp.MustCompile("'CREATE' .* 'INVERTED' 'INDEX'")},
 		inline: []string{"opt_unique", "opt_storing", "storing", "index_params", "index_elem", "opt_asc_desc", "opt_concurrently", "opt_with_storage_parameter_list", "storage_parameter_list"},
 		replace: map[string]string{
-			"opt_nulls_order":        "",
-			"opt_partition_by_index": "( 'PARTITION' ( 'ALL' | ) 'BY' partition_by_inner | )",
+			"opt_nulls_order": "",
 		},
 		nosplit: true,
-	},
-	{
-		name:   "create_schedule_for_backup_stmt",
-		inline: []string{"string_or_placeholder_opt_list", "string_or_placeholder_list", "opt_with_backup_options", "cron_expr", "opt_full_backup_clause", "opt_with_schedule_options", "opt_backup_targets"},
-		replace: map[string]string{
-			"string_or_placeholder": "collectionURI",
-			"sconst_or_placeholder": "crontab",
-			"schedule_label_spec":   "( 'IF NOT EXISTS' | )  schedule_label",
-			"backup_targets":        "( | ( 'TABLE' | ) table_pattern ( ( ',' table_pattern ) )* | 'DATABASE' database_name ( ( ',' database_name ) )* )",
-			"kv_option_list":        "schedule_option"},
-		unlink: []string{"schedule_label", "collection_URI", "crontab", "schedule_option"},
-	},
-	{
-		name:   "create_schedule_for_changefeed_stmt",
-		inline: []string{"opt_with_schedule_options", "changefeed_targets", "table_pattern", "opt_where_clause", "changefeed_target_expr", "cron_expr"},
-		replace: map[string]string{
-			"schedule_label_spec":   "( 'IF NOT EXISTS' | )  schedule_label",
-			"changefeed_sink":       "( 'INTO' changefeed_sink )",
-			"sconst_or_placeholder": "crontab",
-			"kv_option_list":        "schedule_option",
-			"opt_with_options":      "( | 'WITH' changefeed_option ( ',' changefeed_option )* )"},
-		unlink: []string{"schedule_label", "schedule_option", "changefeed_sink", "changefeed_option", "crontab"},
 	},
 	{
 		name:    "create_schema_stmt",
@@ -832,7 +739,7 @@ var specs = []stmtSpec{
 		replace: map[string]string{
 			"func_as":                          "'SCONST'",
 			"'AS'":                             "'AS' routine_body_str",
-			"non_reserved_word_or_sconst":      "('SQL' | 'PLPGSQL')",
+			"non_reserved_word_or_sconst":      "'SQL'",
 			"( 'SCONST' ) ( ',' 'SCONST' |  )": "",
 			"'DEFAULT'":                        "",
 			"'='":                              "",
@@ -850,19 +757,13 @@ var specs = []stmtSpec{
 			"common_routine_opt_item":          "",
 			"'AS'":                             "'AS' routine_body_str",
 			"opt_routine_body":                 "",
-			"non_reserved_word_or_sconst":      "( 'SQL' | 'PLPGSQL' )",
+			"non_reserved_word_or_sconst":      "'SQL'",
 			"'RETURN'":                         "",
 			"( 'SCONST' ) ( ',' 'SCONST' |  )": "",
 			"'='":                              "",
 			"a_expr":                           "",
 			"'ATOMIC'":                         ""},
 		nosplit: true,
-	},
-	{
-		name:    "opt_locality",
-		inline:  []string{"locality"},
-		replace: map[string]string{" name": "column_name"},
-		unlink:  []string{"column_name"},
 	},
 	{
 		name: "create_type",
@@ -1020,26 +921,6 @@ var specs = []stmtSpec{
 		},
 	},
 	{
-		name:   "alter_table_partition_by",
-		stmt:   "alter_onetable_stmt",
-		inline: []string{"alter_table_cmds", "alter_table_cmd", "partition_by_table"},
-		replace: map[string]string{
-			"relation_expr": "table_name",
-			"partition_by ": "'PARTITION' 'BY' partition_by_inner ",
-		},
-		regreplace: map[string]string{
-			`'NOTHING' .*`:        `'NOTHING'`,
-			`_partitions '\)' .*`: `_partitions ')'`,
-		},
-		match: []*regexp.Regexp{regexp.MustCompile("relation_expr 'PARTITION")},
-	},
-	{
-		name:    "alter_index_partition_by",
-		stmt:    "alter_oneindex_stmt",
-		inline:  []string{"alter_index_cmds", "alter_index_cmd", "partition_by", "table_index_name"},
-		replace: map[string]string{"standalone_index_name": "index_name"},
-	},
-	{
 		name:   "explain_stmt",
 		inline: []string{"explain_option_list"},
 		replace: map[string]string{
@@ -1093,7 +974,6 @@ var specs = []stmtSpec{
 		inline: []string{"opt_storing", "storing", "index_params", "opt_name", "opt_hash_sharded"},
 		replace: map[string]string{
 			"opt_hash_sharded_bucket_count ": "",
-			"opt_partition_by_index":         "( 'PARTITION' ( 'ALL' | ) 'BY' partition_by_inner | )",
 		},
 	},
 	{
@@ -1240,23 +1120,6 @@ var specs = []stmtSpec{
 		match:   []*regexp.Regexp{regexp.MustCompile("'ALTER' 'TABLE' .* 'RENAME' 'TO'")},
 		replace: map[string]string{"relation_expr": "current_name", "qualified_name": "new_name"},
 		unlink:  []string{"current_name"}, relink: map[string]string{"new_name": "name"}},
-	{
-		name:   "restore",
-		stmt:   "restore_stmt",
-		inline: []string{"opt_as_of_clause", "as_of_clause", "opt_with_restore_options"},
-		match:  []*regexp.Regexp{regexp.MustCompile("'FROM'")},
-		replace: map[string]string{
-			"a_expr": "timestamp",
-			"'WITH' 'OPTIONS' '(' kv_option_list ')'": "",
-			"backup_targets":                         "( 'TABLE' table_pattern ( ( ',' table_pattern ) )* | 'DATABASE' database_name ( ( ',' database_name ) )* )",
-			"string_or_placeholder":                  "( ( subdirectory | 'LATEST' ) )",
-			"list_of_string_or_placeholder_opt_list": "( collectionURI | '(' localityURI ( ',' localityURI )* ')' )",
-		},
-		unlink: []string{"subdirectory", "timestamp", "collectionURI", "localityURI"},
-		exclude: []*regexp.Regexp{
-			regexp.MustCompile("'REPLICATION' 'STREAM' 'FROM'"),
-		},
-	},
 	{
 		name:    "resume_job",
 		stmt:    "resume_jobs_stmt",
@@ -1440,17 +1303,6 @@ var specs = []stmtSpec{
 		stmt: "show_full_scans_stmt",
 	},
 	{
-		name:   "show_backup",
-		stmt:   "show_backup_stmt",
-		inline: []string{"opt_with_options"},
-		replace: map[string]string{
-			"'BACKUPS' 'IN' string_or_placeholder":                      "'BACKUPS' 'IN' location",
-			"'BACKUP' string_or_placeholder 'IN' string_or_placeholder": "'BACKUP' subdirectory 'IN' location",
-			"'BACKUP' 'SCHEMAS' string_or_placeholder":                  "'BACKUP' 'SCHEMAS' location",
-		},
-		unlink: []string{"subdirectory", "location", "location_opt_list"},
-	},
-	{
 		name:    "show_jobs",
 		stmt:    "show_jobs_stmt",
 		replace: map[string]string{"a_expr": "job_id"},
@@ -1486,13 +1338,6 @@ var specs = []stmtSpec{
 		name:    "show_locality",
 		stmt:    "show_roles_stmt",
 		replace: map[string]string{"'ROLES'": "'LOCALITY'"},
-	},
-	{
-		name: "show_partitions_stmt",
-	},
-	{
-		name: "show_regions",
-		stmt: "show_regions_stmt",
 	},
 	{
 		name:   "show_statements",
@@ -1565,7 +1410,7 @@ var specs = []stmtSpec{
 	},
 	{
 		name:   "show_zone_stmt",
-		inline: []string{"opt_partition", "table_index_name", "partition", "from_with_implicit_for_alias"},
+		inline: []string{"table_index_name", "from_with_implicit_for_alias"},
 	},
 	{
 		name:   "sort_clause",
@@ -1587,7 +1432,6 @@ var specs = []stmtSpec{
 		inline: []string{"constraint_elem", "opt_storing", "storing", "opt_hash_sharded"},
 		replace: map[string]string{
 			"opt_hash_sharded_bucket_count ": "",
-			"opt_partition_by_index":         "( 'PARTITION' ( 'ALL' | ) 'BY' partition_by_inner | )",
 		},
 	},
 	{
@@ -1681,14 +1525,6 @@ var specs = []stmtSpec{
 	{
 		name:   "opt_frame_clause",
 		inline: []string{"frame_extent"},
-	},
-	{
-		name:   "backup_options",
-		inline: []string{"include_all_clusters"},
-	},
-	{
-		name:   "restore_options",
-		inline: []string{"include_all_clusters", "virtual_cluster_name", "virtual_cluster_opt"},
 	},
 }
 

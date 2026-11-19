@@ -24,11 +24,7 @@ func TestPostgresMutator(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	rng, _ := randutil.NewTestRand()
 	q := `
-		CREATE TABLE t (s STRING FAMILY fam1, b BYTES, FAMILY fam2 (b), PRIMARY KEY (s ASC, b DESC), INDEX (s) STORING (b), c TEXT COLLATE en_US NOT NULL)
-		    PARTITION BY LIST (s)
-		        (
-		            PARTITION europe_west VALUES IN ('a', 'b')
-		        );
+		CREATE TABLE t (s STRING FAMILY fam1, b BYTES, FAMILY fam2 (b), PRIMARY KEY (s ASC, b DESC), INDEX (s) STORING (b), c TEXT COLLATE en_US NOT NULL);
 		ALTER TABLE table1 INJECT STATISTICS 'blah';
 		SET CLUSTER SETTING "sql.stats.automatic_collection.enabled" = false;
 	`
@@ -48,7 +44,7 @@ func TestPostgresMutator(t *testing.T) {
 			name:     "postgresCreateTableMutator",
 			original: q,
 			mutators: []randgen.Mutator{randgen.PostgresCreateTableMutator},
-			mutated:  "CREATE TABLE t (s STRING FAMILY fam1, b BYTES, FAMILY fam2 (b), PRIMARY KEY (s, b), c STRING NOT NULL) PARTITION BY LIST (s) (PARTITION europe_west VALUES IN ('a', 'b'));\nCREATE INDEX ON t (s) STORING (b);\nALTER TABLE table1 INJECT STATISTICS 'blah';\nSET CLUSTER SETTING \"sql.stats.automatic_collection.enabled\" = false;",
+			mutated:  "CREATE TABLE t (s STRING FAMILY fam1, b BYTES, FAMILY fam2 (b), PRIMARY KEY (s, b), c STRING NOT NULL);\nCREATE INDEX ON t (s) STORING (b);\nALTER TABLE table1 INJECT STATISTICS 'blah';\nSET CLUSTER SETTING \"sql.stats.automatic_collection.enabled\" = false;",
 			changed:  true,
 		},
 		{

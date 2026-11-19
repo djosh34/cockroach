@@ -621,12 +621,6 @@ type PrimaryKeySwap interface {
 	// ForEachNewIndexIDs iterates through each of the new index IDs.
 	// iterutil.StopIteration is supported.
 	ForEachNewIndexIDs(fn func(id descpb.IndexID) error) error
-
-	// HasLocalityConfig returns true iff the locality config is swapped also.
-	HasLocalityConfig() bool
-
-	// LocalityConfigSwap returns the locality config swap, if there is one.
-	LocalityConfigSwap() descpb.PrimaryKeySwap_LocalityConfigSwap
 }
 
 // ComputedColumnSwap is an interface around a computed column swap mutation.

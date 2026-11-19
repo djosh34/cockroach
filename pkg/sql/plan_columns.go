@@ -171,8 +171,6 @@ func getPlanColumns(plan planNode, mut bool) colinfo.ResultColumns {
 		}
 	case *rowSourceToPlanNode:
 		return n.planCols
-	case *cdcValuesNode:
-		return n.resultColumns
 
 	case *identifySystemNode:
 		return n.getColumns(mut, colinfo.IdentifySystemColumns)

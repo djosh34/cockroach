@@ -10,8 +10,8 @@
 
 // Package ui embeds the assets for the web UI into the Cockroach binary.
 //
-// By default, it serves a stub web UI. Linking with distoss or distccl will
-// replace the stubs with the OSS UI or the CCL UI, respectively. The exported
+// By default, it serves a stub web UI. Linking with distoss will replace
+// the stubs with the web UI. The exported
 // symbols in this package are thus function pointers instead of functions so
 // that they can be mutated by init hooks.
 package ui
@@ -32,7 +32,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/util/httputil"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
-	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 )
 
 const (
@@ -83,40 +82,12 @@ var indexHTML = []byte(`<!DOCTYPE html>
 
 type indexHTMLArgs struct {
 	// Insecure means disable auth entirely - anyone can use.
-	Insecure         bool
-	LoggedInUser     *string
-	Tag              string
-	Version          string
-	NodeID           string
-	OIDCAutoLogin    bool
-	OIDCLoginEnabled bool
-	OIDCButtonText   string
-	FeatureFlags     serverpb.FeatureFlags
-
-	OIDCGenerateJWTAuthTokenEnabled bool
-
-	LicenseType               string
-	SecondsUntilLicenseExpiry int64
-}
-
-// OIDCUIConf is a variable that stores data required by the
-// Admin UI to display and manage the OIDC login flow. It is
-// provided by the `oidcAuthenticationServer` at runtime
-// since that's where all the OIDC configuration is centralized.
-type OIDCUIConf struct {
-	ButtonText string
-	AutoLogin  bool
-	Enabled    bool
-
-	GenerateJWTAuthTokenEnabled bool
-}
-
-// OIDCUI is an interface that our OIDC configuration must implement in order to be able
-// to pass relevant configuration info to the ui module. This is to pass through variables that
-// are necessary to render an appropriate user interface for OIDC support and to set the state
-// cookie that OIDC requires for securing auth requests.
-type OIDCUI interface {
-	GetOIDCConf() OIDCUIConf
+	Insecure     bool
+	LoggedInUser *string
+	Tag          string
+	Version      string
+	NodeID       string
+	FeatureFlags serverpb.FeatureFlags
 }
 
 // bareIndexHTML is used in place of indexHTMLTemplate when the binary is built
@@ -132,7 +103,6 @@ type Config struct {
 	Insecure bool
 	NodeID   *base.NodeIDContainer
 	GetUser  func(ctx context.Context) *string
-	OIDC     OIDCUI
 	Flags    serverpb.FeatureFlags
 	Settings *cluster.Settings
 }
@@ -164,26 +134,12 @@ func Handler(cfg Config) http.Handler {
 	buildInfo := build.GetInfo()
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		licenseType, err := base.LicenseType(cfg.Settings)
-		if err != nil {
-			log.Errorf(context.Background(), "unable to get license type: %+v", err)
-		}
-		licenseTTL := base.GetLicenseTTL(r.Context(), cfg.Settings, timeutil.DefaultTimeSource{})
-		oidcConf := cfg.OIDC.GetOIDCConf()
 		args := indexHTMLArgs{
-			Insecure:         cfg.Insecure,
-			LoggedInUser:     cfg.GetUser(r.Context()),
-			Tag:              buildInfo.Tag,
-			Version:          build.BinaryVersionPrefix(),
-			OIDCAutoLogin:    oidcConf.AutoLogin,
-			OIDCLoginEnabled: oidcConf.Enabled,
-			OIDCButtonText:   oidcConf.ButtonText,
-			FeatureFlags:     cfg.Flags,
-
-			OIDCGenerateJWTAuthTokenEnabled: oidcConf.GenerateJWTAuthTokenEnabled,
-
-			LicenseType:               licenseType,
-			SecondsUntilLicenseExpiry: licenseTTL,
+			Insecure:     cfg.Insecure,
+			LoggedInUser: cfg.GetUser(r.Context()),
+			Tag:          buildInfo.Tag,
+			Version:      build.BinaryVersionPrefix(),
+			FeatureFlags: cfg.Flags,
 		}
 		if cfg.NodeID != nil {
 			args.NodeID = cfg.NodeID.String()

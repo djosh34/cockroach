@@ -1,7 +1,7 @@
 `dev` is the general-purpose dev tool for working on cockroachdb/cockroach; it's
 powered by Bazel underneath the hood. With it you can:
 
-- build various binaries (cockroach, roachprod, optgen, ...)
+- build various binaries (cockroach-oss, optgen, ...)
 - run arbitrary tests (unit tests, logic tests, ...) under various configurations (stress, race, ...)
 - generate code (bazel files, docs, protos, ...)
 

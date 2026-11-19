@@ -28,15 +28,12 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/execinfrapb"
 	"github.com/cockroachdb/cockroach/pkg/sql/execstats"
 	"github.com/cockroachdb/cockroach/pkg/sql/memsize"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/row"
 	"github.com/cockroachdb/cockroach/pkg/sql/rowcontainer"
 	"github.com/cockroachdb/cockroach/pkg/sql/rowenc"
 	"github.com/cockroachdb/cockroach/pkg/sql/rowinfra"
 	"github.com/cockroachdb/cockroach/pkg/sql/scrub"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
-	"github.com/cockroachdb/cockroach/pkg/sql/sqlerrors"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/cockroach/pkg/util"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
@@ -155,7 +152,7 @@ type joinReader struct {
 
 	input execinfra.RowSource
 
-	// lookupCols and lookupExpr (and optionally remoteLookupExpr) represent the
+	// lookupCols and lookupExpr represent the
 	// part of the join condition used to perform the lookup into the index.
 	// Exactly one of lookupCols or lookupExpr must be non-empty.
 	//
@@ -169,15 +166,8 @@ type joinReader struct {
 	// lookupExpr specifies the expression that will be used to construct the
 	// spans for each lookup. See comments in the spec for details about the
 	// supported expressions.
-	//
-	// If remoteLookupExpr is set, this is a locality optimized lookup join. In
-	// this case, lookupExpr contains the lookup join conditions targeting ranges
-	// located on local nodes (relative to the gateway region), and
-	// remoteLookupExpr contains the lookup join conditions targeting remote
-	// nodes. See comments in the spec for more details.
-	lookupCols       []uint32
-	lookupExpr       execinfrapb.ExprHelper
-	remoteLookupExpr execinfrapb.ExprHelper
+	lookupCols []uint32
+	lookupExpr execinfrapb.ExprHelper
 
 	// spansCanOverlap indicates whether the spans generated for a given input
 	// batch can overlap. It is used in the fetcher when deciding whether a newly
@@ -249,17 +239,6 @@ type joinReader struct {
 	// limitHintHelper is used in limiting batches of input rows in the presence
 	// of hard and soft limits.
 	limitHintHelper execinfra.LimitHintHelper
-
-	// Set errorOnLookup to true to cause the join to error out just prior to
-	// performing a lookup. This is currently only set when the join contains
-	// only lookups to rows in remote regions and remote accesses are set to
-	// error out via a session setting.
-	errorOnLookup bool
-
-	// allowEnforceHomeRegionFollowerReads, if true, causes errors produced by the
-	// above `errorOnLookup` flag to be retryable, and use follower reads to find
-	// the query's home region during the retries.
-	allowEnforceHomeRegionFollowerReads bool
 }
 
 var _ execinfra.Processor = &joinReader{}
@@ -307,9 +286,6 @@ func newJoinReader(
 		if !spec.LookupExpr.Empty() {
 			return nil, errors.AssertionFailedf("non-empty lookup expressions are not supported for index joins")
 		}
-		if !spec.RemoteLookupExpr.Empty() {
-			return nil, errors.AssertionFailedf("non-empty remote lookup expressions are not supported for index joins")
-		}
 		if !spec.OnExpr.Empty() {
 			return nil, errors.AssertionFailedf("non-empty ON expressions are not supported for index joins")
 		}
@@ -352,24 +328,19 @@ func newJoinReader(
 		return nil, err
 	}
 
-	errorOnLookup := spec.RemoteOnlyLookups &&
-		flowCtx.EvalCtx.Planner != nil && flowCtx.EvalCtx.Planner.EnforceHomeRegion()
-
 	jr := &joinReader{
-		fetchSpec:                           spec.FetchSpec,
-		splitFamilyIDs:                      spec.SplitFamilyIDs,
-		maintainOrdering:                    spec.MaintainOrdering,
-		input:                               input,
-		lookupCols:                          lookupCols,
-		outputGroupContinuationForLeftRow:   spec.OutputGroupContinuationForLeftRow,
-		shouldLimitBatches:                  shouldLimitBatches,
-		readerType:                          readerType,
-		txn:                                 txn,
-		usesStreamer:                        useStreamer,
-		lookupBatchBytesLimit:               rowinfra.BytesLimit(spec.LookupBatchBytesLimit),
-		limitHintHelper:                     execinfra.MakeLimitHintHelper(spec.LimitHint, post),
-		errorOnLookup:                       errorOnLookup,
-		allowEnforceHomeRegionFollowerReads: flowCtx.EvalCtx.SessionData().EnforceHomeRegionFollowerReadsEnabled,
+		fetchSpec:                         spec.FetchSpec,
+		splitFamilyIDs:                    spec.SplitFamilyIDs,
+		maintainOrdering:                  spec.MaintainOrdering,
+		input:                             input,
+		lookupCols:                        lookupCols,
+		outputGroupContinuationForLeftRow: spec.OutputGroupContinuationForLeftRow,
+		shouldLimitBatches:                shouldLimitBatches,
+		readerType:                        readerType,
+		txn:                               txn,
+		usesStreamer:                      useStreamer,
+		lookupBatchBytesLimit:             rowinfra.BytesLimit(spec.LookupBatchBytesLimit),
+		limitHintHelper:                   execinfra.MakeLimitHintHelper(spec.LimitHint, post),
 	}
 	if readerType != indexJoinReaderType {
 		jr.groupingState = &inputBatchGroupingState{doGrouping: spec.LeftJoinWithPairedJoiner}
@@ -437,13 +408,6 @@ func newJoinReader(
 		semaCtx := flowCtx.NewSemaContext(jr.txn)
 		if err := jr.lookupExpr.Init(ctx, spec.LookupExpr, lookupExprTypes, semaCtx, jr.EvalCtx); err != nil {
 			return nil, err
-		}
-		if !spec.RemoteLookupExpr.Empty() {
-			if err := jr.remoteLookupExpr.Init(
-				ctx, spec.RemoteLookupExpr, lookupExprTypes, semaCtx, jr.EvalCtx,
-			); err != nil {
-				return nil, err
-			}
 		}
 	}
 
@@ -632,9 +596,8 @@ func (jr *joinReader) initJoinReaderStrategy(
 		}
 		generator = defGen
 	} else {
-		// Since jr.lookupExpr is set, we need to use either multiSpanGenerator or
-		// localityOptimizedSpanGenerator, which support looking up multiple spans
-		// per input row.
+		// Since jr.lookupExpr is set, we need to use multiSpanGenerator, which
+		// supports looking up multiple spans per input row.
 
 		// Map fetched columns to index key columns.
 		var fetchedOrdToIndexKeyOrd util.FastIntMap
@@ -649,43 +612,21 @@ func (jr *joinReader) initJoinReaderStrategy(
 			}
 		}
 
-		// If jr.remoteLookupExpr is set, this is a locality optimized lookup join
-		// and we need to use localityOptimizedSpanGenerator.
+		multiSpanGen := &multiSpanGenerator{}
 		var err error
-		if jr.remoteLookupExpr.Expr == nil {
-			multiSpanGen := &multiSpanGenerator{}
-			if jr.spansCanOverlap, err = multiSpanGen.init(
-				flowCtx.EvalCtx,
-				flowCtx.Codec(),
-				&jr.fetchSpec,
-				jr.splitFamilyIDs,
-				len(jr.input.OutputTypes()),
-				&jr.lookupExpr,
-				fetchedOrdToIndexKeyOrd,
-				&spanGeneratorMemAcc,
-			); err != nil {
-				return err
-			}
-			generator = multiSpanGen
-		} else {
-			localityOptSpanGen := &localityOptimizedSpanGenerator{}
-			remoteSpanGenMemAcc := jr.MemMonitor.MakeBoundAccount()
-			if jr.spansCanOverlap, err = localityOptSpanGen.init(
-				flowCtx.EvalCtx,
-				flowCtx.Codec(),
-				&jr.fetchSpec,
-				jr.splitFamilyIDs,
-				len(jr.input.OutputTypes()),
-				&jr.lookupExpr,
-				&jr.remoteLookupExpr,
-				fetchedOrdToIndexKeyOrd,
-				&spanGeneratorMemAcc,
-				&remoteSpanGenMemAcc,
-			); err != nil {
-				return err
-			}
-			generator = localityOptSpanGen
+		if jr.spansCanOverlap, err = multiSpanGen.init(
+			flowCtx.EvalCtx,
+			flowCtx.Codec(),
+			&jr.fetchSpec,
+			jr.splitFamilyIDs,
+			len(jr.input.OutputTypes()),
+			&jr.lookupExpr,
+			fetchedOrdToIndexKeyOrd,
+			&spanGeneratorMemAcc,
+		); err != nil {
+			return err
 		}
+		generator = multiSpanGen
 	}
 
 	defer func() {
@@ -1011,18 +952,6 @@ func (jr *joinReader) readInput() (
 		// All of the input rows were filtered out. Skip the index lookup.
 		return jrEmittingRows, outRow, nil
 	}
-	if jr.errorOnLookup {
-		// If spans has a non-zero length, the call to StartScan below will
-		// perform a batch lookup of kvs, so error out before that happens if
-		// we were instructed to do so via the errorOnLookup flag.
-		err = noHomeRegionError
-		if jr.allowEnforceHomeRegionFollowerReads {
-			err = execinfra.NewDynamicQueryHasNoHomeRegionError(err)
-		}
-		jr.MoveToDraining(err)
-		return jrStateUnknown, nil, jr.DrainHelper()
-	}
-
 	// Sort the spans by key order, except for a special case: an index-join with
 	// maintainOrdering. That case can be executed efficiently if we don't sort:
 	// we know that, for an index-join, each input row corresponds to exactly one
@@ -1069,10 +998,6 @@ func (jr *joinReader) readInput() (
 	return jrFetchingLookupRows, outRow, nil
 }
 
-var noHomeRegionError = pgerror.Newf(pgcode.QueryHasNoHomeRegion,
-	"Query has no home region. Try using a lower LIMIT value or running the query from a different region. %s",
-	sqlerrors.EnforceHomeRegionFurtherInfo)
-
 // fetchLookupRow fetches the next lookup row from the fetcher's batchResponse
 // buffer, which was filled via a call to StartScan in joinReader.readInput.
 // It also starts the KV lookups for the remote branch of locality-optimized
@@ -1097,42 +1022,6 @@ func (jr *joinReader) fetchLookupRow() (joinReaderState, *execinfrapb.ProducerMe
 			return jrStateUnknown, jr.DrainHelper()
 		} else if nextState != jrFetchingLookupRows {
 			return nextState, nil
-		}
-	}
-
-	// If this is a locality optimized lookup join and we haven't yet generated
-	// remote spans, check whether all input rows in the batch had local matches.
-	// If not all rows matched, generate remote spans and start a scan to search
-	// the remote nodes for the current batch.
-	if jr.remoteLookupExpr.Expr != nil && !jr.strategy.generatedRemoteSpans() &&
-		jr.curBatchRowsRead != jr.curBatchInputRowCount {
-		spans, spanIDs, err := jr.strategy.generateRemoteSpans()
-		if err != nil {
-			jr.MoveToDraining(err)
-			return jrStateUnknown, jr.DrainHelper()
-		}
-
-		if len(spans) != 0 {
-			if !jr.usesStreamer || jr.streamerInfo.maintainOrdering {
-				// Sort the spans so that we can rely upon the fetcher to limit
-				// the number of results per batch. It's safe to reorder the
-				// spans here because we already restore the original order of
-				// the output during the output collection phase.
-				//
-				// We don't want to sort the spans here if we're using the
-				// Streamer, and it will perform the sort on its own -
-				// currently, this is the case with OutOfOrder mode.
-				sortSpans(spans, spanIDs)
-			}
-
-			log.VEventf(jr.Ctx(), 1, "scanning %d remote spans", len(spans))
-			if err := jr.fetcher.StartScan(
-				jr.Ctx(), spans, spanIDs, jr.getBatchBytesLimit(), rowinfra.NoRowLimit,
-			); err != nil {
-				jr.MoveToDraining(err)
-				return jrStateUnknown, jr.DrainHelper()
-			}
-			return jrFetchingLookupRows, nil
 		}
 	}
 

@@ -52,21 +52,9 @@ WHERE status='%s' AND created_by_type='%s' AND created_by_id=schedule_id
 	}
 
 	switch n.ExecutorType {
-	case tree.ScheduledBackupExecutor:
-		whereExprs = append(whereExprs, fmt.Sprintf(
-			"executor_type = '%s'", tree.ScheduledBackupExecutor.InternalName()))
-		columnExprs = append(columnExprs, fmt.Sprintf(
-			"%s->>'backup_statement' AS command", commandColumn))
-		columnExprs = append(columnExprs, fmt.Sprintf(
-			"(CASE WHEN %s->>'backup_type' IS NULL THEN 'FULL' ELSE 'INCREMENTAL' END) AS backup_type", commandColumn))
 	case tree.ScheduledSQLStatsCompactionExecutor:
 		whereExprs = append(whereExprs, fmt.Sprintf(
 			"executor_type = '%s'", tree.ScheduledSQLStatsCompactionExecutor.InternalName()))
-	case tree.ScheduledChangefeedExecutor:
-		whereExprs = append(whereExprs, fmt.Sprintf(
-			"executor_type = '%s'", tree.ScheduledChangefeedExecutor.InternalName()))
-		columnExprs = append(columnExprs, fmt.Sprintf(
-			"%s->>'changefeed_statement' AS command", commandColumn))
 	default:
 		// Strip out '@type' tag from the ExecutionArgs.args, and display what's left.
 		columnExprs = append(columnExprs, fmt.Sprintf("%s #-'{@type}' AS command", commandColumn))

@@ -34,12 +34,6 @@ type Server interface {
 	// the caller as an HTTP cookie, added via a "Set-Cookie" header.
 	UserLogin(ctx context.Context, req *serverpb.UserLoginRequest) (*serverpb.UserLoginResponse, error)
 
-	// UserLoginFromSSO checks for the existence of a given username and
-	// if it exists, creates a session for the username in the
-	// `web_sessions` table. The session's ID and secret are returned to
-	// the caller as an HTTP cookie, added via a "Set-Cookie" header.
-	UserLoginFromSSO(ctx context.Context, reqUsername string) (*http.Cookie, error)
-
 	// UserLogout allows a user to terminate their currently active session.
 	UserLogout(ctx context.Context, req *serverpb.UserLogoutRequest) (*serverpb.UserLogoutResponse, error)
 

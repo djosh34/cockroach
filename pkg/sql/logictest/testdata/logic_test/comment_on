@@ -4,41 +4,41 @@ CREATE DATABASE db
 statement ok
 COMMENT ON DATABASE db IS 'A'
 
-query TTTTTTT colnames,rowsort
+query TTT colnames,rowsort
 SHOW DATABASES WITH COMMENT
 ----
-database_name  owner  primary_region  secondary_region  regions  survival_goal  comment
-db             root   NULL            NULL              {}       NULL           A
-defaultdb      root   NULL            NULL              {}       NULL           NULL
-postgres       root   NULL            NULL              {}       NULL           NULL
-system         node   NULL            NULL              {}       NULL           NULL
-test           root   NULL            NULL              {}       NULL           NULL
+database_name  owner  comment
+db             root   A
+defaultdb      root   NULL
+postgres       root   NULL
+system         node   NULL
+test           root   NULL
 
 statement ok
 COMMENT ON DATABASE db IS 'AAA'
 
-query TTTTTTT colnames,rowsort
+query TTT colnames,rowsort
 SHOW DATABASES WITH COMMENT
 ----
-database_name  owner  primary_region  secondary_region  regions  survival_goal  comment
-db             root   NULL            NULL              {}       NULL           AAA
-defaultdb      root   NULL            NULL              {}       NULL           NULL
-postgres       root   NULL            NULL              {}       NULL           NULL
-system         node   NULL            NULL              {}       NULL           NULL
-test           root   NULL            NULL              {}       NULL           NULL
+database_name  owner  comment
+db             root   AAA
+defaultdb      root   NULL
+postgres       root   NULL
+system         node   NULL
+test           root   NULL
 
 statement ok
 COMMENT ON DATABASE db IS NULL;
 
-query TTTTTTT colnames,rowsort
+query TTT colnames,rowsort
 SHOW DATABASES WITH COMMENT
 ----
-database_name  owner  primary_region  secondary_region  regions  survival_goal  comment
-db             root   NULL            NULL              {}       NULL           NULL
-defaultdb      root   NULL            NULL              {}       NULL           NULL
-postgres       root   NULL            NULL              {}       NULL           NULL
-system         node   NULL            NULL              {}       NULL           NULL
-test           root   NULL            NULL              {}       NULL           NULL
+database_name  owner  comment
+db             root   NULL
+defaultdb      root   NULL
+postgres       root   NULL
+system         node   NULL
+test           root   NULL
 
 statement ok
 CREATE SCHEMA sc

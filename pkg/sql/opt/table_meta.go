@@ -11,15 +11,9 @@
 package opt
 
 import (
-	"context"
 	"math/rand"
 
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/multiregion"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/cat"
-	"github.com/cockroachdb/cockroach/pkg/sql/opt/partition"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/util/buildutil"
 	"github.com/cockroachdb/cockroach/pkg/util/intsets"
@@ -126,9 +120,6 @@ const maxTableAnnIDCount = 4
 // NotNullAnnID is the annotation ID for table not null columns.
 var NotNullAnnID = NewTableAnnID()
 
-// regionConfigAnnID is the annotation ID for multiregion table config.
-var regionConfigAnnID = NewTableAnnID()
-
 // TableMeta stores information about one of the tables stored in the metadata.
 //
 // NOTE: Metadata.DuplicateTable and TableMeta.copyFrom must be kept in sync
@@ -185,21 +176,6 @@ type TableMeta struct {
 	// index. If an index is not a partial index, it will not have an entry in
 	// the map.
 	partialIndexPredicates map[cat.IndexOrdinal]ScalarExpr
-
-	// indexPartitionLocalities is a slice containing PrefixSorters for each
-	// index that has local and remote partitions. The i-th PrefixSorter in the
-	// slice corresponds to the i-th index in the table.
-	//
-	// The PrefixSorters represent the PARTITION BY LIST values of the index and
-	// whether each of those partitions is region-local with respect to the
-	// query being run. If an index is partitioned BY LIST, and has both local
-	// and remote partitions, it will have an entry in the map. Local partitions
-	// are those where all row ranges they own have a preferred region for
-	// leaseholder nodes the same as the gateway region of the current
-	// connection that is running the query. Remote partitions have at least one
-	// row range with a leaseholder preferred region which is different from the
-	// gateway region.
-	indexPartitionLocalities []partition.PrefixSorter
 
 	// checkConstraintsStats is a map from the current ColumnID statistics based
 	// on CHECK constraint values is based on back to the original ColumnStatistic
@@ -329,7 +305,6 @@ func (tm *TableMeta) copyFrom(from *TableMeta, copyScalarFn func(Expr) Expr) {
 
 	// This map has no ColumnID or TableID specific information in it, so it can
 	// be shared.
-	tm.indexPartitionLocalities = from.indexPartitionLocalities
 }
 
 // IndexColumns returns the set of table columns in the given index.
@@ -443,40 +418,6 @@ func (tm *TableMeta) OrigCheckConstraintsStats(
 	return nil, false
 }
 
-// CacheIndexPartitionLocalities caches locality prefix sorters in the table
-// metadata for indexes that have a mix of local and remote partitions. It can
-// be called multiple times if necessary to update with new indexes.
-func (tm *TableMeta) CacheIndexPartitionLocalities(evalCtx *eval.Context) {
-	tab := tm.Table
-	if cap(tm.indexPartitionLocalities) < tab.IndexCount() {
-		tm.indexPartitionLocalities = make([]partition.PrefixSorter, tab.IndexCount())
-	}
-	tm.indexPartitionLocalities = tm.indexPartitionLocalities[:tab.IndexCount()]
-	for indexOrd, n := 0, tab.IndexCount(); indexOrd < n; indexOrd++ {
-		index := tab.Index(indexOrd)
-		if localPartitions, ok := partition.HasMixOfLocalAndRemotePartitions(evalCtx, index); ok {
-			ps := partition.GetSortedPrefixes(index, localPartitions, evalCtx)
-			tm.indexPartitionLocalities[indexOrd] = ps
-		}
-	}
-}
-
-// IndexPartitionLocality returns the given index's PrefixSorter. An empty
-// PrefixSorter is returned if the index does not have a mix of local and remote
-// partitions.
-func (tm *TableMeta) IndexPartitionLocality(ord cat.IndexOrdinal) (ps partition.PrefixSorter) {
-	if tm.indexPartitionLocalities != nil {
-		if ord >= len(tm.indexPartitionLocalities) {
-			panic(errors.AssertionFailedf(
-				"index ordinal %d greater than length of indexPartitionLocalities", ord,
-			))
-		}
-		ps := tm.indexPartitionLocalities[ord]
-		return ps
-	}
-	return partition.PrefixSorter{}
-}
-
 // AddPartialIndexPredicate adds a partial index predicate to the table's
 // metadata.
 func (tm *TableMeta) AddPartialIndexPredicate(ord cat.IndexOrdinal, pred ScalarExpr) {
@@ -523,83 +464,6 @@ func (tm *TableMeta) VirtualComputedColumns() ColSet {
 		}
 	}
 	return virtualCols
-}
-
-// GetRegionsInDatabase finds the full set of regions in the multiregion
-// database owning the table described by `tm`, or returns hasRegionName=false
-// if not multiregion. The result is cached in TableMeta.
-func (tm *TableMeta) GetRegionsInDatabase(
-	ctx context.Context, planner eval.Planner,
-) (regionNames catpb.RegionNames, hasRegionNames bool) {
-	multiregionConfig, ok := tm.TableAnnotation(regionConfigAnnID).(*multiregion.RegionConfig)
-	if ok {
-		if multiregionConfig == nil {
-			return nil /* regionNames */, false
-		}
-		return multiregionConfig.Regions(), true
-	}
-	dbID := tm.Table.GetDatabaseID()
-	defer func() {
-		if !hasRegionNames {
-			tm.SetTableAnnotation(
-				regionConfigAnnID,
-				// Use a nil pointer to a RegionConfig, which is distinct from the
-				// untyped nil and will be detected in the type assertion above.
-				(*multiregion.RegionConfig)(nil),
-			)
-		}
-	}()
-	if dbID == 0 || !tm.Table.IsMultiregion() {
-		return nil /* regionNames */, false
-	}
-	regionConfig, ok := planner.GetMultiregionConfig(ctx, dbID)
-	if !ok {
-		return nil /* regionNames */, false
-	}
-	multiregionConfig, _ = regionConfig.(*multiregion.RegionConfig)
-	tm.SetTableAnnotation(regionConfigAnnID, multiregionConfig)
-	return multiregionConfig.Regions(), true
-}
-
-// GetDatabaseSurvivalGoal finds the survival goal of the multiregion database
-// owning the table described by `tm`, or returns ok=false if not multiregion.
-// The result is cached in TableMeta.
-func (tm *TableMeta) GetDatabaseSurvivalGoal(
-	ctx context.Context, planner eval.Planner,
-) (survivalGoal descpb.SurvivalGoal, ok bool) {
-	// If planner is nil, we could be running an internal query or something else
-	// which is not a user query, so make sure we don't error out this case.
-	if planner == nil {
-		return descpb.SurvivalGoal_ZONE_FAILURE /* survivalGoal */, true
-	}
-	multiregionConfig, ok := tm.TableAnnotation(regionConfigAnnID).(*multiregion.RegionConfig)
-	if ok {
-		if multiregionConfig == nil {
-			return descpb.SurvivalGoal_ZONE_FAILURE /* survivalGoal */, false
-		}
-		return multiregionConfig.SurvivalGoal(), true
-	}
-	dbID := tm.Table.GetDatabaseID()
-	defer func() {
-		if !ok {
-			tm.SetTableAnnotation(
-				regionConfigAnnID,
-				// Use a nil pointer to a RegionConfig, which is distinct from the
-				// untyped nil and will be detected in the type assertion above.
-				(*multiregion.RegionConfig)(nil),
-			)
-		}
-	}()
-	if dbID == 0 || !tm.Table.IsMultiregion() {
-		return descpb.SurvivalGoal_ZONE_FAILURE /* regionNames */, false
-	}
-	regionConfig, ok := planner.GetMultiregionConfig(ctx, dbID)
-	if !ok {
-		return descpb.SurvivalGoal_ZONE_FAILURE /* survivalGoal */, false
-	}
-	multiregionConfig, _ = regionConfig.(*multiregion.RegionConfig)
-	tm.SetTableAnnotation(regionConfigAnnID, multiregionConfig)
-	return multiregionConfig.SurvivalGoal(), true
 }
 
 // TableAnnotation returns the given annotation that is associated with the

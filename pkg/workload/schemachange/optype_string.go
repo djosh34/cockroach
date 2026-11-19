@@ -15,36 +15,32 @@ func _() {
 	_ = x[renameSequence-4]
 	_ = x[renameTable-5]
 	_ = x[renameView-6]
-	_ = x[alterDatabaseAddRegion-7]
-	_ = x[alterDatabasePrimaryRegion-8]
-	_ = x[alterDatabaseSurvivalGoal-9]
-	_ = x[alterTableAddColumn-10]
-	_ = x[alterTableAddConstraint-11]
-	_ = x[alterTableAddConstraintForeignKey-12]
-	_ = x[alterTableAddConstraintUnique-13]
-	_ = x[alterTableAlterColumnType-14]
-	_ = x[alterTableDropColumn-15]
-	_ = x[alterTableDropConstraint-16]
-	_ = x[alterTableDropNotNull-17]
-	_ = x[alterTableDropColumnDefault-18]
-	_ = x[alterTableDropStored-19]
-	_ = x[alterTableLocality-20]
-	_ = x[alterTableRenameColumn-21]
-	_ = x[alterTableSetColumnDefault-22]
-	_ = x[alterTableSetColumnNotNull-23]
-	_ = x[alterTypeDropValue-24]
-	_ = x[createTypeEnum-25]
-	_ = x[createIndex-26]
-	_ = x[createSchema-27]
-	_ = x[createSequence-28]
-	_ = x[createTable-29]
-	_ = x[createTableAs-30]
-	_ = x[createView-31]
-	_ = x[dropIndex-32]
-	_ = x[dropSchema-33]
-	_ = x[dropSequence-34]
-	_ = x[dropTable-35]
-	_ = x[dropView-36]
+	_ = x[alterTableAddColumn-7]
+	_ = x[alterTableAddConstraint-8]
+	_ = x[alterTableAddConstraintForeignKey-9]
+	_ = x[alterTableAddConstraintUnique-10]
+	_ = x[alterTableAlterColumnType-11]
+	_ = x[alterTableDropColumn-12]
+	_ = x[alterTableDropConstraint-13]
+	_ = x[alterTableDropNotNull-14]
+	_ = x[alterTableDropColumnDefault-15]
+	_ = x[alterTableDropStored-16]
+	_ = x[alterTableRenameColumn-17]
+	_ = x[alterTableSetColumnDefault-18]
+	_ = x[alterTableSetColumnNotNull-19]
+	_ = x[alterTypeDropValue-20]
+	_ = x[createTypeEnum-21]
+	_ = x[createIndex-22]
+	_ = x[createSchema-23]
+	_ = x[createSequence-24]
+	_ = x[createTable-25]
+	_ = x[createTableAs-26]
+	_ = x[createView-27]
+	_ = x[dropIndex-28]
+	_ = x[dropSchema-29]
+	_ = x[dropSequence-30]
+	_ = x[dropTable-31]
+	_ = x[dropView-32]
 }
 
 func (i opType) String() string {
@@ -63,12 +59,6 @@ func (i opType) String() string {
 		return "renameTable"
 	case renameView:
 		return "renameView"
-	case alterDatabaseAddRegion:
-		return "alterDatabaseAddRegion"
-	case alterDatabasePrimaryRegion:
-		return "alterDatabasePrimaryRegion"
-	case alterDatabaseSurvivalGoal:
-		return "alterDatabaseSurvivalGoal"
 	case alterTableAddColumn:
 		return "alterTableAddColumn"
 	case alterTableAddConstraint:
@@ -89,8 +79,6 @@ func (i opType) String() string {
 		return "alterTableDropColumnDefault"
 	case alterTableDropStored:
 		return "alterTableDropStored"
-	case alterTableLocality:
-		return "alterTableLocality"
 	case alterTableRenameColumn:
 		return "alterTableRenameColumn"
 	case alterTableSetColumnDefault:

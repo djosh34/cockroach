@@ -65,7 +65,6 @@ var (
 		{Pkg: "golang.org/x/sync/errgroup", Type: "Group", Name: "Go"},
 		{Pkg: "github.com/cockroachdb/cockroach/pkg/util/ctxgroup", Type: "Group", Name: "Go"},
 		{Pkg: "github.com/cockroachdb/cockroach/pkg/util/ctxgroup", Type: "Group", Name: "GoCtx"},
-		{Pkg: "github.com/cockroachdb/cockroach/pkg/cmd/roachtest/cluster", Type: "Monitor", Name: "Go"},
 	}
 )
 

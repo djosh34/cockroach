@@ -2164,15 +2164,6 @@ throttled they do count towards 'delay.total' and 'delay.enginebackpressure'.
 		Unit:        metric.Unit_NANOSECONDS,
 	}
 
-	// Encryption-at-rest metrics.
-	// TODO(mberhault): metrics for key age, per-key file/bytes counts.
-	metaEncryptionAlgorithm = metric.Metadata{
-		Name:        "rocksdb.encryption.algorithm",
-		Help:        "Algorithm in use for encryption-at-rest, see ccl/storageccl/engineccl/enginepbccl/key_registry.proto",
-		Measurement: "Encryption At Rest",
-		Unit:        metric.Unit_CONST,
-	}
-
 	// Concurrency control metrics.
 	metaConcurrencyLocks = metric.Metadata{
 		Name:        "kv.concurrency.locks",
@@ -2667,10 +2658,6 @@ type StoreMetrics struct {
 
 	// Export request stats.
 	ExportRequestProposalTotalDelay *metric.Counter
-
-	// Encryption-at-rest stats.
-	// EncryptionAlgorithm is an enum representing the cipher in use, so we use a gauge.
-	EncryptionAlgorithm *metric.Gauge
 
 	// RangeFeed counts.
 	RangeFeedMetrics *rangefeed.Metrics
@@ -3387,7 +3374,6 @@ func newStoreMetrics(histogramWindow time.Duration) *StoreMetrics {
 		ExportRequestProposalTotalDelay: metric.NewCounter(metaExportEvalTotalDelay),
 
 		// Encryption-at-rest.
-		EncryptionAlgorithm: metric.NewGauge(metaEncryptionAlgorithm),
 
 		// RangeFeed counters.
 		RangeFeedMetrics: rangefeed.NewMetrics(),
@@ -3652,10 +3638,6 @@ func (sm *StoreMetrics) updateCrossLocalityMetricsOnOutgoingRaftMsg(
 	case roachpb.LocalityComparisonType_SAME_REGION_CROSS_ZONE:
 		sm.RaftSentCrossZoneBytes.Inc(msgSize)
 	}
-}
-
-func (sm *StoreMetrics) updateEnvStats(stats storage.EnvStats) {
-	sm.EncryptionAlgorithm.Update(int64(stats.EncryptionType))
 }
 
 func (sm *StoreMetrics) handleMetricsResult(ctx context.Context, metric result.Metrics) {

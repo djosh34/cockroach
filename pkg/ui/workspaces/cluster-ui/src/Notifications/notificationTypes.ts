@@ -11,7 +11,6 @@
 export type NotificationType =
   | "backup-blocked"
   | "command-commit"
-  | "expired"
   | "full-table"
   | "network-partition";
 export type NotificationSeverity = "low" | "info" | "moderate" | "critical";
@@ -42,13 +41,6 @@ export const notificationTypes: Array<NotificationTypeProp> = [
     description:
       "Command Commit Latency is > 100ms on at least one node in this cluster. This can result in poor query performance.",
     severity: "low",
-  },
-  {
-    key: "expired",
-    title: "Expired License Key",
-    description:
-      "Your enterprise license key has expired. Enterprise features are disabled until a new license key is set.",
-    severity: "moderate",
   },
   {
     key: "full-table",

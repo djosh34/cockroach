@@ -36,7 +36,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlliveness"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
-	"github.com/cockroachdb/cockroach/pkg/util/cidr"
 	"github.com/cockroachdb/cockroach/pkg/util/envutil"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
@@ -226,7 +225,6 @@ func MakeRegistry(
 	execCtxFn jobExecCtxMaker,
 	preventAdoptionFile string,
 	knobs *TestingKnobs,
-	lookup *cidr.Lookup,
 ) *Registry {
 	r := &Registry{
 		serverCtx:               ctx,
@@ -257,7 +255,7 @@ func MakeRegistry(
 	}
 	r.mu.adoptedJobs = make(map[jobspb.JobID]*adoptedJob)
 	r.mu.waiting = make(map[jobspb.JobID]map[*waitingSet]struct{})
-	r.metrics.init(histogramWindowInterval, lookup)
+	r.metrics.init(histogramWindowInterval)
 	return r
 }
 

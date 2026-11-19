@@ -793,7 +793,7 @@ func TestingOverrideExplainEnvVersion(ver string) func() {
 
 // PrintVersion appends a row of the form:
 //
-//	-- Version: CockroachDB CCL v20.1.0 ...
+//	-- Version: CockroachDB OSS v20.1.0 ...
 func (c *stmtEnvCollector) PrintVersion(w io.Writer) error {
 	version, err := c.query("SELECT version()")
 	if err != nil {
@@ -957,7 +957,7 @@ func (c *stmtEnvCollector) PrintClusterSettings(w io.Writer, all bool) error {
 			// Ignore some settings that might differ from their default values
 			// but aren't useful in stmt bundles.
 			switch *setting {
-			case "cluster.secret", "diagnostics.reporting.enabled", "enterprise.license", "version":
+			case "cluster.secret", "diagnostics.reporting.enabled", "version":
 				skip = true
 			}
 			if buildutil.CrdbTestBuild {

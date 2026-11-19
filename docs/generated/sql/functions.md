@@ -404,45 +404,9 @@
 <tbody>
 <tr><td><a name="crypt"></a><code>crypt(password: <a href="string.html">string</a>, salt: <a href="string.html">string</a>) &rarr; <a href="string.html">string</a></code></td><td><span class="funcdesc"><p>Generates a hash based on a password and salt. The hash algorithm and number of rounds if applicable are encoded in the salt.</p>
 </span></td><td>Immutable</td></tr>
-<tr><td><a name="decrypt"></a><code>decrypt(data: <a href="bytes.html">bytes</a>, key: <a href="bytes.html">bytes</a>, type: <a href="string.html">string</a>) &rarr; <a href="bytes.html">bytes</a></code></td><td><span class="funcdesc"><p>Decrypt <code>data</code> with <code>key</code> using the cipher method specified by <code>type</code>.</p>
-<p>The cipher type must have the format <code>&lt;algorithm&gt;[-&lt;mode&gt;][/pad:&lt;padding&gt;]</code> where:</p>
-<ul>
-<li><code>&lt;algorithm&gt;</code> is <code>aes</code></li>
-<li><code>&lt;mode&gt;</code> is <code>cbc</code> (default)</li>
-<li><code>&lt;padding&gt;</code> is <code>pkcs</code> (default) or <code>none</code></li>
-</ul>
-<p>This function requires an enterprise license on a CCL distribution.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="decrypt_iv"></a><code>decrypt_iv(data: <a href="bytes.html">bytes</a>, key: <a href="bytes.html">bytes</a>, iv: <a href="bytes.html">bytes</a>, type: <a href="string.html">string</a>) &rarr; <a href="bytes.html">bytes</a></code></td><td><span class="funcdesc"><p>Decrypt <code>data</code> with <code>key</code> using the cipher method specified by <code>type</code>. If the mode is CBC, the provided <code>iv</code> will be used. Otherwise, it will be ignored.</p>
-<p>The cipher type must have the format <code>&lt;algorithm&gt;[-&lt;mode&gt;][/pad:&lt;padding&gt;]</code> where:</p>
-<ul>
-<li><code>&lt;algorithm&gt;</code> is <code>aes</code></li>
-<li><code>&lt;mode&gt;</code> is <code>cbc</code> (default)</li>
-<li><code>&lt;padding&gt;</code> is <code>pkcs</code> (default) or <code>none</code></li>
-</ul>
-<p>This function requires an enterprise license on a CCL distribution.</p>
-</span></td><td>Immutable</td></tr>
 <tr><td><a name="digest"></a><code>digest(data: <a href="bytes.html">bytes</a>, type: <a href="string.html">string</a>) &rarr; <a href="bytes.html">bytes</a></code></td><td><span class="funcdesc"><p>Computes a binary hash of the given <code>data</code>. <code>type</code> is the algorithm to use (md5, sha1, sha224, sha256, sha384, or sha512).</p>
 </span></td><td>Immutable</td></tr>
 <tr><td><a name="digest"></a><code>digest(data: <a href="string.html">string</a>, type: <a href="string.html">string</a>) &rarr; <a href="bytes.html">bytes</a></code></td><td><span class="funcdesc"><p>Computes a binary hash of the given <code>data</code>. <code>type</code> is the algorithm to use (md5, sha1, sha224, sha256, sha384, or sha512).</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="encrypt"></a><code>encrypt(data: <a href="bytes.html">bytes</a>, key: <a href="bytes.html">bytes</a>, type: <a href="string.html">string</a>) &rarr; <a href="bytes.html">bytes</a></code></td><td><span class="funcdesc"><p>Encrypt <code>data</code> with <code>key</code> using the cipher method specified by <code>type</code>.</p>
-<p>The cipher type must have the format <code>&lt;algorithm&gt;[-&lt;mode&gt;][/pad:&lt;padding&gt;]</code> where:</p>
-<ul>
-<li><code>&lt;algorithm&gt;</code> is <code>aes</code></li>
-<li><code>&lt;mode&gt;</code> is <code>cbc</code> (default)</li>
-<li><code>&lt;padding&gt;</code> is <code>pkcs</code> (default) or <code>none</code></li>
-</ul>
-<p>This function requires an enterprise license on a CCL distribution.</p>
-</span></td><td>Immutable</td></tr>
-<tr><td><a name="encrypt_iv"></a><code>encrypt_iv(data: <a href="bytes.html">bytes</a>, key: <a href="bytes.html">bytes</a>, iv: <a href="bytes.html">bytes</a>, type: <a href="string.html">string</a>) &rarr; <a href="bytes.html">bytes</a></code></td><td><span class="funcdesc"><p>Encrypt <code>data</code> with <code>key</code> using the cipher method specified by <code>type</code>. If the mode is CBC, the provided <code>iv</code> will be used. Otherwise, it will be ignored.</p>
-<p>The cipher type must have the format <code>&lt;algorithm&gt;[-&lt;mode&gt;][/pad:&lt;padding&gt;]</code> where:</p>
-<ul>
-<li><code>&lt;algorithm&gt;</code> is <code>aes</code></li>
-<li><code>&lt;mode&gt;</code> is <code>cbc</code> (default)</li>
-<li><code>&lt;padding&gt;</code> is <code>pkcs</code> (default) or <code>none</code></li>
-</ul>
-<p>This function requires an enterprise license on a CCL distribution.</p>
 </span></td><td>Immutable</td></tr>
 <tr><td><a name="gen_random_bytes"></a><code>gen_random_bytes(count: <a href="int.html">int</a>) &rarr; <a href="bytes.html">bytes</a></code></td><td><span class="funcdesc"><p>Returns <code>count</code> cryptographically strong random bytes. At most 1024 bytes can be extracted at a time.</p>
 </span></td><td>Volatile</td></tr>
@@ -624,13 +588,8 @@ This is deprecated in favor of <code>extract</code> which supports duration.</p>
 <tr><td><a name="follower_read_timestamp"></a><code>follower_read_timestamp() &rarr; <a href="timestamp.html">timestamptz</a></code></td><td><span class="funcdesc"><p>Returns a timestamp which is very likely to be safe to perform
 against a follower replica.</p>
 <p>This function is intended to be used with an AS OF SYSTEM TIME clause to perform
-historical reads against a time which is recent but sufficiently old for reads
-to be performed against the closest replica as opposed to the currently
-leaseholder for a given range.</p>
-<p>Note that this function requires an enterprise license on a CCL distribution to
-return a result that is less likely the closest replica. It is otherwise
-hardcoded as -4.8s from the statement time, which may not result in reading from the
-nearest replica.</p>
+historical reads against a time which is recent but sufficiently old. It returns
+the statement time plus -4.8s.</p>
 </span></td><td>Volatile</td></tr>
 <tr><td><a name="localtimestamp"></a><code>localtimestamp() &rarr; <a href="date.html">date</a></code></td><td><span class="funcdesc"><p>Returns the time of the current transaction.</p>
 <p>The value is based on a timestamp picked when the transaction starts
@@ -763,31 +722,7 @@ has no relationship with the commit order of concurrent transactions.</p>
 and which stays constant throughout the transaction. This timestamp
 has no relationship with the commit order of concurrent transactions.</p>
 <p>This function is the preferred overload and will be evaluated by default.</p>
-</span></td><td>Stable</td></tr>
-<tr><td><a name="with_max_staleness"></a><code>with_max_staleness(max_staleness: <a href="interval.html">interval</a>) &rarr; <a href="timestamp.html">timestamptz</a></code></td><td><span class="funcdesc"><p>When used in the AS OF SYSTEM TIME clause of an single-statement,
-read-only transaction, CockroachDB chooses the newest timestamp within the staleness
-bound that allows execution of the reads at the nearest available replica without blocking.</p>
-<p>Note this function requires an enterprise license on a CCL distribution.</p>
-</span></td><td>Volatile</td></tr>
-<tr><td><a name="with_max_staleness"></a><code>with_max_staleness(max_staleness: <a href="interval.html">interval</a>, nearest_only: <a href="bool.html">bool</a>) &rarr; <a href="timestamp.html">timestamptz</a></code></td><td><span class="funcdesc"><p>When used in the AS OF SYSTEM TIME clause of an single-statement,
-read-only transaction, CockroachDB chooses the newest timestamp within the staleness
-bound that allows execution of the reads at the nearest available replica without blocking.</p>
-<p>If nearest_only is set to true, reads that cannot be served using the nearest
-available replica will error.</p>
-<p>Note this function requires an enterprise license on a CCL distribution.</p>
-</span></td><td>Volatile</td></tr>
-<tr><td><a name="with_min_timestamp"></a><code>with_min_timestamp(min_timestamp: <a href="timestamp.html">timestamptz</a>) &rarr; <a href="timestamp.html">timestamptz</a></code></td><td><span class="funcdesc"><p>When used in the AS OF SYSTEM TIME clause of an single-statement,
-read-only transaction, CockroachDB chooses the newest timestamp before the min_timestamp
-that allows execution of the reads at the nearest available replica without blocking.</p>
-<p>Note this function requires an enterprise license on a CCL distribution.</p>
-</span></td><td>Volatile</td></tr>
-<tr><td><a name="with_min_timestamp"></a><code>with_min_timestamp(min_timestamp: <a href="timestamp.html">timestamptz</a>, nearest_only: <a href="bool.html">bool</a>) &rarr; <a href="timestamp.html">timestamptz</a></code></td><td><span class="funcdesc"><p>When used in the AS OF SYSTEM TIME clause of an single-statement,
-read-only transaction, CockroachDB chooses the newest timestamp before the min_timestamp
-that allows execution of the reads at the nearest available replica without blocking.</p>
-<p>If nearest_only is set to true, reads that cannot be served using the nearest
-available replica will error.</p>
-<p>Note this function requires an enterprise license on a CCL distribution.</p>
-</span></td><td>Volatile</td></tr></tbody>
+</span></td><td>Stable</td></tr></tbody>
 </table>
 
 ### Enum functions
@@ -1207,23 +1142,6 @@ available replica will error.</p>
 <tr><td><a name="to_json"></a><code>to_json(val: anyelement) &rarr; jsonb</code></td><td><span class="funcdesc"><p>Returns the value as JSON or JSONB.</p>
 </span></td><td>Stable</td></tr>
 <tr><td><a name="to_jsonb"></a><code>to_jsonb(val: anyelement) &rarr; jsonb</code></td><td><span class="funcdesc"><p>Returns the value as JSON or JSONB.</p>
-</span></td><td>Stable</td></tr></tbody>
-</table>
-
-### Multi-region functions
-
-<table>
-<thead><tr><th>Function &rarr; Returns</th><th>Description</th><th>Volatility</th></tr></thead>
-<tbody>
-<tr><td><a name="default_to_database_primary_region"></a><code>default_to_database_primary_region(val: <a href="string.html">string</a>) &rarr; <a href="string.html">string</a></code></td><td><span class="funcdesc"><p>Returns the given region if the region has been added to the current database.
-Otherwise, this will return the primary region of the current database.
-This will error if the current database is not a multi-region database.</p>
-</span></td><td>Stable</td></tr>
-<tr><td><a name="gateway_region"></a><code>gateway_region() &rarr; <a href="string.html">string</a></code></td><td><span class="funcdesc"><p>Returns the region of the connection’s current node as defined by
-the locality flag on node startup. Returns an error if no region is set.</p>
-</span></td><td>Stable</td></tr>
-<tr><td><a name="rehome_row"></a><code>rehome_row() &rarr; <a href="string.html">string</a></code></td><td><span class="funcdesc"><p>Returns the region of the connection’s current node as defined by
-the locality flag on node startup. Returns an error if no region is set.</p>
 </span></td><td>Stable</td></tr></tbody>
 </table>
 

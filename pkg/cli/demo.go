@@ -107,15 +107,11 @@ func incrementTelemetryCounters(cmd *cobra.Command) {
 	if demoCtx.RunWorkload {
 		incrementDemoCounter(withLoad)
 	}
-	if demoCtx.GeoPartitionedReplicas {
-		incrementDemoCounter(geoPartitionedReplicas)
-	}
 }
 
 func checkDemoConfiguration(
 	cmd *cobra.Command, gen workload.Generator,
 ) (workload.Generator, error) {
-	f := cliflagcfg.FlagSetForCmd(cmd)
 	if gen == nil && !demoCtx.UseEmptyDatabase {
 		// Use a default dataset unless prevented by --no-example-database.
 		gen = defaultGenerator
@@ -134,63 +130,6 @@ func checkDemoConfiguration(
 	// If artificial latencies were requested, then the user cannot supply their own localities.
 	if demoCtx.SimulateLatency && demoCtx.Localities != nil {
 		return nil, errors.Newf("--%s cannot be used with --%s", cliflags.Global.Name, cliflags.DemoNodeLocality.Name)
-	}
-
-	// Whether or not we enable enterprise feature is a combination of:
-	//
-	// - whether the user wants them (they can disable enterprise
-	//   features explicitly with --no-license, e.g. for testing what
-	//   errors come up if no license is available)
-	// - whether enterprise features are enabled in this build, depending
-	//   on whether CCL code is included (and sets democluster.EnableEnterprise).
-	demoCtx.disableEnterpriseFeatures = democluster.EnableEnterprise == nil || demoCtx.disableEnterpriseFeatures
-
-	if demoCtx.GeoPartitionedReplicas {
-		geoFlag := "--" + cliflags.DemoGeoPartitionedReplicas.Name
-		if demoCtx.disableEnterpriseFeatures {
-			return nil, errors.Newf("enterprise features are needed for this demo (%s)", geoFlag)
-		}
-
-		// Make sure that the user didn't request to have a topology and disable the example database.
-		if demoCtx.UseEmptyDatabase {
-			return nil, errors.New("cannot setup geo-partitioned replicas topology without generating an example database")
-		}
-
-		// Make sure that the Movr database is selected when automatically partitioning.
-		if gen == nil || gen.Meta().Name != "movr" {
-			return nil, errors.Newf("%s must be used with the Movr dataset", geoFlag)
-		}
-
-		// If the geo-partitioned replicas flag was given and the demo localities have changed, throw an error.
-		if demoCtx.Localities != nil {
-			return nil, errors.Newf("--demo-locality cannot be used with %s", geoFlag)
-		}
-
-		// If the geo-partitioned replicas flag was given and the nodes have changed, throw an error.
-		if fl := f.Lookup(cliflags.DemoNodes.Name); fl != nil && fl.Changed {
-			if demoCtx.NumNodes != 9 {
-				return nil, errors.Newf("--nodes with a value different from 9 cannot be used with %s", geoFlag)
-			}
-		} else {
-			demoCtx.NumNodes = 9
-			cliCtx.PrintlnUnlessEmbedded(
-				// Only explain how the configuration was interpreted if the
-				// user has control over it.
-				`#
-# --geo-partitioned replicas operates on a 9 node cluster.
-# The cluster size has been changed from the default to 9 nodes.`)
-		}
-
-		// If geo-partition-replicas is requested, make sure the workload has a Partitioning step.
-		configErr := errors.Newf(
-			"workload %s is not configured to have a partitioning step", gen.Meta().Name)
-		hookser, ok := gen.(workload.Hookser)
-		if !ok {
-			return nil, configErr
-		}
-		if hookser.Hooks().Partition == nil {
-			return nil, configErr
-		}
 	}
 
 	return gen, nil
@@ -290,18 +229,6 @@ func runDemoInternal(
 				"# To disable this behavior, set the environment variable\n" +
 				"# COCKROACH_SKIP_ENABLING_DIAGNOSTIC_REPORTING=true.")
 		}
-
-		if demoCtx.disableEnterpriseFeatures {
-			cliCtx.PrintlnUnlessEmbedded("#\n# Enterprise features are disabled by configuration.\n")
-		}
-	}
-
-	if !demoCtx.disableEnterpriseFeatures {
-		fn, err := c.EnableEnterprise(ctx)
-		if err != nil {
-			return clierrorplus.CheckAndMaybeShout(err)
-		}
-		defer fn()
 	}
 
 	// Initialize the workload, if requested.

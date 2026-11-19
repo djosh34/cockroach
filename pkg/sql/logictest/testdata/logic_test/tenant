@@ -113,12 +113,6 @@ SELECT * FROM [SHOW TENANTS] WHERE id = 4
 id  name   data_state  service_mode
 4   three  ready       none
 
-query ITTTT colnames
-SELECT id, name, data_state, service_mode, source_tenant_name FROM [SHOW TENANTS WITH REPLICATION STATUS] WHERE id = 4
-----
-id  name   data_state  service_mode  source_tenant_name
-4   three  ready       none          NULL
-
 statement error tenant "seven" does not exist
 SHOW TENANT seven
 
@@ -400,8 +394,6 @@ statement ok
 ALTER TENANT tmpl GRANT CAPABILITY can_view_node_info; -- will be copied
 ALTER TENANT tmpl SET CLUSTER SETTING trace.debug_http_endpoint.enabled = true; -- will be copied
 -- Simulate resource limits. Will be copied.
--- Note: we cannot use the update_tenant_resource_limits() builtin
--- directly here because it can only be used from a CCL binary.
 INSERT INTO system.tenant_usage(
         tenant_id, instance_id, next_instance_id, last_update,
         ru_burst_limit, ru_refill_rate, ru_current, current_share_sum, total_consumption)

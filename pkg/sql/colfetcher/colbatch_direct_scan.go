@@ -190,7 +190,7 @@ func NewColBatchDirectScan(
 	post *execinfrapb.PostProcessSpec,
 	typeResolver *descs.DistSQLTypeResolver,
 ) (*ColBatchDirectScan, []*types.T, error) {
-	base, bsHeader, tableArgs, err := newColBatchScanBase(
+	base, tableArgs, err := newColBatchScanBase(
 		ctx, kvFetcherMemAcc, flowCtx, processorID, spec, post, typeResolver,
 	)
 	if err != nil {
@@ -210,7 +210,6 @@ func NewColBatchDirectScan(
 	fetchSpec := spec.FetchSpec
 	fetcher := row.NewDirectKVBatchFetcher(
 		flowCtx.Txn,
-		bsHeader,
 		&fetchSpec,
 		spec.Reverse,
 		spec.LockingStrength,

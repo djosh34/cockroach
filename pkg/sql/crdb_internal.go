@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/build"
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
 	"github.com/cockroachdb/cockroach/pkg/config/zonepb"
@@ -57,7 +56,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/colinfo"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/multiregion"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/nstree"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/schemaexpr"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/systemschema"
@@ -149,7 +147,6 @@ var crdbInternal = virtualSchema{
 		catconstants.CrdbInternalCreateTypeStmtsTableID:             crdbInternalCreateTypeStmtsTable,
 		catconstants.CrdbInternalDatabasesTableID:                   crdbInternalDatabasesTable,
 		catconstants.CrdbInternalDroppedRelationsViewID:             crdbInternalDroppedRelationsView,
-		catconstants.CrdbInternalSuperRegions:                       crdbInternalSuperRegions,
 		catconstants.CrdbInternalFeatureUsageID:                     crdbInternalFeatureUsage,
 		catconstants.CrdbInternalForwardDependenciesTableID:         crdbInternalForwardDependenciesTable,
 		catconstants.CrdbInternalGossipNodesTableID:                 crdbInternalGossipNodesTable,
@@ -178,7 +175,6 @@ var crdbInternal = virtualSchema{
 		catconstants.CrdbInternalNodeStmtStatsTableID:               crdbInternalNodeStmtStatsTable,
 		catconstants.CrdbInternalNodeTxnExecutionInsightsTableID:    crdbInternalNodeTxnExecutionInsightsTable,
 		catconstants.CrdbInternalNodeTxnStatsTableID:                crdbInternalNodeTxnStatsTable,
-		catconstants.CrdbInternalPartitionsTableID:                  crdbInternalPartitionsTable,
 		catconstants.CrdbInternalRangesNoLeasesTableID:              crdbInternalRangesNoLeasesTable,
 		catconstants.CrdbInternalRangesViewID:                       crdbInternalRangesView,
 		catconstants.CrdbInternalRuntimeInfoTableID:                 crdbInternalRuntimeInfoTable,
@@ -206,7 +202,6 @@ var crdbInternal = virtualSchema{
 		catconstants.CrdbInternalCrossDbRefrences:                   crdbInternalCrossDbReferences,
 		catconstants.CrdbInternalLostTableDescriptors:               crdbLostTableDescriptors,
 		catconstants.CrdbInternalClusterInflightTracesTable:         crdbInternalClusterInflightTracesTable,
-		catconstants.CrdbInternalRegionsTable:                       crdbInternalRegionsTable,
 		catconstants.CrdbInternalDefaultPrivilegesTable:             crdbInternalDefaultPrivilegesTable,
 		catconstants.CrdbInternalActiveRangeFeedsTable:              crdbInternalActiveRangeFeedsTable,
 		catconstants.CrdbInternalTenantUsageDetailsViewID:           crdbInternalTenantUsageDetailsView,
@@ -324,69 +319,14 @@ CREATE TABLE crdb_internal.databases (
 	id INT NOT NULL,
 	name STRING NOT NULL,
 	owner NAME NOT NULL,
-	primary_region STRING,
-	secondary_region STRING,
-	regions STRING[],
-	survival_goal STRING,
-	placement_policy STRING,
 	create_statement STRING NOT NULL
 )`,
 	populate: func(ctx context.Context, p *planner, _ catalog.DatabaseDescriptor, addRow func(...tree.Datum) error) error {
 		return forEachDatabaseDesc(ctx, p, nil /* all databases */, true, /* requiresPrivileges */
 			func(db catalog.DatabaseDescriptor) error {
-				var survivalGoal = tree.DNull
-				var primaryRegion = tree.DNull
-				var secondaryRegion = tree.DNull
-				var placement = tree.DNull
-				regions := tree.NewDArray(types.String)
-
 				createNode := tree.CreateDatabase{}
 				createNode.ConnectionLimit = -1
 				createNode.Name = tree.Name(db.GetName())
-				if db.IsMultiRegion() {
-					primaryRegion = tree.NewDString(string(db.GetRegionConfig().PrimaryRegion))
-					createNode.PrimaryRegion = tree.Name(db.GetRegionConfig().PrimaryRegion)
-					secondaryRegion = tree.NewDString(string(db.GetRegionConfig().SecondaryRegion))
-					createNode.SecondaryRegion = tree.Name(db.GetRegionConfig().SecondaryRegion)
-
-					regionConfig, err := SynthesizeRegionConfig(ctx, p.txn, db.GetID(), p.Descriptors())
-					if err != nil {
-						return err
-					}
-
-					createNode.Regions = make(tree.NameList, len(regionConfig.Regions()))
-					for i, region := range regionConfig.Regions() {
-						if err := regions.Append(tree.NewDString(string(region))); err != nil {
-							return err
-						}
-						createNode.Regions[i] = tree.Name(region)
-					}
-
-					if db.GetRegionConfig().Placement == descpb.DataPlacement_RESTRICTED {
-						placement = tree.NewDString("restricted")
-						createNode.Placement = tree.DataPlacementRestricted
-					} else {
-						placement = tree.NewDString("default")
-						// We can't differentiate between a database that was created with
-						// unspecified and default, and we don't want to expose PLACEMENT
-						// unless we know the user wants to use PLACEMENT. Therefore, we
-						// only add a PLACEMENT clause if the database was configured with
-						// restricted placement.
-						createNode.Placement = tree.DataPlacementUnspecified
-					}
-
-					createNode.SurvivalGoal = tree.SurvivalGoalDefault
-					switch db.GetRegionConfig().SurvivalGoal {
-					case descpb.SurvivalGoal_ZONE_FAILURE:
-						survivalGoal = tree.NewDString("zone")
-						createNode.SurvivalGoal = tree.SurvivalGoalZoneFailure
-					case descpb.SurvivalGoal_REGION_FAILURE:
-						survivalGoal = tree.NewDString("region")
-						createNode.SurvivalGoal = tree.SurvivalGoalRegionFailure
-					default:
-						return errors.Newf("unknown survival goal: %d", db.GetRegionConfig().SurvivalGoal)
-					}
-				}
 				owner, err := p.getOwnerOfPrivilegeObject(ctx, db)
 				if err != nil {
 					return err
@@ -395,61 +335,8 @@ CREATE TABLE crdb_internal.databases (
 					tree.NewDInt(tree.DInt(db.GetID())),  // id
 					tree.NewDString(db.GetName()),        // name
 					tree.NewDName(owner.Normalized()),    // owner
-					primaryRegion,                        // primary_region
-					secondaryRegion,                      // secondary_region
-					regions,                              // regions
-					survivalGoal,                         // survival_goal
-					placement,                            // data_placement
 					tree.NewDString(createNode.String()), // create_statement
 				)
-			})
-	},
-}
-
-var crdbInternalSuperRegions = virtualSchemaTable{
-	comment: `list super regions of databases visible to the current user`,
-	schema: `
-CREATE TABLE crdb_internal.super_regions (
-	id INT NOT NULL,
-	database_name STRING NOT NULL,
-  super_region_name STRING NOT NULL,
-	regions STRING[]
-)`,
-	populate: func(ctx context.Context, p *planner, _ catalog.DatabaseDescriptor, addRow func(...tree.Datum) error) error {
-		return forEachDatabaseDesc(ctx, p, nil /* all databases */, true, /* requiresPrivileges */
-			func(db catalog.DatabaseDescriptor) error {
-				if !db.IsMultiRegion() {
-					return nil
-				}
-
-				typeID, err := db.MultiRegionEnumID()
-				if err != nil {
-					return err
-				}
-				typeDesc, err := p.Descriptors().ByIDWithLeased(p.txn).WithoutNonPublic().Get().Type(ctx, typeID)
-				if err != nil {
-					return err
-				}
-				regionDesc := typeDesc.AsRegionEnumTypeDescriptor()
-				if regionDesc == nil {
-					return errors.AssertionFailedf("expected region enum type, not %s for type %q (%d)",
-						typeDesc.GetKind(), typeDesc.GetName(), typeDesc.GetID())
-				}
-
-				return regionDesc.ForEachSuperRegion(func(superRegion string) error {
-					regionList := tree.NewDArray(types.String)
-					if err := regionDesc.ForEachRegionInSuperRegion(superRegion, func(region catpb.RegionName) error {
-						return regionList.Append(tree.NewDString(region.String()))
-					}); err != nil {
-						return err
-					}
-					return addRow(
-						tree.NewDInt(tree.DInt(db.GetID())), // id
-						tree.NewDString(db.GetName()),       // database_name
-						tree.NewDString(superRegion),        // super_region_name
-						regionList,                          // regions
-					)
-				})
 			})
 	},
 }
@@ -468,14 +355,6 @@ func makeCrdbInternalTablesAddRowFn(
 				return err
 			}
 		}
-		locality := tree.DNull
-		if c := table.GetLocalityConfig(); c != nil {
-			f := p.EvalContext().FmtCtx(tree.FmtSimple)
-			if err := multiregion.FormatTableLocalityConfig(c, f); err != nil {
-				return err
-			}
-			locality = tree.NewDString(f.String())
-		}
 		row = row[:0]
 		row = append(row,
 			tree.NewDInt(tree.DInt(int64(table.GetID()))),
@@ -493,7 +372,6 @@ func makeCrdbInternalTablesAddRowFn(
 			tree.NewDString(table.GetAuditMode().String()),
 			tree.NewDString(scName),
 			tree.NewDInt(tree.DInt(int64(table.GetParentSchemaID()))),
-			locality,
 		)
 		return pusher(row...)
 	}
@@ -519,7 +397,6 @@ CREATE TABLE crdb_internal.tables (
     audit_mode               STRING NOT NULL,
     schema_name              STRING NOT NULL,
     parent_schema_id         INT8 NOT NULL,
-    locality                 STRING,
     INDEX (parent_id) WHERE drop_time IS NULL,
     INDEX (database_name) WHERE drop_time IS NULL
 );`,
@@ -3451,11 +3328,6 @@ func writeCreateTypeDescRow(
 		return false, nil
 	}
 	if e := typeDesc.AsEnumTypeDescriptor(); e != nil {
-		if e.AsRegionEnumTypeDescriptor() != nil {
-			// Multi-region enums are created implicitly, so we don't have create
-			// statements for them.
-			return false, nil
-		}
 		var enumLabels tree.EnumValueList
 		enumLabelsDatum := tree.NewDArray(types.String)
 		for i := 0; i < e.NumEnumMembers(); i++ {
@@ -3760,8 +3632,6 @@ CREATE TABLE crdb_internal.create_statements (
   alter_statements              STRING[] NOT NULL,
   validate_statements           STRING[] NOT NULL,
   create_redactable             STRING NOT NULL,
-  has_partitions                BOOL NOT NULL,
-  is_multi_region               BOOL NOT NULL,
   is_virtual                    BOOL NOT NULL,
   is_temporary                  BOOL NOT NULL,
   INDEX(descriptor_id)
@@ -3831,9 +3701,6 @@ CREATE TABLE crdb_internal.create_statements (
 		if createNofk == "" {
 			createNofk = stmt
 		}
-		hasPartitions := nil != catalog.FindIndex(table, catalog.IndexOpts{}, func(idx catalog.Index) bool {
-			return idx.PartitioningColumnCount() != 0
-		})
 		return addRow(
 			dbDescID,
 			parentNameStr,
@@ -3847,8 +3714,6 @@ CREATE TABLE crdb_internal.create_statements (
 			alterStmts,
 			validateStmts,
 			tree.NewDString(createRedactable),
-			tree.MakeDBool(tree.DBool(hasPartitions)),
-			tree.MakeDBool(tree.DBool(db != nil && db.IsMultiRegion())),
 			tree.MakeDBool(tree.DBool(table.IsVirtualTable())),
 			tree.MakeDBool(tree.DBool(table.IsTemporary())),
 		)
@@ -3984,7 +3849,6 @@ CREATE TABLE crdb_internal.table_indexes (
 		secondary := tree.NewDString("secondary")
 		var row []tree.Datum
 		worker := func(ctx context.Context, pusher rowPusher) error {
-			alloc := &tree.DatumAlloc{}
 			return forEachTableDescAll(ctx, p, dbContext, hideVirtual,
 				func(db catalog.DatabaseDescriptor, sc catalog.SchemaDescriptor, table catalog.TableDescriptor) error {
 					tableID := tree.NewDInt(tree.DInt(table.GetID()))
@@ -4015,26 +3879,11 @@ CREATE TABLE crdb_internal.table_indexes (
 						idxInvisibility := idx.GetInvisibility()
 						namePrefix := tree.ObjectNamePrefix{SchemaName: tree.Name(sc.GetName()), ExplicitSchema: true}
 						fullTableName := tree.MakeTableNameFromPrefix(namePrefix, tree.Name(table.GetName()))
-						var partitionBuf bytes.Buffer
-						if err := ShowCreatePartitioning(
-							alloc,
-							p.ExecCfg().Codec,
-							table,
-							idx,
-							idx.GetPartitioning(),
-							&partitionBuf,
-							0,     /* indent */
-							0,     /* colOffset */
-							false, /* redactableValues */
-						); err != nil {
-							return err
-						}
 						createIndexStmt, err := catformat.IndexForDisplay(
 							ctx,
 							table,
 							&fullTableName,
 							idx,
-							partitionBuf.String(),
 							tree.FmtSimple,
 							p.SemaCtx(),
 							p.SessionData(),
@@ -4718,7 +4567,6 @@ CREATE TABLE crdb_internal.zones (
   schema_name          STRING,
   table_name           STRING,
   index_name           STRING,
-  partition_name       STRING,
   raw_config_yaml      STRING NOT NULL,
   raw_config_sql       STRING, -- this column can be NULL if there is no specifier syntax
                                -- possible (e.g. the object was deleted).
@@ -4853,28 +4701,18 @@ CREATE TABLE crdb_internal.zones (
 						continue
 					}
 
+					if s.PartitionName != "" {
+						// Subzones of partitions only come from upstream data.
+						continue
+					}
+
 					zs := zs
 					zs.TableOrIndex.Index = tree.UnrestrictedName(index.GetName())
-					zs.Partition = tree.Name(s.PartitionName)
 					zoneSpecifier = &zs
 
-					// Generate information about full / inherited constraints.
-					// There are two cases -- the subzone we are looking at refers
-					// to an index, or to a partition.
+					// The subzone refers to an index. Inherit from the parent zone.
 					subZoneConfig := s.Config
-
-					// In this case, we have an index. Inherit from the parent zone.
-					if s.PartitionName == "" {
-						subZoneConfig.InheritFromParent(&fullZone)
-					} else {
-						// We have a partition. Get the parent index partition from the zone and
-						// have it inherit constraints.
-						if indexSubzone := fullZone.GetSubzone(uint32(index.GetID()), ""); indexSubzone != nil {
-							subZoneConfig.InheritFromParent(&indexSubzone.Config)
-						}
-						// Inherit remaining fields from the full parent zone.
-						subZoneConfig.InheritFromParent(&fullZone)
-					}
+					subZoneConfig.InheritFromParent(&fullZone)
 
 					if err := generateZoneConfigIntrospectionValues(
 						values,
@@ -5283,222 +5121,6 @@ CREATE TABLE crdb_internal.gossip_network (
 `,
 	populate: func(ctx context.Context, p *planner, _ catalog.DatabaseDescriptor, addRow func(...tree.Datum) error) error {
 		p.BufferClientNotice(ctx, pgnotice.Newf("This table is no longer supported/populated, and will be removed in a future version."))
-		return nil
-	},
-}
-
-// addPartitioningRows adds the rows in crdb_internal.partitions for each partition.
-// None of the arguments can be nil, and it is used recursively when a list partition
-// has subpartitions. In that case, the colOffset argument is incremented to represent
-// how many columns of the index have been partitioned already.
-func addPartitioningRows(
-	ctx context.Context,
-	p *planner,
-	database string,
-	table catalog.TableDescriptor,
-	index catalog.Index,
-	partitioning catalog.Partitioning,
-	parentName tree.Datum,
-	colOffset int,
-	addRow func(...tree.Datum) error,
-) error {
-	tableID := tree.NewDInt(tree.DInt(table.GetID()))
-	indexID := tree.NewDInt(tree.DInt(index.GetID()))
-	numColumns := tree.NewDInt(tree.DInt(partitioning.NumColumns()))
-
-	var buf bytes.Buffer
-	for i := uint32(colOffset); i < uint32(colOffset+partitioning.NumColumns()); i++ {
-		if i != uint32(colOffset) {
-			buf.WriteString(`, `)
-		}
-		buf.WriteString(index.GetKeyColumnName(int(i)))
-	}
-	colNames := tree.NewDString(buf.String())
-
-	var datumAlloc tree.DatumAlloc
-
-	// We don't need real prefixes in the DecodePartitionTuple calls because we
-	// only use the tree.Datums part of the output.
-	fakePrefixDatums := make([]tree.Datum, colOffset)
-	for i := range fakePrefixDatums {
-		fakePrefixDatums[i] = tree.DNull
-	}
-
-	// This produces the list_value column.
-	err := partitioning.ForEachList(func(name string, values [][]byte, subPartitioning catalog.Partitioning) error {
-		var buf bytes.Buffer
-		for j, values := range values {
-			if j != 0 {
-				buf.WriteString(`, `)
-			}
-			tuple, _, err := rowenc.DecodePartitionTuple(
-				&datumAlloc, p.ExecCfg().Codec, table, index, partitioning, values, fakePrefixDatums,
-			)
-			if err != nil {
-				return err
-			}
-			buf.WriteString(tuple.String())
-		}
-
-		partitionValue := tree.NewDString(buf.String())
-		nameDString := tree.NewDString(name)
-
-		// Figure out which zone and subzone this partition should correspond to.
-		zoneID, zone, subzone, err := GetZoneConfigInTxn(
-			ctx, p.txn, p.Descriptors(), table.GetID(), index, name, false /* getInheritedDefault */)
-		if err != nil {
-			return err
-		}
-		subzoneID := base.SubzoneID(0)
-		if subzone != nil {
-			for i, s := range zone.Subzones {
-				if s.IndexID == subzone.IndexID && s.PartitionName == subzone.PartitionName {
-					subzoneID = base.SubzoneIDFromIndex(i)
-				}
-			}
-		}
-
-		if err := addRow(
-			tableID,
-			indexID,
-			parentName,
-			nameDString,
-			numColumns,
-			colNames,
-			partitionValue,
-			tree.DNull, /* null value for partition range */
-			tree.NewDInt(tree.DInt(zoneID)),
-			tree.NewDInt(tree.DInt(subzoneID)),
-		); err != nil {
-			return err
-		}
-		return addPartitioningRows(ctx, p, database, table, index, subPartitioning, nameDString,
-			colOffset+partitioning.NumColumns(), addRow)
-	})
-	if err != nil {
-		return err
-	}
-
-	// This produces the range_value column.
-	err = partitioning.ForEachRange(func(name string, from, to []byte) error {
-		var buf bytes.Buffer
-		fromTuple, _, err := rowenc.DecodePartitionTuple(
-			&datumAlloc, p.ExecCfg().Codec, table, index, partitioning, from, fakePrefixDatums,
-		)
-		if err != nil {
-			return err
-		}
-		buf.WriteString(fromTuple.String())
-		buf.WriteString(" TO ")
-		toTuple, _, err := rowenc.DecodePartitionTuple(
-			&datumAlloc, p.ExecCfg().Codec, table, index, partitioning, to, fakePrefixDatums,
-		)
-		if err != nil {
-			return err
-		}
-		buf.WriteString(toTuple.String())
-		partitionRange := tree.NewDString(buf.String())
-
-		// Figure out which zone and subzone this partition should correspond to.
-		zoneID, zone, subzone, err := GetZoneConfigInTxn(
-			ctx, p.txn, p.Descriptors(), table.GetID(), index, name, false /* getInheritedDefault */)
-		if err != nil {
-			return err
-		}
-		subzoneID := base.SubzoneID(0)
-		if subzone != nil {
-			for i, s := range zone.Subzones {
-				if s.IndexID == subzone.IndexID && s.PartitionName == subzone.PartitionName {
-					subzoneID = base.SubzoneIDFromIndex(i)
-				}
-			}
-		}
-
-		return addRow(
-			tableID,
-			indexID,
-			parentName,
-			tree.NewDString(name),
-			numColumns,
-			colNames,
-			tree.DNull, /* null value for partition list */
-			partitionRange,
-			tree.NewDInt(tree.DInt(zoneID)),
-			tree.NewDInt(tree.DInt(subzoneID)),
-		)
-	})
-
-	return err
-}
-
-// crdbInternalPartitionsTable decodes and exposes the partitions of each
-// table.
-//
-// TODO(tbg): prefix with cluster_.
-var crdbInternalPartitionsTable = virtualSchemaTable{
-	comment: "defined partitions for all tables/indexes accessible by the current user in the current database (KV scan)",
-	schema: `
-CREATE TABLE crdb_internal.partitions (
-	table_id    INT NOT NULL,
-	index_id    INT NOT NULL,
-	parent_name STRING,
-	name        STRING NOT NULL,
-	columns     INT NOT NULL,
-	column_names STRING,
-	list_value  STRING,
-	range_value STRING,
-	zone_id INT, -- references a zone id in the crdb_internal.zones table
-	subzone_id INT -- references a subzone id in the crdb_internal.zones table
-)
-	`,
-	generator: func(ctx context.Context, p *planner, dbContext catalog.DatabaseDescriptor, stopper *stop.Stopper) (virtualTableGenerator, cleanupFunc, error) {
-		dbName := ""
-		if dbContext != nil {
-			dbName = dbContext.GetName()
-		}
-		worker := func(ctx context.Context, pusher rowPusher) error {
-			return forEachTableDescAll(ctx, p, dbContext, hideVirtual, /* virtual tables have no partitions*/
-				func(db catalog.DatabaseDescriptor, _ catalog.SchemaDescriptor, table catalog.TableDescriptor) error {
-					return catalog.ForEachIndex(table, catalog.IndexOpts{
-						AddMutations: true,
-					}, func(index catalog.Index) error {
-						return addPartitioningRows(ctx, p, dbName, table, index, index.GetPartitioning(),
-							tree.DNull /* parentName */, 0 /* colOffset */, pusher.pushRow)
-					})
-				})
-		}
-		return setupGenerator(ctx, worker, stopper)
-	},
-}
-
-// crdbInternalRegionsTable exposes available regions in the cluster.
-var crdbInternalRegionsTable = virtualSchemaTable{
-	comment: "available regions for the cluster",
-	schema: `
-CREATE TABLE crdb_internal.regions (
-	region STRING NOT NULL,
-	zones STRING[] NOT NULL
-)
-	`,
-	populate: func(ctx context.Context, p *planner, _ catalog.DatabaseDescriptor, addRow func(...tree.Datum) error) error {
-		resp, err := p.InternalSQLTxn().Regions().GetRegions(ctx)
-		if err != nil {
-			return err
-		}
-		for regionName, regionMeta := range resp.Regions {
-			zones := tree.NewDArray(types.String)
-			for _, zone := range regionMeta.Zones {
-				if err := zones.Append(tree.NewDString(zone)); err != nil {
-					return err
-				}
-			}
-			if err := addRow(
-				tree.NewDString(regionName),
-				zones,
-			); err != nil {
-				return err
-			}
-		}
 		return nil
 	},
 }

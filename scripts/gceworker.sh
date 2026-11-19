@@ -29,13 +29,6 @@ case "${cmd}" in
     gcloud "$@"
     ;;
     create)
-    if [[ "${COCKROACH_DEV_LICENSE:-}" ]]; then
-      echo "Using dev license key from \$COCKROACH_DEV_LICENSE"
-    else
-      echo -n "Enter your dev license key (if any): "
-      read COCKROACH_DEV_LICENSE
-    fi
-
     gsuite_account_for_label="$(gcloud auth list | \
         grep '^\*' | \
         sed -e 's/\* *//' -e 's/@/__at__/g' -e 's/\./__dot__/g'\
@@ -61,10 +54,6 @@ case "${cmd}" in
 
     gcloud compute scp --recurse "build/bootstrap" "${NAME}:bootstrap"
     gcloud compute ssh "${NAME}" --ssh-flag="-A" --command="./bootstrap/bootstrap-debian.sh"
-
-    if [[ "$COCKROACH_DEV_LICENSE" ]]; then
-      gcloud compute ssh "${NAME}" --command="echo COCKROACH_DEV_LICENSE=$COCKROACH_DEV_LICENSE >> ~/.bashrc_bootstrap"
-    fi
 
     # Install automatic shutdown after ten minutes of operation without a
     # logged in user. To disable this, `sudo touch /.active`.

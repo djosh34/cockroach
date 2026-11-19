@@ -75,14 +75,12 @@ func TestExcludeReallyEnormousTests(t *testing.T) {
 		},
 		{
 			in: []string{
-				"//pkg/ccl/sqlitelogictestccl:sqlitelogictestccl_test",
 				"//pkg/sql/sqlitelogictest:sqlitelogictest_test",
 			},
 			out: []string{},
 		},
 		{
 			in: []string{
-				"//pkg/ccl/sqlitelogictestccl:sqlitelogictestccl_test",
 				"//pkg/jobs:jobs_test",
 				"//pkg/sql/colexec:colexec_test",
 				"//pkg/sql/sem/eval:eval_test",

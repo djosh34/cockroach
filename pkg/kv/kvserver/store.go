@@ -3338,13 +3338,6 @@ func (s *Store) computeMetrics(ctx context.Context) (m storage.Metrics, err erro
 	_ = s.TODOEngine() // TODO(sep-raft-log): log engine should also have metrics
 	s.metrics.updateEngineMetrics(m)
 
-	// Get engine Env stats.
-	envStats, err := s.TODOEngine().GetEnvStats()
-	if err != nil {
-		return m, err
-	}
-	s.metrics.updateEnvStats(*envStats)
-
 	{
 		dirs, err := s.TODOEngine().List(s.checkpointsDir())
 		if err != nil { // skip NotFound or any other error

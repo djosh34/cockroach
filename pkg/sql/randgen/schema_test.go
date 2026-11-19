@@ -17,7 +17,6 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
-	"github.com/cockroachdb/cockroach/pkg/ccl"
 	"github.com/cockroachdb/cockroach/pkg/sql/randgen"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/testutils/serverutils"
@@ -39,7 +38,6 @@ func TestPopulateTableWithRandData(t *testing.T) {
 	defer s.Stopper().Stop(ctx)
 
 	rng, _ := randutil.NewTestRand()
-	defer ccl.TestingEnableEnterprise()() // allow usage of partitions
 
 	sqlDB := sqlutils.MakeSQLRunner(dbConn)
 	sqlDB.Exec(t, "CREATE DATABASE rand")
@@ -50,7 +48,7 @@ func TestPopulateTableWithRandData(t *testing.T) {
 	tablePrefix := "table"
 	numTables := 10
 
-	stmts := randgen.RandCreateTables(rng, tablePrefix, numTables, false, /* isMultiRegion */
+	stmts := randgen.RandCreateTables(rng, tablePrefix, numTables,
 		randgen.PartialIndexMutator,
 		randgen.ForeignKeyMutator,
 	)

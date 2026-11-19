@@ -170,7 +170,6 @@ func (ef *execFactory) ConstructScan(
 	scan.lockingStrength = descpb.ToScanLockingStrength(params.Locking.Strength)
 	scan.lockingWaitPolicy = descpb.ToScanLockingWaitPolicy(params.Locking.WaitPolicy)
 	scan.lockingDurability = descpb.ToScanLockingDurability(params.Locking.Durability)
-	scan.localityOptimized = params.LocalityOptimized
 	if !ef.isExplain && !ef.planner.SessionData().Internal {
 		idxUsageKey := roachpb.IndexUsageKey{
 			TableID: roachpb.TableID(tabDesc.GetID()),
@@ -573,8 +572,7 @@ func (ef *execFactory) ConstructHashSetOp(
 	typ tree.UnionType, all bool, left, right exec.Node,
 ) (exec.Node, error) {
 	return ef.planner.newUnionNode(
-		typ, all, left.(planNode), right.(planNode), nil, nil, 0, /* hardLimit */
-		false, /* enforceHomeRegion */
+		typ, all, left.(planNode), right.(planNode), nil, nil,
 	)
 }
 
@@ -593,14 +591,12 @@ func (ef *execFactory) ConstructStreamingSetOp(
 		right.(planNode),
 		streamingOrdering,
 		ReqOrdering(reqOrdering),
-		0,     /* hardLimit */
-		false, /* enforceHomeRegion */
 	)
 }
 
 // ConstructUnionAll is part of the exec.Factory interface.
 func (ef *execFactory) ConstructUnionAll(
-	left, right exec.Node, reqOrdering exec.OutputOrdering, hardLimit uint64, enforceHomeRegion bool,
+	left, right exec.Node, reqOrdering exec.OutputOrdering,
 ) (exec.Node, error) {
 	return ef.planner.newUnionNode(
 		tree.UnionOp,
@@ -609,8 +605,6 @@ func (ef *execFactory) ConstructUnionAll(
 		right.(planNode),
 		colinfo.ColumnOrdering(reqOrdering),
 		ReqOrdering(reqOrdering),
-		hardLimit,
-		enforceHomeRegion,
 	)
 }
 
@@ -702,7 +696,6 @@ func (ef *execFactory) ConstructLookupJoin(
 	eqCols []exec.NodeColumnOrdinal,
 	eqColsAreKey bool,
 	lookupExpr tree.TypedExpr,
-	remoteLookupExpr tree.TypedExpr,
 	lookupCols exec.TableColumnOrdinalSet,
 	onCond tree.TypedExpr,
 	isFirstJoinInPairedJoiner bool,
@@ -710,7 +703,6 @@ func (ef *execFactory) ConstructLookupJoin(
 	reqOrdering exec.OutputOrdering,
 	locking opt.Locking,
 	limitHint int64,
-	remoteOnlyLookups bool,
 ) (exec.Node, error) {
 	if table.IsVirtualTable() {
 		return ef.constructVirtualTableLookupJoin(joinType, input, table, index, eqCols, lookupCols, onCond)
@@ -746,7 +738,6 @@ func (ef *execFactory) ConstructLookupJoin(
 		isSecondJoinInPairedJoiner: isSecondJoinInPairedJoiner,
 		reqOrdering:                ReqOrdering(reqOrdering),
 		limitHint:                  limitHint,
-		remoteOnlyLookups:          remoteOnlyLookups,
 	}
 	n.eqCols = make([]int, len(eqCols))
 	for i, c := range eqCols {
@@ -755,9 +746,6 @@ func (ef *execFactory) ConstructLookupJoin(
 	pred := makePredicate(joinType, planColumns(input.(planNode)), planColumns(tableScan))
 	if lookupExpr != nil {
 		n.lookupExpr = pred.iVarHelper.Rebind(lookupExpr)
-	}
-	if remoteLookupExpr != nil {
-		n.remoteLookupExpr = pred.iVarHelper.Rebind(remoteLookupExpr)
 	}
 	if onCond != nil && onCond != tree.DBoolTrue {
 		n.onCond = pred.iVarHelper.Rebind(onCond)
@@ -1382,8 +1370,6 @@ func (ef *execFactory) ConstructInsert(
 		},
 	}
 
-	ins.run.regionLocalInfo.setupEnforceHomeRegion(ef.planner, table, cols, ins.run.ti.ri.InsertColIDtoRowIndex)
-
 	// If rows are not needed, no columns are returned.
 	if rowsNeeded {
 		returnCols := makeColList(table, returnColOrdSet)
@@ -1455,8 +1441,6 @@ func (ef *execFactory) ConstructInsertFastPath(
 			},
 		},
 	}
-
-	ins.run.regionLocalInfo.setupEnforceHomeRegion(ef.planner, table, cols, ins.run.ti.ri.InsertColIDtoRowIndex)
 
 	if len(uniqChecks) > 0 {
 		ins.run.uniqChecks = make([]insertFastPathCheck, len(uniqChecks))
@@ -1579,9 +1563,6 @@ func (ef *execFactory) ConstructUpdate(
 			numPassthrough: len(passthrough),
 		},
 	}
-
-	upd.run.regionLocalInfo.setupEnforceHomeRegion(ef.planner, table, ru.UpdateCols,
-		upd.run.tu.ru.UpdateColIDtoRowIndex)
 
 	// If rows are not needed, no columns are returned.
 	if rowsNeeded {

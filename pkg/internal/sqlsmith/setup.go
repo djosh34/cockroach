@@ -28,18 +28,13 @@ type Setup func(*rand.Rand) []string
 // RandTableSetupName is the name of the table setup that creates random tables.
 const RandTableSetupName = "rand-tables"
 
-// SeedMultiRegionSetupName is the name of the table setup that creates
-// multi-region tables.
-const SeedMultiRegionSetupName = "seed-multi-region"
-
 // Setups is a collection of useful initial table states.
 var Setups = map[string]Setup{
 	"empty": wrapCommonSetup(stringSetup("", "")),
 	// seed is a SQL statement that creates a table with most data types
 	// and some sample rows.
-	"seed":                   wrapCommonSetup(stringSetup(seedTable, "seed")),
-	SeedMultiRegionSetupName: wrapCommonSetup(stringSetup(multiregionSeed, "seed_mr_table")),
-	RandTableSetupName:       wrapCommonSetup(randTables),
+	"seed":             wrapCommonSetup(stringSetup(seedTable, "seed")),
+	RandTableSetupName: wrapCommonSetup(randTables),
 }
 
 // wrapCommonSetup wraps setup steps common to all SQLSmith setups around the
@@ -73,9 +68,9 @@ func stringSetup(s, tableName string) Setup {
 		if tableName != "" {
 			numSplits := r.Intn(10)
 			for i := 0; i < numSplits; i++ {
-				// At the moment, this function is called only for "seed" and
-				// "seed-multi-region" setups which don't define an explicit
-				// primary key, so the table has hidden rowid column as its PK.
+				// At the moment, this function is called only for the "seed"
+				// setup which doesn't define an explicit primary key, so the
+				// table has hidden rowid column as its PK.
 				splitValue := r.Int63()
 				setup = append(setup, fmt.Sprintf("ALTER TABLE %s SPLIT AT VALUES (%d)", tableName, splitValue))
 			}
@@ -116,7 +111,7 @@ func randTablesN(r *rand.Rand, n int, prefix string) []string {
 
 	// Create the random tables.
 	createTableStatements := randgen.RandCreateTables(
-		r, "table", n, false /* isMultiRegion */, randgen.StatisticsMutator,
+		r, "table", n, randgen.StatisticsMutator,
 		randgen.PartialIndexMutator, randgen.ForeignKeyMutator, //prefixStringConstsMutator,
 	)
 
@@ -172,26 +167,6 @@ INSERT INTO seed DEFAULT VALUES;
 CREATE INDEX on seed (_int8, _float8, _date);
 CREATE INVERTED INDEX on seed (_jsonb);
 `
-
-	multiregionSeed = `
-CREATE TABLE IF NOT EXISTS seed_mr_table AS
-	SELECT
-		g::INT2 AS _int2,
-		g::INT4 AS _int4,
-		g::INT8 AS _int8,
-		g::FLOAT8 AS _float8,
-		'2001-01-01'::DATE + g AS _date,
-		'2001-01-01'::TIMESTAMP + g * '1 day'::INTERVAL AS _timestamp,
-		'2001-01-01'::TIMESTAMPTZ + g * '1 day'::INTERVAL AS _timestamptz,
-		g * '1 day'::INTERVAL AS _interval,
-		g % 2 = 1 AS _bool,
-		g::DECIMAL AS _decimal,
-		g::STRING AS _string,
-		g::STRING::BYTES AS _bytes,
-		substring('00000000-0000-0000-0000-' || g::STRING || '00000000000', 1, 36)::UUID AS _uuid
-	FROM
-		generate_series(1, 5) AS g;
-`
 )
 
 // SettingFunc generates a Setting.
@@ -224,7 +199,6 @@ var Settings = map[string]SettingFunc{
 	"no-mutations+rand": randSetting(Parallel, DisableMutations()),
 	"no-ddl+rand":       randSetting(NoParallel, DisableDDLs()),
 	"ddl-nodrop":        randSetting(NoParallel, OnlyNoDropDDLs()),
-	"multi-region":      randSetting(Parallel, MultiRegionDDLs()),
 }
 
 var settingNames = func() []string {

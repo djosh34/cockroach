@@ -79,8 +79,6 @@ func ShowCreateTable(
 	ctx, sp := tracing.ChildSpan(ctx, "sql.ShowCreateTable")
 	defer sp.Finish()
 
-	a := &tree.DatumAlloc{}
-
 	fmtFlags := tree.FmtSimple
 	if displayOptions.RedactableValues {
 		fmtFlags |= tree.FmtMarkRedactionNode | tree.FmtOmitNameRedaction
@@ -147,22 +145,12 @@ func ShowCreateTable(
 	for _, idx := range desc.PublicNonPrimaryIndexes() {
 		// Showing the primary index is handled above.
 
-		// Build the PARTITION BY clause.
-		var partitionBuf bytes.Buffer
-		if err := ShowCreatePartitioning(
-			a, p.ExecCfg().Codec, desc, idx, idx.GetPartitioning(), &partitionBuf, 1, /* indent */
-			0 /* colOffset */, displayOptions.RedactableValues,
-		); err != nil {
-			return "", err
-		}
-
 		f.WriteString(",\n\t")
 		idxStr, err := catformat.IndexForDisplay(
 			ctx,
 			desc,
 			&descpb.AnonymousTable,
 			idx,
-			partitionBuf.String(),
 			fmtFlags,
 			p.RunParams(ctx).p.SemaCtx(),
 			p.RunParams(ctx).p.SessionData(),
@@ -180,21 +168,10 @@ func ShowCreateTable(
 		return "", err
 	}
 
-	if err := ShowCreatePartitioning(
-		a, p.ExecCfg().Codec, desc, desc.GetPrimaryIndex(), desc.GetPrimaryIndex().GetPartitioning(),
-		&f.Buffer, 0 /* indent */, 0 /* colOffset */, displayOptions.RedactableValues,
-	); err != nil {
-		return "", err
-	}
-
 	if storageParams := desc.GetStorageParams(true /* spaceBetweenEqual */); len(storageParams) > 0 {
 		f.Buffer.WriteString(` WITH (`)
 		f.Buffer.WriteString(strings.Join(storageParams, ", "))
 		f.Buffer.WriteString(`)`)
-	}
-
-	if err := showCreateLocality(desc, f); err != nil {
-		return "", err
 	}
 
 	if !displayOptions.IgnoreComments {

@@ -295,7 +295,6 @@ func runPlanInsidePlan(
 	// (which won't affect the outer planner's extended eval context), and we'll
 	// use it as the golden version going forward.
 	plannerCopy.extendedEvalCtx.Planner = &plannerCopy
-	plannerCopy.extendedEvalCtx.StreamManagerFactory = &plannerCopy
 	plannerCopy.extendedEvalCtx.RoutineSender = deferredRoutineSender
 	evalCtxFactory := plannerCopy.ExtendedEvalContextCopy
 

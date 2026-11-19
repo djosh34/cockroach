@@ -80,16 +80,6 @@ func (p *planner) CreateIndex(ctx context.Context, n *tree.CreateIndex) (planNod
 		return nil, err
 	}
 
-	if tableDesc.IsLocalityRegionalByRow() {
-		if err := p.checkNoRegionChangeUnderway(
-			ctx,
-			tableDesc.GetParentID(),
-			"CREATE INDEX on a REGIONAL BY ROW table",
-		); err != nil {
-			return nil, err
-		}
-	}
-
 	// Disallow schema changes if this table's schema is locked.
 	if err := checkTableSchemaUnlocked(tableDesc); err != nil {
 		return nil, err
@@ -239,10 +229,6 @@ func makeIndexDescriptor(
 	}
 
 	if n.Sharded != nil {
-		if n.PartitionByIndex.ContainsPartitions() {
-			return nil, pgerror.New(pgcode.FeatureNotSupported, "sharded indexes don't support explicit partitioning")
-		}
-
 		shardCol, newColumns, err := setupShardedIndex(
 			params.ctx,
 			params.EvalContext(),
@@ -674,19 +660,6 @@ func setupShardedIndex(
 	storageParams tree.StorageParams,
 	isNewTable bool,
 ) (shard catalog.Column, newColumns tree.IndexElemList, err error) {
-	if !isNewTable && tableDesc.IsPartitionAllBy() {
-		partitionAllBy, err := partitionByFromTableDesc(evalCtx.Codec, tableDesc)
-		if err != nil {
-			return nil, nil, err
-		}
-		if anyColumnIsPartitioningField(columns, partitionAllBy) {
-			return nil, nil, pgerror.New(
-				pgcode.FeatureNotSupported,
-				`hash sharded indexes cannot include implicit partitioning columns from "PARTITION ALL BY" or "LOCALITY REGIONAL BY ROW"`,
-			)
-		}
-	}
-
 	colNames := make([]string, 0, len(columns))
 	for _, c := range columns {
 		colNames = append(colNames, string(c.Column))
@@ -768,22 +741,6 @@ func (n *createIndexNode) startExec(params runParams) error {
 		)
 	}
 
-	// Warn against creating a non-partitioned index on a partitioned table,
-	// which is undesirable in most cases.
-	// Avoid the warning if we have PARTITION ALL BY as all indexes will implicitly
-	// have relevant partitioning columns prepended at the front.
-	if n.n.PartitionByIndex == nil &&
-		n.tableDesc.GetPrimaryIndex().PartitioningColumnCount() > 0 &&
-		!n.tableDesc.IsPartitionAllBy() {
-		params.p.BufferClientNotice(
-			params.ctx,
-			errors.WithHint(
-				pgnotice.Newf("creating non-partitioned index on partitioned table may not be performant"),
-				"Consider modifying the index such that it is also partitioned.",
-			),
-		)
-	}
-
 	indexDesc, err := makeIndexDescriptor(params, *n.n, n.tableDesc)
 	if err != nil {
 		return err
@@ -799,27 +756,6 @@ func (n *createIndexNode) startExec(params runParams) error {
 	// affects mixed-21.2-22.1-version clusters (issue #78426).
 	indexDesc.Version = descpb.StrictIndexColumnIDGuaranteesVersion
 
-	if n.n.PartitionByIndex != nil && n.tableDesc.GetLocalityConfig() != nil {
-		return pgerror.New(
-			pgcode.FeatureNotSupported,
-			"cannot define PARTITION BY on a new INDEX in a multi-region database",
-		)
-	}
-
-	*indexDesc, err = params.p.configureIndexDescForNewIndexPartitioning(
-		params.ctx,
-		n.tableDesc,
-		*indexDesc,
-		n.n.PartitionByIndex,
-	)
-	if err != nil {
-		return err
-	}
-
-	if indexDesc.Type == descpb.IndexDescriptor_INVERTED && indexDesc.Partitioning.NumColumns != 0 {
-		telemetry.Inc(sqltelemetry.PartitionedInvertedIndexCounter)
-	}
-
 	mutationIdx := len(n.tableDesc.Mutations)
 	if err := n.tableDesc.AddIndexMutationMaybeWithTempIndex(
 		indexDesc, descpb.DescriptorMutation_ADD,
@@ -828,14 +764,6 @@ func (n *createIndexNode) startExec(params runParams) error {
 	}
 	version := params.ExecCfg().Settings.Version.ActiveVersion(params.ctx)
 	if err := n.tableDesc.AllocateIDs(params.ctx, version); err != nil {
-		return err
-	}
-
-	if err := params.p.configureZoneConfigForNewIndexPartitioning(
-		params.ctx,
-		n.tableDesc,
-		*indexDesc,
-	); err != nil {
 		return err
 	}
 
@@ -871,98 +799,3 @@ func (n *createIndexNode) startExec(params runParams) error {
 func (*createIndexNode) Next(runParams) (bool, error) { return false, nil }
 func (*createIndexNode) Values() tree.Datums          { return tree.Datums{} }
 func (*createIndexNode) Close(context.Context)        {}
-
-// configureIndexDescForNewIndexPartitioning returns a new copy of an index descriptor
-// containing modifications needed if partitioning is configured.
-func (p *planner) configureIndexDescForNewIndexPartitioning(
-	ctx context.Context,
-	tableDesc *tabledesc.Mutable,
-	indexDesc descpb.IndexDescriptor,
-	partitionByIndex *tree.PartitionByIndex,
-) (descpb.IndexDescriptor, error) {
-	var err error
-	if partitionByIndex.ContainsPartitioningClause() || tableDesc.IsPartitionAllBy() {
-		var partitionBy *tree.PartitionBy
-		if !tableDesc.IsPartitionAllBy() {
-			if partitionByIndex.ContainsPartitions() {
-				partitionBy = partitionByIndex.PartitionBy
-			}
-		} else if partitionByIndex.ContainsPartitioningClause() {
-			return indexDesc, pgerror.New(
-				pgcode.FeatureNotSupported,
-				"cannot define PARTITION BY on an index if the table has a PARTITION ALL BY definition",
-			)
-		} else {
-			partitionBy, err = partitionByFromTableDesc(p.ExecCfg().Codec, tableDesc)
-			if err != nil {
-				return indexDesc, err
-			}
-		}
-		allowImplicitPartitioning := p.EvalContext().SessionData().ImplicitColumnPartitioningEnabled ||
-			tableDesc.IsLocalityRegionalByRow()
-		if partitionBy != nil {
-			newImplicitCols, newPartitioning, err := CreatePartitioning(
-				ctx,
-				p.ExecCfg().Settings,
-				p.EvalContext(),
-				tableDesc,
-				indexDesc,
-				partitionBy,
-				nil, /* allowedNewColumnNames */
-				allowImplicitPartitioning,
-			)
-			if err != nil {
-				return indexDesc, err
-			}
-			tabledesc.UpdateIndexPartitioning(&indexDesc, false /* isIndexPrimary */, newImplicitCols, newPartitioning)
-		}
-	}
-	return indexDesc, nil
-}
-
-// configureZoneConfigForNewIndexPartitioning configures the zone config for any new index
-// in a REGIONAL BY ROW table.
-// This *must* be done after the index ID has been allocated.
-func (p *planner) configureZoneConfigForNewIndexPartitioning(
-	ctx context.Context, tableDesc *tabledesc.Mutable, indexDesc descpb.IndexDescriptor,
-) error {
-	if indexDesc.ID == 0 {
-		return errors.AssertionFailedf("index %s does not have id", indexDesc.Name)
-	}
-	// For REGIONAL BY ROW tables, correctly configure relevant zone configurations.
-	if tableDesc.IsLocalityRegionalByRow() {
-		regionConfig, err := SynthesizeRegionConfig(ctx, p.txn, tableDesc.GetParentID(), p.Descriptors())
-		if err != nil {
-			return err
-		}
-
-		indexIDs := []descpb.IndexID{indexDesc.ID}
-		if idx := catalog.FindCorrespondingTemporaryIndexByID(tableDesc, indexDesc.ID); idx != nil {
-			indexIDs = append(indexIDs, idx.GetID())
-		}
-
-		if err := ApplyZoneConfigForMultiRegionTable(
-			ctx,
-			p.InternalSQLTxn(),
-			p.ExecCfg(),
-			p.extendedEvalCtx.Tracing.KVTracingEnabled(),
-			regionConfig,
-			tableDesc,
-			applyZoneConfigForMultiRegionTableOptionNewIndexes(indexIDs...),
-		); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func anyColumnIsPartitioningField(columns tree.IndexElemList, partitionBy *tree.PartitionBy) bool {
-	for _, field := range partitionBy.Fields {
-		for _, column := range columns {
-			if field == column.Column {
-				return true
-			}
-		}
-	}
-	return false
-}

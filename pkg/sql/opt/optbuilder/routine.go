@@ -18,8 +18,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/parser/statements"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
-	plpgsql "github.com/cockroachdb/cockroach/pkg/sql/plpgsql/parser"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/plpgsqltree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/cockroach/pkg/util/errorutil/unimplemented"
@@ -278,35 +276,8 @@ func (b *Builder) buildRoutine(
 			body[i] = expr
 			bodyProps[i] = physProps
 		}
-	case tree.RoutineLangPLpgSQL:
-		// Parse the function body.
-		stmt, err := plpgsql.Parse(o.Body)
-		if err != nil {
-			panic(err)
-		}
-		// Add a RETURN NULL statement if the return type of the function is
-		// VOID and the last statement is not already a RETURN statement. This
-		// ensures that all possible code paths lead to a RETURN statement.
-		// TODO(#108298): There is a parsing bug that affects some PLpgSQL
-		// functions with VOID return types.
-		if rtyp.Family() == types.VoidFamily {
-			lastStmt := stmt.AST.Body[len(stmt.AST.Body)-1]
-			if _, ok := lastStmt.(*plpgsqltree.Return); !ok {
-				stmt.AST.Body = append(stmt.AST.Body, &plpgsqltree.Return{Expr: tree.DNull})
-			}
-		}
-		var expr memo.RelExpr
-		var physProps *physical.Required
-		var plBuilder plpgsqlBuilder
-		plBuilder.init(b, colRefs, o.Types.(tree.ParamTypes), stmt.AST, rtyp)
-		stmtScope := plBuilder.build(stmt.AST, bodyScope)
-		rtyp = finishResolveType(stmtScope)
-		expr, physProps, isMultiColDataSource =
-			b.finishBuildLastStmt(stmtScope, bodyScope, isSetReturning, f)
-		body = []memo.RelExpr{expr}
-		bodyProps = []*physical.Required{physProps}
 	default:
-		panic(errors.AssertionFailedf("unexpected language: %v", o.Language))
+		panic(pgerror.Newf(pgcode.FeatureNotSupported, "routine language %v is unsupported", o.Language))
 	}
 
 	b.insideUDF = false

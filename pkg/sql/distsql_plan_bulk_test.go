@@ -50,7 +50,7 @@ func TestCalculatePlanGrowth(t *testing.T) {
 			name:   "changed inputs to same node",
 			before: []physicalplan.Processor{{SQLInstanceID: 1}},
 			after: []physicalplan.Processor{{SQLInstanceID: 1,
-				Spec: execinfrapb.ProcessorSpec{Core: execinfrapb.ProcessorCoreUnion{ChangeAggregator: &execinfrapb.ChangeAggregatorSpec{JobID: 1}}}}},
+				Spec: execinfrapb.ProcessorSpec{Core: execinfrapb.ProcessorCoreUnion{Noop: &execinfrapb.NoopCoreSpec{}}}}},
 			added: 1, frac: 1.0,
 		},
 		{

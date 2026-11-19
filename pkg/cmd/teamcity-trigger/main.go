@@ -54,12 +54,6 @@ var (
 		"//pkg/kv/kvserver": {
 			maxTime: 3 * time.Hour,
 		},
-		"//pkg/ccl/backupccl": {
-			maxTime: 2 * time.Hour,
-		},
-		"//pkg/ccl/logictestccl/tests/3node-tenant": {
-			maxTime: 2 * time.Hour,
-		},
 	}
 )
 
@@ -158,9 +152,7 @@ func runTC(queueBuild func(string, map[string]string)) {
 		}
 
 		if testTarget == "//pkg/sql/logictest:logictest_test" ||
-			testTarget == "//pkg/kv/kvserver:kvserver_test" ||
-			testTarget == "//pkg/ccl/backupccl:backupccl_test" ||
-			testTarget == "//pkg/ccl/streamingccl/streamingest:streamingest_test" {
+			testTarget == "//pkg/kv/kvserver:kvserver_test" {
 			// Stress heavy with reduced parallelism (to avoid overloading the
 			// machine, see https://github.com/cockroachdb/cockroach/pull/10966).
 			parallelism /= 2

@@ -51,7 +51,6 @@ exports_files([
 # gazelle:resolve proto io/prometheus/client/metrics.proto @com_github_prometheus_client_model//io/prometheus/client:io_prometheus_client_proto
 # gazelle:resolve proto go io/prometheus/client/metrics.proto @com_github_prometheus_client_model//go
 # gazelle:resolve go github.com/prometheus/client_model/go @com_github_prometheus_client_model//go
-# gazelle:resolve go github.com/cockroachdb/cockroach/pkg/ccl/gssapiccl //pkg/ccl/gssapiccl
 # gazelle:resolve go github.com/cockroachdb/cockroach/pkg/cli_test //pkg/cli:cli_test
 # gazelle:resolve go github.com/cockroachdb/cockroach/pkg/sql/colflow_test //pkg/sql/colflow:colflow_test
 # gazelle:resolve go github.com/cockroachdb/cockroach/pkg/util/caller_test //pkg/util/caller:caller_test
@@ -95,7 +94,6 @@ exports_files([
 # gazelle:exclude bin
 # gazelle:exclude build/builder_home
 # gazelle:exclude lib
-# gazelle:exclude pkg/ccl/gssapiccl
 # gazelle:exclude pkg/ui/node_modules
 # gazelle:exclude pkg/ui/workspaces/cluster-ui/node_modules
 # gazelle:exclude pkg/ui/workspaces/db-console/node_modules
@@ -120,23 +118,17 @@ exports_files([
 # gazelle:exclude pkg/sql/lexbase/keywords.go
 # gazelle:exclude pkg/sql/lexbase/tokens.go
 # gazelle:exclude pkg/sql/lexbase/reserved_keywords.go
-# gazelle:exclude pkg/sql/plpgsql/parser/lexbase/keywords.go
-# gazelle:exclude pkg/sql/plpgsql/parser/lexbase/tokens.go
-# gazelle:exclude pkg/sql/plpgsql/parser/lexbase/reserved_keywords.go
 # gazelle:exclude pkg/sql/scanner/token_names_test.go
 # gazelle:exclude pkg/sql/schemachanger/scexec/mocks_generated_test.go
 # gazelle:exclude pkg/cmd/prereqs/testdata
 # gazelle:exclude pkg/testutils/**/testdata/**
 # gazelle:exclude pkg/security/securitytest/embedded.go
-# gazelle:exclude pkg/roachprod/vm/aws/embedded.go
 # gazelle:exclude pkg/**/*_string.go
-# gazelle:exclude pkg/ui/distccl/distccl_no_bazel.go
 # gazelle:exclude pkg/ui/distoss/distoss_no_bazel.go
 # gazelle:exclude pkg/util/buildutil/crdb_test_off.go
 # gazelle:exclude pkg/util/buildutil/crdb_test_on.go
 # gazelle:exclude pkg/testutils/bazelcodecover/crdb_test_off.go
 # gazelle:exclude pkg/testutils/bazelcodecover/crdb_test_on.go
-# gazelle:exclude pkg/acceptance/compose/gss/psql/*
 # gazelle:exclude pkg/acceptance/test_main.go
 #
 # Generally useful references:

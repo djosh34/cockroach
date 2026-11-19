@@ -29,9 +29,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/server/settingswatcher"
 	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
-	"github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/systemschema"
 	"github.com/cockroachdb/cockroach/pkg/sql/enum"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlinstance"
@@ -555,40 +553,11 @@ func (s *Storage) getInstanceRows(
 // RunInstanceIDReclaimLoop runs a background task that allocates available
 // instance IDs and reclaim expired ones within the sql_instances table.
 func (s *Storage) RunInstanceIDReclaimLoop(
-	ctx context.Context,
-	stopper *stop.Stopper,
-	ts timeutil.TimeSource,
-	db descs.DB,
-	session sqlliveness.Session,
+	ctx context.Context, stopper *stop.Stopper, ts timeutil.TimeSource, session sqlliveness.Session,
 ) error {
-	loadRegions := func(ctx context.Context) ([][]byte, error) {
-		// Load regions from the system DB.
-		var regions [][]byte
-		if err := db.DescsTxn(ctx, func(
-			ctx context.Context, txn descs.Txn,
-		) error {
-			enumReps, _, err := sql.GetRegionEnumRepresentations(
-				ctx, txn.KV(), keys.SystemDatabaseID, txn.Descriptors(),
-			)
-			if err != nil {
-				if errors.Is(err, sql.ErrNotMultiRegionDatabase) {
-					return nil
-				}
-				return err
-			}
-			for _, r := range enumReps {
-				regions = append(regions, r)
-			}
-			return nil
-		}); err != nil {
-			return nil, err
-		}
-		// The system database isn't multi-region.
-		if len(regions) == 0 {
-			regions = [][]byte{enum.One}
-		}
-		return regions, nil
-	}
+	// The system database has a single region, so every instance row uses
+	// the default region prefix.
+	regions := [][]byte{enum.One}
 
 	return stopper.RunAsyncTask(ctx, "instance-id-reclaim-loop", func(ctx context.Context) {
 		ctx, cancel := stopper.WithCancelOnQuiesce(ctx)
@@ -608,14 +577,6 @@ func (s *Storage) RunInstanceIDReclaimLoop(
 				return
 			case <-timer.Ch():
 				timer.MarkRead()
-
-				// Load the regions each time we attempt to generate rows since
-				// regions can be added/removed to/from the system DB.
-				regions, err := loadRegions(ctx)
-				if err != nil {
-					log.Warningf(ctx, "failed to load regions from the system DB: %v", err)
-					continue
-				}
 
 				// Mark instances that belong to expired sessions as available
 				// and delete surplus IDs. Cleaning up surplus IDs is necessary

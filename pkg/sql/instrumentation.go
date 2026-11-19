@@ -159,9 +159,7 @@ type instrumentationHelper struct {
 	// generic is true if the plan can be fully-optimized once and re-used
 	// without re-optimization. Plans without placeholders and fold-able stable
 	// expressions, and plans utilizing the placeholder fast-path are always
-	// considered "generic". Plans that are fully optimized with placeholders
-	// present via the force_generic_plan or auto settings for plan_cache_mode
-	// are also considered "generic".
+	// considered "generic".
 	generic bool
 	// optimized is true if the plan was optimized or re-optimized during the
 	// current execution.

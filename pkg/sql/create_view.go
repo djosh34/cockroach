@@ -30,11 +30,8 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgnotice"
-	plpgsql "github.com/cockroachdb/cockroach/pkg/sql/plpgsql/parser"
 	"github.com/cockroachdb/cockroach/pkg/sql/privilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/plpgsqltree"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/plpgsqltree/utils"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlerrors"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqltelemetry"
@@ -186,8 +183,6 @@ func (n *createViewNode) startExec(params runParams) error {
 	}
 
 	var newDesc *tabledesc.Mutable
-	applyGlobalMultiRegionZoneConfig := false
-
 	var retErr error
 	params.p.runWithOptions(resolveFlags{contextDatabaseID: n.dbDesc.GetID()}, func() {
 		retErr = func() error {
@@ -232,7 +227,6 @@ func (n *createViewNode) startExec(params runParams) error {
 					params.p.EvalContext(),
 					params.p.EvalContext().Settings,
 					createView.Persistence,
-					n.dbDesc.IsMultiRegion(),
 					params.p)
 				if err != nil {
 					return err
@@ -255,11 +249,6 @@ func (n *createViewNode) startExec(params runParams) error {
 					version := params.ExecCfg().Settings.Version.ActiveVersion(params.ctx)
 					if err := desc.AllocateIDs(params.ctx, version); err != nil {
 						return err
-					}
-					// For multi-region databases, we want this descriptor to be GLOBAL instead.
-					if n.dbDesc.IsMultiRegion() {
-						desc.SetTableLocalityGlobal()
-						applyGlobalMultiRegionZoneConfig = true
 					}
 				}
 
@@ -331,26 +320,6 @@ func (n *createViewNode) startExec(params runParams) error {
 				return err
 			}
 
-			if applyGlobalMultiRegionZoneConfig {
-				regionConfig, err := SynthesizeRegionConfig(params.ctx, params.p.txn, n.dbDesc.GetID(), params.p.Descriptors())
-				if err != nil {
-					return err
-				}
-				if err := ApplyZoneConfigForMultiRegionTable(
-					params.ctx,
-					params.p.InternalSQLTxn(),
-					params.p.ExecCfg(),
-					params.p.extendedEvalCtx.Tracing.KVTracingEnabled(),
-					regionConfig,
-					newDesc,
-					applyZoneConfigForMultiRegionTableOptionTableNewConfig(
-						tabledesc.LocalityConfigGlobal(),
-					),
-				); err != nil {
-					return err
-				}
-			}
-
 			// Log Create View event. This is an auditable log event and is
 			// recorded in the same transaction as the table descriptor update.
 			return params.p.logEvent(params.ctx,
@@ -389,7 +358,6 @@ func makeViewTableDesc(
 	evalCtx *eval.Context,
 	st *cluster.Settings,
 	persistence tree.Persistence,
-	isMultiRegion bool,
 	sc resolver.SchemaResolver,
 ) (tabledesc.Mutable, error) {
 	desc := tabledesc.InitTableDescriptor(
@@ -402,10 +370,6 @@ func makeViewTableDesc(
 		persistence,
 	)
 	desc.ViewQuery = viewQuery
-	if isMultiRegion {
-		desc.SetTableLocalityRegionalByTable(tree.PrimaryRegionNotSpecifiedName)
-	}
-
 	if sc != nil {
 		sequenceReplacedQuery, err := replaceSeqNamesWithIDs(ctx, sc, viewQuery, false /* multiStmt */)
 		if err != nil {
@@ -440,8 +404,7 @@ func replaceSeqNamesWithIDs(
 
 // replaceSeqNamesWithIDsLang walks the query in queryStr, replacing any
 // sequence names with their IDs and returning a new query string with the names
-// replaced. Queries may be in either the SQL or PLpgSQL language, indicated by
-// lang.
+// replaced. Only the SQL language, indicated by lang, is supported.
 func replaceSeqNamesWithIDsLang(
 	ctx context.Context,
 	sc resolver.SchemaResolver,
@@ -505,17 +468,6 @@ func replaceSeqNamesWithIDsLang(
 				fmtCtx.WriteString(";")
 			}
 		}
-	case catpb.Function_PLPGSQL:
-		var stmts plpgsqltree.Statement
-		plstmt, err := plpgsql.Parse(queryStr)
-		if err != nil {
-			return "", errors.Wrap(err, "failed to parse query string")
-		}
-		stmts = plstmt.AST
-
-		v := utils.SQLStmtVisitor{Fn: replaceSeqFunc}
-		newStmt := plpgsqltree.Walk(&v, stmts)
-		fmtCtx.FormatNode(newStmt)
 	}
 
 	return fmtCtx.String(), nil
@@ -534,7 +486,7 @@ func serializeUserDefinedTypes(
 // serializeUserDefinedTypesLang walks the given query and serializes any
 // user defined types as IDs, so that renaming the type does not cause
 // corruption, and returns a new query string containing the replacement IDs.
-// The query may be in either the SQL or PLpgSQL language, indicated by lang.
+// Only the SQL language, indicated by lang, is supported.
 func serializeUserDefinedTypesLang(
 	ctx context.Context,
 	semaCtx *tree.SemaContext,
@@ -594,30 +546,6 @@ func serializeUserDefinedTypesLang(
 		}
 		return false, parsedExpr, nil
 	}
-	// replaceTypeFunc is a visitor function that replaces type annotations
-	// containing user defined types with their IDs. This is currently only
-	// necessary for some kinds of PLpgSQL statements.
-	replaceTypeFunc := func(typ tree.ResolvableTypeReference) (newTyp tree.ResolvableTypeReference, err error) {
-		if typ == nil {
-			return typ, nil
-		}
-		// semaCtx may be nil if this is a virtual view being created at
-		// init time.
-		var typeResolver tree.TypeReferenceResolver
-		if semaCtx != nil {
-			typeResolver = semaCtx.TypeResolver
-		}
-		var t *types.T
-		t, err = tree.ResolveType(ctx, typ, typeResolver)
-		if err != nil {
-			return typ, err
-		}
-		if !t.UserDefined() {
-			return typ, nil
-		}
-		return &tree.OIDTypeReference{OID: t.Oid()}, nil
-	}
-
 	fmtCtx := tree.NewFmtCtx(tree.FmtSimple)
 	switch lang {
 	case catpb.Function_SQL:
@@ -652,23 +580,6 @@ func serializeUserDefinedTypesLang(
 				fmtCtx.WriteString(";")
 			}
 		}
-	case catpb.Function_PLPGSQL:
-		var stmts plpgsqltree.Statement
-		plstmt, err := plpgsql.Parse(queries)
-		if err != nil {
-			return "", errors.Wrap(err, "failed to parse query string")
-		}
-		stmts = plstmt.AST
-
-		v := utils.SQLStmtVisitor{Fn: replaceFunc}
-		newStmt := plpgsqltree.Walk(&v, stmts)
-		// Some PLpgSQL statements (i.e., declarations), may contain type
-		// annotations containing the UDT. We need to walk the AST to replace them,
-		// too.
-		v2 := utils.TypeRefVisitor{Fn: replaceTypeFunc}
-		newStmt = plpgsqltree.Walk(&v2, newStmt)
-		fmtCtx.FormatNode(newStmt)
-		fmtCtx.WriteString(";")
 	}
 
 	return fmtCtx.CloseAndGetString(), nil

@@ -1055,20 +1055,18 @@ func TestZoneSpecifiers(t *testing.T) {
 		{tree.ZoneSpecifier{NamedZone: "foo"}, -1, `"foo" is not a built-in zone`},
 		{tree.ZoneSpecifier{Database: "db"}, 54, ""},
 		{tree.ZoneSpecifier{NamedZone: "db"}, -1, `"db" is not a built-in zone`},
-		{tableSpecifier("db", "tbl", "", ""), 56, ""},
-		{tableSpecifier("db", "tbl", "", "prt"), 56, ""},
-		{tableSpecifier("db", "tbl", "primary", ""), 56, ""},
-		{tableSpecifier("db", "tbl", "idx", ""), 56, ""},
-		{tableSpecifier("db", "tbl", "idx", "prt"), 56, ""},
+		{tableSpecifier("db", "tbl", ""), 56, ""},
+		{tableSpecifier("db", "tbl", "primary"), 56, ""},
+		{tableSpecifier("db", "tbl", "idx"), 56, ""},
 		{tree.ZoneSpecifier{Database: "tbl"}, -1, `"tbl" not found`},
 		{tree.ZoneSpecifier{Database: "carl"}, 57, ""},
-		{tableSpecifier("carl", "toys", "", ""), 59, ""},
+		{tableSpecifier("carl", "toys", ""), 59, ""},
 		{tree.ZoneSpecifier{
 			TableOrIndex: tree.TableIndexName{
 				Table: tree.MakeTableNameWithSchema("carl", "test_schema", "toys"),
 			},
 		}, 61, ""},
-		{tableSpecifier("carl", "love", "", ""), -1, `"love" not found`},
+		{tableSpecifier("carl", "love", ""), -1, `"love" not found`},
 	} {
 		t.Run(fmt.Sprintf("resolve-specifier=%s", tc.specifier.String()), func(t *testing.T) {
 			err := func() error {
@@ -1120,15 +1118,12 @@ func TestZoneSpecifiers(t *testing.T) {
 	}
 }
 
-func tableSpecifier(
-	db tree.Name, tbl tree.Name, idx tree.UnrestrictedName, partition tree.Name,
-) tree.ZoneSpecifier {
+func tableSpecifier(db tree.Name, tbl tree.Name, idx tree.UnrestrictedName) tree.ZoneSpecifier {
 	return tree.ZoneSpecifier{
 		TableOrIndex: tree.TableIndexName{
 			Table: tree.MakeTableNameWithSchema(db, catconstants.PublicSchemaName, tbl),
 			Index: idx,
 		},
-		Partition: partition,
 	}
 }
 

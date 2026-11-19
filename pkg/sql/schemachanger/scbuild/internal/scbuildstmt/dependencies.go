@@ -253,12 +253,6 @@ type TableHelpers interface {
 	// that should be used for any new index added to this table.
 	NextTableTentativeConstraintID(tableID catid.DescID) catid.ConstraintID
 
-	// IndexPartitioningDescriptor creates a new partitioning descriptor
-	// for the secondary index element, or panics.
-	IndexPartitioningDescriptor(indexName string,
-		index *scpb.Index, keyColumns []*scpb.IndexColumn,
-		partBy *tree.PartitionBy) catpb.PartitioningDescriptor
-
 	// ResolveTypeRef resolves a type reference.
 	ResolveTypeRef(typeref tree.ResolvableTypeReference) scpb.TypeT
 

@@ -346,7 +346,6 @@ memo (optimized, ~9KB, required=[presentation: k:1,i:2,f:3,s:4,b:5])
  ├── G8: (variable s)
  └── G9: (const 'foo')
 
-
 # Do not generate a partial index scan when the predicate is not implied by the
 # filter.
 memo expect-not=GeneratePartialIndexScans
@@ -2642,63 +2641,6 @@ index-join e
       ├── key: (1)
       └── fd: (1)-->(2,4)
 
-# Regression test for #86168. Selecting from a table with a partitioned
-# primary and secondary index, where the primary index is partitioned by
-# region and the secondary index is partitioned by another column, should
-# not cause an error.
-exec-ddl
-CREATE TYPE region_enum AS ENUM ('AP_SOUTHEAST', 'CA_CENTRAL', 'US_EAST');
-----
-
-exec-ddl
-CREATE TABLE "user" (
-  region region_enum NOT NULL,
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  col1 int2 AS (col2::int2) VIRTUAL,
-  col2 varchar NOT NULL,
-  PRIMARY KEY (region, id),
-  UNIQUE (col1, col2) PARTITION BY LIST (col1) (
-    PARTITION user_col1_col2_key_ap_southeast VALUES IN (43,32),
-    PARTITION user_col1_col2_key_ca_central VALUES IN (1),
-    PARTITION DEFAULT VALUES IN (default)
-  )
-) PARTITION BY LIST (region) (
-  PARTITION user_ap_southeast VALUES IN ('AP_SOUTHEAST'),
-  PARTITION user_us_east VALUES IN ('US_EAST'),
-  PARTITION user_ca_central VALUES IN ('CA_CENTRAL'),
-  PARTITION DEFAULT VALUES IN (default)
-);
-----
-
-exec-ddl
-ALTER PARTITION user_ap_southeast OF TABLE "user" CONFIGURE ZONE USING
-  num_replicas = 5,
-  num_voters = 3,
-  lease_preferences = '[[+region=ap-southeast-2]]',
-  voter_constraints = '[+region=ap-southeast-2]';
-----
-
-opt locality=(region=ap-southeast-2)
-SELECT *
-FROM "user"
-WHERE region = 'AP_SOUTHEAST';
-----
-project
- ├── columns: region:1!null id:2!null col1:3!null col2:4!null
- ├── immutable
- ├── key: (2)
- ├── fd: ()-->(1), (2)-->(4), (4)-->(3)
- ├── distribution: ap-southeast-2
- ├── scan user
- │    ├── columns: region:1!null id:2!null col2:4!null
- │    ├── constraint: /1/2: [/'AP_SOUTHEAST' - /'AP_SOUTHEAST']
- │    ├── immutable
- │    ├── key: (2)
- │    ├── fd: ()-->(1), (2)-->(4)
- │    └── distribution: ap-southeast-2
- └── projections
-      └── col2:4::INT2 [as=col1:3, outer=(4), immutable]
-
 # Regression test for #114250 - don't generate a trivial constrained scan that
 # scans the whole table using the table's check constraints.
 exec-ddl
@@ -3412,7 +3354,6 @@ project
       └── filters
            └── j:4 = '[1, 2, 3]' [outer=(4), immutable, constraints=(/4: [/'[1, 2, 3]' - /'[1, 2, 3]']; tight), fd=()-->(4)]
 
-
 # Testing equality for a JSON empty array on an inverted index.
 opt expect=GenerateInvertedIndexScans
 SELECT k FROM b WHERE j = '[]'
@@ -3679,7 +3620,6 @@ project
       └── filters
            └── (j:4->'a') = '{"b": "c"}' [outer=(4), immutable]
 
-
 # Generate an inverted scan when the index of the fetch val operator is
 # an integer and the right side to the equality is a JSON
 # array. Since the inverted expression is not tight, a
@@ -3845,7 +3785,6 @@ project
       │    └── filters (true)
       └── filters
            └── (j:4->0) @> '[1, 2]' [outer=(4), immutable]
-
 
 # Generate an inverted scan when the index of the fetch val operator
 # is an integer and there is a containment operator with a JSON string.
@@ -4084,7 +4023,6 @@ project
            ├── key: (1)
            └── fd: (1)-->(7)
 
-
 # Testing the IN operator, without the fetch val operator,
 # on an inverted index.
 
@@ -4130,7 +4068,6 @@ project
       └── filters
            └── j:4 IN ('1', '2', '3') [outer=(4), constraints=(/4: [/'1' - /'1'] [/'2' - /'2'] [/'3' - /'3']; tight)]
 
-
 # Multiple JSON strings contained within the IN operator.
 opt expect=GenerateInvertedIndexScans
 SELECT k FROM b WHERE j IN ('"a"', '"b"', '"c"')
@@ -4172,7 +4109,6 @@ project
       │              └── fd: (1)-->(7)
       └── filters
            └── j:4 IN ('"a"', '"b"', '"c"') [outer=(4), constraints=(/4: [/'"a"' - /'"a"'] [/'"b"' - /'"b"'] [/'"c"' - /'"c"']; tight)]
-
 
 # Multiple JSON arrays contained within the IN operator.
 opt expect=GenerateInvertedIndexScans
@@ -4379,7 +4315,6 @@ project
            ├── key: (1)
            └── fd: (1)-->(7)
 
-
 # Generate an inverted scan when the index of the fetch val operator is
 # a string along with the IN operator consisting of JSON objects in
 # the tuple. Since the inverted expression is not tight,
@@ -4522,7 +4457,6 @@ project
       └── filters
            └── (j:4->'a') IN ('null', '"a"', '1', '[1, 2, 3]', '{"a": "b"}') [outer=(4), immutable]
 
-
 # Generate an inverted scan when the index of the fetch val operator is
 # a string along with the IN operator consisting of JSON arrays in
 # the tuple. Since the inverted expression is not tight,
@@ -4588,7 +4522,6 @@ project
       │              └── fd: (1)-->(7)
       └── filters
            └── (j:4->'a') IN ('[1]', '[1, 2]', '[1, 2, 3]') [outer=(4), immutable]
-
 
 # Generate an inverted scan when the index of the fetch val operator is
 # an integer along with the IN operator consisting of JSON integers in
@@ -4917,7 +4850,6 @@ project
       └── filters
            └── (j:4->0) IN ('null', '"a"', '1', '{"a": "b"}') [outer=(4), immutable]
 
-
 # Generate an inverted scan when the index of the fetch val operator is
 # an integer along with the IN operator consisting of JSON arrays.
 # Since the inverted expression generated is not tight,
@@ -5027,7 +4959,6 @@ project
       │              └── fd: (1)-->(7)
       └── filters
            └── ((j:4->0)->'a') IN ('null', '"a"', '1', '{"a": "b"}') [outer=(4), immutable]
-
 
 # Query using the fetch val and equality operators in a disjunction with a
 # contains operator.
@@ -7580,7 +7511,6 @@ CREATE TABLE geom_geog (
 # detecting whether GenerateInvertedIndexScans was fired due to derivation
 # of a new filter condition, used only internally when determining the
 # inverted index scan spans to use.
-
 
 # Tests related to old normalization rule FoldEqZeroSTDistance
 
@@ -12934,54 +12864,6 @@ project
            │    └── s:4
            └── const-agg [as=b:5, outer=(5)]
                 └── b:5
-
-# Reproduction of #80820.
-exec-ddl
-CREATE TABLE table80820 (
-    col0
-        INT8 NOT NULL,
-    col1
-        INT8 NOT NULL,
-    col2
-        INT8 NOT NULL,
-    col3
-        BYTES NOT NULL,
-    col4
-        CHAR NOT NULL,
-    INDEX (col0 DESC, col1, col2)
-        PARTITION BY LIST (col0, col1)
-            (
-                PARTITION one VALUES IN ((1, 10)),
-                PARTITION two VALUES IN ((2, 20))
-            ),
-    INDEX (col3, col4 DESC, col2)
-        PARTITION BY LIST (col3, col4)
-            (
-                PARTITION one VALUES IN (('\xab', 'A')),
-                PARTITION two VALUES IN (('\xcd', 'C'))
-            )
-)
-----
-
-opt
-SELECT col0, col1, col2 FROM table80820 WHERE col2 < 4
-----
-select
- ├── columns: col0:1!null col1:2!null col2:3!null
- ├── scan table80820@table80820_col0_col1_col2_idx
- │    └── columns: col0:1!null col1:2!null col2:3!null
- └── filters
-      └── col2:3 < 4 [outer=(3), constraints=(/3: (/NULL - /3]; tight)]
-
-opt
-SELECT col3, col4, col2 FROM table80820 WHERE col2 < 4
-----
-select
- ├── columns: col3:4!null col4:5!null col2:3!null
- ├── scan table80820@table80820_col3_col4_col2_idx
- │    └── columns: col2:3!null col3:4!null col4:5!null
- └── filters
-      └── col2:3 < 4 [outer=(3), constraints=(/3: (/NULL - /3]; tight)]
 
 # Reproduction for #83976. Do not split disjunctions with trivial columns.
 exec-ddl

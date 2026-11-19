@@ -95,11 +95,9 @@ func newPlanNodeToRowSource(
 // MustBeStreaming implements the execinfra.Processor interface.
 func (p *planNodeToRowSource) MustBeStreaming() bool {
 	switch p.node.(type) {
-	case *hookFnNode, *cdcValuesNode:
+	case *hookFnNode:
 		// hookFnNode is special because it might be blocked forever if we decide to
 		// buffer its output.
-		// cdcValuesNode is a node used by CDC that must stream data row-by-row, and
-		// it may also block forever if the input is buffered.
 		return true
 	default:
 		return false

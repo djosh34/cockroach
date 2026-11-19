@@ -303,7 +303,7 @@ SELECT info FROM [EXPLAIN SELECT count(*) FROM crdb_internal.jobs WHERE status =
 # Validate that the virtual index on 'job_type' works.
 # Vectorized execution may be on or off during tests, so exclude it from the output.
 query T
-SELECT info FROM [EXPLAIN SELECT count(*) FROM crdb_internal.jobs WHERE job_type = 'CHANGEFEED'] WHERE info NOT LIKE 'vectorized%'
+SELECT info FROM [EXPLAIN SELECT count(*) FROM crdb_internal.jobs WHERE job_type = 'IMPORT'] WHERE info NOT LIKE 'vectorized%'
 ----
     distribution: local
     ·
@@ -311,7 +311,7 @@ SELECT info FROM [EXPLAIN SELECT count(*) FROM crdb_internal.jobs WHERE job_type
     │
     └── • virtual table
           table: jobs@jobs_job_type_idx
-          spans: [/'CHANGEFEED' - /'CHANGEFEED']
+          spans: [/'IMPORT' - /'IMPORT']
 
 # Regression test for not projecting away looked up columns by the left semi
 # virtual lookup join (#91012).
@@ -449,7 +449,7 @@ SELECT info FROM [EXPLAIN SELECT count(*) FROM crdb_internal.system_jobs WHERE s
 # Validate that the virtual index on 'status' works.
 # Vectorized execution may be on or off during tests, so exclude it from the output.
 query T
-SELECT info FROM [EXPLAIN SELECT count(*) FROM crdb_internal.system_jobs WHERE job_type = 'changefeed'] WHERE info NOT LIKE 'vectorized%'
+SELECT info FROM [EXPLAIN SELECT count(*) FROM crdb_internal.system_jobs WHERE job_type = 'import'] WHERE info NOT LIKE 'vectorized%'
 ----
     distribution: local
     ·
@@ -457,7 +457,7 @@ SELECT info FROM [EXPLAIN SELECT count(*) FROM crdb_internal.system_jobs WHERE j
     │
     └── • virtual table
           table: system_jobs@system_jobs_job_type_idx
-          spans: [/'changefeed' - /'changefeed']
+          spans: [/'import' - /'import']
 
 # Validate that the virtual index on 'status' works.
 # Vectorized execution may be on or off during tests, so exclude it from the output.

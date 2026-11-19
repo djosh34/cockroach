@@ -1,6 +1,5 @@
 preparable_stmt ::=
 	alter_stmt
-	| backup_stmt
 	| cancel_stmt
 	| create_stmt
 	| delete_stmt
@@ -10,7 +9,6 @@ preparable_stmt ::=
 	| insert_stmt
 	| pause_stmt
 	| reset_stmt
-	| restore_stmt
 	| resume_stmt
 	| export_stmt
 	| scrub_stmt

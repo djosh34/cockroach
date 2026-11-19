@@ -814,8 +814,6 @@ func (desc *immutable) getCreateExprLang() tree.RoutineLanguage {
 	switch desc.Lang {
 	case catpb.Function_SQL:
 		return tree.RoutineLangSQL
-	case catpb.Function_PLPGSQL:
-		return tree.RoutineLangPLpgSQL
 	}
 	return tree.RoutineLangUnknown
 }

@@ -37,7 +37,6 @@ var showZoneConfigColumns = colinfo.ResultColumns{
 	{Name: "schema_name", Typ: types.String, Hidden: true},
 	{Name: "table_name", Typ: types.String, Hidden: true},
 	{Name: "index_name", Typ: types.String, Hidden: true},
-	{Name: "partition_name", Typ: types.String, Hidden: true},
 	{Name: "raw_config_yaml", Typ: types.String, Hidden: true},
 	{Name: "raw_config_sql", Typ: types.String},
 	{Name: "raw_config_protobuf", Typ: types.Bytes, Hidden: true},
@@ -55,7 +54,6 @@ const (
 	schemaNameCol
 	tableNameCol
 	indexNameCol
-	partitionNameCol
 	rawConfigYAMLCol
 	rawConfigSQLCol
 	rawConfigProtobufCol
@@ -117,14 +115,14 @@ func getShowZoneConfigRow(
 		return nil, err
 	}
 
-	index, partition, err := resolveSubzone(&zoneSpecifier, tblDesc)
+	index, err := resolveSubzone(&zoneSpecifier, tblDesc)
 	if err != nil {
 		return nil, err
 	}
 
 	subZoneIdx := uint32(0)
 	zoneID, zone, subzone, err := GetZoneConfigInTxn(
-		ctx, p.txn, p.Descriptors(), targetID, index, partition, false, /* getInheritedDefault */
+		ctx, p.txn, p.Descriptors(), targetID, index, false, /* getInheritedDefault */
 	)
 	if errors.Is(err, errNoZoneConfigApplies) {
 		// TODO(benesch): This shouldn't be the caller's responsibility;
@@ -264,7 +262,6 @@ func generateZoneConfigIntrospectionValues(
 	values[schemaNameCol] = tree.DNull
 	values[tableNameCol] = tree.DNull
 	values[indexNameCol] = tree.DNull
-	values[partitionNameCol] = tree.DNull
 	if zs != nil {
 		values[targetCol] = tree.NewDString(zs.String())
 		if zs.NamedZone != "" {
@@ -280,9 +277,6 @@ func generateZoneConfigIntrospectionValues(
 		}
 		if zs.TableOrIndex.Index != "" {
 			values[indexNameCol] = tree.NewDString(string(zs.TableOrIndex.Index))
-		}
-		if zs.Partition != "" {
-			values[partitionNameCol] = tree.NewDString(string(zs.Partition))
 		}
 	}
 
@@ -368,24 +362,14 @@ func ascendZoneSpecifier(
 		zs.NamedZone = tree.UnrestrictedName(zonepb.DefaultZoneName)
 		zs.Database = ""
 		zs.TableOrIndex = tree.TableIndexName{}
-		// Since the default zone has no partition, we can erase the
-		// partition name field.
-		zs.Partition = ""
 	} else if resolvedID != actualID {
 		// We traversed at least one level up, and we're not at the top of the
 		// hierarchy, so we're showing the database zone config.
 		zs.Database = zs.TableOrIndex.Table.CatalogName
 		zs.TableOrIndex = tree.TableIndexName{}
-		// Since databases don't have partition, we can erase the
-		// partition name field.
-		zs.Partition = ""
 	} else if actualSubzone == nil {
-		// We didn't find a subzone, so no index or partition zone config exists.
+		// We didn't find a subzone, so no index zone config exists.
 		zs.TableOrIndex.Index = ""
-		zs.Partition = ""
-	} else if actualSubzone.PartitionName == "" {
-		// The resolved subzone did not name a partition, just an index.
-		zs.Partition = ""
 	}
 	return zs
 }

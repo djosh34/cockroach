@@ -162,7 +162,7 @@ const (
 	CrdbInternalNodeMemoryMonitorsTableID
 	CrdbInternalNodeStmtStatsTableID
 	CrdbInternalNodeTxnStatsTableID
-	CrdbInternalPartitionsTableID
+	_ // was crdb_internal.partitions
 	CrdbInternalRangesNoLeasesTableID
 	CrdbInternalRangesViewID
 	CrdbInternalRuntimeInfoTableID
@@ -189,12 +189,12 @@ const (
 	CrdbInternalCrossDbRefrences
 	CrdbInternalLostTableDescriptors
 	CrdbInternalClusterInflightTracesTable
-	CrdbInternalRegionsTable
+	_ // was crdb_internal.regions
 	CrdbInternalDefaultPrivilegesTable
 	CrdbInternalActiveRangeFeedsTable
 	CrdbInternalTenantUsageDetailsViewID
 	CrdbInternalPgCatalogTableIsImplementedTableID
-	CrdbInternalSuperRegions
+	_ // was crdb_internal.super_regions
 	CrdbInternalDroppedRelationsViewID
 	CrdbInternalShowTenantCapabilitiesCacheTableID
 	CrdbInternalInheritedRoleMembersTableID

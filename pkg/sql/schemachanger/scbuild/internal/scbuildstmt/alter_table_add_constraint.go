@@ -440,11 +440,6 @@ func alterTableAddUniqueWithoutIndex(
 			"unique constraints without an index cannot store columns",
 		))
 	}
-	if d.PartitionByIndex.ContainsPartitions() {
-		panic(pgerror.New(pgcode.FeatureNotSupported,
-			"partitioned unique constraints without an index are not supported",
-		))
-	}
 	if d.Invisibility.Value != 0.0 {
 		// Theoretically, this should never happen because this is not supported by
 		// the parser. This is just a safe check.

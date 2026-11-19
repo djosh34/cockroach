@@ -142,7 +142,6 @@ func doCreateSequence(
 		creationTime,
 		privs,
 		persistence,
-		dbDesc.IsMultiRegion(),
 	)
 	if err != nil {
 		return nil, err
@@ -265,7 +264,6 @@ func NewSequenceTableDesc(
 	creationTime hlc.Timestamp,
 	privileges *catpb.PrivilegeDescriptor,
 	persistence tree.Persistence,
-	isMultiRegion bool,
 ) (*tabledesc.Mutable, error) {
 	desc := tabledesc.InitTableDescriptor(
 		id,
@@ -326,10 +324,6 @@ func NewSequenceTableDesc(
 	// A sequence doesn't have dependencies and thus can be made public
 	// immediately.
 	desc.State = descpb.DescriptorState_PUBLIC
-
-	if isMultiRegion {
-		desc.SetTableLocalityRegionalByTable(tree.PrimaryRegionNotSpecifiedName)
-	}
 
 	version := settings.Version.ActiveVersion(ctx)
 	var sd *sessiondata.SessionData

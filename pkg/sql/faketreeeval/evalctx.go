@@ -13,12 +13,10 @@ package faketreeeval
 
 import (
 	"context"
-	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgnotice"
@@ -105,63 +103,6 @@ func (so *DummySequenceOperators) SetSequenceValueByID(
 	ctx context.Context, seqID uint32, newVal int64, isCalled bool,
 ) error {
 	return errors.WithStack(errSequenceOperators)
-}
-
-// DummyRegionOperator implements the tree.RegionOperator interface by
-// returning errors.
-type DummyRegionOperator struct{}
-
-var _ eval.RegionOperator = &DummyRegionOperator{}
-
-var errRegionOperator = unimplemented.NewWithIssue(42508,
-	"cannot evaluate scalar expressions containing region operations in this context")
-
-// CurrentDatabaseRegionConfig is part of the eval.RegionOperator interface.
-func (so *DummyRegionOperator) CurrentDatabaseRegionConfig(
-	_ context.Context,
-) (eval.DatabaseRegionConfig, error) {
-	return nil, errors.WithStack(errRegionOperator)
-}
-
-// ValidateAllMultiRegionZoneConfigsInCurrentDatabase is part of the eval.RegionOperator interface.
-func (so *DummyRegionOperator) ValidateAllMultiRegionZoneConfigsInCurrentDatabase(
-	_ context.Context,
-) error {
-	return errors.WithStack(errRegionOperator)
-}
-
-// ResetMultiRegionZoneConfigsForTable is part of the eval.RegionOperator
-// interface.
-func (so *DummyRegionOperator) ResetMultiRegionZoneConfigsForTable(
-	_ context.Context, id int64,
-) error {
-	return errors.WithStack(errRegionOperator)
-}
-
-// ResetMultiRegionZoneConfigsForDatabase is part of the eval.RegionOperator
-// interface.
-func (so *DummyRegionOperator) ResetMultiRegionZoneConfigsForDatabase(
-	_ context.Context, id int64,
-) error {
-	return errors.WithStack(errRegionOperator)
-}
-
-// DummyStreamManagerFactory implements the eval.StreamManagerFactory interface by
-// returning errors.
-type DummyStreamManagerFactory struct{}
-
-// GetReplicationStreamManager implements the eval.StreamManagerFactory interface.
-func (smf *DummyStreamManagerFactory) GetReplicationStreamManager(
-	ctx context.Context,
-) (eval.ReplicationStreamManager, error) {
-	return nil, errors.WithStack(errors.New("Stream manager factory not implemented"))
-}
-
-// GetStreamIngestManager implements the eval.StreamManagerFactory interface.
-func (smf *DummyStreamManagerFactory) GetStreamIngestManager(
-	ctx context.Context,
-) (eval.StreamIngestManager, error) {
-	return nil, errors.WithStack(errors.New("Stream manager factory not implemented"))
 }
 
 // DummyEvalPlanner implements the eval.Planner interface by returning
@@ -274,16 +215,6 @@ func (*DummyEvalPlanner) DeserializeSessionState(
 	return nil, errors.WithStack(errEvalPlanner)
 }
 
-// CreateSessionRevivalToken is part of the Planner interface.
-func (*DummyEvalPlanner) CreateSessionRevivalToken() (*tree.DBytes, error) {
-	return nil, errors.WithStack(errEvalPlanner)
-}
-
-// ValidateSessionRevivalToken is part of the Planner interface.
-func (*DummyEvalPlanner) ValidateSessionRevivalToken(token *tree.DBytes) (*tree.DBool, error) {
-	return nil, errors.WithStack(errEvalPlanner)
-}
-
 // RevalidateUniqueConstraintsInCurrentDB is part of the Planner interface.
 func (*DummyEvalPlanner) RevalidateUniqueConstraintsInCurrentDB(ctx context.Context) error {
 	return errors.WithStack(errEvalPlanner)
@@ -335,60 +266,15 @@ func (*DummyEvalPlanner) Optimizer() interface{} {
 	return nil
 }
 
-// GenUniqueCursorName is part of the eval.Planner interface.
-func (*DummyEvalPlanner) GenUniqueCursorName() tree.Name {
-	return ""
-}
-
-// PLpgSQLCloseCursor is part of the eval.Planner interface.
-func (*DummyEvalPlanner) PLpgSQLCloseCursor(_ tree.Name) error {
-	return errors.WithStack(errEvalPlanner)
-}
-
-// PLpgSQLFetchCursor is part of the Planner interface.
-func (*DummyEvalPlanner) PLpgSQLFetchCursor(
-	context.Context, *tree.CursorStmt,
-) (tree.Datums, error) {
-	return nil, errors.WithStack(errEvalPlanner)
-}
-
 var _ eval.Planner = &DummyEvalPlanner{}
 
 var errEvalPlanner = pgerror.New(pgcode.ScalarOperationCannotRunWithoutFullSessionContext,
 	"cannot evaluate scalar expressions using table lookups in this context")
 
-// CurrentDatabaseRegionConfig is part of the eval.RegionOperator interface.
-func (ep *DummyEvalPlanner) CurrentDatabaseRegionConfig(
-	_ context.Context,
-) (eval.DatabaseRegionConfig, error) {
-	return nil, errors.WithStack(errEvalPlanner)
-}
-
 func (ep *DummyEvalPlanner) FingerprintSpan(
 	_ context.Context, _ roachpb.Span, _ hlc.Timestamp, _ bool, _ bool,
 ) (uint64, error) {
 	return 0, errors.AssertionFailedf("FingerprintSpan unimplemented")
-}
-
-// ResetMultiRegionZoneConfigsForTable is part of the eval.RegionOperator
-// interface.
-func (ep *DummyEvalPlanner) ResetMultiRegionZoneConfigsForTable(_ context.Context, _ int64) error {
-	return errors.WithStack(errEvalPlanner)
-}
-
-// ResetMultiRegionZoneConfigsForDatabase is part of the eval.RegionOperator
-// interface.
-func (ep *DummyEvalPlanner) ResetMultiRegionZoneConfigsForDatabase(
-	_ context.Context, _ int64,
-) error {
-	return errors.WithStack(errEvalPlanner)
-}
-
-// ValidateAllMultiRegionZoneConfigsInCurrentDatabase is part of the eval.RegionOperator interface.
-func (ep *DummyEvalPlanner) ValidateAllMultiRegionZoneConfigsInCurrentDatabase(
-	_ context.Context,
-) error {
-	return errors.WithStack(errEvalPlanner)
 }
 
 // SchemaExists is part of the eval.DatabaseCatalog interface.
@@ -488,23 +374,6 @@ func (ep *DummyEvalPlanner) ResolveFunctionByOID(
 	ctx context.Context, oid oid.Oid,
 ) (*tree.RoutineName, *tree.Overload, error) {
 	return nil, nil, errors.AssertionFailedf("ResolveFunctionByOID unimplemented")
-}
-
-// GetMultiregionConfig is part of the eval.Planner interface.
-func (ep *DummyEvalPlanner) GetMultiregionConfig(
-	ctx context.Context, databaseID descpb.ID,
-) (interface{}, bool) {
-	return nil /* regionConfig */, false
-}
-
-// IsANSIDML is part of the eval.Planner interface.
-func (ep *DummyEvalPlanner) IsANSIDML() bool {
-	return false
-}
-
-// EnforceHomeRegion is part of the eval.Planner interface.
-func (ep *DummyEvalPlanner) EnforceHomeRegion() bool {
-	return false
 }
 
 // GetRangeDescIterator is part of the eval.Planner interface.
@@ -668,19 +537,6 @@ func (c *DummyTenantOperator) DropTenantByID(
 
 // GCTenant is part of the tree.TenantOperator interface.
 func (c *DummyTenantOperator) GCTenant(_ context.Context, _ uint64) error {
-	return errors.WithStack(errEvalTenant)
-}
-
-// UpdateTenantResourceLimits is part of the tree.TenantOperator interface.
-func (c *DummyTenantOperator) UpdateTenantResourceLimits(
-	_ context.Context,
-	tenantID uint64,
-	availableRU float64,
-	refillRate float64,
-	maxBurstRU float64,
-	asOf time.Time,
-	asOfConsumedRequestUnits float64,
-) error {
 	return errors.WithStack(errEvalTenant)
 }
 

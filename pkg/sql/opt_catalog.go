@@ -35,7 +35,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/privilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/roleoption"
-	"github.com/cockroachdb/cockroach/pkg/sql/rowenc"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catid"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
@@ -45,7 +44,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/stats"
 	"github.com/cockroachdb/cockroach/pkg/sql/syntheticprivilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
-	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/errors"
 	"github.com/lib/pq/oid"
 )
@@ -902,8 +900,8 @@ func newOptTable(
 		ot.colMap.Set(descpb.ColumnID(ot.columns[i].ColID()), i)
 	}
 
-	// Add unique without index constraints. Constraints for implicitly
-	// partitioned unique indexes will be added below.
+	// Add unique without index constraints. Constraints for hash sharded
+	// unique indexes will be added below.
 	ot.uniqueConstraints = make([]optUniqueConstraint, len(ot.desc.EnforcedUniqueConstraintsWithoutIndex()))
 	for i, u := range ot.desc.EnforcedUniqueConstraintsWithoutIndex() {
 		ot.uniqueConstraints[i] = optUniqueConstraint{
@@ -918,8 +916,6 @@ func newOptTable(
 
 	// Build the indexes.
 	ot.indexes = make([]optIndex, 1+len(secondaryIndexes))
-	// partZones is allocated lazily and is reused for all indexes.
-	var partZones map[string]cat.Zone
 
 	for i := range ot.indexes {
 		var idx catalog.Index
@@ -930,26 +926,12 @@ func newOptTable(
 		}
 
 		// If there is a subzone that applies to the entire index, use that, else
-		// use the table zone. Save subzones that apply to partitions, since we will
-		// use those later when initializing partitions in the index.
+		// use the table zone.
 		idxZone := tblZone
-		for k := range partZones {
-			delete(partZones, k)
-		}
 		for j := 0; j < tblZone.SubzoneCount(); j++ {
 			subzone := tblZone.Subzone(j)
-			if subzone.Index() == cat.StableID(idx.GetID()) {
-				copyZone := subzone.Zone().InheritFromParent(tblZone)
-				if subzone.Partition() == "" {
-					// Subzone applies to the whole index.
-					idxZone = copyZone
-				} else {
-					// Subzone applies to a partition.
-					if partZones == nil {
-						partZones = make(map[string]cat.Zone)
-					}
-					partZones[subzone.Partition()] = copyZone
-				}
+			if subzone.Index() == cat.StableID(idx.GetID()) && subzone.Partition() == "" {
+				idxZone = subzone.Zone().InheritFromParent(tblZone)
 			}
 		}
 		if idx.GetType() == descpb.IndexDescriptor_INVERTED {
@@ -973,25 +955,13 @@ func newOptTable(
 				false, /* nullable */
 				invertedSourceColOrdinal,
 			)
-			ot.indexes[i].init(ot, i, idx, idxZone, partZones, invertedColOrd)
+			ot.indexes[i].init(ot, i, idx, idxZone, invertedColOrd)
 		} else {
-			ot.indexes[i].init(ot, i, idx, idxZone, partZones, -1 /* invertedColOrd */)
+			ot.indexes[i].init(ot, i, idx, idxZone, -1 /* invertedColOrd */)
 		}
 
 		if idx.IsUnique() {
-			if idx.ImplicitPartitioningColumnCount() > 0 {
-				// Add unique constraints for implicitly partitioned unique indexes.
-				ot.uniqueConstraints = append(ot.uniqueConstraints, optUniqueConstraint{
-					name:         idx.GetName(),
-					table:        ot.ID(),
-					columns:      idx.IndexDesc().KeyColumnIDs[idx.IndexDesc().ExplicitColumnStartIdx():],
-					withoutIndex: true,
-					predicate:    idx.GetPredicate(),
-					// TODO(rytaft): will we ever support an unvalidated unique constraint
-					// here?
-					validity: descpb.ConstraintValidity_Validated,
-				})
-			} else if idx.IsSharded() {
+			if idx.IsSharded() {
 				// Add unique constraint for hash sharded indexes.
 				ot.uniqueConstraints = append(ot.uniqueConstraints, optUniqueConstraint{
 					name:                               idx.GetName(),
@@ -1314,76 +1284,6 @@ func (ot *optTable) Zone() cat.Zone {
 	return ot.zone
 }
 
-// IsPartitionAllBy is part of the cat.Table interface.
-func (ot *optTable) IsPartitionAllBy() bool {
-	return ot.desc.IsPartitionAllBy()
-}
-
-// HomeRegion is part of the cat.Table interface.
-func (ot *optTable) HomeRegion() (region string, ok bool) {
-	localityConfig := ot.desc.GetLocalityConfig()
-	if localityConfig == nil {
-		return "", false
-	}
-	regionalByTable := localityConfig.GetRegionalByTable()
-	if regionalByTable == nil {
-		return "", false
-	}
-	if regionalByTable.Region != nil {
-		return regionalByTable.Region.String(), true
-	}
-	if ot.zone.LeasePreferenceCount() != 1 {
-		return "", false
-	}
-	if ot.zone.LeasePreference(0).ConstraintCount() != 1 {
-		return "", false
-	}
-	if ot.zone.LeasePreference(0).Constraint(0).GetKey() != "region" {
-		return "", false
-	}
-	return ot.zone.LeasePreference(0).Constraint(0).GetValue(), true
-}
-
-// IsGlobalTable is part of the cat.Table interface.
-func (ot *optTable) IsGlobalTable() bool {
-	localityConfig := ot.desc.GetLocalityConfig()
-	if localityConfig == nil {
-		return false
-	}
-	return localityConfig.GetGlobal() != nil
-}
-
-// IsRegionalByRow is part of the cat.Table interface.
-func (ot *optTable) IsRegionalByRow() bool {
-	localityConfig := ot.desc.GetLocalityConfig()
-	if localityConfig == nil {
-		return false
-	}
-	return localityConfig.GetRegionalByRow() != nil
-}
-
-// IsMultiregion is part of the cat.Table interface.
-func (ot *optTable) IsMultiregion() bool {
-	localityConfig := ot.desc.GetLocalityConfig()
-	return localityConfig != nil
-}
-
-// HomeRegionColName is part of the cat.Table interface.
-func (ot *optTable) HomeRegionColName() (colName string, ok bool) {
-	localityConfig := ot.desc.GetLocalityConfig()
-	if localityConfig == nil {
-		return "", false
-	}
-	regionalByRowConfig := localityConfig.GetRegionalByRow()
-	if regionalByRowConfig == nil {
-		return "", false
-	}
-	if regionalByRowConfig.As == nil {
-		return "crdb_region", true
-	}
-	return *regionalByRowConfig.As, true
-}
-
 // GetDatabaseID is part of the cat.Table interface.
 func (ot *optTable) GetDatabaseID() descpb.ID {
 	return ot.desc.GetParentID()
@@ -1448,10 +1348,6 @@ type optIndex struct {
 	numKeyCols    int
 	numLaxKeyCols int
 
-	// partitions stores zone information and datums for PARTITION BY LIST
-	// partitions.
-	partitions []optPartition
-
 	// invertedColOrd is used if this is an inverted index; it stores
 	// the ordinal of the inverted column created to refer to the key of this
 	// index. It is -1 if this is not an inverted index.
@@ -1462,14 +1358,8 @@ var _ cat.Index = &optIndex{}
 
 // init can be used instead of newOptIndex when we have a pre-allocated instance
 // (e.g. as part of a bigger struct).
-// partZones can be nil when no partition zone information is present.
 func (oi *optIndex) init(
-	tab *optTable,
-	indexOrdinal int,
-	idx catalog.Index,
-	zone cat.Zone,
-	partZones map[string]cat.Zone,
-	invertedColOrd int,
+	tab *optTable, indexOrdinal int, idx catalog.Index, zone cat.Zone, invertedColOrd int,
 ) {
 	oi.tab = tab
 	oi.idx = idx
@@ -1494,44 +1384,6 @@ func (oi *optIndex) init(
 		oi.storedCols = idx.IndexDesc().StoreColumnIDs
 		oi.numCols = idx.NumKeyColumns() + idx.NumKeySuffixColumns() + idx.NumSecondaryStoredColumns()
 	}
-
-	// Collect information about the partitions.
-	idxPartitioning := idx.GetPartitioning()
-	oi.partitions = make([]optPartition, 0, idxPartitioning.NumLists())
-	_ = idxPartitioning.ForEachList(func(name string, values [][]byte, subPartitioning catalog.Partitioning) error {
-		op := optPartition{
-			name:   name,
-			zone:   cat.EmptyZone(),
-			datums: make([]tree.Datums, 0, len(values)),
-		}
-
-		// Get the zone.
-		if partZones != nil {
-			if zone, ok := partZones[name]; ok {
-				op.zone = zone
-			}
-		}
-
-		// Get the partition values.
-		var a tree.DatumAlloc
-		for _, valueEncBuf := range values {
-			t, _, err := rowenc.DecodePartitionTuple(
-				&a, oi.tab.codec, oi.tab.desc, oi.idx, oi.idx.GetPartitioning(),
-				valueEncBuf, nil, /* prefixDatums */
-			)
-			if err != nil {
-				log.Fatalf(context.TODO(), "error while decoding partition tuple: %+v %+v",
-					oi.tab.desc, oi.tab.desc.GetDependsOnTypes())
-			}
-			op.datums = append(op.datums, t.Datums)
-			// TODO(radu): split into multiple prefixes if Subpartition is also by list.
-			// Note that this functionality should be kept in sync with the test catalog
-			// implementation (test_catalog.go).
-		}
-
-		oi.partitions = append(oi.partitions, op)
-		return nil
-	})
 
 	if idx.IsUnique() {
 		notNull := true
@@ -1688,16 +1540,10 @@ func (oi *optIndex) Ordinal() cat.IndexOrdinal {
 
 // ImplicitColumnCount is part of the cat.Index interface.
 func (oi *optIndex) ImplicitColumnCount() int {
-	implicitColCnt := oi.idx.ImplicitPartitioningColumnCount()
 	if oi.idx.IsSharded() {
-		implicitColCnt++
+		return 1
 	}
-	return implicitColCnt
-}
-
-// ImplicitPartitioningColumnCount is part of the cat.Index interface.
-func (oi *optIndex) ImplicitPartitioningColumnCount() int {
-	return oi.idx.ImplicitPartitioningColumnCount()
+	return 0
 }
 
 // GeoConfig is part of the cat.Index interface.
@@ -1708,41 +1554,6 @@ func (oi *optIndex) GeoConfig() geoindex.Config {
 // Version is part of the cat.Index interface.
 func (oi *optIndex) Version() descpb.IndexDescriptorVersion {
 	return oi.idx.GetVersion()
-}
-
-// PartitionCount is part of the cat.Index interface.
-func (oi *optIndex) PartitionCount() int {
-	return len(oi.partitions)
-}
-
-// Partition is part of the cat.Index interface.
-func (oi *optIndex) Partition(i int) cat.Partition {
-	return &oi.partitions[i]
-}
-
-// optPartition implements cat.Partition and represents a PARTITION BY LIST
-// partition of an index.
-type optPartition struct {
-	name   string
-	zone   cat.Zone
-	datums []tree.Datums
-}
-
-var _ cat.Partition = &optPartition{}
-
-// Name is part of the cat.Partition interface.
-func (op *optPartition) Name() string {
-	return op.name
-}
-
-// Zone is part of the cat.Partition interface.
-func (op *optPartition) Zone() cat.Zone {
-	return op.zone
-}
-
-// PartitionByListPrefixes is part of the cat.Partition interface.
-func (op *optPartition) PartitionByListPrefixes() []tree.Datums {
-	return op.datums
 }
 
 // optCheckConstraint implements cat.CheckConstraint. See that interface
@@ -2390,36 +2201,6 @@ func (ot *optVirtualTable) Zone() cat.Zone {
 	panic(errors.AssertionFailedf("no zone"))
 }
 
-// IsPartitionAllBy is part of the cat.Table interface.
-func (ot *optVirtualTable) IsPartitionAllBy() bool {
-	return false
-}
-
-// HomeRegion is part of the cat.Table interface.
-func (ot *optVirtualTable) HomeRegion() (region string, ok bool) {
-	return "", false
-}
-
-// IsGlobalTable is part of the cat.Table interface.
-func (ot *optVirtualTable) IsGlobalTable() bool {
-	return false
-}
-
-// IsRegionalByRow is part of the cat.Table interface.
-func (ot *optVirtualTable) IsRegionalByRow() bool {
-	return false
-}
-
-// IsMultiregion is part of the cat.Table interface.
-func (ot *optVirtualTable) IsMultiregion() bool {
-	return false
-}
-
-// HomeRegionColName is part of the cat.Table interface.
-func (ot *optVirtualTable) HomeRegionColName() (colName string, ok bool) {
-	return "", false
-}
-
 // GetDatabaseID is part of the cat.Table interface.
 func (ot *optVirtualTable) GetDatabaseID() descpb.ID {
 	return 0
@@ -2599,11 +2380,6 @@ func (oi *optVirtualIndex) ImplicitColumnCount() int {
 	return 0
 }
 
-// ImplicitPartitioningColumnCount is part of the cat.Index interface.
-func (oi *optVirtualIndex) ImplicitPartitioningColumnCount() int {
-	return 0
-}
-
 // GeoConfig is part of the cat.Index interface.
 func (oi *optVirtualIndex) GeoConfig() geoindex.Config {
 	return geoindex.Config{}
@@ -2612,16 +2388,6 @@ func (oi *optVirtualIndex) GeoConfig() geoindex.Config {
 // Version is part of the cat.Index interface.
 func (oi *optVirtualIndex) Version() descpb.IndexDescriptorVersion {
 	return 0
-}
-
-// PartitionCount is part of the cat.Index interface.
-func (oi *optVirtualIndex) PartitionCount() int {
-	return 0
-}
-
-// Partition is part of the cat.Index interface.
-func (oi *optVirtualIndex) Partition(i int) cat.Partition {
-	return nil
 }
 
 // optVirtualFamily is a dummy implementation of cat.Family for the only family

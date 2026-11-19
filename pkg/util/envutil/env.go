@@ -261,8 +261,6 @@ var nameReportableUnsafeVarRegistry = map[redact.SafeString]struct{}{
 	"GAE_MODULE_NAME":     {},
 	"GAE_PARTITION":       {},
 	"GAE_SERVICE":         {},
-	// Kerberos.
-	"KRB5CCNAME": {},
 	// Pprof.
 	"PPROF_BINARY_PATH": {},
 	"PPROF_TMPDIR":      {},

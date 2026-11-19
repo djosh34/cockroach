@@ -12,7 +12,6 @@ package sql
 
 import (
 	"context"
-	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
 	"github.com/cockroachdb/cockroach/pkg/keys"
@@ -23,10 +22,8 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/isql"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
-	"github.com/cockroachdb/cockroach/pkg/sql/privilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
-	"github.com/cockroachdb/cockroach/pkg/sql/syntheticprivilege"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
 	"github.com/cockroachdb/cockroach/pkg/util/log/logcrash"
 	"github.com/cockroachdb/cockroach/pkg/util/protoutil"
@@ -141,34 +138,6 @@ func TestingUpdateTenantRecord(
 	ctx context.Context, settings *cluster.Settings, txn isql.Txn, info *mtinfopb.TenantInfo,
 ) error {
 	return UpdateTenantRecord(ctx, settings, txn, info)
-}
-
-// UpdateTenantResourceLimits implements the tree.TenantOperator interface.
-func (p *planner) UpdateTenantResourceLimits(
-	ctx context.Context,
-	tenantID uint64,
-	availableRU float64,
-	refillRate float64,
-	maxBurstRU float64,
-	asOf time.Time,
-	asOfConsumedRequestUnits float64,
-) error {
-	const op = "update-resource-limits"
-	if err := p.CheckPrivilege(ctx, syntheticprivilege.GlobalPrivilegeObject, privilege.REPAIRCLUSTERMETADATA); err != nil {
-		return err
-	}
-
-	if err := rejectIfCantCoordinateMultiTenancy(p.execCfg.Codec, op, p.execCfg.Settings); err != nil {
-		return err
-	}
-	if err := rejectIfSystemTenant(tenantID, op); err != nil {
-		return err
-	}
-
-	return p.ExecCfg().TenantUsageServer.ReconfigureTokenBucket(
-		ctx, p.InternalSQLTxn(), roachpb.MustMakeTenantID(tenantID), availableRU, refillRate,
-		maxBurstRU, asOf, asOfConsumedRequestUnits,
-	)
 }
 
 // ActivateTenant marks a tenant active.

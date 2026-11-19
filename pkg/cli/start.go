@@ -35,7 +35,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/docs"
 	"github.com/cockroachdb/cockroach/pkg/geo/geos"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/kvstorage"
-	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/security/clientsecopts"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server"
@@ -127,23 +126,17 @@ replication disabled (replication factor = 1).
 
 // StartCmds lists the commands that start KV nodes as a server.
 // This includes 'start' and 'start-single-node' but excludes
-// the MT SQL server (not KV node) and 'demo' (not a server).
+// 'demo' (not a server).
 var StartCmds = []*cobra.Command{startCmd, startSingleNodeCmd}
 
 // serverCmds lists the commands that start servers.
-var serverCmds = append(StartCmds, mtStartSQLCmd)
+var serverCmds = StartCmds
 
 // customLoggingSetupCmds lists the commands that call setupLogging()
 // after other types of configuration.
 var customLoggingSetupCmds = append(
 	serverCmds, debugCheckLogConfigCmd, demoCmd, statementBundleRecreateCmd,
 )
-
-// RegisterCommandWithCustomLogging is used by cliccl to note commands which
-// want to suppress default logging setup.
-func RegisterCommandWithCustomLogging(cmd *cobra.Command) {
-	customLoggingSetupCmds = append(customLoggingSetupCmds, cmd)
-}
 
 func initBlockProfile() {
 	// Enable the block profile for a sample of mutex and channel operations.
@@ -193,26 +186,16 @@ func initTraceDir(ctx context.Context, dir string) {
 func initTempStorageConfig(
 	ctx context.Context, st *cluster.Settings, stopper *stop.Stopper, stores base.StoreSpecList,
 ) (base.TempStorageConfig, error) {
-	// Initialize the target directory for temporary storage. If encryption at
-	// rest is enabled in any fashion, we'll want temp storage to be encrypted
-	// too. To achieve this, we use the first encrypted store as temp dir
-	// target, if any. If we can't find one, we use the first StoreSpec in the
-	// list.
+	// Initialize the target directory for temporary storage. We use the first
+	// on-disk StoreSpec as temp dir target, or the first StoreSpec if all are
+	// in memory.
 	//
 	// While we look, we also clean up any abandoned temporary directories. We
-	// don't know which store spec was used previously—and it may change if
-	// encryption gets enabled after the fact—so we check each store.
+	// don't know which store spec was used previously, so we check each store.
 	specIdxDisk := -1
-	specIdxEncrypted := -1
 	for i, spec := range stores.Specs {
 		if spec.InMemory {
 			continue
-		}
-		if spec.IsEncrypted() && specIdxEncrypted == -1 {
-			// TODO(jackson): One store's EncryptionOptions may say to encrypt
-			// with a real key, while another store's say to use key=plain.
-			// This provides no guarantee that we'll use the encrypted one's.
-			specIdxEncrypted = i
 		}
 		if specIdxDisk == -1 {
 			specIdxDisk = i
@@ -226,11 +209,8 @@ func initTempStorageConfig(
 
 	// Use first store by default. This might be an in-memory store.
 	specIdx := 0
-	if specIdxEncrypted >= 0 {
-		// Prefer an encrypted store.
-		specIdx = specIdxEncrypted
-	} else if specIdxDisk >= 0 {
-		// Prefer a non-encrypted on-disk store.
+	if specIdxDisk >= 0 {
+		// Prefer an on-disk store.
 		specIdx = specIdxDisk
 	}
 	useStore := stores.Specs[specIdx]
@@ -495,14 +475,6 @@ func runStartInternal(
 			errors.New("no --join flags provided to 'cockroach start'"),
 			"Consider using 'cockroach init' or 'cockroach start-single-node' instead")
 		return err
-	}
-
-	// Check the --tenant-id-file flag.
-	if fl := cliflagcfg.FlagSetForCmd(cmd).Lookup(cliflags.TenantIDFile.Name); fl != nil && fl.Changed {
-		fileName := fl.Value.String()
-		serverCfg.DelayedSetTenantID = func(ctx context.Context) (roachpb.TenantID, error) {
-			return tenantIDFromFile(ctx, fileName, nil, nil, nil)
-		}
 	}
 
 	// Now perform additional configuration tweaks specific to the start
@@ -1409,20 +1381,6 @@ func setupAndInitializeLoggingAndProfiling(
 			redact.Safe(build.MakeIssueURL(53404)),
 			redact.Safe(docs.URL("secure-a-cluster.html")),
 		)
-	}
-
-	// The new multi-region abstractions require that nodes be labeled in "regions"
-	// (and optionally, "zones").  To push users in that direction, we warn them here
-	// if they've provided a --locality value which doesn't include a "region" tier.
-	if len(serverCfg.Locality.Tiers) > 0 {
-		if _, containsRegion := serverCfg.Locality.Find("region"); !containsRegion {
-			const warningString string = "The --locality flag does not contain a \"region\" tier. To add regions\n" +
-				"to databases, the --locality flag must contain a \"region\" tier.\n" +
-				"For more information, see:\n\n" +
-				"- %s"
-			log.Shoutf(ctx, severity.WARNING, warningString,
-				redact.Safe(docs.URL("cockroach-start.html#locality")))
-		}
 	}
 
 	maybeWarnMemorySizes(ctx)

@@ -47,7 +47,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/keysutil"
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
-	"github.com/cockroachdb/cockroach/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
@@ -1051,12 +1050,42 @@ func generateTableZone(t table, tableDesc descpb.TableDescriptor) (*zonepb.ZoneC
 		idxID := i + 1 // index 1 is the PK
 		tableZone = addIndexSubzones(idx, tableZone, idxID)
 	}
-	// Fill in the SubzoneSpans.
+	// Fill in the SubzoneSpans. SQL cannot compute the spans of partitions, so
+	// build them here the way they would be stored.
 	if tableZone != nil {
+		codec := keys.SystemSQLCodec
+		tablePrefix := codec.TablePrefix(uint32(tableDesc.ID))
+		var partitionSpans []zonepb.SubzoneSpan
+		for i, idx := range t.indexes {
+			idxID := uint32(i + 1) // index 1 is the PK
+			idxPrefix := bytes.TrimPrefix(codec.IndexPrefix(uint32(tableDesc.ID), idxID), tablePrefix)
+			for _, p := range idx.partitions {
+				subzoneIdx := -1
+				for j, sz := range tableZone.Subzones {
+					if sz.IndexID == idxID && sz.PartitionName == p.name {
+						subzoneIdx = j
+					}
+				}
+				if subzoneIdx < 0 {
+					continue
+				}
+				start := append(roachpb.Key(nil), idxPrefix...)
+				for _, v := range p.start {
+					start = encoding.EncodeVarintAscending(start, int64(v))
+				}
+				end := append(roachpb.Key(nil), idxPrefix...)
+				for _, v := range p.end {
+					end = encoding.EncodeVarintAscending(end, int64(v))
+				}
+				partitionSpans = append(partitionSpans, zonepb.SubzoneSpan{
+					Key: start, EndKey: end, SubzoneIndex: int32(subzoneIdx),
+				})
+			}
+		}
 		var err error
 		tableZone.SubzoneSpans, err = sql.GenerateSubzoneSpans(
-			nil, uuid.UUID{} /* clusterID */, keys.SystemSQLCodec,
-			tabledesc.NewBuilder(&tableDesc).BuildImmutableTable(), tableZone.Subzones, false /* hasNewSubzones */)
+			codec, tabledesc.NewBuilder(&tableDesc).BuildImmutableTable(), tableZone.Subzones, partitionSpans,
+		)
 		if err != nil {
 			return nil, errors.Wrap(err, "error generating subzone spans")
 		}

@@ -10,7 +10,6 @@
 
 // cockroach-sql is an entry point for a CockroachDB binary that only
 // includes the SQL shell and does not include any server components.
-// It also does not include CCL features.
 package main
 
 import (

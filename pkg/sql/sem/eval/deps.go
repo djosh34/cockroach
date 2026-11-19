@@ -35,13 +35,6 @@ import (
 	"github.com/lib/pq/oid"
 )
 
-// DatabaseRegionConfig is a wrapper around multiregion.RegionConfig
-// related methods which avoids a circular dependency between descpb and tree.
-type DatabaseRegionConfig interface {
-	IsValidRegionNameString(r string) bool
-	PrimaryRegionString() string
-}
-
 // HasAnyPrivilegeResult represents the non-error results of calling HasAnyPrivilege
 type HasAnyPrivilegeResult = int8
 
@@ -311,14 +304,6 @@ type Planner interface {
 	// into the current session.
 	DeserializeSessionState(ctx context.Context, state *tree.DBytes) (*tree.DBool, error)
 
-	// CreateSessionRevivalToken creates a token that can be used to log in
-	// as the current user, in bytes form.
-	CreateSessionRevivalToken() (*tree.DBytes, error)
-
-	// ValidateSessionRevivalToken checks if the given bytes are a valid
-	// session revival token.
-	ValidateSessionRevivalToken(token *tree.DBytes) (*tree.DBool, error)
-
 	// RevalidateUniqueConstraintsInCurrentDB verifies that all unique constraints
 	// defined on tables in the current database are valid. In other words, it
 	// verifies that for every table in the database with one or more unique
@@ -379,21 +364,6 @@ type Planner interface {
 	// IsActive returns if the version specified by key is active.
 	IsActive(ctx context.Context, key clusterversion.Key) bool
 
-	// GetMultiregionConfig synthesizes a new multiregion.RegionConfig describing
-	// the multiregion properties of the database identified via databaseID. The
-	// second return value is false if the database doesn't exist or is not
-	// multiregion.
-	GetMultiregionConfig(ctx context.Context, databaseID descpb.ID) (interface{}, bool)
-
-	// IsANSIDML returns true if the statement being planned is one of the 4 DML
-	// statements, SELECT, UPDATE, INSERT, DELETE, or an EXPLAIN of one of these
-	// statements.
-	IsANSIDML() bool
-
-	// EnforceHomeRegion returns true if the statement being planned is an ANSI
-	// DML statement and the enforce_home_region session setting is true.
-	EnforceHomeRegion() bool
-
 	// GetRangeDescIterator gets a rangedesc.Iterator for the specified span.
 	GetRangeDescIterator(context.Context, roachpb.Span) (rangedesc.Iterator, error)
 
@@ -412,21 +382,6 @@ type Planner interface {
 
 	// Optimizer returns the optimizer associated with this Planner, if any.
 	Optimizer() interface{}
-
-	// GenUniqueCursorName returns a name that is guaranteed to be unique among
-	// the current list of cursors and portals. It is used to implement PLpgSQL
-	// OPEN statements when used with an unnamed cursor.
-	GenUniqueCursorName() tree.Name
-
-	// PLpgSQLCloseCursor closes the cursor with the given name, returning an
-	// error if the cursor doesn't exist. It is used to implement the PLpgSQL
-	// CLOSE statement.
-	PLpgSQLCloseCursor(cursorName tree.Name) error
-
-	// PLpgSQLFetchCursor returns the next row from the cursor with the given
-	// name, if any. It returns nil if no such row exists. Used to implement the
-	// PLpgSQL FETCH statement.
-	PLpgSQLFetchCursor(ctx context.Context, cursor *tree.CursorStmt) (res tree.Datums, err error)
 
 	// AutoCommit indicates whether the Planner has flagged the current statement
 	// as eligible for transaction auto-commit.
@@ -540,9 +495,8 @@ type ClientNoticeSender interface {
 	// BufferClientNotice buffers the notice to send to the client.
 	// This is flushed before the connection is closed.
 	BufferClientNotice(ctx context.Context, notice pgnotice.Notice)
-	// SendClientNotice immediately flushes the notice to the client. This is used
-	// to implement PLpgSQL RAISE statements; most cases should use
-	// BufferClientNotice.
+	// SendClientNotice immediately flushes the notice to the client. Most cases
+	// should use BufferClientNotice.
 	SendClientNotice(ctx context.Context, notice pgnotice.Notice) error
 }
 
@@ -577,29 +531,6 @@ type PrivilegedAccessor interface {
 	IsSystemTable(ctx context.Context, id int64) (bool, error)
 }
 
-// RegionOperator gives access to the current region, validation for all
-// regions, and the ability to reset the zone configurations for tables
-// or databases.
-type RegionOperator interface {
-
-	// CurrentDatabaseRegionConfig returns the RegionConfig of the current
-	// session database.
-	CurrentDatabaseRegionConfig(ctx context.Context) (DatabaseRegionConfig, error)
-
-	// ValidateAllMultiRegionZoneConfigsInCurrentDatabase validates whether the current
-	// database's multi-region zone configs are correctly setup. This includes
-	// all tables within the database.
-	ValidateAllMultiRegionZoneConfigsInCurrentDatabase(ctx context.Context) error
-
-	// ResetMultiRegionZoneConfigsForTable resets the given table's zone
-	// configuration to its multi-region default.
-	ResetMultiRegionZoneConfigsForTable(ctx context.Context, id int64) error
-
-	// ResetMultiRegionZoneConfigsForDatabase resets the given database's zone
-	// configuration to its multi-region default.
-	ResetMultiRegionZoneConfigsForDatabase(ctx context.Context, id int64) error
-}
-
 // SequenceOperators is used for various sql related functions that can
 // be used from Context.
 type SequenceOperators interface {
@@ -632,17 +563,6 @@ type SequenceOperators interface {
 	GetLastSequenceValueByID(ctx context.Context, seqID uint32) (value int64, wasCalled bool, err error)
 }
 
-// ChangefeedState is used to track progress and checkpointing for sinkless/core changefeeds.
-// Because a CREATE CHANGEFEED statement for a sinkless changefeed will hang and return data
-// over the SQL connection, this state belongs in the EvalCtx.
-type ChangefeedState interface {
-	// SetHighwater sets the frontier timestamp for the changefeed.
-	SetHighwater(frontier hlc.Timestamp)
-
-	// SetCheckpoint sets the checkpoint for the changefeed.
-	SetCheckpoint(spans []roachpb.Span, timestamp hlc.Timestamp)
-}
-
 // TenantOperator is capable of interacting with tenant state, allowing SQL
 // builtin functions to create, configure, and destroy tenants. The methods will
 // return errors when run by any tenant other than the system tenant.
@@ -662,18 +582,6 @@ type TenantOperator interface {
 
 	// LookupTenantID returns the ID for the given tenant name.o
 	LookupTenantID(ctx context.Context, tenantName roachpb.TenantName) (roachpb.TenantID, error)
-
-	// UpdateTenantResourceLimits reconfigures the tenant resource limits.
-	// See multitenant.TenantUsageServer for more details on the arguments.
-	UpdateTenantResourceLimits(
-		ctx context.Context,
-		tenantID uint64,
-		availableRU float64,
-		refillRate float64,
-		maxBurstRU float64,
-		asOf time.Time,
-		asOfConsumedRequestUnits float64,
-	) error
 }
 
 // JoinTokenCreator is capable of creating and persisting join tokens, allowing
@@ -737,18 +645,4 @@ type StmtDiagnosticsRequestInsertFunc func(
 type AsOfSystemTime struct {
 	// Timestamp is the HLC timestamp evaluated from the AS OF SYSTEM TIME clause.
 	Timestamp hlc.Timestamp
-	// BoundedStaleness is true if the AS OF SYSTEM TIME clause specifies bounded
-	// staleness should be used. If true, Timestamp specifies an (inclusive) lower
-	// bound to read from - data can be read from a time later than Timestamp. If
-	// false, data is returned at the exact Timestamp specified.
-	BoundedStaleness bool
-	// If this is a bounded staleness read, ensures we only read from the nearest
-	// replica. The query will error if this constraint could not be satisfied.
-	NearestOnly bool
-	// If this is a bounded staleness read with nearest_only=True, this is set when
-	// we failed to satisfy a bounded staleness read with a nearby replica as we
-	// have no followers with an up-to-date schema.
-	// This is be zero if there is no maximum bound.
-	// In non-zero, we want a read t where Timestamp <= t < MaxTimestampBound.
-	MaxTimestampBound hlc.Timestamp
 }

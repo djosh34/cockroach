@@ -634,3 +634,16 @@ func metaDataIdentityCheck(
 		t.Fatalf(err.Error())
 	}
 }
+
+// parserRoundTrip parses each single-statement row of in and formats it
+// again, so that equivalent statements compare equal.
+func parserRoundTrip(t *testing.T, in [][]string) (out [][]string) {
+	out = make([][]string, len(in))
+	for i, s := range in {
+		require.Equal(t, 1, len(s))
+		stmt, err := parser.ParseOne(s[0])
+		require.NoError(t, err)
+		out[i] = []string{tree.AsString(stmt.AST)}
+	}
+	return out
+}

@@ -24,7 +24,7 @@ import (
 func (tc *Collection) GetLeasedImmutableTableByID(
 	ctx context.Context, txn *kv.Txn, tableID descpb.ID,
 ) (catalog.TableDescriptor, error) {
-	desc, _, err := tc.leased.getByID(ctx, tc.deadlineHolder(txn), tableID)
+	desc, _, err := tc.leased.getByID(ctx, txn, tableID)
 	if err != nil || desc == nil {
 		return nil, err
 	}

@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
 
@@ -208,7 +207,7 @@ func NewSeparateProcessTenantServer(
 		// in-process with KV instances have no such optimization to take
 		// advantage of to begin with.
 		nodeIDGetter:          nil,
-		costControllerFactory: NewTenantSideCostController,
+		costControllerFactory: NewNoopTenantSideCostController,
 		spanLimiterFactory: func(ie isql.Executor, st *cluster.Settings, knobs *spanconfig.TestingKnobs) spanconfig.Limiter {
 			return spanconfiglimiter.New(ie, st, knobs)
 		},
@@ -267,13 +266,6 @@ func newTenantServer(
 	deps tenantServerDeps,
 	serviceMode mtinfopb.TenantServiceMode,
 ) (*SQLServerWrapper, error) {
-	// TODO(knz): Make the license application a per-server thing
-	// instead of a global thing.
-	err := ApplyTenantLicense()
-	if err != nil {
-		return nil, err
-	}
-
 	// Start the SQL listener early so any delay that happen from this point onward
 	// (until the server is ready) won't cause client connections to be rejected.
 	if baseCfg.SplitListenSQL && !baseCfg.DisableSQLListener {
@@ -643,13 +635,9 @@ func (s *SQLServerWrapper) PreStart(ctx context.Context) error {
 		listenHTTP:   s.sqlServer.cfg.HTTPAdvertiseAddr,
 	}.Iter()
 
-	encryptedStore := false
 	for _, storeSpec := range s.sqlServer.cfg.Stores.Specs {
 		if storeSpec.InMemory {
 			continue
-		}
-		if storeSpec.IsEncrypted() {
-			encryptedStore = true
 		}
 
 		for name, val := range listenerFiles {
@@ -710,8 +698,7 @@ func (s *SQLServerWrapper) PreStart(ctx context.Context) error {
 	// to add this information. See below.
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetTags(map[string]string{
-			"engine_type":     s.sqlServer.cfg.StorageEngine.String(),
-			"encrypted_store": strconv.FormatBool(encryptedStore),
+			"engine_type": s.sqlServer.cfg.StorageEngine.String(),
 		})
 	})
 
@@ -1429,10 +1416,6 @@ func makeNextLiveInstanceIDFn(
 	}
 }
 
-// NewTenantSideCostController is a hook for CCL code which implements the
-// controller.
-var NewTenantSideCostController costControllerFactory = NewNoopTenantSideCostController
-
 // NewNoopTenantSideCostController returns a noop cost
 // controller. Used by shared-process tenants.
 func NewNoopTenantSideCostController(
@@ -1441,11 +1424,6 @@ func NewNoopTenantSideCostController(
 	// Return a no-op implementation.
 	return noopTenantSideCostController{}, nil
 }
-
-// ApplyTenantLicense is a hook for CCL code which enables enterprise features
-// for the tenant process if the COCKROACH_TENANT_LICENSE environment variable
-// is set.
-var ApplyTenantLicense = func() error { return nil /* no-op */ }
 
 // noopTenantSideCostController is a no-op implementation of
 // TenantSideCostController.

@@ -513,15 +513,10 @@ var functions = func() *functionsMu {
 
 		skip := false
 		for _, substr := range []string{
-			"stream_ingestion",
 			"crdb_internal.force_",
 			"crdb_internal.unsafe_",
 			"crdb_internal.create_join_token",
-			"crdb_internal.reset_multi_region_zone_configs_for_database",
 			"crdb_internal.reset_index_usage_stats",
-			"crdb_internal.start_replication_stream",
-			"crdb_internal.replication_stream_progress",
-			"crdb_internal.complete_replication_stream",
 			"crdb_internal.revalidate_unique_constraint",
 			"crdb_internal.request_statement_bundle",
 			"crdb_internal.set_compaction_concurrency",

@@ -16,20 +16,16 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cockroachdb/cockroach/pkg/keys"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catalogkeys"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/multiregion"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/schemaexpr"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/tabledesc"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
-	plpgsql "github.com/cockroachdb/cockroach/pkg/sql/plpgsql/parser"
-	"github.com/cockroachdb/cockroach/pkg/sql/rowenc"
+	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
+	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/plpgsqltree"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/plpgsqltree/utils"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/semenumpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
@@ -261,17 +257,8 @@ func formatQuerySequencesForDisplay(
 				fmtCtx.WriteString(";")
 			}
 		}
-	case catpb.Function_PLPGSQL:
-		var stmts plpgsqltree.Statement
-		plstmt, err := plpgsql.Parse(queries)
-		if err != nil {
-			return "", errors.Wrap(err, "failed to parse query string")
-		}
-		stmts = plstmt.AST
-
-		v := utils.SQLStmtVisitor{Fn: replaceFunc}
-		newStmt := plpgsqltree.Walk(&v, stmts)
-		fmtCtx.FormatNode(newStmt)
+	default:
+		return "", pgerror.Newf(pgcode.FeatureNotSupported, "routine language %s is unsupported", lang)
 	}
 	return fmtCtx.CloseAndGetString(), nil
 }
@@ -382,38 +369,6 @@ func formatFunctionQueryTypesForDisplay(
 		}
 		return false, newExpr, nil
 	}
-	// replaceTypeFunc is a visitor function that replaces type annotations
-	// containing user defined types IDs with their name. This is currently only
-	// necessary for some kinds of PLpgSQL statements.
-	replaceTypeFunc := func(typ tree.ResolvableTypeReference) (newTyp tree.ResolvableTypeReference, err error) {
-		if typ == nil {
-			return typ, nil
-		}
-		// semaCtx may be nil if this is a virtual view being created at
-		// init time.
-		var typeResolver tree.TypeReferenceResolver
-		if semaCtx != nil {
-			typeResolver = semaCtx.TypeResolver
-		}
-		var t *types.T
-		t, err = tree.ResolveType(ctx, typ, typeResolver)
-		if err != nil {
-			return typ, err
-		}
-		if !t.UserDefined() {
-			return typ, nil
-		}
-		name := t.TypeMeta.Name
-		typname := tree.MakeTypeNameWithPrefix(tree.ObjectNamePrefix{
-			CatalogName:     tree.Name(name.Catalog),
-			SchemaName:      tree.Name(name.Schema),
-			ExplicitCatalog: name.Catalog != "",
-			ExplicitSchema:  name.ExplicitSchema,
-		}, name.Name)
-		ref := typname.ToUnresolvedObjectName()
-		return ref, nil
-	}
-
 	fmtCtx := tree.NewFmtCtx(tree.FmtSimple)
 	switch lang {
 	case catpb.Function_SQL:
@@ -438,22 +393,8 @@ func formatFunctionQueryTypesForDisplay(
 			fmtCtx.FormatNode(newStmt)
 			fmtCtx.WriteString(";")
 		}
-	case catpb.Function_PLPGSQL:
-		var stmts plpgsqltree.Statement
-		plstmt, err := plpgsql.Parse(queries)
-		if err != nil {
-			return "", errors.Wrap(err, "failed to parse query string")
-		}
-		stmts = plstmt.AST
-
-		v := utils.SQLStmtVisitor{Fn: replaceFunc}
-		newStmt := plpgsqltree.Walk(&v, stmts)
-		// Some PLpgSQL statements (i.e., declarations), may contain type
-		// annotations containing the UDT. We need to walk the AST to replace them,
-		// too.
-		v2 := utils.TypeRefVisitor{Fn: replaceTypeFunc}
-		newStmt = plpgsqltree.Walk(&v2, newStmt)
-		fmtCtx.FormatNode(newStmt)
+	default:
+		return "", pgerror.Newf(pgcode.FeatureNotSupported, "routine language %s is unsupported", lang)
 	}
 
 	return fmtCtx.CloseAndGetString(), nil
@@ -647,154 +588,6 @@ func showFamilyClause(desc catalog.TableDescriptor, f *tree.FmtCtx) {
 		formatQuoteNames(&f.Buffer, activeColumnNames...)
 		f.WriteString(")")
 	}
-}
-
-// showCreateLocality creates the LOCALITY clauses for a CREATE statement, writing them
-// to tree.FmtCtx f.
-func showCreateLocality(desc catalog.TableDescriptor, f *tree.FmtCtx) error {
-	if c := desc.GetLocalityConfig(); c != nil {
-		f.WriteString(" LOCALITY ")
-		return multiregion.FormatTableLocalityConfig(c, f)
-	}
-	return nil
-}
-
-// ShowCreatePartitioning returns a PARTITION BY clause for the specified
-// index, if applicable.
-func ShowCreatePartitioning(
-	a *tree.DatumAlloc,
-	codec keys.SQLCodec,
-	tableDesc catalog.TableDescriptor,
-	idx catalog.Index,
-	part catalog.Partitioning,
-	buf *bytes.Buffer,
-	indent int,
-	colOffset int,
-	redactableValues bool,
-) error {
-	isPrimaryKeyOfPartitionAllByTable :=
-		tableDesc.IsPartitionAllBy() && tableDesc.GetPrimaryIndexID() == idx.GetID() && colOffset == 0
-
-	if part.NumColumns() == 0 && !isPrimaryKeyOfPartitionAllByTable {
-		return nil
-	}
-	// Do not print PARTITION BY clauses of non-primary indexes belonging to a table
-	// that is PARTITION BY ALL. The ALL will be printed for the PRIMARY INDEX clause.
-	if tableDesc.IsPartitionAllBy() && tableDesc.GetPrimaryIndexID() != idx.GetID() {
-		return nil
-	}
-	// Do not print PARTITION ALL BY if we are a REGIONAL BY ROW table.
-	if c := tableDesc.GetLocalityConfig(); c != nil {
-		switch c.Locality.(type) {
-		case *catpb.LocalityConfig_RegionalByRow_:
-			return nil
-		}
-	}
-
-	// We don't need real prefixes in the DecodePartitionTuple calls because we
-	// only use the tree.Datums part of the output.
-	fakePrefixDatums := make([]tree.Datum, colOffset)
-	for i := range fakePrefixDatums {
-		fakePrefixDatums[i] = tree.DNull
-	}
-
-	indentStr := strings.Repeat("\t", indent)
-	buf.WriteString(` PARTITION `)
-	if isPrimaryKeyOfPartitionAllByTable {
-		buf.WriteString(`ALL `)
-	}
-	buf.WriteString(`BY `)
-	if part.NumLists() > 0 {
-		buf.WriteString(`LIST`)
-	} else if part.NumRanges() > 0 {
-		buf.WriteString(`RANGE`)
-	} else if isPrimaryKeyOfPartitionAllByTable {
-		buf.WriteString(`NOTHING`)
-		return nil
-	} else {
-		return errors.Errorf(`invalid partition descriptor: %v`, part.PartitioningDesc())
-	}
-	buf.WriteString(` (`)
-	for i := 0; i < part.NumColumns(); i++ {
-		if i != 0 {
-			buf.WriteString(", ")
-		}
-		buf.WriteString(tree.NameString(idx.GetKeyColumnName(colOffset + i)))
-	}
-	buf.WriteString(`) (`)
-	fmtFlags := tree.FmtSimple
-	if redactableValues {
-		fmtFlags |= tree.FmtMarkRedactionNode | tree.FmtOmitNameRedaction
-	}
-	f := tree.NewFmtCtx(fmtFlags)
-	isFirst := true
-	err := part.ForEachList(func(name string, values [][]byte, subPartitioning catalog.Partitioning) error {
-		if !isFirst {
-			buf.WriteString(`, `)
-		}
-		isFirst = false
-		buf.WriteString("\n")
-		buf.WriteString(indentStr)
-		buf.WriteString("\tPARTITION ")
-		f.FormatName(name)
-		_, _ = f.Buffer.WriteTo(buf)
-		buf.WriteString(` VALUES IN (`)
-		for j, values := range values {
-			if j != 0 {
-				buf.WriteString(`, `)
-			}
-			tuple, _, err := rowenc.DecodePartitionTuple(
-				a, codec, tableDesc, idx, part, values, fakePrefixDatums)
-			if err != nil {
-				return err
-			}
-			f.FormatNode(tuple)
-			_, _ = f.Buffer.WriteTo(buf)
-		}
-		buf.WriteString(`)`)
-		return ShowCreatePartitioning(
-			a, codec, tableDesc, idx, subPartitioning, buf, indent+1, colOffset+part.NumColumns(),
-			redactableValues,
-		)
-	})
-	if err != nil {
-		return err
-	}
-	isFirst = true
-	err = part.ForEachRange(func(name string, from, to []byte) error {
-		if !isFirst {
-			buf.WriteString(`, `)
-		}
-		isFirst = false
-		buf.WriteString("\n")
-		buf.WriteString(indentStr)
-		buf.WriteString("\tPARTITION ")
-		buf.WriteString(tree.NameString(name))
-		buf.WriteString(" VALUES FROM ")
-		fromTuple, _, err := rowenc.DecodePartitionTuple(
-			a, codec, tableDesc, idx, part, from, fakePrefixDatums)
-		if err != nil {
-			return err
-		}
-		f.FormatNode(fromTuple)
-		_, _ = f.Buffer.WriteTo(buf)
-		buf.WriteString(" TO ")
-		toTuple, _, err := rowenc.DecodePartitionTuple(
-			a, codec, tableDesc, idx, part, to, fakePrefixDatums)
-		if err != nil {
-			return err
-		}
-		f.FormatNode(toTuple)
-		_, _ = f.Buffer.WriteTo(buf)
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	buf.WriteString("\n")
-	buf.WriteString(indentStr)
-	buf.WriteString(")")
-	return nil
 }
 
 // showConstraintClause creates the CONSTRAINT clauses for a CREATE statement,

@@ -28,7 +28,6 @@ go_library(
         "//pkg/roachpb",
         "//pkg/security",
         "//pkg/security/password",
-        "//pkg/security/sessionrevival",
         "//pkg/security/username",
         "//pkg/server/pgurl",
         "//pkg/server/serverpb",

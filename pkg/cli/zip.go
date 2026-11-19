@@ -392,16 +392,13 @@ latestprogress AS (
 jobpage AS (
   SELECT id
   FROM system.jobs@jobs_status_created_idx
-  WHERE (job_type IN ($1, $2, $3, $4)) AND (status IN ($5, $6))
+  WHERE (job_type = $1) AND (status IN ($2, $3))
   ORDER BY id
 )
 SELECT distinct (id), latestprogress.value AS progress
 FROM jobpage AS j
 INNER JOIN latestprogress ON j.id = latestprogress.job_id;`,
-		jobspb.TypeBackup.String(),
-		jobspb.TypeRestore.String(),
 		jobspb.TypeImport.String(),
-		jobspb.TypeReplicationStreamIngestion.String(),
 		"running",
 		"reverting",
 	)

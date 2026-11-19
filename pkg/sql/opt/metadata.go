@@ -17,7 +17,6 @@ import (
 	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/multiregion"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/cat"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
@@ -265,17 +264,8 @@ func (md *Metadata) CopyFrom(from *Metadata, copyScalarFn func(Expr) Expr) {
 		md.tables = make([]TableMeta, len(from.tables))
 	}
 	for i := range from.tables {
-		// Note: annotations inside TableMeta are not retained...
+		// Note: annotations inside TableMeta are not retained.
 		md.tables[i].copyFrom(&from.tables[i], copyScalarFn)
-
-		// ...except for the regionConfig annotation.
-		tabID := from.tables[i].MetaID
-		regionConfig, ok := md.TableAnnotation(tabID, regionConfigAnnID).(*multiregion.RegionConfig)
-		if ok {
-			// Don't waste time looking up a database descriptor and constructing a
-			// RegionConfig more than once for a given table.
-			md.SetTableAnnotation(tabID, regionConfigAnnID, regionConfig)
-		}
 	}
 
 	for id, dataSource := range from.dataSourceDeps {
@@ -730,18 +720,11 @@ func (md *Metadata) DuplicateTable(
 		ComputedCols:                  computedCols,
 		ColsInComputedColsExpressions: referencedColsInComputedExpressions,
 		partialIndexPredicates:        partialIndexPredicates,
-		indexPartitionLocalities:      tabMeta.indexPartitionLocalities,
 		checkConstraintsStats:         checkConstraintsStats,
 	}
 	newTabMeta.indexVisibility.cached = tabMeta.indexVisibility.cached
 	newTabMeta.indexVisibility.notVisible = tabMeta.indexVisibility.notVisible
 	md.tables = append(md.tables, newTabMeta)
-	regionConfig, ok := md.TableAnnotation(tabID, regionConfigAnnID).(*multiregion.RegionConfig)
-	if ok {
-		// Don't waste time looking up a database descriptor and constructing a
-		// RegionConfig more than once for a given table.
-		md.SetTableAnnotation(newTabID, regionConfigAnnID, regionConfig)
-	}
 
 	return newTabID
 }
@@ -861,7 +844,7 @@ func (md *Metadata) QualifiedAlias(
 
 // UpdateTableMeta allows the caller to replace the cat.Table struct that a
 // TableMeta instance stores.
-func (md *Metadata) UpdateTableMeta(evalCtx *eval.Context, tables map[cat.StableID]cat.Table) {
+func (md *Metadata) UpdateTableMeta(tables map[cat.StableID]cat.Table) {
 	for i := range md.tables {
 		oldTable := md.tables[i].Table
 		if newTable, ok := tables[oldTable.ID()]; ok {
@@ -877,7 +860,6 @@ func (md *Metadata) UpdateTableMeta(evalCtx *eval.Context, tables map[cat.Stable
 				md.SetTableAnnotation(md.tables[i].MetaID, NotNullAnnID, nil)
 			}
 			md.tables[i].Table = newTable
-			md.tables[i].CacheIndexPartitionLocalities(evalCtx)
 		}
 	}
 }

@@ -325,14 +325,6 @@ var (
 	// when there's no code known yet.
 	Uncategorized = MakeCode("XXUUU")
 
-	// CCLRequired signals that a CCL binary is required to complete this
-	// task.
-	CCLRequired = MakeCode("XXC01")
-
-	// CCLValidLicenseRequired signals that a valid CCL license is
-	// required to complete this task.
-	CCLValidLicenseRequired = MakeCode("XXC02")
-
 	// TransactionCommittedWithSchemaChangeFailure signals that the
 	// non-DDL payload of a transaction was committed successfully but
 	// some DDL operation failed, without rolling back the rest of the
@@ -382,23 +374,7 @@ var (
 	// internally on a connection between different Cockroach nodes.
 	InternalConnectionFailure = MakeCode("58C01")
 
-	// ProxyConnectionError is returned by the sqlproxyccl and it indicates a
-	// problem establishing the connection through the proxy.
-	ProxyConnectionError = MakeCode("08C00")
-
 	// Class XC - cockroach extension.
-	// CockroachDB distributed system related errors.
-
-	// UnsatisfiableBoundedStaleness signals that the bounded staleness query
-	// cannot be satisfied.
-	UnsatisfiableBoundedStaleness = MakeCode("XCUBS")
-
-	// QueryNotRunningInHomeRegion signals that a query is not running in its
-	// home region.
-	QueryNotRunningInHomeRegion = MakeCode("XCHR1")
-
-	// QueryHasNoHomeRegion signals that a query has no home region.
-	QueryHasNoHomeRegion = MakeCode("XCHR2")
 
 	// ExperimentalFeature signals that a feature we supported experimentally is being
 	// used without the session variable being enabled.

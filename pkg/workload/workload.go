@@ -132,9 +132,6 @@ type Hooks struct {
 	// These are expected to pass after the initial data load as well as after
 	// running queryload.
 	CheckConsistency func(context.Context, *gosql.DB) error
-	// Partition is used to run a partitioning step on the data created by the workload.
-	// TODO (rohany): migrate existing partitioning steps (such as tpcc's) into here.
-	Partition func(*gosql.DB) error
 }
 
 // Meta is used to register a Generator at init time and holds meta information
@@ -365,18 +362,6 @@ func ColBatchToRows(cb coldata.Batch) [][]interface{} {
 // between implementations but this is sadly not the case right now.
 type InitialDataLoader interface {
 	InitialDataLoad(context.Context, *gosql.DB, Generator) (int64, error)
-}
-
-// ImportDataLoader is a hook for binaries that include CCL code to inject an
-// IMPORT-based InitialDataLoader implementation.
-var ImportDataLoader InitialDataLoader = requiresCCLBinaryDataLoader(`IMPORT`)
-
-type requiresCCLBinaryDataLoader string
-
-func (l requiresCCLBinaryDataLoader) InitialDataLoad(
-	context.Context, *gosql.DB, Generator,
-) (int64, error) {
-	return 0, errors.Errorf(`loading initial data with %s requires a CCL binary`, l)
 }
 
 // QueryLoad represents some SQL query workload performable on a database

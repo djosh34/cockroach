@@ -59,43 +59,6 @@ CREATE INVERTED INDEX CONCURRENTLY id2
 - [[IndexData:{DescID: 104, IndexID: 3}, TRANSIENT_ABSENT], ABSENT]
   {indexId: 3, tableId: 104}
 
-build skip=sql_dependencies
-CREATE INDEX id3
-	ON defaultdb.t1 (id, name)
-	STORING (money)
-	PARTITION BY LIST (id) (PARTITION p1 VALUES IN (1))
-----
-- [[IndexData:{DescID: 104, IndexID: 1}, PUBLIC], PUBLIC]
-  {indexId: 1, tableId: 104}
-- [[TableData:{DescID: 104, ReferencedDescID: 100}, PUBLIC], PUBLIC]
-  {databaseId: 100, tableId: 104}
-- [[SecondaryIndex:{DescID: 104, IndexID: 2, ConstraintID: 0, TemporaryIndexID: 3, SourceIndexID: 1, RecreateSourceIndexID: 0}, PUBLIC], ABSENT]
-  {indexId: 2, sourceIndexId: 1, tableId: 104, temporaryIndexId: 3}
-- [[IndexPartitioning:{DescID: 104, IndexID: 2}, PUBLIC], ABSENT]
-  {indexId: 2, partitioning: {list: [{name: p1, subpartitioning: {}, values: [AwI=]}], numColumns: 1}, tableId: 104}
-- [[IndexColumn:{DescID: 104, ColumnID: 1, IndexID: 2}, PUBLIC], ABSENT]
-  {columnId: 1, indexId: 2, tableId: 104}
-- [[IndexColumn:{DescID: 104, ColumnID: 2, IndexID: 2}, PUBLIC], ABSENT]
-  {columnId: 2, indexId: 2, ordinalInKind: 1, tableId: 104}
-- [[IndexColumn:{DescID: 104, ColumnID: 3, IndexID: 2}, PUBLIC], ABSENT]
-  {columnId: 3, indexId: 2, kind: STORED, tableId: 104}
-- [[IndexData:{DescID: 104, IndexID: 2}, PUBLIC], ABSENT]
-  {indexId: 2, tableId: 104}
-- [[IndexName:{DescID: 104, Name: id3, IndexID: 2}, PUBLIC], ABSENT]
-  {indexId: 2, name: id3, tableId: 104}
-- [[TemporaryIndex:{DescID: 104, IndexID: 3, ConstraintID: 1, SourceIndexID: 1}, TRANSIENT_ABSENT], ABSENT]
-  {constraintId: 1, indexId: 3, isUsingSecondaryEncoding: true, sourceIndexId: 1, tableId: 104}
-- [[IndexPartitioning:{DescID: 104, IndexID: 3}, TRANSIENT_ABSENT], ABSENT]
-  {indexId: 3, partitioning: {list: [{name: p1, subpartitioning: {}, values: [AwI=]}], numColumns: 1}, tableId: 104}
-- [[IndexColumn:{DescID: 104, ColumnID: 1, IndexID: 3}, TRANSIENT_ABSENT], ABSENT]
-  {columnId: 1, indexId: 3, tableId: 104}
-- [[IndexColumn:{DescID: 104, ColumnID: 2, IndexID: 3}, TRANSIENT_ABSENT], ABSENT]
-  {columnId: 2, indexId: 3, ordinalInKind: 1, tableId: 104}
-- [[IndexColumn:{DescID: 104, ColumnID: 3, IndexID: 3}, TRANSIENT_ABSENT], ABSENT]
-  {columnId: 3, indexId: 3, kind: STORED, tableId: 104}
-- [[IndexData:{DescID: 104, IndexID: 3}, TRANSIENT_ABSENT], ABSENT]
-  {indexId: 3, tableId: 104}
-
 build
 CREATE INDEX id4
 	ON defaultdb.t1 (id, name) USING HASH STORING (money) WITH (bucket_count=8)

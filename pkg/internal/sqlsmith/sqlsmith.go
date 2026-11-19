@@ -115,7 +115,6 @@ type Smither struct {
 
 	bulkSrv     *httptest.Server
 	bulkFiles   map[string][]byte
-	bulkBackups map[string]tree.BackupTargetList
 	bulkExports []string
 }
 
@@ -366,11 +365,6 @@ var OnlyNoDropDDLs = simpleOption("only DDLs", func(s *Smither) {
 	),
 		altersExistingTypes...,
 	)
-})
-
-// MultiRegionDDLs causes the Smither to enable multiregion features.
-var MultiRegionDDLs = simpleOption("include multiregion DDLs", func(s *Smither) {
-	s.alterWeights = append(s.alterWeights, alterMultiregion...)
 })
 
 // EnableAlters enables ALTER statements.

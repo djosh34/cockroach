@@ -28,7 +28,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/tabledesc"
 	"github.com/cockroachdb/cockroach/pkg/sql/exprutil"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgnotice"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/asof"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
@@ -92,11 +91,11 @@ func (p *planner) RunParams(ctx context.Context) runParams {
 // interface as we find we need them, to avoid churn in the planHookFn sig and
 // the hooks that implement it.
 //
-// The PlanHookState is used by modules that are under the CCL. Since the OSS
-// modules cannot depend on the CCL modules, the CCL modules need to inform the
-// planner when they should be invoked (via plan hooks). The only way for the
-// CCL statements to get access to a "planner" is through this PlanHookState
-// that gets passed back due to this inversion of roles.
+// The PlanHookState is used by modules that the sql package cannot depend on,
+// such as the importer. Those modules inform the planner when they should be
+// invoked (via plan hooks). The only way for their statements to get access to
+// a "planner" is through this PlanHookState that gets passed back due to this
+// inversion of roles.
 type PlanHookState interface {
 	resolver.SchemaResolver
 	RunParams(ctx context.Context) runParams
@@ -114,11 +113,7 @@ type PlanHookState interface {
 	// TODO(mberhault): it would be easier to just pass a planner to plan hooks.
 	GetAllRoles(ctx context.Context) (map[username.SQLUsername]bool, error)
 	BumpRoleMembershipTableVersion(ctx context.Context) error
-	EvalAsOfTimestamp(
-		ctx context.Context,
-		asOf tree.AsOfClause,
-		opts ...asof.EvalOption,
-	) (eval.AsOfSystemTime, error)
+	EvalAsOfTimestamp(ctx context.Context, asOf tree.AsOfClause) (eval.AsOfSystemTime, error)
 	ResolveMutableTableDescriptor(ctx context.Context, tn *tree.TableName, required bool, requiredType tree.RequiredTableKind) (prefix catalog.ResolvedObjectPrefix, table *tabledesc.Mutable, err error)
 	ShowCreate(
 		ctx context.Context, dbPrefix string, allHydratedDescs []catalog.Descriptor, desc catalog.TableDescriptor, displayOptions ShowCreateDisplayOptions,

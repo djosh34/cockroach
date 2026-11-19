@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
-	"github.com/cockroachdb/cockroach/pkg/ccl"
 	"github.com/cockroachdb/cockroach/pkg/internal/rsg"
 	"github.com/cockroachdb/cockroach/pkg/internal/sqlsmith"
 	"github.com/cockroachdb/cockroach/pkg/sql"
@@ -609,11 +608,8 @@ var ignoredErrorPatterns = []string{
 	"cannot write directly to computed column",
 	"index .* in the middle of being added",
 	"could not mark job .* as succeeded",
-	"failed to read backup descriptor",
 	"AS OF SYSTEM TIME: cannot specify timestamp in the future",
 	"AS OF SYSTEM TIME: timestamp before 1970-01-01T00:00:00Z is invalid",
-	"BACKUP for requested time  needs option 'revision_history'",
-	"RESTORE timestamp: supplied backups do not cover requested time",
 
 	// Numeric conditions
 	"exponent out of range",
@@ -689,7 +685,6 @@ var ignoredErrorPatterns = []string{
 	"cannot take logarithm of a negative number",
 	"input value must be",
 	"formats are supported for decode",
-	"only available in ccl",
 	"expect comma-separated list of filename",
 	"unknown constraint",
 	"invalid destination encoding name",
@@ -716,7 +711,6 @@ var ignoredRegex = regexp.MustCompile(strings.Join(ignoredErrorPatterns, "|"))
 func TestRandomSyntaxSQLSmith(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	defer log.Scope(t).Close(t)
-	defer ccl.TestingEnableEnterprise()() // allow usage of partitions
 
 	var smither *sqlsmith.Smither
 

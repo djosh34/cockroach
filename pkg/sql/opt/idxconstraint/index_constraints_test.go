@@ -24,7 +24,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/memo"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/norm"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/optbuilder"
-	"github.com/cockroachdb/cockroach/pkg/sql/opt/partition"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/props"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/testutils"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
@@ -135,7 +134,7 @@ func TestIndexConstraints(t *testing.T) {
 				ic.Init(
 					filters, optionalFilters, indexCols, sv.NotNullCols(), computedCols,
 					colsInComputedColsExpressions,
-					true /* consolidate */, &evalCtx, &f, partition.PrefixSorter{},
+					true /* consolidate */, &evalCtx, &f,
 					func() {}, /* checkCancellation */
 				)
 				result := ic.Constraint()
@@ -148,7 +147,6 @@ func TestIndexConstraints(t *testing.T) {
 					execBld := execbuilder.New(
 						context.Background(), nil /* execFactory */, nil /* optimizer */, f.Memo(), nil, /* catalog */
 						&remainingFilter, &semaCtx, &evalCtx, false, /* allowAutoCommit */
-						false, /* isANSIDML */
 					)
 					expr, err := execBld.BuildScalar()
 					if err != nil {
@@ -254,7 +252,7 @@ func BenchmarkIndexConstraints(b *testing.B) {
 					filters, nil /* optionalFilters */, indexCols, sv.NotNullCols(),
 					nil /* computedCols */, opt.ColSet{}, /* colsInComputedColsExpressions */
 					true, /* consolidate */
-					&evalCtx, &f, partition.PrefixSorter{},
+					&evalCtx, &f,
 					func() {}, /* checkCancellation */
 				)
 				_ = ic.Constraint()

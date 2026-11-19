@@ -61,7 +61,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/volatility"
-	"github.com/cockroachdb/cockroach/pkg/sql/sessiondatapb"
 	"github.com/cockroachdb/cockroach/pkg/sql/stats"
 	"github.com/cockroachdb/cockroach/pkg/testutils/datapathutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/floatcmp"
@@ -165,9 +164,6 @@ type Flags struct {
 
 	// DisableRules is a set of rules that are not allowed to run.
 	DisableRules RuleSet
-
-	// Generic enables optimizations for generic query plans.
-	Generic bool
 
 	// ExploreTraceRule restricts the ExploreTrace output to only show the effects
 	// of a specific rule.
@@ -299,7 +295,6 @@ func New(catalog cat.Catalog, sql string) *OptTester {
 	ot.evalCtx.SessionData().ZigzagJoinEnabled = true
 	ot.evalCtx.SessionData().OptimizerUseForecasts = true
 	ot.evalCtx.SessionData().OptimizerUseHistograms = true
-	ot.evalCtx.SessionData().LocalityOptimizedSearch = true
 	ot.evalCtx.SessionData().ReorderJoinsLimit = opt.DefaultJoinOrderLimit
 	ot.evalCtx.SessionData().InsertFastPath = true
 	ot.evalCtx.SessionData().OptSplitScanLimit = tabledesc.MaxBucketAllowed
@@ -483,11 +478,6 @@ func New(catalog cat.Catalog, sql string) *OptTester {
 //     opt disable=ConstrainScan
 //     norm disable=(NegateOr,NegateAnd)
 //
-//   - generic: enables optimizations for generic query plans.
-//     NOTE: This flag sets the plan_cache_mode session setting to "auto", which
-//     cannot be done via the "set" flag because it requires a CCL license,
-//     which optimizer tests are not set up to utilize.
-//
 //   - rule: used with exploretrace; the value is the name of a rule. When
 //     specified, the exploretrace output is filtered to only show expression
 //     changes due to that specific rule.
@@ -597,7 +587,6 @@ func (ot *OptTester) RunCommand(tb testing.TB, d *datadriven.TestData) string {
 
 	ot.evalCtx.TestingKnobs.OptimizerCostPerturbation = ot.Flags.PerturbCost
 	ot.evalCtx.Locality = ot.Flags.Locality
-	ot.evalCtx.OriginalLocality = ot.Flags.Locality
 	ot.evalCtx.Placeholders = nil
 	ot.evalCtx.TxnIsoLevel = ot.Flags.TxnIsoLevel
 
@@ -996,9 +985,6 @@ func (f *Flags) Set(arg datadriven.CmdArg) error {
 			}
 			f.DisableRules.Add(int(r))
 		}
-
-	case "generic":
-		f.evalCtx.SessionData().PlanCacheMode = sessiondatapb.PlanCacheModeAuto
 
 	case "rule":
 		if len(arg.Vals) != 1 {
@@ -2318,7 +2304,7 @@ func (ot *OptTester) optimizeExpr(
 		return nil, err
 	}
 	if tables != nil {
-		o.Memo().Metadata().UpdateTableMeta(&ot.evalCtx, tables)
+		o.Memo().Metadata().UpdateTableMeta(tables)
 	}
 	root, err := o.Optimize()
 	if err != nil {
@@ -2375,7 +2361,7 @@ func (ot *OptTester) ExecBuild(f exec.Factory, mem *memo.Memo, expr opt.Expr) (e
 	}
 	bld := execbuilder.New(
 		context.Background(), f, ot.makeOptimizer(), mem, ot.catalog, expr,
-		&ot.semaCtx, &ot.evalCtx, true /* allowAutoCommit */, false, /* isANSIDML */
+		&ot.semaCtx, &ot.evalCtx, true, /* allowAutoCommit */
 	)
 	return bld.Build()
 }

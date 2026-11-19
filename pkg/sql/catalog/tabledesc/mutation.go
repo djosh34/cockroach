@@ -149,16 +149,6 @@ func (c primaryKeySwap) forEachIndexIDs(
 	return nil
 }
 
-// HasLocalityConfig returns true iff the locality config is swapped also.
-func (c primaryKeySwap) HasLocalityConfig() bool {
-	return c.desc.LocalityConfigSwap != nil
-}
-
-// LocalityConfigSwap returns the locality config swap, if there is one.
-func (c primaryKeySwap) LocalityConfigSwap() descpb.PrimaryKeySwap_LocalityConfigSwap {
-	return *c.desc.LocalityConfigSwap
-}
-
 // computedColumnSwap implements the catalog.ComputedColumnSwap interface.
 type computedColumnSwap struct {
 	maybeMutation

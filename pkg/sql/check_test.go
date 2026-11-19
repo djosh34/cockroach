@@ -80,7 +80,7 @@ func TestValidateTTLScheduledJobs(t *testing.T) {
 						jobstest.NewJobSchedulerTestEnv(
 							jobstest.UseSystemTables,
 							timeutil.Now(),
-							tree.ScheduledBackupExecutor,
+							tree.ScheduledRowLevelTTLExecutor,
 						),
 						scheduleID,
 					)

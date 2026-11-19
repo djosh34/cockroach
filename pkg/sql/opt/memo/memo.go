@@ -155,7 +155,6 @@ type Memo struct {
 	useHistograms                              bool
 	useMultiColStats                           bool
 	useNotVisibleIndex                         bool
-	localityOptimizedSearch                    bool
 	safeUpdates                                bool
 	preferLookupJoinsForFKs                    bool
 	saveTablesPrefix                           string
@@ -172,7 +171,6 @@ type Memo struct {
 	testingOptimizerRandomSeed                 int64
 	testingOptimizerCostPerturbation           float64
 	testingOptimizerDisableRuleProbability     float64
-	enforceHomeRegion                          bool
 	variableInequalityLookupJoinEnabled        bool
 	allowOrdinalColumnReferences               bool
 	useImprovedDisjunctionStats                bool
@@ -237,7 +235,6 @@ func (m *Memo) Init(ctx context.Context, evalCtx *eval.Context) {
 		useHistograms:                              evalCtx.SessionData().OptimizerUseHistograms,
 		useMultiColStats:                           evalCtx.SessionData().OptimizerUseMultiColStats,
 		useNotVisibleIndex:                         evalCtx.SessionData().OptimizerUseNotVisibleIndexes,
-		localityOptimizedSearch:                    evalCtx.SessionData().LocalityOptimizedSearch,
 		safeUpdates:                                evalCtx.SessionData().SafeUpdates,
 		preferLookupJoinsForFKs:                    evalCtx.SessionData().PreferLookupJoinsForFKs,
 		saveTablesPrefix:                           evalCtx.SessionData().SaveTablesPrefix,
@@ -254,7 +251,6 @@ func (m *Memo) Init(ctx context.Context, evalCtx *eval.Context) {
 		testingOptimizerRandomSeed:                 evalCtx.SessionData().TestingOptimizerRandomSeed,
 		testingOptimizerCostPerturbation:           evalCtx.SessionData().TestingOptimizerCostPerturbation,
 		testingOptimizerDisableRuleProbability:     evalCtx.SessionData().TestingOptimizerDisableRuleProbability,
-		enforceHomeRegion:                          evalCtx.SessionData().EnforceHomeRegion,
 		variableInequalityLookupJoinEnabled:        evalCtx.SessionData().VariableInequalityLookupJoinEnabled,
 		allowOrdinalColumnReferences:               evalCtx.SessionData().AllowOrdinalColumnReferences,
 		useImprovedDisjunctionStats:                evalCtx.SessionData().OptimizerUseImprovedDisjunctionStats,
@@ -397,7 +393,6 @@ func (m *Memo) IsStale(
 		m.useHistograms != evalCtx.SessionData().OptimizerUseHistograms ||
 		m.useMultiColStats != evalCtx.SessionData().OptimizerUseMultiColStats ||
 		m.useNotVisibleIndex != evalCtx.SessionData().OptimizerUseNotVisibleIndexes ||
-		m.localityOptimizedSearch != evalCtx.SessionData().LocalityOptimizedSearch ||
 		m.safeUpdates != evalCtx.SessionData().SafeUpdates ||
 		m.preferLookupJoinsForFKs != evalCtx.SessionData().PreferLookupJoinsForFKs ||
 		m.saveTablesPrefix != evalCtx.SessionData().SaveTablesPrefix ||
@@ -414,7 +409,6 @@ func (m *Memo) IsStale(
 		m.testingOptimizerRandomSeed != evalCtx.SessionData().TestingOptimizerRandomSeed ||
 		m.testingOptimizerCostPerturbation != evalCtx.SessionData().TestingOptimizerCostPerturbation ||
 		m.testingOptimizerDisableRuleProbability != evalCtx.SessionData().TestingOptimizerDisableRuleProbability ||
-		m.enforceHomeRegion != evalCtx.SessionData().EnforceHomeRegion ||
 		m.variableInequalityLookupJoinEnabled != evalCtx.SessionData().VariableInequalityLookupJoinEnabled ||
 		m.allowOrdinalColumnReferences != evalCtx.SessionData().AllowOrdinalColumnReferences ||
 		m.useImprovedDisjunctionStats != evalCtx.SessionData().OptimizerUseImprovedDisjunctionStats ||

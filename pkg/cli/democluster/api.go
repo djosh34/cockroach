@@ -12,7 +12,6 @@ package democluster
 
 import (
 	"context"
-	gosql "database/sql"
 
 	democlusterapi "github.com/cockroachdb/cockroach/pkg/cli/democluster/api"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
@@ -42,11 +41,6 @@ type DemoCluster interface {
 	// Close shuts down the demo cluster.
 	Close(ctx context.Context)
 
-	// EnableEnterprise enables enterprise features for this demo,
-	// if available in this build. The returned callback should be called
-	// before terminating the demo.
-	EnableEnterprise(ctx context.Context) (func(), error)
-
 	// SetupWorkload initializes the workload generator if defined.
 	SetupWorkload(ctx context.Context) error
 
@@ -60,7 +54,3 @@ type DemoCluster interface {
 	// TenantName returns the tenant name that the default connection is for.
 	TenantName() string
 }
-
-// EnableEnterprise is not implemented here in order to keep OSS/BSL builds successful.
-// The cliccl package sets this function if enterprise features are available to demo.
-var EnableEnterprise func(db *gosql.DB, org string) (func(), error)

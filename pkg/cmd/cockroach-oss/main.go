@@ -8,8 +8,7 @@
 // by the Apache License, Version 2.0, included in the file
 // licenses/APL.txt.
 
-// cockroach-oss is an entry point for a CockroachDB binary that excludes all
-// CCL-licensed code.
+// cockroach-oss is the entry point for the CockroachDB binary.
 package main
 
 import (
