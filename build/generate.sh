@@ -122,13 +122,8 @@ gen_proto() {
 
 gen_parser() {
   build_tool goyacc golang.org/x/tools/cmd/goyacc
-  local tmp
-  tmp=$(mktemp -d)
-  (cd "$tmp" && bash "$root/pkg/sql/lexbase/sql-gen.sh" "$root/pkg/sql/parser/sql.y" sql \
-    "$root/pkg/sql/parser/replace_help_rules.awk" "$root/pkg/sql/parser/sql.go" "$bin/goyacc")
-  (cd "$tmp" && bash "$root/pkg/sql/lexbase/sql-gen.sh" "$root/pkg/sql/pgrepl/pgreplparser/pgrepl.y" pgrepl \
-    "" "$root/pkg/sql/pgrepl/pgreplparser/pgrepl.go" "$bin/goyacc")
-  rm -rf "$tmp"
+  (cd pkg/sql/parser && bash ../lexbase/sql-gen.sh sql.y sql replace_help_rules.awk sql.go goyacc)
+  (cd pkg/sql/pgrepl/pgreplparser && bash ../../lexbase/sql-gen.sh pgrepl.y pgrepl "" pgrepl.go goyacc)
 
   bash pkg/sql/parser/help_gen_test.sh <pkg/sql/parser/sql.go >pkg/sql/parser/helpmap_test.go
   awk -f pkg/sql/parser/help.awk <pkg/sql/parser/sql.y >pkg/sql/parser/help_messages.go
@@ -182,7 +177,7 @@ gen_optgen() {
 # name selects the generator inside execgen.
 EXECGEN=(
   "pkg/col/coldata vec.eg.go -"
-  "pkg/sql/colexec sort_partitioner.eg.go ../colexecbase/distinct_tmpl.go"
+  "pkg/sql/colexec sort_partitioner.eg.go colexecbase/distinct_tmpl.go"
   "pkg/sql/colexec/colexecprojconst default_cmp_proj_const_op.eg.go ../colexecproj/default_cmp_proj_ops_tmpl.go"
   "pkg/sql/colexec and_or_projection.eg.go and_or_projection_tmpl.go"
   "pkg/sql/colexec hash_aggregator.eg.go hash_aggregator_tmpl.go"
