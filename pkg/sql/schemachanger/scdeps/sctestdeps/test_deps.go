@@ -25,7 +25,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catalogkeys"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descbuilder"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/funcdesc"
@@ -43,7 +42,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/schemachanger/scrun"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catid"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqltelemetry"
@@ -205,27 +203,6 @@ func (s *TestState) MemberOfWithAdminOption(
 	ctx context.Context, member username.SQLUsername,
 ) (map[username.SQLUsername]bool, error) {
 	return nil, nil
-}
-
-// IndexPartitioningCCLCallback implements the scbuild.Dependencies interface.
-func (s *TestState) IndexPartitioningCCLCallback() scbuild.CreatePartitioningCCLCallback {
-	if ccl := scdeps.CreatePartitioningCCL; ccl != nil {
-		return ccl
-	}
-	return func(
-		ctx context.Context,
-		st *cluster.Settings,
-		evalCtx *eval.Context,
-		columnLookupFn func(tree.Name) (catalog.Column, error),
-		oldNumImplicitColumns int,
-		oldKeyColumnNames []string,
-		partBy *tree.PartitionBy,
-		allowedNewColumnNames []tree.Name,
-		allowImplicitPartitioning bool,
-	) (newImplicitCols []catalog.Column, newPartitioning catpb.PartitioningDescriptor, err error) {
-		newPartitioning.NumColumns = uint32(len(partBy.Fields))
-		return nil, newPartitioning, nil
-	}
 }
 
 var _ scbuild.CatalogReader = (*TestState)(nil)

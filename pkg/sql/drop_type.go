@@ -197,11 +197,7 @@ func (p *planner) removeTypeBackReferences(
 func (p *planner) addBackRefsFromAllTypesInTable(
 	ctx context.Context, desc *tabledesc.Mutable,
 ) error {
-	dbDesc, err := p.Descriptors().ByID(p.txn).WithoutNonPublic().Get().Database(ctx, desc.GetParentID())
-	if err != nil {
-		return err
-	}
-	typeIDs, _, err := desc.GetAllReferencedTypeIDs(dbDesc, func(id descpb.ID) (catalog.TypeDescriptor, error) {
+	typeIDs, _, err := desc.GetAllReferencedTypeIDs(func(id descpb.ID) (catalog.TypeDescriptor, error) {
 		mutDesc, err := p.Descriptors().MutableByID(p.txn).Type(ctx, id)
 		if err != nil {
 			return nil, err
@@ -223,11 +219,7 @@ func (p *planner) addBackRefsFromAllTypesInTable(
 func (p *planner) removeBackRefsFromAllTypesInTable(
 	ctx context.Context, desc *tabledesc.Mutable,
 ) error {
-	dbDesc, err := p.Descriptors().ByID(p.txn).WithoutNonPublic().Get().Database(ctx, desc.GetParentID())
-	if err != nil {
-		return err
-	}
-	typeIDs, _, err := desc.GetAllReferencedTypeIDs(dbDesc, func(id descpb.ID) (catalog.TypeDescriptor, error) {
+	typeIDs, _, err := desc.GetAllReferencedTypeIDs(func(id descpb.ID) (catalog.TypeDescriptor, error) {
 		mutDesc, err := p.Descriptors().MutableByID(p.txn).Type(ctx, id)
 		if err != nil {
 			return nil, err

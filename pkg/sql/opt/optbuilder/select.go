@@ -11,26 +11,21 @@
 package optbuilder
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/cockroachdb/cockroach/pkg/server/telemetry"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/colinfo"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/tabledesc"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/cat"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/memo"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/props"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
-	"github.com/cockroachdb/cockroach/pkg/sql/parser/statements"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/privilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/asof"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/cast"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlerrors"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqltelemetry"
@@ -506,27 +501,6 @@ func (b *Builder) addTable(tab cat.Table, alias *tree.TableName) *opt.TableMeta 
 	return md.TableMeta(tabID)
 }
 
-// errorOnInvalidMultiregionDB panics if the table described by tabMeta is owned
-// by a non-multiregion database or a multiregion database with SURVIVE REGION
-// FAILURE goal.
-func errorOnInvalidMultiregionDB(
-	ctx context.Context, evalCtx *eval.Context, tabMeta *opt.TableMeta,
-) {
-	survivalGoal, ok := tabMeta.GetDatabaseSurvivalGoal(ctx, evalCtx.Planner)
-	// non-multiregional database or SURVIVE REGION FAILURE option
-	if !ok {
-		err := pgerror.Newf(pgcode.QueryHasNoHomeRegion,
-			"Query has no home region. Try accessing only tables in multi-region databases with ZONE survivability. %s",
-			sqlerrors.EnforceHomeRegionFurtherInfo)
-		panic(err)
-	} else if survivalGoal == descpb.SurvivalGoal_REGION_FAILURE {
-		err := pgerror.Newf(pgcode.QueryHasNoHomeRegion,
-			"The enforce_home_region setting cannot be combined with REGION survivability. Try accessing only tables in multi-region databases with ZONE survivability. %s",
-			sqlerrors.EnforceHomeRegionFurtherInfo)
-		panic(err)
-	}
-}
-
 // buildScan builds a memo group for a ScanOp expression on the given table. If
 // the ordinals list contains any VirtualComputed columns, a ProjectOp is built
 // on top.
@@ -630,30 +604,6 @@ func (b *Builder) buildScan(
 
 		// Note: virtual tables should not be collected as view dependencies.
 		return outScope
-	}
-
-	// Scanning tables in databases that don't use the SURVIVE ZONE FAILURE option
-	// is disallowed when EnforceHomeRegion is true.
-	if b.evalCtx.SessionData().EnforceHomeRegion && statements.IsANSIDML(b.stmt) {
-		errorOnInvalidMultiregionDB(b.ctx, b.evalCtx, tabMeta)
-		// Populate the remote regions touched by the multiregion database used in
-		// this query. If a query dynamically errors out as having no home region,
-		// the query will be replanned with each of the remote regions,
-		// one-at-a-time, with AOST follower_read_timestamp(). If one of these
-		// retries doesn't error out, that region will be reported to the user as
-		// the query's home region.
-		if len(b.evalCtx.RemoteRegions) == 0 {
-			if regionsNames, ok := tabMeta.GetRegionsInDatabase(b.ctx, b.evalCtx.Planner); ok {
-				if gatewayRegion, ok := b.evalCtx.Locality.Find("region"); ok {
-					b.evalCtx.RemoteRegions = make(catpb.RegionNames, 0, len(regionsNames))
-					for _, regionName := range regionsNames {
-						if string(regionName) != gatewayRegion {
-							b.evalCtx.RemoteRegions = append(b.evalCtx.RemoteRegions, regionName)
-						}
-					}
-				}
-			}
-		}
 	}
 
 	private := memo.ScanPrivate{Table: tabID, Cols: scanColIDs}
@@ -762,7 +712,6 @@ func (b *Builder) buildScan(
 
 	b.addCheckConstraintsForTable(tabMeta)
 	b.addComputedColsForTable(tabMeta, virtualMutationColOrds)
-	tabMeta.CacheIndexPartitionLocalities(b.evalCtx)
 
 	outScope.expr = b.factory.ConstructScan(&private)
 

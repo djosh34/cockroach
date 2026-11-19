@@ -32,11 +32,6 @@ const (
 		"until end of transaction block"
 )
 
-// EnforceHomeRegionFurtherInfo is the suffix to append to every error returned
-// due to turning on the enforce_home_region session setting, and provides some
-// information for users or app developers.
-const EnforceHomeRegionFurtherInfo = "For more information, see https://www.cockroachlabs.com/docs/stable/cost-based-optimizer.html#control-whether-queries-are-limited-to-a-single-region"
-
 // NewSchemaChangeOnLockedTableErr creates an error signaling schema
 // change statement is attempted on a table with locked schema.
 func NewSchemaChangeOnLockedTableErr(tableName string) error {
@@ -125,17 +120,6 @@ func NewInvalidSchemaDefinitionError(err error) error {
 // TODO (lucy): Have this take a database name.
 func NewUndefinedSchemaError(name string) error {
 	return pgerror.Newf(pgcode.InvalidSchemaName, "unknown schema %q", name)
-}
-
-// NewCCLRequiredError creates an error for when a CCL feature is used in an OSS
-// binary.
-func NewCCLRequiredError(err error) error {
-	return pgerror.WithCandidateCode(err, pgcode.CCLRequired)
-}
-
-// IsCCLRequiredError returns whether the error is a CCLRequired error.
-func IsCCLRequiredError(err error) bool {
-	return errHasCode(err, pgcode.CCLRequired)
 }
 
 // NewUndefinedDatabaseError creates an error that represents a missing database.

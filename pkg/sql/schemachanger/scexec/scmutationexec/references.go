@@ -179,15 +179,7 @@ func (i *immediateVisitor) UpdateTableBackReferencesInTypes(
 		if err != nil {
 			return err
 		}
-		parent, err := i.getDescriptor(ctx, desc.GetParentID())
-		if err != nil {
-			return err
-		}
-		db, err := catalog.AsDatabaseDescriptor(parent)
-		if err != nil {
-			return err
-		}
-		ids, _, err := tbl.GetAllReferencedTypeIDs(db, func(id descpb.ID) (catalog.TypeDescriptor, error) {
+		ids, _, err := tbl.GetAllReferencedTypeIDs(func(id descpb.ID) (catalog.TypeDescriptor, error) {
 			d, err := i.getDescriptor(ctx, id)
 			if err != nil {
 				return nil, err

@@ -49,7 +49,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catid"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
-	"github.com/cockroachdb/cockroach/pkg/sql/sqltelemetry"
 	"github.com/cockroachdb/cockroach/pkg/sql/stats"
 	"github.com/cockroachdb/cockroach/pkg/storage"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
@@ -169,17 +168,6 @@ func (r *importResumer) Resume(ctx context.Context, execCtx interface{}) error {
 					schemaMetadata)
 				if err != nil {
 					return err
-				}
-
-				// Telemetry for multi-region.
-				for _, table := range preparedDetails.Tables {
-					dbDesc, err := descsCol.ByIDWithLeased(txn.KV()).WithoutNonPublic().Get().Database(ctx, table.Desc.GetParentID())
-					if err != nil {
-						return err
-					}
-					if dbDesc.IsMultiRegion() {
-						telemetry.Inc(sqltelemetry.ImportIntoMultiRegionDatabaseCounter)
-					}
 				}
 
 				// Update the job details now that the schemas and table descs have

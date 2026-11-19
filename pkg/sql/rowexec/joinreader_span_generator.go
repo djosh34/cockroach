@@ -61,7 +61,6 @@ type joinReaderSpanGenerator interface {
 
 var _ joinReaderSpanGenerator = &defaultSpanGenerator{}
 var _ joinReaderSpanGenerator = &multiSpanGenerator{}
-var _ joinReaderSpanGenerator = &localityOptimizedSpanGenerator{}
 
 type resizeMemoryAccountFunc func(_ *mon.BoundAccount, oldSz, newSz int64) error
 
@@ -746,92 +745,4 @@ func (g *multiSpanGenerator) getInequalityBounds(
 func (g *multiSpanGenerator) close(ctx context.Context) {
 	g.memAcc.Close(ctx)
 	*g = multiSpanGenerator{}
-}
-
-// localityOptimizedSpanGenerator is the span generator for locality optimized
-// lookup joins. The localSpanGen is used to generate spans targeting local
-// nodes, and the remoteSpanGen is used to generate spans targeting remote
-// nodes.
-type localityOptimizedSpanGenerator struct {
-	localSpanGen  multiSpanGenerator
-	remoteSpanGen multiSpanGenerator
-	// localSpanGenUsedLast is true if generateSpans() was called more recently
-	// than generateRemoteSpans().
-	localSpanGenUsedLast bool
-}
-
-// init must be called before the localityOptimizedSpanGenerator can be used to
-// generate spans. Note that we use two different span builders so that both
-// local and remote span generators could release their own when they are
-// close()d.
-func (g *localityOptimizedSpanGenerator) init(
-	evalCtx *eval.Context,
-	codec keys.SQLCodec,
-	fetchSpec *fetchpb.IndexFetchSpec,
-	splitFamilyIDs []descpb.FamilyID,
-	numInputCols int,
-	localExprHelper *execinfrapb.ExprHelper,
-	remoteExprHelper *execinfrapb.ExprHelper,
-	fetchedOrdToIndexKeyOrd util.FastIntMap,
-	localSpanGenMemAcc *mon.BoundAccount,
-	remoteSpanGenMemAcc *mon.BoundAccount,
-) (spansCanOverlap bool, err error) {
-	var localSpansCanOverlap, remoteSpansCanOverlap bool
-	if localSpansCanOverlap, err = g.localSpanGen.init(
-		evalCtx, codec, fetchSpec, splitFamilyIDs,
-		numInputCols, localExprHelper, fetchedOrdToIndexKeyOrd, localSpanGenMemAcc,
-	); err != nil {
-		return false, err
-	}
-	if remoteSpansCanOverlap, err = g.remoteSpanGen.init(
-		evalCtx, codec, fetchSpec, splitFamilyIDs,
-		numInputCols, remoteExprHelper, fetchedOrdToIndexKeyOrd, remoteSpanGenMemAcc,
-	); err != nil {
-		return false, err
-	}
-	// Check that the resulting span generators have the same lookup columns.
-	localLookupCols := len(g.localSpanGen.indexColInfos)
-	remoteLookupCols := len(g.remoteSpanGen.indexColInfos)
-	if localLookupCols != remoteLookupCols {
-		return false, errors.AssertionFailedf(
-			"local lookup cols (%d) != remote lookup cols (%d)", localLookupCols, remoteLookupCols,
-		)
-	}
-	return localSpansCanOverlap || remoteSpansCanOverlap, nil
-}
-
-func (g *localityOptimizedSpanGenerator) setResizeMemoryAccountFunc(f resizeMemoryAccountFunc) {
-	g.localSpanGen.setResizeMemoryAccountFunc(f)
-	g.remoteSpanGen.setResizeMemoryAccountFunc(f)
-}
-
-// generateSpans is part of the joinReaderSpanGenerator interface.
-func (g *localityOptimizedSpanGenerator) generateSpans(
-	ctx context.Context, rows []rowenc.EncDatumRow,
-) (roachpb.Spans, []int, error) {
-	g.localSpanGenUsedLast = true
-	return g.localSpanGen.generateSpans(ctx, rows)
-}
-
-// generateRemoteSpans generates spans targeting remote nodes for the given
-// batch of input rows.
-func (g *localityOptimizedSpanGenerator) generateRemoteSpans(
-	ctx context.Context, rows []rowenc.EncDatumRow,
-) (roachpb.Spans, []int, error) {
-	g.localSpanGenUsedLast = false
-	return g.remoteSpanGen.generateSpans(ctx, rows)
-}
-
-// getMatchingRowIndices is part of the joinReaderSpanGenerator interface.
-func (g *localityOptimizedSpanGenerator) getMatchingRowIndices(spanID int) []int {
-	if g.localSpanGenUsedLast {
-		return g.localSpanGen.getMatchingRowIndices(spanID)
-	}
-	return g.remoteSpanGen.getMatchingRowIndices(spanID)
-}
-
-func (g *localityOptimizedSpanGenerator) close(ctx context.Context) {
-	g.localSpanGen.close(ctx)
-	g.remoteSpanGen.close(ctx)
-	*g = localityOptimizedSpanGenerator{}
 }

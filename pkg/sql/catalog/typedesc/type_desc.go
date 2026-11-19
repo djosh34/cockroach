@@ -16,14 +16,12 @@ import (
 	"bytes"
 	"context"
 	"sort"
-	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/keys"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catprivilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/multiregion"
 	"github.com/cockroachdb/cockroach/pkg/sql/enum"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
@@ -40,7 +38,6 @@ import (
 
 var _ catalog.TypeDescriptor = (*immutable)(nil)
 var _ catalog.EnumTypeDescriptor = (*immutable)(nil)
-var _ catalog.RegionEnumTypeDescriptor = (*immutable)(nil)
 var _ catalog.AliasTypeDescriptor = (*immutable)(nil)
 var _ catalog.CompositeTypeDescriptor = (*immutable)(nil)
 var _ catalog.TypeDescriptor = (*Mutable)(nil)
@@ -220,36 +217,6 @@ func (desc *immutable) NewBuilder() catalog.DescriptorBuilder {
 	b := newBuilder(desc.TypeDesc(), hlc.Timestamp{}, desc.IsUncommittedVersion(), desc.changes)
 	b.SetRawBytesInStorage(desc.GetRawBytesInStorage())
 	return b
-}
-
-// PrimaryRegion implements the catalog.RegionEnumTypeDescriptor interface.
-func (desc *immutable) PrimaryRegion() catpb.RegionName {
-	return desc.RegionConfig.PrimaryRegion
-}
-
-// ForEachRegion implements the catalog.RegionEnumTypeDescriptor interface.
-func (desc *immutable) ForEachRegion(
-	f func(name catpb.RegionName, transition descpb.TypeDescriptor_EnumMember_Direction) error,
-) error {
-	for _, member := range desc.EnumMembers {
-		if err := f(catpb.RegionName(member.LogicalRepresentation), member.Direction); err != nil {
-			return iterutil.Map(err)
-		}
-	}
-	return nil
-}
-
-// ForEachPublicRegion implements the catalog.RegionEnumTypeDescriptor interface.
-func (desc *immutable) ForEachPublicRegion(f func(name catpb.RegionName) error) error {
-	for _, member := range desc.EnumMembers {
-		if member.Capability == descpb.TypeDescriptor_EnumMember_READ_ONLY {
-			continue
-		}
-		if err := f(catpb.RegionName(member.LogicalRepresentation)); err != nil {
-			return iterutil.Map(err)
-		}
-	}
-	return nil
 }
 
 // GetAuditMode implements the DescriptorProto interface.
@@ -472,32 +439,10 @@ func (desc *immutable) ValidateSelf(vea catalog.ValidationErrorAccumulator) {
 
 	switch desc.Kind {
 	case descpb.TypeDescriptor_MULTIREGION_ENUM:
-		// Check presence of region config
-		if desc.RegionConfig == nil {
-			vea.Report(errors.AssertionFailedf("no region config on %s type desc", desc.Kind.String()))
-		}
-		if desc.validateEnumMembers(vea) {
-			// In the case of the multi-region enum, we also keep the logical descriptors
-			// sorted. Validate that's the case.
-			for i := 0; i < len(desc.EnumMembers)-1; i++ {
-				if desc.EnumMembers[i].LogicalRepresentation > desc.EnumMembers[i+1].LogicalRepresentation {
-					vea.Report(errors.AssertionFailedf(
-						"multi-region enum is out of order %q > %q",
-						desc.EnumMembers[i].LogicalRepresentation,
-						desc.EnumMembers[i+1].LogicalRepresentation,
-					))
-				}
-			}
-		}
+		vea.Report(errors.New("multi-region enums are unsupported"))
 	case descpb.TypeDescriptor_ENUM:
-		if desc.RegionConfig != nil {
-			vea.Report(errors.AssertionFailedf("found region config on %s type desc", desc.Kind.String()))
-		}
 		desc.validateEnumMembers(vea)
 	case descpb.TypeDescriptor_ALIAS:
-		if desc.RegionConfig != nil {
-			vea.Report(errors.AssertionFailedf("found region config on %s type desc", desc.Kind.String()))
-		}
 		if desc.Alias == nil {
 			vea.Report(errors.AssertionFailedf("ALIAS type desc has nil alias type"))
 		}
@@ -598,10 +543,6 @@ func (desc *immutable) ValidateForwardReferences(
 		}
 	}
 
-	if r := desc.AsRegionEnumTypeDescriptor(); r != nil && dbDesc != nil {
-		validateMultiRegion(r, dbDesc, vea)
-	}
-
 	// Validate that the forward-referenced types exist.
 	if a := desc.AsAliasTypeDescriptor(); a != nil && a.Aliased().UserDefined() {
 		aliasedID := UserDefinedTypeOIDToID(a.Aliased().Oid())
@@ -663,72 +604,6 @@ func (desc *immutable) ValidateBackReferences(
 				desc.GetName(), desc.GetID(), depDesc.DescriptorType(), depDesc.GetName(), depDesc.GetID()))
 		}
 	}
-}
-
-func validateMultiRegion(
-	desc catalog.RegionEnumTypeDescriptor,
-	dbDesc catalog.DatabaseDescriptor,
-	vea catalog.ValidationErrorAccumulator,
-) {
-	// Parent database must be a multi-region database if it includes a
-	// multi-region enum.
-	if !dbDesc.IsMultiRegion() {
-		vea.Report(errors.AssertionFailedf("parent database is not a multi-region database"))
-		return
-	}
-
-	primaryRegion := desc.PrimaryRegion()
-
-	{
-		found := false
-		for i := 0; i < desc.NumEnumMembers(); i++ {
-			if catpb.RegionName(desc.GetMemberLogicalRepresentation(i)) == primaryRegion {
-				found = true
-			}
-		}
-		if !found {
-			vea.Report(
-				errors.AssertionFailedf("primary region %q not found in list of enum members",
-					primaryRegion,
-				))
-		}
-	}
-
-	dbPrimaryRegion, err := dbDesc.PrimaryRegionName()
-	if err != nil {
-		vea.Report(err)
-	}
-	if dbPrimaryRegion != primaryRegion {
-		vea.Report(errors.AssertionFailedf("unexpected primary region on db desc: %q expected %q",
-			dbPrimaryRegion, primaryRegion))
-	}
-
-	var regionNames catpb.RegionNames
-	_ = desc.ForEachPublicRegion(func(name catpb.RegionName) error {
-		regionNames = append(regionNames, name)
-		return nil
-	})
-	if dbDesc.GetRegionConfig().SurvivalGoal == descpb.SurvivalGoal_REGION_FAILURE {
-		if len(regionNames) < 3 {
-			vea.Report(
-				errors.AssertionFailedf(
-					"expected >= 3 regions, got %d: %s",
-					len(regionNames),
-					strings.Join(regionNames.ToStrings(), ","),
-				),
-			)
-		}
-	}
-
-	superRegions := desc.TypeDesc().RegionConfig.SuperRegions
-	multiregion.ValidateSuperRegions(superRegions, dbDesc.GetRegionConfig().SurvivalGoal, regionNames, func(err error) {
-		vea.Report(err)
-	})
-
-	zoneCfgExtensions := desc.TypeDesc().RegionConfig.ZoneConfigExtensions
-	multiregion.ValidateZoneConfigExtensions(regionNames, zoneCfgExtensions, func(err error) {
-		vea.Report(err)
-	})
 }
 
 // ValidateTxnCommit implements the catalog.Descriptor interface.
@@ -982,14 +857,6 @@ func (desc *immutable) AsEnumTypeDescriptor() catalog.EnumTypeDescriptor {
 	return nil
 }
 
-// AsRegionEnumTypeDescriptor implements the catalog.TypeDescriptor interface.
-func (desc *immutable) AsRegionEnumTypeDescriptor() catalog.RegionEnumTypeDescriptor {
-	if desc.Kind == descpb.TypeDescriptor_MULTIREGION_ENUM {
-		return desc
-	}
-	return nil
-}
-
 // AsAliasTypeDescriptor implements the catalog.TypeDescriptor interface.
 func (desc *immutable) AsAliasTypeDescriptor() catalog.AliasTypeDescriptor {
 	if desc.Kind == descpb.TypeDescriptor_ALIAS {
@@ -1030,35 +897,6 @@ func (desc *immutable) GetElementLabel(ordinal int) string {
 // GetElementType implements the catalog.CompositeTypeDescriptor interface.
 func (desc *immutable) GetElementType(ordinal int) *types.T {
 	return desc.Composite.Elements[ordinal].ElementType
-}
-
-// ForEachRegionInSuperRegion implements the catalog.RegionEnumTypeDescriptor
-// interface.
-func (desc *immutable) ForEachRegionInSuperRegion(
-	superRegionName string, f func(region catpb.RegionName) error,
-) error {
-	for _, s := range desc.RegionConfig.SuperRegions {
-		if superRegionName == s.SuperRegionName {
-			for _, r := range s.Regions {
-				if err := f(r); err != nil {
-					return iterutil.Map(err)
-				}
-			}
-			break
-		}
-	}
-	return nil
-}
-
-// ForEachSuperRegion implements the catalog.RegionEnumTypeDescriptor
-// interface.
-func (desc *immutable) ForEachSuperRegion(f func(superRegionName string) error) error {
-	for _, s := range desc.RegionConfig.SuperRegions {
-		if err := f(s.SuperRegionName); err != nil {
-			return iterutil.Map(err)
-		}
-	}
-	return nil
 }
 
 // SetDeclarativeSchemaChangerState is part of the catalog.MutableDescriptor

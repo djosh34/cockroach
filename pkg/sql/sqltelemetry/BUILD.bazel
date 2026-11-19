@@ -12,8 +12,6 @@ go_library(
         "feature_flags.go",
         "iam.go",
         "isolation.go",
-        "multiregion.go",
-        "partitioning.go",
         "pgwire.go",
         "planning.go",
         "reassign_owned_by.go",

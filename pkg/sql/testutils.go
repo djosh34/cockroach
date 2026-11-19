@@ -69,7 +69,6 @@ func CreateTestTableDescriptor(
 			db,
 			schemadesc.GetPublicSchema(),
 			id,
-			nil,             /* regionConfig */
 			hlc.Timestamp{}, /* creationTime */
 			privileges,
 			make(map[descpb.ID]*tabledesc.Mutable),
@@ -90,7 +89,6 @@ func CreateTestTableDescriptor(
 			hlc.Timestamp{}, /* creationTime */
 			privileges,
 			tree.PersistencePermanent,
-			false, /* isMultiRegion */
 		)
 		return desc, err
 	default:

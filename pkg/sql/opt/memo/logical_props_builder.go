@@ -721,12 +721,6 @@ func (b *logicalPropsBuilder) buildExceptAllProps(except *ExceptAllExpr, rel *pr
 	b.buildSetProps(except, rel)
 }
 
-func (b *logicalPropsBuilder) buildLocalityOptimizedSearchProps(
-	locOptSearch *LocalityOptimizedSearchExpr, rel *props.Relational,
-) {
-	b.buildSetProps(locOptSearch, rel)
-}
-
 func (b *logicalPropsBuilder) buildSetProps(setNode RelExpr, rel *props.Relational) {
 	BuildSharedProps(setNode, &rel.Shared, b.evalCtx)
 
@@ -767,7 +761,7 @@ func (b *logicalPropsBuilder) buildSetProps(setNode RelExpr, rel *props.Relation
 	// Functional Dependencies
 	// -----------------------
 	switch op {
-	case opt.UnionOp, opt.UnionAllOp, opt.LocalityOptimizedSearchOp:
+	case opt.UnionOp, opt.UnionAllOp:
 		// If columns at ordinals (i, j) are equivalent in both the left input
 		// and right input, then the output columns at ordinals at (i, j) are
 		// also equivalent.

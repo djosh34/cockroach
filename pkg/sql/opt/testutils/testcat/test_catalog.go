@@ -733,16 +733,6 @@ type Table struct {
 	inboundFKs  []ForeignKeyConstraint
 
 	uniqueConstraints []UniqueConstraint
-
-	// partitionBy is the partitioning clause that corresponds to the primary
-	// index. Used to initialize the partitioning for the primary index.
-	partitionBy *tree.PartitionBy
-
-	multiRegion bool
-
-	implicitRBRIndexElem *tree.IndexElem
-
-	homeRegion string
 }
 
 var _ cat.Table = &Table{}
@@ -751,13 +741,6 @@ func (tt *Table) String() string {
 	tp := treeprinter.New()
 	cat.FormatTable(tt.Catalog, tt, tp, false /* redactableValues */)
 	return tp.String()
-}
-
-// SetMultiRegion can make a table in the test catalog appear to be a
-// multiregion table, in that it can cause cat.Table.IsMultiregion() to return
-// true after SetMultiRegion(true) has been called.
-func (tt *Table) SetMultiRegion(val bool) {
-	tt.multiRegion = val
 }
 
 // ID is part of the cat.DataSource interface.
@@ -900,42 +883,6 @@ func (tt *Table) Zone() cat.Zone {
 	return cat.AsZone(&zone)
 }
 
-// IsPartitionAllBy is part of the cat.Table interface.
-func (tt *Table) IsPartitionAllBy() bool {
-	return tt.implicitRBRIndexElem != nil
-}
-
-// HomeRegion is part of the cat.Table interface.
-func (tt *Table) HomeRegion() (region string, ok bool) {
-	if tt.homeRegion == "" {
-		return "", false
-	}
-	return tt.homeRegion, true
-}
-
-// IsGlobalTable is part of the cat.Table interface.
-func (tt *Table) IsGlobalTable() bool {
-	return false
-}
-
-// IsRegionalByRow is part of the cat.Table interface.
-func (tt *Table) IsRegionalByRow() bool {
-	return tt.implicitRBRIndexElem != nil
-}
-
-// IsMultiregion is part of the cat.Table interface.
-func (tt *Table) IsMultiregion() bool {
-	return tt.multiRegion
-}
-
-// HomeRegionColName is part of the cat.Table interface.
-func (tt *Table) HomeRegionColName() (colName string, ok bool) {
-	if !tt.IsRegionalByRow() {
-		return "", false
-	}
-	return string(tree.RegionalByRowRegionDefaultColName), true
-}
-
 // GetDatabaseID is part of the cat.Table interface.
 func (tt *Table) GetDatabaseID() descpb.ID {
 	return tt.DatabaseID
@@ -1049,10 +996,6 @@ type Index struct {
 	// table is a back reference to the table this index is on.
 	table *Table
 
-	// partitions stores zone information and datums for PARTITION BY LIST
-	// partitions.
-	partitions []Partition
-
 	// predicate is the partial index predicate expression, if it exists.
 	predicate string
 
@@ -1066,10 +1009,6 @@ type Index struct {
 
 	// version is the index descriptor version of the index.
 	version descpb.IndexDescriptorVersion
-
-	// numImplicitPartitioningColumns is the number of implicit partitioning
-	// columns defined in this index.
-	numImplicitPartitioningColumns int
 }
 
 // ID is part of the cat.Index interface.
@@ -1167,12 +1106,7 @@ func (ti *Index) Predicate() (string, bool) {
 
 // ImplicitColumnCount is part of the cat.Index interface.
 func (ti *Index) ImplicitColumnCount() int {
-	return ti.numImplicitPartitioningColumns
-}
-
-// ImplicitPartitioningColumnCount is part of the cat.Index interface.
-func (ti *Index) ImplicitPartitioningColumnCount() int {
-	return ti.numImplicitPartitioningColumns
+	return 0
 }
 
 // GeoConfig is part of the cat.Index interface.
@@ -1183,50 +1117,6 @@ func (ti *Index) GeoConfig() geoindex.Config {
 // Version is part of the cat.Index interface.
 func (ti *Index) Version() descpb.IndexDescriptorVersion {
 	return ti.version
-}
-
-// PartitionCount is part of the cat.Index interface.
-func (ti *Index) PartitionCount() int {
-	return len(ti.partitions)
-}
-
-// Partition is part of the cat.Index interface.
-func (ti *Index) Partition(i int) cat.Partition {
-	return &ti.partitions[i]
-}
-
-// SetPartitions manually sets the partitions.
-func (ti *Index) SetPartitions(partitions []Partition) {
-	ti.partitions = partitions
-}
-
-// Partition implements the cat.Partition interface for testing purposes.
-type Partition struct {
-	name   string
-	zone   cat.Zone
-	datums []tree.Datums
-}
-
-var _ cat.Partition = &Partition{}
-
-// Name is part of the cat.Partition interface.
-func (p *Partition) Name() string {
-	return p.name
-}
-
-// Zone is part of the cat.Partition interface.
-func (p *Partition) Zone() cat.Zone {
-	return p.zone
-}
-
-// PartitionByListPrefixes is part of the cat.Partition interface.
-func (p *Partition) PartitionByListPrefixes() []tree.Datums {
-	return p.datums
-}
-
-// SetDatums manually sets the partitioning values.
-func (p *Partition) SetDatums(datums []tree.Datums) {
-	p.datums = datums
 }
 
 // CheckConstraint implements cat.CheckConstraint. See that interface

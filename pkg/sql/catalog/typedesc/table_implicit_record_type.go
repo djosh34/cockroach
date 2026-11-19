@@ -319,11 +319,6 @@ func (v *tableImplicitRecordType) AsEnumTypeDescriptor() catalog.EnumTypeDescrip
 	return nil
 }
 
-// AsRegionEnumTypeDescriptor implements the catalog.TypeDescriptor interface.
-func (v *tableImplicitRecordType) AsRegionEnumTypeDescriptor() catalog.RegionEnumTypeDescriptor {
-	return nil
-}
-
 // AsAliasTypeDescriptor implements the catalog.TypeDescriptor interface.
 func (v *tableImplicitRecordType) AsAliasTypeDescriptor() catalog.AliasTypeDescriptor {
 	return nil

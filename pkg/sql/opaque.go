@@ -79,28 +79,6 @@ func planOpaque(ctx context.Context, p *planner, stmt tree.Statement) (planNode,
 	switch n := stmt.(type) {
 	case *tree.AlterDatabaseOwner:
 		return p.AlterDatabaseOwner(ctx, n)
-	case *tree.AlterDatabaseAddRegion:
-		return p.AlterDatabaseAddRegion(ctx, n)
-	case *tree.AlterDatabaseDropRegion:
-		return p.AlterDatabaseDropRegion(ctx, n)
-	case *tree.AlterDatabasePrimaryRegion:
-		return p.AlterDatabasePrimaryRegion(ctx, n)
-	case *tree.AlterDatabasePlacement:
-		return p.AlterDatabasePlacement(ctx, n)
-	case *tree.AlterDatabaseSurvivalGoal:
-		return p.AlterDatabaseSurvivalGoal(ctx, n)
-	case *tree.AlterDatabaseAddSuperRegion:
-		return p.AlterDatabaseAddSuperRegion(ctx, n)
-	case *tree.AlterDatabaseDropSuperRegion:
-		return p.AlterDatabaseDropSuperRegion(ctx, n)
-	case *tree.AlterDatabaseAlterSuperRegion:
-		return p.AlterDatabaseAlterSuperRegion(ctx, n)
-	case *tree.AlterDatabaseSecondaryRegion:
-		return p.AlterDatabaseSecondaryRegion(ctx, n)
-	case *tree.AlterDatabaseDropSecondaryRegion:
-		return p.AlterDatabaseDropSecondaryRegion(ctx, n)
-	case *tree.AlterDatabaseSetZoneConfigExtension:
-		return p.AlterDatabaseSetZoneConfigExtension(ctx, n)
 	case *tree.AlterDefaultPrivileges:
 		return p.alterDefaultPrivileges(ctx, n)
 	case *tree.AlterFunctionOptions:
@@ -113,16 +91,12 @@ func planOpaque(ctx context.Context, p *planner, stmt tree.Statement) (planNode,
 		return p.AlterFunctionSetSchema(ctx, n)
 	case *tree.AlterFunctionDepExtension:
 		return p.AlterFunctionDepExtension(ctx, n)
-	case *tree.AlterIndex:
-		return p.AlterIndex(ctx, n)
 	case *tree.AlterIndexVisible:
 		return p.AlterIndexVisible(ctx, n)
 	case *tree.AlterSchema:
 		return p.AlterSchema(ctx, n)
 	case *tree.AlterTable:
 		return p.AlterTable(ctx, n)
-	case *tree.AlterTableLocality:
-		return p.AlterTableLocality(ctx, n)
 	case *tree.AlterTableOwner:
 		return p.AlterTableOwner(ctx, n)
 	case *tree.AlterTableSetSchema:
@@ -295,29 +269,16 @@ func planOpaque(ctx context.Context, p *planner, stmt tree.Statement) (planNode,
 
 func init() {
 	for _, stmt := range []tree.Statement{
-		&tree.AlterDatabaseAddRegion{},
-		&tree.AlterDatabaseDropRegion{},
 		&tree.AlterDatabaseOwner{},
-		&tree.AlterDatabasePrimaryRegion{},
-		&tree.AlterDatabasePlacement{},
-		&tree.AlterDatabaseSurvivalGoal{},
-		&tree.AlterDatabaseAddSuperRegion{},
-		&tree.AlterDatabaseDropSuperRegion{},
-		&tree.AlterDatabaseAlterSuperRegion{},
-		&tree.AlterDatabaseSecondaryRegion{},
-		&tree.AlterDatabaseDropSecondaryRegion{},
-		&tree.AlterDatabaseSetZoneConfigExtension{},
 		&tree.AlterDefaultPrivileges{},
 		&tree.AlterFunctionOptions{},
 		&tree.AlterRoutineRename{},
 		&tree.AlterRoutineSetOwner{},
 		&tree.AlterRoutineSetSchema{},
 		&tree.AlterFunctionDepExtension{},
-		&tree.AlterIndex{},
 		&tree.AlterIndexVisible{},
 		&tree.AlterSchema{},
 		&tree.AlterTable{},
-		&tree.AlterTableLocality{},
 		&tree.AlterTableOwner{},
 		&tree.AlterTableSetSchema{},
 		&tree.AlterTenantCapability{},

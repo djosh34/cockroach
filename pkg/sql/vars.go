@@ -875,25 +875,6 @@ var varGen = map[string]sessionVar{
 	},
 
 	// CockroachDB extension.
-	`locality_optimized_partitioned_index_scan`: {
-		GetStringVal: makePostgresBoolGetStringValFn(`locality_optimized_partitioned_index_scan`),
-		Set: func(_ context.Context, m sessionDataMutator, s string) error {
-			b, err := paramparse.ParseBoolVar(`locality_optimized_partitioned_index_scan`, s)
-			if err != nil {
-				return err
-			}
-			m.SetLocalityOptimizedSearch(b)
-			return nil
-		},
-		Get: func(evalCtx *extendedEvalContext, _ *kv.Txn) (string, error) {
-			return formatBoolAsPostgresSetting(evalCtx.SessionData().LocalityOptimizedSearch), nil
-		},
-		GlobalDefault: func(sv *settings.Values) string {
-			return formatBoolAsPostgresSetting(localityOptimizedSearchMode.Get(sv))
-		},
-	},
-
-	// CockroachDB extension.
 	`enable_implicit_select_for_update`: {
 		GetStringVal: makePostgresBoolGetStringValFn(`enable_implicit_select_for_update`),
 		Set: func(_ context.Context, m sessionDataMutator, s string) error {
@@ -2646,23 +2627,6 @@ var varGen = map[string]sessionVar{
 	},
 
 	// CockroachDB extension.
-	`enforce_home_region`: {
-		GetStringVal: makePostgresBoolGetStringValFn(`enforce_home_region`),
-		Set: func(_ context.Context, m sessionDataMutator, s string) error {
-			b, err := paramparse.ParseBoolVar("enforce_home_region", s)
-			if err != nil {
-				return err
-			}
-			m.SetEnforceHomeRegion(b)
-			return nil
-		},
-		Get: func(evalCtx *extendedEvalContext, _ *kv.Txn) (string, error) {
-			return formatBoolAsPostgresSetting(evalCtx.SessionData().EnforceHomeRegion), nil
-		},
-		GlobalDefault: globalFalse,
-	},
-
-	// CockroachDB extension.
 	`variable_inequality_lookup_join_enabled`: {
 		GetStringVal: makePostgresBoolGetStringValFn(`variable_inequality_lookup_join_enabled`),
 		Set: func(_ context.Context, m sessionDataMutator, s string) error {
@@ -2758,23 +2722,6 @@ var varGen = map[string]sessionVar{
 			return formatBoolAsPostgresSetting(evalCtx.SessionData().OptimizerUseImprovedSplitDisjunctionForJoins), nil
 		},
 		GlobalDefault: globalTrue,
-	},
-
-	// CockroachDB extension.
-	`enforce_home_region_follower_reads_enabled`: {
-		GetStringVal: makePostgresBoolGetStringValFn(`enforce_home_region_follower_reads_enabled`),
-		Set: func(_ context.Context, m sessionDataMutator, s string) error {
-			b, err := paramparse.ParseBoolVar("enforce_home_region_follower_reads_enabled", s)
-			if err != nil {
-				return err
-			}
-			m.SetEnforceHomeRegionFollowerReadsEnabled(b)
-			return nil
-		},
-		Get: func(evalCtx *extendedEvalContext, _ *kv.Txn) (string, error) {
-			return formatBoolAsPostgresSetting(evalCtx.SessionData().EnforceHomeRegionFollowerReadsEnabled), nil
-		},
-		GlobalDefault: globalFalse,
 	},
 
 	// CockroachDB extension.

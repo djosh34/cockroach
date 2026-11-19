@@ -339,23 +339,13 @@ func ForEachExprStringInTableDesc(descI catalog.TableDescriptor, f func(expr *st
 
 // GetAllReferencedTypeIDs implements the TableDescriptor interface.
 func (desc *wrapper) GetAllReferencedTypeIDs(
-	dbDesc catalog.DatabaseDescriptor, getType func(descpb.ID) (catalog.TypeDescriptor, error),
+	getType func(descpb.ID) (catalog.TypeDescriptor, error),
 ) (referencedAnywhere, referencedInColumns descpb.IDs, _ error) {
 	ids, err := desc.getAllReferencedTypesInTableColumns(getType)
 	if err != nil {
 		return nil, nil, err
 	}
 	referencedInColumns = ids.Ordered()
-
-	// REGIONAL BY TABLE tables may have a dependency with the multi-region enum.
-	exists := desc.GetMultiRegionEnumDependencyIfExists()
-	if exists {
-		regionEnumID, err := dbDesc.MultiRegionEnumID()
-		if err != nil {
-			return nil, nil, err
-		}
-		ids.Add(regionEnumID)
-	}
 
 	// Add any other type dependencies that are not
 	// used in a column (specifically for views).
@@ -436,11 +426,6 @@ func (desc *wrapper) GetAllReferencedFunctionIDsInColumnExprs(
 // GetAllReferencedTypeIDs when constructing the list of type descriptor IDs
 // referenced by a table -- being used by a column is a sufficient but not
 // necessary condition for a table to reference a type.
-// One example of a table having a type descriptor dependency but no column to
-// show for it is a REGIONAL BY TABLE table (homed in the non-primary region).
-// These use a value from the multi-region enum to denote the homing region, but
-// do so in the locality config as opposed to through a column.
-// GetAllReferencedTypesByID accounts for this dependency.
 func (desc *wrapper) getAllReferencedTypesInTableColumns(
 	getType func(descpb.ID) (catalog.TypeDescriptor, error),
 ) (ret catalog.DescriptorIDSet, _ error) {
@@ -2318,46 +2303,6 @@ func (desc *Mutable) SetOffline(reason string) {
 	desc.OfflineReason = reason
 }
 
-// IsLocalityRegionalByRow implements the TableDescriptor interface.
-func (desc *wrapper) IsLocalityRegionalByRow() bool {
-	return desc.LocalityConfig.GetRegionalByRow() != nil
-}
-
-// IsLocalityRegionalByTable returns whether or not the table is REGIONAL BY
-// TABLE table.
-func (desc *wrapper) IsLocalityRegionalByTable() bool {
-	return desc.LocalityConfig.GetRegionalByTable() != nil
-}
-
-// IsLocalityGlobal returns whether or not the table is GLOBAL table.
-func (desc *wrapper) IsLocalityGlobal() bool {
-	return desc.LocalityConfig.GetGlobal() != nil
-}
-
-// GetRegionalByTableRegion implements the TableDescriptor interface.
-func (desc *wrapper) GetRegionalByTableRegion() (catpb.RegionName, error) {
-	if !desc.IsLocalityRegionalByTable() {
-		return "", errors.AssertionFailedf("%s is not REGIONAL BY TABLE", desc.Name)
-	}
-	region := desc.LocalityConfig.GetRegionalByTable().Region
-	if region == nil {
-		return catpb.RegionName(tree.PrimaryRegionNotSpecifiedName), nil
-	}
-	return *region, nil
-}
-
-// GetRegionalByRowTableRegionColumnName implements the TableDescriptor interface.
-func (desc *wrapper) GetRegionalByRowTableRegionColumnName() (tree.Name, error) {
-	if !desc.IsLocalityRegionalByRow() {
-		return "", errors.AssertionFailedf("%q is not a REGIONAL BY ROW table", desc.Name)
-	}
-	colName := desc.LocalityConfig.GetRegionalByRow().As
-	if colName == nil {
-		return tree.RegionalByRowRegionDefaultColName, nil
-	}
-	return tree.Name(*colName), nil
-}
-
 // GetRowLevelTTL implements the TableDescriptor interface.
 func (desc *wrapper) GetRowLevelTTL() *catpb.RowLevelTTL {
 	return desc.RowLevelTTL
@@ -2453,21 +2398,6 @@ func (desc *wrapper) GetStorageParams(spaceBetweenEqual bool) []string {
 	return storageParams
 }
 
-// GetMultiRegionEnumDependency returns true if the given table has an "implicit"
-// dependency on the multi-region enum. An implicit dependency exists for
-// REGIONAL BY TABLE table's which are homed in an explicit region
-// (i.e non-primary region). Even though these tables don't have a column
-// denoting their locality, their region config uses a value from the
-// multi-region enum. As such, any drop validation or locality switches must
-// honor this implicit dependency.
-func (desc *wrapper) GetMultiRegionEnumDependencyIfExists() bool {
-	if desc.IsLocalityRegionalByTable() {
-		regionName, _ := desc.GetRegionalByTableRegion()
-		return regionName != catpb.RegionName(tree.PrimaryRegionNotSpecifiedName)
-	}
-	return false
-}
-
 // NoAutoStatsSettingsOverrides implements the TableDescriptor interface.
 func (desc *wrapper) NoAutoStatsSettingsOverrides() bool {
 	if desc.AutoStatsSettings == nil {
@@ -2529,77 +2459,10 @@ func (desc *wrapper) HistogramBucketsCount() (histogramBucketsCount uint32, ok b
 	return *desc.HistogramBuckets, true
 }
 
-// SetTableLocalityRegionalByTable sets the descriptor's locality config to
-// regional at the table level in the supplied region. An empty region name
-// (or its alias PrimaryRegionNotSpecifiedName) denotes that the table is homed in
-// the primary region.
-// SetTableLocalityRegionalByTable doesn't account for the locality config that
-// was previously set on the descriptor. Instead, you may want to use:
-// (planner) alterTableDescLocalityToRegionalByTable.
-func (desc *Mutable) SetTableLocalityRegionalByTable(region tree.Name) {
-	lc := LocalityConfigRegionalByTable(region)
-	desc.LocalityConfig = &lc
-}
-
-// LocalityConfigRegionalByTable returns a config for a REGIONAL BY TABLE table.
-func LocalityConfigRegionalByTable(region tree.Name) catpb.LocalityConfig {
-	l := &catpb.LocalityConfig_RegionalByTable_{
-		RegionalByTable: &catpb.LocalityConfig_RegionalByTable{},
-	}
-	if region != tree.PrimaryRegionNotSpecifiedName {
-		regionName := catpb.RegionName(region)
-		l.RegionalByTable.Region = &regionName
-	}
-	return catpb.LocalityConfig{Locality: l}
-}
-
-// SetTableLocalityRegionalByRow sets the descriptor's locality config to
-// regional at the row level. An empty regionColName denotes the default
-// crdb_region partitioning column.
-// SetTableLocalityRegionalByRow doesn't account for the locality config that
-// was previously set on the descriptor, and the dependency unlinking that it
-// entails.
-func (desc *Mutable) SetTableLocalityRegionalByRow(regionColName tree.Name) {
-	lc := LocalityConfigRegionalByRow(regionColName)
-	desc.LocalityConfig = &lc
-}
-
-// LocalityConfigRegionalByRow returns a config for a REGIONAL BY ROW table.
-func LocalityConfigRegionalByRow(regionColName tree.Name) catpb.LocalityConfig {
-	rbr := &catpb.LocalityConfig_RegionalByRow{}
-	if regionColName != tree.RegionalByRowRegionNotSpecifiedName {
-		rbr.As = (*string)(&regionColName)
-	}
-	return catpb.LocalityConfig{
-		Locality: &catpb.LocalityConfig_RegionalByRow_{
-			RegionalByRow: rbr,
-		},
-	}
-}
-
-// SetTableLocalityGlobal sets the descriptor's locality config to a global
-// table.
-// SetLocalityGlobal doesn't account for the locality config that was previously
-// set on the descriptor. Instead, you may want to use
-// (planner) alterTableDescLocalityToGlobal.
-func (desc *Mutable) SetTableLocalityGlobal() {
-	lc := LocalityConfigGlobal()
-	desc.LocalityConfig = &lc
-}
-
 // SetDeclarativeSchemaChangerState is part of the catalog.MutableDescriptor
 // interface.
 func (desc *Mutable) SetDeclarativeSchemaChangerState(state *scpb.DescriptorState) {
 	desc.DeclarativeSchemaChangerState = state
-}
-
-// LocalityConfigGlobal returns a config for a GLOBAL table.
-func LocalityConfigGlobal() catpb.LocalityConfig {
-	return catpb.LocalityConfig{
-		Locality: &catpb.LocalityConfig_Global_{
-			Global: &catpb.LocalityConfig_Global{},
-		},
-	}
 }
 
 // PrimaryKeyIndexName returns an appropriate PrimaryKey index name for the

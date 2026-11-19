@@ -295,7 +295,7 @@ func (cb *cascadeBuilder) planCascade(
 	// 5. Execbuild the optimized expression.
 	eb := New(
 		ctx, execFactory, &o, factory.Memo(), cb.b.catalog, optimizedExpr,
-		semaCtx, evalCtx, allowAutoCommit, evalCtx.Planner.IsANSIDML(),
+		semaCtx, evalCtx, allowAutoCommit,
 	)
 	if bufferRef != nil {
 		// Set up the With binding.

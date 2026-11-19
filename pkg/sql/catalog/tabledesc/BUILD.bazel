@@ -36,7 +36,6 @@ go_library(
         "//pkg/sql/catalog/fetchpb",
         "//pkg/sql/catalog/funcdesc",
         "//pkg/sql/catalog/internal/validate",
-        "//pkg/sql/catalog/multiregion",
         "//pkg/sql/catalog/schemaexpr",
         "//pkg/sql/catalog/seqexpr",
         "//pkg/sql/catalog/typedesc",

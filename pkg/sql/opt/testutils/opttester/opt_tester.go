@@ -588,7 +588,6 @@ func (ot *OptTester) RunCommand(tb testing.TB, d *datadriven.TestData) string {
 
 	ot.evalCtx.TestingKnobs.OptimizerCostPerturbation = ot.Flags.PerturbCost
 	ot.evalCtx.Locality = ot.Flags.Locality
-	ot.evalCtx.OriginalLocality = ot.Flags.Locality
 	ot.evalCtx.Placeholders = nil
 	ot.evalCtx.TxnIsoLevel = ot.Flags.TxnIsoLevel
 
@@ -2306,7 +2305,7 @@ func (ot *OptTester) optimizeExpr(
 		return nil, err
 	}
 	if tables != nil {
-		o.Memo().Metadata().UpdateTableMeta(&ot.evalCtx, tables)
+		o.Memo().Metadata().UpdateTableMeta(tables)
 	}
 	root, err := o.Optimize()
 	if err != nil {
@@ -2363,7 +2362,7 @@ func (ot *OptTester) ExecBuild(f exec.Factory, mem *memo.Memo, expr opt.Expr) (e
 	}
 	bld := execbuilder.New(
 		context.Background(), f, ot.makeOptimizer(), mem, ot.catalog, expr,
-		&ot.semaCtx, &ot.evalCtx, true /* allowAutoCommit */, false, /* isANSIDML */
+		&ot.semaCtx, &ot.evalCtx, true, /* allowAutoCommit */
 	)
 	return bld.Build()
 }

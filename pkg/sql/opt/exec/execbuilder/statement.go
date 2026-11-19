@@ -166,7 +166,7 @@ func (b *Builder) buildExplain(explainExpr *memo.ExplainExpr) (execPlan, error) 
 
 			explainBld := New(
 				b.ctx, ef, b.optimizer, b.mem, b.catalog, explainExpr.Input,
-				b.semaCtx, b.evalCtx, b.initialAllowAutoCommit, b.IsANSIDML,
+				b.semaCtx, b.evalCtx, b.initialAllowAutoCommit,
 			)
 			explainBld.disableTelemetry = true
 			plan, err := explainBld.Build()

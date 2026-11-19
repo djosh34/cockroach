@@ -19,7 +19,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catprivilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/multiregion"
 	"github.com/cockroachdb/cockroach/pkg/sql/privilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/schemachanger/scpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
@@ -312,24 +311,6 @@ func (ddb *databaseDescriptorBuilder) BuildCreatedMutableDatabase() *Mutable {
 
 // NewInitialOption is an optional argument for NewInitial.
 type NewInitialOption func(*descpb.DatabaseDescriptor)
-
-// MaybeWithDatabaseRegionConfig is an option allowing an optional regional
-// configuration to be set on the database descriptor.
-func MaybeWithDatabaseRegionConfig(regionConfig *multiregion.RegionConfig) NewInitialOption {
-	return func(desc *descpb.DatabaseDescriptor) {
-		// Not a multi-region database. Not much to do here.
-		if regionConfig == nil {
-			return
-		}
-		desc.RegionConfig = &descpb.DatabaseDescriptor_RegionConfig{
-			SurvivalGoal:    regionConfig.SurvivalGoal(),
-			PrimaryRegion:   regionConfig.PrimaryRegion(),
-			RegionEnumID:    regionConfig.RegionEnumID(),
-			Placement:       regionConfig.Placement(),
-			SecondaryRegion: regionConfig.SecondaryRegion(),
-		}
-	}
-}
 
 // WithPublicSchemaID is used to create a DatabaseDescriptor with a
 // publicSchemaID.

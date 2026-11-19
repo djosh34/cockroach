@@ -273,8 +273,6 @@ var zipInternalTablesPerCluster = DebugZipTableRegistry{
 			"descriptor_type",
 			"state",
 			"validate_statements",
-			"has_partitions",
-			"is_multi_region",
 			"is_virtual",
 			"is_temporary",
 			"crdb_internal.hide_sql_constants(create_statement) as create_statement",
@@ -435,26 +433,6 @@ var zipInternalTablesPerCluster = DebugZipTableRegistry{
 			"properties",
 		},
 	},
-	"crdb_internal.partitions": {
-		// `list_value` and `range_value` columns contain PARTITION BY
-		// statements, which contain partition constants.
-		nonSensitiveCols: NonSensitiveColumns{
-			"table_id",
-			"index_id",
-			"parent_name",
-			"name",
-			"columns",
-			"column_names",
-			"zone_id",
-			"subzone_id",
-		},
-	},
-	"crdb_internal.regions": {
-		nonSensitiveCols: NonSensitiveColumns{
-			"region",
-			"zones",
-		},
-	},
 	"crdb_internal.schema_changes": {
 		nonSensitiveCols: NonSensitiveColumns{
 			"table_id",
@@ -465,14 +443,6 @@ var zipInternalTablesPerCluster = DebugZipTableRegistry{
 			"target_name",
 			"state",
 			"direction",
-		},
-	},
-	"crdb_internal.super_regions": {
-		nonSensitiveCols: NonSensitiveColumns{
-			"id",
-			"database_name",
-			"super_region_name",
-			"regions",
 		},
 	},
 	"crdb_internal.kv_protected_ts_records": {

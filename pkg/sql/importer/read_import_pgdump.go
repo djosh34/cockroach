@@ -333,8 +333,6 @@ func createPostgresSequences(
 			hlc.Timestamp{WallTime: walltime},
 			catpb.NewBasePrivilegeDescriptor(owner),
 			tree.PersistencePermanent,
-			// If this is multi-region, this will get added by WriteDescriptors.
-			false, /* isMultiRegion */
 		)
 		if err != nil {
 			return nil, err
@@ -644,12 +642,11 @@ func readPostgresStmt(
 			break
 		}
 		var idx tree.TableDef = &tree.IndexTableDef{
-			Name:             stmt.Name,
-			Columns:          stmt.Columns,
-			Storing:          stmt.Storing,
-			Inverted:         stmt.Inverted,
-			PartitionByIndex: stmt.PartitionByIndex,
-			StorageParams:    stmt.StorageParams,
+			Name:          stmt.Name,
+			Columns:       stmt.Columns,
+			Storing:       stmt.Storing,
+			Inverted:      stmt.Inverted,
+			StorageParams: stmt.StorageParams,
 			// Postgres doesn't support NotVisible Index, so NotVisible is not populated here.
 		}
 		if stmt.Unique {

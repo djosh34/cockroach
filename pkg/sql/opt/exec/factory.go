@@ -123,11 +123,6 @@ type ScanParams struct {
 	Locking opt.Locking
 
 	EstimatedRowCount float64
-
-	// If true, we are performing a locality optimized search. In order for this
-	// to work correctly, the execution engine must create a local DistSQL plan
-	// for the main query (subqueries and postqueries need not be local).
-	LocalityOptimized bool
 }
 
 // OutputOrdering indicates the required output ordering on a Node that is being

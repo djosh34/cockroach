@@ -18,9 +18,6 @@ type ZoneSpecifier struct {
 	// TODO(radu): TableOrIndex abuses TableIndexName: it allows for the case when
 	// an index is not specified, in which case TableOrIndex.Index is empty.
 	TableOrIndex TableIndexName
-
-	// Partition is only respected when Table is set.
-	Partition Name
 }
 
 // TelemetryName returns a name fitting for telemetry purposes.
@@ -31,16 +28,10 @@ func (node ZoneSpecifier) TelemetryName() string {
 	if node.Database != "" {
 		return "database"
 	}
-	str := ""
-	if node.Partition != "" {
-		str = "partition."
-	}
 	if node.TargetsIndex() {
-		str += "index"
-	} else {
-		str += "table"
+		return "index"
 	}
-	return str
+	return "table"
 }
 
 // TargetsTable returns whether the zone specifier targets a table or a subzone
@@ -54,11 +45,6 @@ func (node ZoneSpecifier) TargetsIndex() bool {
 	return node.TargetsTable() && node.TableOrIndex.Index != ""
 }
 
-// TargetsPartition returns whether the zone specifier targets a partition.
-func (node ZoneSpecifier) TargetsPartition() bool {
-	return node.TargetsTable() && node.Partition != ""
-}
-
 // Format implements the NodeFormatter interface.
 func (node *ZoneSpecifier) Format(ctx *FmtCtx) {
 	if node.NamedZone != "" {
@@ -68,11 +54,6 @@ func (node *ZoneSpecifier) Format(ctx *FmtCtx) {
 		ctx.WriteString("DATABASE ")
 		ctx.FormatNode(&node.Database)
 	} else {
-		if node.Partition != "" {
-			ctx.WriteString("PARTITION ")
-			ctx.FormatNode(&node.Partition)
-			ctx.WriteString(" OF ")
-		}
 		if node.TargetsIndex() {
 			ctx.WriteString("INDEX ")
 		} else {

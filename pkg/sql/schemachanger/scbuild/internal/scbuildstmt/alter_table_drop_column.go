@@ -32,9 +32,7 @@ func alterTableDropColumn(
 	b BuildCtx, tn *tree.TableName, tbl *scpb.Table, n *tree.AlterTableDropColumn,
 ) {
 	fallBackIfSubZoneConfigExists(b, n, tbl.TableID)
-	fallBackIfRegionalByRowTable(b, n, tbl.TableID)
 	checkSafeUpdatesForDropColumn(b)
-	checkRegionalByRowColumnConflict(b, tbl, n)
 	// Version gates functionally that is implemented after the statement is
 	// publicly published.
 	fallbackIfAddColDropColAlterPKInOneAlterTableStmtBeforeV232(b, tbl.TableID, n)
@@ -115,36 +113,6 @@ func checkRowLevelTTLColumn(
 			))
 		}
 	}
-}
-
-func checkRegionalByRowColumnConflict(b BuildCtx, tbl *scpb.Table, n *tree.AlterTableDropColumn) {
-	var regionalByRow *scpb.TableLocalityRegionalByRow
-	// TODO(ajwerner): Does this need to look at status or target status?
-	scpb.ForEachTableLocalityRegionalByRow(b.QueryByID(tbl.TableID), func(
-		_ scpb.Status, _ scpb.TargetStatus, e *scpb.TableLocalityRegionalByRow,
-	) {
-		regionalByRow = e
-	})
-	if regionalByRow == nil {
-		return
-	}
-	rbrColName := tree.RegionalByRowRegionDefaultColName
-	if regionalByRow.As != "" {
-		rbrColName = tree.Name(regionalByRow.As)
-	}
-	if rbrColName == n.Column {
-		panic(errors.WithHintf(
-			pgerror.Newf(
-				pgcode.InvalidColumnReference,
-				"cannot drop column %s as it is used to store the region in a REGIONAL BY ROW table",
-				n.Column,
-			),
-			"You must change the table locality before dropping this table or alter the table to use a different column to use for the region.",
-		))
-	}
-	// TODO(ajwerner): Support dropping a column of a REGIONAL BY ROW table.
-	panic(scerrors.NotImplementedErrorf(n,
-		"regional by row partitioning is not supported"))
 }
 
 func resolveColumnForDropColumn(

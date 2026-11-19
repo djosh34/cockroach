@@ -367,11 +367,6 @@ var OnlyNoDropDDLs = simpleOption("only DDLs", func(s *Smither) {
 	)
 })
 
-// MultiRegionDDLs causes the Smither to enable multiregion features.
-var MultiRegionDDLs = simpleOption("include multiregion DDLs", func(s *Smither) {
-	s.alterWeights = append(s.alterWeights, alterMultiregion...)
-})
-
 // EnableAlters enables ALTER statements.
 var EnableAlters = simpleOption("include ALTER statements", func(s *Smither) {
 	s.stmtWeights = append(s.stmtWeights, statementWeight{1, makeAlter})

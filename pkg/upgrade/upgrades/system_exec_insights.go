@@ -15,7 +15,6 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/systemschema"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/upgrade"
 )
 
@@ -23,10 +22,10 @@ import (
 func systemExecInsightsTableMigration(
 	ctx context.Context, _ clusterversion.ClusterVersion, d upgrade.TenantDeps,
 ) error {
-	if err := createSystemTable(ctx, d.DB, d.Settings, d.Codec, systemschema.TransactionExecInsightsTable, tree.LocalityLevelTable); err != nil {
+	if err := createSystemTable(ctx, d.DB, d.Settings, d.Codec, systemschema.TransactionExecInsightsTable); err != nil {
 		return err
 	}
-	if err := createSystemTable(ctx, d.DB, d.Settings, d.Codec, systemschema.StatementExecInsightsTable, tree.LocalityLevelTable); err != nil {
+	if err := createSystemTable(ctx, d.DB, d.Settings, d.Codec, systemschema.StatementExecInsightsTable); err != nil {
 		return err
 	}
 	return nil

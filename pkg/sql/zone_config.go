@@ -12,7 +12,6 @@ package sql
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
 	"github.com/cockroachdb/cockroach/pkg/config"
@@ -24,7 +23,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/resolver"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/tabledesc"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/zone"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
@@ -209,7 +207,6 @@ func GetZoneConfigInTxn(
 	descriptors *descs.Collection,
 	id descpb.ID,
 	index catalog.Index,
-	partition string,
 	getInheritedDefault bool,
 ) (descpb.ID, *zonepb.ZoneConfig, *zonepb.Subzone, error) {
 	zcHelper := descs.AsZoneConfigHydrationHelper(descriptors)
@@ -226,18 +223,12 @@ func GetZoneConfigInTxn(
 	if index != nil {
 		indexID := uint32(index.GetID())
 		if placeholder != nil {
-			if subzone = placeholder.GetSubzone(indexID, partition); subzone != nil {
-				if indexSubzone := placeholder.GetSubzone(indexID, ""); indexSubzone != nil {
-					subzone.Config.InheritFromParent(&indexSubzone.Config)
-				}
+			if subzone = placeholder.GetSubzone(indexID, ""); subzone != nil {
 				subzone.Config.InheritFromParent(zone)
 				return placeholderID, placeholder, subzone, nil
 			}
 		} else {
-			if subzone = zone.GetSubzone(indexID, partition); subzone != nil {
-				if indexSubzone := zone.GetSubzone(indexID, ""); indexSubzone != nil {
-					subzone.Config.InheritFromParent(&indexSubzone.Config)
-				}
+			if subzone = zone.GetSubzone(indexID, ""); subzone != nil {
 				subzone.Config.InheritFromParent(zone)
 			}
 		}
@@ -434,91 +425,9 @@ func resolveZone(
 	return descpb.ID(id), nil
 }
 
-func resolveSubzone(
-	zs *tree.ZoneSpecifier, table catalog.TableDescriptor,
-) (catalog.Index, string, error) {
-	if !zs.TargetsTable() || zs.TableOrIndex.Index == "" && zs.Partition == "" {
-		return nil, "", nil
-	}
-
-	indexName := string(zs.TableOrIndex.Index)
-	var index catalog.Index
-	if indexName == "" {
-		index = table.GetPrimaryIndex()
-		indexName = index.GetName()
-	} else {
-		var err error
-		index, err = catalog.MustFindIndexByName(table, indexName)
-		if err != nil {
-			return nil, "", err
-		}
-	}
-
-	partitionName := string(zs.Partition)
-	if partitionName != "" {
-		if index.GetPartitioning().FindPartitionByName(partitionName) == nil {
-			return nil, "", fmt.Errorf("partition %q does not exist on index %q", partitionName, indexName)
-		}
-	}
-
-	return index, partitionName, nil
-}
-
-func prepareRemovedPartitionZoneConfigs(
-	ctx context.Context,
-	txn descs.Txn,
-	tableDesc catalog.TableDescriptor,
-	indexID descpb.IndexID,
-	oldPart catalog.Partitioning,
-	newPart catalog.Partitioning,
-	execCfg *ExecutorConfig,
-) (*zoneConfigUpdate, error) {
-	newNames := map[string]struct{}{}
-	_ = newPart.ForEachPartitionName(func(newName string) error {
-		newNames[newName] = struct{}{}
-		return nil
-	})
-	removedNames := make([]string, 0, len(newNames))
-	_ = oldPart.ForEachPartitionName(func(oldName string) error {
-		if _, exists := newNames[oldName]; !exists {
-			removedNames = append(removedNames, oldName)
-		}
-		return nil
-	})
-	if len(removedNames) == 0 {
+func resolveSubzone(zs *tree.ZoneSpecifier, table catalog.TableDescriptor) (catalog.Index, error) {
+	if !zs.TargetsTable() || zs.TableOrIndex.Index == "" {
 		return nil, nil
 	}
-	zoneWithRaw, err := txn.Descriptors().GetZoneConfig(ctx, txn.KV(), tableDesc.GetID())
-	if err != nil {
-		return nil, err
-	}
-	if zoneWithRaw == nil {
-		zoneWithRaw = zone.NewZoneConfigWithRawBytes(zonepb.NewZoneConfig(), nil)
-	}
-	for _, n := range removedNames {
-		zoneWithRaw.ZoneConfigProto().DeleteSubzone(uint32(indexID), n)
-	}
-	return prepareZoneConfigWrites(
-		ctx, execCfg, tableDesc.GetID(), tableDesc, zoneWithRaw.ZoneConfigProto(), zoneWithRaw.GetRawBytesInStorage(), false, /* hasNewSubzones */
-	)
-}
-
-func deleteRemovedPartitionZoneConfigs(
-	ctx context.Context,
-	txn descs.Txn,
-	tableDesc catalog.TableDescriptor,
-	indexID descpb.IndexID,
-	oldPart catalog.Partitioning,
-	newPart catalog.Partitioning,
-	execCfg *ExecutorConfig,
-	kvTrace bool,
-) error {
-	update, err := prepareRemovedPartitionZoneConfigs(
-		ctx, txn, tableDesc, indexID, oldPart, newPart, execCfg,
-	)
-	if update == nil || err != nil {
-		return err
-	}
-	_, err = writeZoneConfigUpdate(ctx, txn, kvTrace, update)
-	return err
+	return catalog.MustFindIndexByName(table, string(zs.TableOrIndex.Index))
 }

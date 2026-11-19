@@ -86,21 +86,6 @@ type unionNode struct {
 	// inputs are already ordered according to streamingOrdering, and reqOrdering
 	// is a prefix of streamingOrdering.
 	reqOrdering ReqOrdering
-
-	// hardLimit can only be set for UNION ALL operations. It is used to implement
-	// locality optimized search, and instructs the execution engine that it
-	// should execute the left node to completion and possibly short-circuit if
-	// the limit is reached before executing the right node. The limit is
-	// guaranteed but the short-circuit behavior is not.
-	hardLimit uint64
-
-	// enforceHomeRegion is true if this UNION ALL is a locality-optimized search
-	// and the session setting `enforce_home_region` is true, indicating the
-	// operation should error out if the query cannot be satisfied by accessing
-	// only rows in the local region. The left branch of the UNION ALL is set up
-	// to only read rows in the local region when this flag is true, and the
-	// right branch reads rows in remote regions.
-	enforceHomeRegion bool
 }
 
 func (p *planner) newUnionNode(
@@ -109,8 +94,6 @@ func (p *planner) newUnionNode(
 	left, right planNode,
 	streamingOrdering colinfo.ColumnOrdering,
 	reqOrdering ReqOrdering,
-	hardLimit uint64,
-	enforceHomeRegion bool,
 ) (planNode, error) {
 	emitAll := false
 	switch typ {
@@ -170,8 +153,6 @@ func (p *planner) newUnionNode(
 		all:               all,
 		streamingOrdering: streamingOrdering,
 		reqOrdering:       reqOrdering,
-		hardLimit:         hardLimit,
-		enforceHomeRegion: enforceHomeRegion,
 	}
 	return node, nil
 }

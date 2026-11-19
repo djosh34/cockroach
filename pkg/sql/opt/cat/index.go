@@ -163,32 +163,21 @@ type Index interface {
 	Span() roachpb.Span
 
 	// ImplicitColumnCount returns the number of implicit columns at the front of
-	// the index including implicit partitioning columns and shard columns of hash
-	// sharded indexes. For example, consider the following table:
+	// the index, which are the shard columns of hash sharded indexes. For
+	// example, consider the following table:
 	//
 	// CREATE TABLE t (
-	//   x INT,
 	//   y INT,
 	//   z INT,
-	//   INDEX (y),
 	//   INDEX (z) USING HASH
-	// ) PARTITION ALL BY LIST (x) (
-	//   PARTITION p1 VALUES IN (1)
 	// );
 	//
-	// In this case, the number of implicit columns in the index on y is 1, since
-	// x is implicitly added to the front of the index. The number of implicit
-	// columns in the index on z is 2, since x and a shard column are implicitly
-	// added to the front of the index.
+	// In this case, the number of implicit columns in the index on z is 1, since
+	// a shard column is implicitly added to the front of the index.
 	//
-	// The implicit partitioning columns are always a prefix of the full column
-	// list, and ImplicitColumnCount < LaxKeyColumnCount.
+	// The implicit columns are always a prefix of the full column list, and
+	// ImplicitColumnCount < LaxKeyColumnCount.
 	ImplicitColumnCount() int
-
-	// ImplicitPartitioningColumnCount returns the number of implicit columns at
-	// the front of the index that are implicit partitioning columns. The value
-	// returned is always <= ImplicitColumnCount.
-	ImplicitPartitioningColumnCount() int
 
 	// GeoConfig returns a geospatial index configuration. If not empty, it
 	// describes the configuration for this geospatial inverted index.
@@ -196,14 +185,6 @@ type Index interface {
 
 	// Version returns the IndexDescriptorVersion of the index.
 	Version() descpb.IndexDescriptorVersion
-
-	// PartitionCount returns the number of PARTITION BY LIST partitions defined
-	// on this index.
-	PartitionCount() int
-
-	// Partition returns the ith PARTITION BY LIST partition within the index
-	// definition, where i < PartitionCount.
-	Partition(i int) Partition
 }
 
 // IndexColumn describes a single column that is part of an index definition.
@@ -221,62 +202,4 @@ type IndexColumn struct {
 // the given ordinal position is a mutation index.
 func IsMutationIndex(table Table, ord IndexOrdinal) bool {
 	return ord >= table.IndexCount()
-}
-
-// Partition is an interface to a PARTITION BY LIST partition of an index. The
-// intended use is to support planning of scans or lookup joins that will use
-// locality optimized search. Locality optimized search can be planned when the
-// maximum number of rows returned by a scan or lookup join is known, but the
-// specific region in which the rows are located is unknown. In this case, the
-// optimizer will plan a scan or lookup join in which local nodes (i.e., nodes
-// in the gateway region) are searched for matching rows before remote nodes, in
-// the hope that the execution engine can avoid visiting remote nodes.
-type Partition interface {
-	// Name is the name of this partition.
-	Name() string
-
-	// Zone returns the zone which constrains placement of this partition's
-	// replicas. If this partition does not have an associated zone, the returned
-	// zone is empty, but non-nil.
-	Zone() Zone
-
-	// PartitionByListPrefixes returns the values of this partition. Specifically,
-	// it returns a list of tuples where each tuple contains values for a prefix
-	// of index columns (indicating the region of the index covered by this
-	// partition).
-	//
-	// Example:
-	//
-	// CREATE INDEX idx ON t(region,subregion,val) PARTITION BY LIST (region,subregion) (
-	//     PARTITION westcoast VALUES IN (('us', 'seattle'), ('us', 'cali')),
-	//     PARTITION us VALUES IN (('us', DEFAULT)),
-	//     PARTITION eu VALUES IN (('eu', DEFAULT)),
-	//     PARTITION default VALUES IN (DEFAULT)
-	// );
-	//
-	// If this is the westcoast partition, PartitionByListPrefixes() returns
-	//  ('us', 'seattle'),
-	//  ('us', 'cali')
-	//
-	// If this is the us partition, PartitionByListPrefixes() cuts off the DEFAULT
-	// value and just returns
-	//  ('us')
-	//
-	// Finally, if this is the default partition, PartitionByListPrefixes()
-	// returns an empty slice.
-	//
-	// In addition to supporting locality optimized search as described above,
-	// this function can be used to support index skip scans. To support index
-	// skip scans, we collect the PartitionByListPrefixes for all partitions in
-	// the index. Each tuple corresponds to a region of the index that we can
-	// constrain further. In the example above: if we have a val=1 filter, instead
-	// of a full index scan we can skip most of the data under /us/cali and
-	// /us/seattle by scanning spans:
-	//   [                 - /us/cali      )
-	//   [ /us/cali/1      - /us/cali/1    ]
-	//   [ /us/cali\x00    - /us/seattle   )
-	//   [ /us/seattle/1   - /us/seattle/1 ]
-	//   [ /us/seattle\x00 -               ]
-	//
-	PartitionByListPrefixes() []tree.Datums
 }

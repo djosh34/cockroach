@@ -275,16 +275,6 @@ type DatabaseDescriptor interface {
 	// DatabaseDesc returns the backing protobuf for this database.
 	DatabaseDesc() *descpb.DatabaseDescriptor
 
-	// GetRegionConfig returns region information for this database.
-	GetRegionConfig() *descpb.DatabaseDescriptor_RegionConfig
-	// IsMultiRegion returns whether the database has multi-region properties
-	// configured. If so, GetRegionConfig can be used.
-	IsMultiRegion() bool
-	// PrimaryRegionName returns the primary region for a multi-region database.
-	PrimaryRegionName() (catpb.RegionName, error)
-	// MultiRegionEnumID returns the ID of the multi-region enum if the database
-	// is a multi-region database, and an error otherwise.
-	MultiRegionEnumID() (descpb.ID, error)
 	// ForEachSchema iterates f over each schema id-name mapping in the descriptor.
 	// iterutil.StopIteration is supported.
 	ForEachSchema(func(id descpb.ID, name string) error) error
@@ -599,7 +589,7 @@ type TableDescriptor interface {
 	// this table references. It takes in a function that returns the TypeDescriptor
 	// with the desired ID.
 	GetAllReferencedTypeIDs(
-		databaseDesc DatabaseDescriptor, getType func(descpb.ID) (TypeDescriptor, error),
+		getType func(descpb.ID) (TypeDescriptor, error),
 	) (referencedAnywhere, referencedInColumns descpb.IDs, _ error)
 
 	// GetAllReferencedFunctionIDs returns descriptor IDs of all user defined
@@ -698,22 +688,6 @@ type TableDescriptor interface {
 	// defined as unique by a non-index-backed constraint.
 	UniqueWithoutIndexColumns(uwoi UniqueWithoutIndexConstraint) []Column
 
-	// GetLocalityConfig returns the locality config for this table, which
-	// describes the table's multi-region locality policy if one is set (e.g.
-	// GLOBAL or REGIONAL BY ROW).
-	GetLocalityConfig() *catpb.LocalityConfig
-	// IsLocalityRegionalByRow returns true if the table is REGIONAL BY ROW.
-	IsLocalityRegionalByRow() bool
-	// IsLocalityRegionalByTable returns true if the table is REGIONAL BY TABLE.
-	IsLocalityRegionalByTable() bool
-	// IsLocalityGlobal returns true if the table is GLOBAL.
-	IsLocalityGlobal() bool
-	// GetRegionalByTableRegion returns the region a REGIONAL BY TABLE table is
-	// homed in.
-	GetRegionalByTableRegion() (catpb.RegionName, error)
-	// GetRegionalByRowTableRegionColumnName returns the region column name of a
-	// REGIONAL BY ROW table.
-	GetRegionalByRowTableRegionColumnName() (tree.Name, error)
 	// GetRowLevelTTL returns the row-level TTL config for the table.
 	GetRowLevelTTL() *catpb.RowLevelTTL
 	// HasRowLevelTTL returns where there is a row-level TTL config for the table.
@@ -809,11 +783,6 @@ type TypeDescriptor interface {
 	// if this type is an enum type, nil otherwise.
 	AsEnumTypeDescriptor() EnumTypeDescriptor
 
-	// AsRegionEnumTypeDescriptor returns this instance cast to
-	// RegionEnumTypeDescriptor if this type is a multi-region enum type,
-	// nil otherwise.
-	AsRegionEnumTypeDescriptor() RegionEnumTypeDescriptor
-
 	// AsAliasTypeDescriptor returns this instance cast to
 	// AliasTypeDescriptor if this type is an alias type,
 	// nil otherwise.
@@ -856,33 +825,6 @@ type EnumTypeDescriptor interface {
 	// IsMemberReadOnly returns true iff the enum member at ordinal
 	// enumMemberOrdinal is read-only.
 	IsMemberReadOnly(enumMemberOrdinal int) bool
-}
-
-// RegionEnumTypeDescriptor is the TypeDescriptor subtype for multi-region enums.
-type RegionEnumTypeDescriptor interface {
-	EnumTypeDescriptor
-
-	// PrimaryRegion returns the primary region name.
-	PrimaryRegion() catpb.RegionName
-
-	// ForEachPublicRegion is like ForEachRegion but limited to regions
-	// which are public, i.e. not in the process of being added or removed.
-	ForEachPublicRegion(f func(regionName catpb.RegionName) error) error
-
-	// ForEachRegion applies f on each region name,
-	// Supports iterutil.StopIteration().
-	ForEachRegion(f func(regionName catpb.RegionName, transition descpb.TypeDescriptor_EnumMember_Direction) error) error
-
-	// ForEachSuperRegion applies f on each super-region name.
-	// Supports iterutil.StopIteration().
-	ForEachSuperRegion(f func(superRegionName string) error) error
-
-	// ForEachRegionInSuperRegion applies f on each region in the super region.
-	// Supports iterutil.StopIteration().
-	ForEachRegionInSuperRegion(
-		superRegion string,
-		f func(region catpb.RegionName) error,
-	) error
 }
 
 // AliasTypeDescriptor is the TypeDescriptor subtype for alias types.

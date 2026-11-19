@@ -71,7 +71,6 @@ func alterPrimaryKey(b BuildCtx, tn *tree.TableName, tbl *scpb.Table, t alterPri
 	// be removed to fully support `ALTER PRIMARY KEY`.
 	fallBackIfShardedIndexExists(b, t, tbl.TableID)
 	fallBackIfPartitionedIndexExists(b, t, tbl.TableID)
-	fallBackIfRegionalByRowTable(b, t.n, tbl.TableID)
 	fallBackIfDescColInRowLevelTTLTables(b, tbl.TableID, t)
 	fallBackIfSubZoneConfigExists(b, t.n, tbl.TableID)
 	// Version gates functionally that is implemented after the statement is
@@ -426,18 +425,6 @@ func fallBackIfShardedIndexExists(b BuildCtx, t alterPrimaryKeySpec, tableID cat
 				"indexes is not yet supported."))
 		}
 	})
-}
-
-// fallBackIfRegionalByRowTable panics with an unimplemented
-// error if it's a REGIONAL BY ROW table because we need to
-// include the implicit REGION column when constructing the
-// new primary key.
-func fallBackIfRegionalByRowTable(b BuildCtx, t tree.NodeFormatter, tableID catid.DescID) {
-	_, _, rbrElem := scpb.FindTableLocalityRegionalByRow(b.QueryByID(tableID))
-	if rbrElem != nil {
-		panic(scerrors.NotImplementedErrorf(t, "ALTER PRIMARY KEY on a REGIONAL BY ROW table "+
-			"is not yet supported."))
-	}
 }
 
 // fallBackIfDescColInRowLevelTTLTables panics with an unimplemented

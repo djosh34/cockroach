@@ -48,7 +48,6 @@ func alterTableAddColumn(
 	// We don't support handling zone config related properties for tables, so
 	// throw an unsupported error.
 	fallBackIfSubZoneConfigExists(b, t, tbl.TableID)
-	fallBackIfRegionalByRowTable(b, t, tbl.TableID)
 	fallBackIfVirtualColumnWithNotNullConstraint(t)
 	// Version gates functionally that is implemented after the statement is
 	// publicly published.
@@ -107,13 +106,6 @@ func alterTableAddColumn(
 	}
 	if d.IsComputed() {
 		d.Computed.Expr = schemaexpr.MaybeRewriteComputedColumn(d.Computed.Expr, b.SessionData())
-	}
-	{
-		tableElts := b.QueryByID(tbl.TableID)
-		if _, _, elem := scpb.FindTableLocalityRegionalByRow(tableElts); elem != nil {
-			panic(scerrors.NotImplementedErrorf(d,
-				"regional by row partitioning is not supported"))
-		}
 	}
 	cdd, err := tabledesc.MakeColumnDefDescs(b, d, b.SemaCtx(), b.EvalCtx(), tree.ColumnDefaultExprInAddColumn)
 	if err != nil {

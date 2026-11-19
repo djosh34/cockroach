@@ -16,16 +16,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cockroachdb/cockroach/pkg/keys"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catalogkeys"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/multiregion"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/schemaexpr"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/tabledesc"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
-	"github.com/cockroachdb/cockroach/pkg/sql/rowenc"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/semenumpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
@@ -589,154 +586,6 @@ func showFamilyClause(desc catalog.TableDescriptor, f *tree.FmtCtx) {
 		formatQuoteNames(&f.Buffer, activeColumnNames...)
 		f.WriteString(")")
 	}
-}
-
-// showCreateLocality creates the LOCALITY clauses for a CREATE statement, writing them
-// to tree.FmtCtx f.
-func showCreateLocality(desc catalog.TableDescriptor, f *tree.FmtCtx) error {
-	if c := desc.GetLocalityConfig(); c != nil {
-		f.WriteString(" LOCALITY ")
-		return multiregion.FormatTableLocalityConfig(c, f)
-	}
-	return nil
-}
-
-// ShowCreatePartitioning returns a PARTITION BY clause for the specified
-// index, if applicable.
-func ShowCreatePartitioning(
-	a *tree.DatumAlloc,
-	codec keys.SQLCodec,
-	tableDesc catalog.TableDescriptor,
-	idx catalog.Index,
-	part catalog.Partitioning,
-	buf *bytes.Buffer,
-	indent int,
-	colOffset int,
-	redactableValues bool,
-) error {
-	isPrimaryKeyOfPartitionAllByTable :=
-		tableDesc.IsPartitionAllBy() && tableDesc.GetPrimaryIndexID() == idx.GetID() && colOffset == 0
-
-	if part.NumColumns() == 0 && !isPrimaryKeyOfPartitionAllByTable {
-		return nil
-	}
-	// Do not print PARTITION BY clauses of non-primary indexes belonging to a table
-	// that is PARTITION BY ALL. The ALL will be printed for the PRIMARY INDEX clause.
-	if tableDesc.IsPartitionAllBy() && tableDesc.GetPrimaryIndexID() != idx.GetID() {
-		return nil
-	}
-	// Do not print PARTITION ALL BY if we are a REGIONAL BY ROW table.
-	if c := tableDesc.GetLocalityConfig(); c != nil {
-		switch c.Locality.(type) {
-		case *catpb.LocalityConfig_RegionalByRow_:
-			return nil
-		}
-	}
-
-	// We don't need real prefixes in the DecodePartitionTuple calls because we
-	// only use the tree.Datums part of the output.
-	fakePrefixDatums := make([]tree.Datum, colOffset)
-	for i := range fakePrefixDatums {
-		fakePrefixDatums[i] = tree.DNull
-	}
-
-	indentStr := strings.Repeat("\t", indent)
-	buf.WriteString(` PARTITION `)
-	if isPrimaryKeyOfPartitionAllByTable {
-		buf.WriteString(`ALL `)
-	}
-	buf.WriteString(`BY `)
-	if part.NumLists() > 0 {
-		buf.WriteString(`LIST`)
-	} else if part.NumRanges() > 0 {
-		buf.WriteString(`RANGE`)
-	} else if isPrimaryKeyOfPartitionAllByTable {
-		buf.WriteString(`NOTHING`)
-		return nil
-	} else {
-		return errors.Errorf(`invalid partition descriptor: %v`, part.PartitioningDesc())
-	}
-	buf.WriteString(` (`)
-	for i := 0; i < part.NumColumns(); i++ {
-		if i != 0 {
-			buf.WriteString(", ")
-		}
-		buf.WriteString(tree.NameString(idx.GetKeyColumnName(colOffset + i)))
-	}
-	buf.WriteString(`) (`)
-	fmtFlags := tree.FmtSimple
-	if redactableValues {
-		fmtFlags |= tree.FmtMarkRedactionNode | tree.FmtOmitNameRedaction
-	}
-	f := tree.NewFmtCtx(fmtFlags)
-	isFirst := true
-	err := part.ForEachList(func(name string, values [][]byte, subPartitioning catalog.Partitioning) error {
-		if !isFirst {
-			buf.WriteString(`, `)
-		}
-		isFirst = false
-		buf.WriteString("\n")
-		buf.WriteString(indentStr)
-		buf.WriteString("\tPARTITION ")
-		f.FormatName(name)
-		_, _ = f.Buffer.WriteTo(buf)
-		buf.WriteString(` VALUES IN (`)
-		for j, values := range values {
-			if j != 0 {
-				buf.WriteString(`, `)
-			}
-			tuple, _, err := rowenc.DecodePartitionTuple(
-				a, codec, tableDesc, idx, part, values, fakePrefixDatums)
-			if err != nil {
-				return err
-			}
-			f.FormatNode(tuple)
-			_, _ = f.Buffer.WriteTo(buf)
-		}
-		buf.WriteString(`)`)
-		return ShowCreatePartitioning(
-			a, codec, tableDesc, idx, subPartitioning, buf, indent+1, colOffset+part.NumColumns(),
-			redactableValues,
-		)
-	})
-	if err != nil {
-		return err
-	}
-	isFirst = true
-	err = part.ForEachRange(func(name string, from, to []byte) error {
-		if !isFirst {
-			buf.WriteString(`, `)
-		}
-		isFirst = false
-		buf.WriteString("\n")
-		buf.WriteString(indentStr)
-		buf.WriteString("\tPARTITION ")
-		buf.WriteString(tree.NameString(name))
-		buf.WriteString(" VALUES FROM ")
-		fromTuple, _, err := rowenc.DecodePartitionTuple(
-			a, codec, tableDesc, idx, part, from, fakePrefixDatums)
-		if err != nil {
-			return err
-		}
-		f.FormatNode(fromTuple)
-		_, _ = f.Buffer.WriteTo(buf)
-		buf.WriteString(" TO ")
-		toTuple, _, err := rowenc.DecodePartitionTuple(
-			a, codec, tableDesc, idx, part, to, fakePrefixDatums)
-		if err != nil {
-			return err
-		}
-		f.FormatNode(toTuple)
-		_, _ = f.Buffer.WriteTo(buf)
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	buf.WriteString("\n")
-	buf.WriteString(indentStr)
-	buf.WriteString(")")
-	return nil
 }
 
 // showConstraintClause creates the CONSTRAINT clauses for a CREATE statement,

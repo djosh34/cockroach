@@ -33,7 +33,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/testutils/testcat"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/xform"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
-	"github.com/cockroachdb/cockroach/pkg/sql/parser/statements"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/volatility"
@@ -852,7 +851,6 @@ func (h *harness) runSimple(tb testing.TB, query benchQuery, phase Phase) {
 		&h.semaCtx,
 		&h.evalCtx,
 		true, /* allowAutoCommit */
-		statements.IsANSIDML(stmt.AST),
 	)
 	if _, err = eb.Build(); err != nil {
 		tb.Fatalf("%v", err)
@@ -907,8 +905,7 @@ func (h *harness) runPrepared(tb testing.TB, phase Phase) {
 		root,
 		&h.semaCtx,
 		&h.evalCtx,
-		true,  /* allowAutoCommit */
-		false, /* isANSIDML */
+		true, /* allowAutoCommit */
 	)
 	if _, err := eb.Build(); err != nil {
 		tb.Fatalf("%v", err)

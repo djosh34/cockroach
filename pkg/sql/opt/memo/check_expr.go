@@ -116,7 +116,7 @@ func (m *Memo) CheckExpr(e opt.Expr) {
 	case *SelectExpr:
 		checkFilters(t.Filters)
 
-	case *UnionExpr, *UnionAllExpr, *LocalityOptimizedSearchExpr:
+	case *UnionExpr, *UnionAllExpr:
 		setPrivate := t.Private().(*SetPrivate)
 		outColSet := setPrivate.OutCols.ToSet()
 
@@ -138,13 +138,6 @@ func (m *Memo) CheckExpr(e opt.Expr) {
 				"union reuses columns in right input: %v",
 				outColSet.Intersection(rightColSet),
 			))
-		}
-
-		switch t.Op() {
-		case opt.LocalityOptimizedSearchOp:
-			if !setPrivate.Ordering.Any() {
-				panic(errors.AssertionFailedf("locality optimized search op has a non-empty ordering"))
-			}
 		}
 
 	case *AggregationsExpr:
@@ -224,19 +217,12 @@ func (m *Memo) CheckExpr(e opt.Expr) {
 		if t.Cols.SubsetOf(t.Input.Relational().OutputCols) {
 			panic(errors.AssertionFailedf("lookup join with no lookup columns"))
 		}
-		switch t.JoinType {
-		case opt.AntiJoinOp:
-			if len(t.RemoteLookupExpr) > 0 {
-				panic(errors.AssertionFailedf("anti join with a non-empty RemoteLookupExpr"))
-			}
-		}
 		var requiredCols opt.ColSet
 		requiredCols.UnionWith(t.Relational().OutputCols)
 		requiredCols.UnionWith(t.AllLookupFilters.OuterCols())
 		requiredCols.UnionWith(t.On.OuterCols())
 		requiredCols.UnionWith(t.KeyCols.ToSet())
 		requiredCols.UnionWith(t.LookupExpr.OuterCols())
-		requiredCols.UnionWith(t.RemoteLookupExpr.OuterCols())
 		idx := m.Metadata().Table(t.Table).Index(t.Index)
 		for i := range t.KeyCols {
 			requiredCols.Add(t.Table.ColumnID(idx.Column(i).Ordinal()))

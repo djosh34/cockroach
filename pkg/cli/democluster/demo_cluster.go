@@ -1609,29 +1609,6 @@ func (c *transientCluster) GetSQLCredentials() (
 	return c.adminUser, c.adminPassword, c.demoDir
 }
 
-func (c *transientCluster) maybeEnableMultiTenantMultiRegion(ctx context.Context) error {
-	if !c.demoCtx.Multitenant {
-		return nil
-	}
-
-	storageURL, err := c.getNetworkURLForServer(ctx, 0, false /* includeAppName */, forSystemTenant)
-	if err != nil {
-		return err
-	}
-	db, err := gosql.Open("postgres", storageURL.ToPQ().String())
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	if _, err = db.Exec(`ALTER TENANT ALL SET CLUSTER SETTING ` +
-		sql.SecondaryTenantsMultiRegionAbstractionsEnabledSettingName + " = true"); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (c *transientCluster) SetClusterSetting(
 	ctx context.Context, setting string, value interface{},
 ) error {
@@ -1655,10 +1632,6 @@ func (c *transientCluster) SetClusterSetting(
 }
 
 func (c *transientCluster) SetupWorkload(ctx context.Context) error {
-	if err := c.maybeEnableMultiTenantMultiRegion(ctx); err != nil {
-		return err
-	}
-
 	// If there is a load generator, create its database and load its
 	// fixture.
 	gen := c.demoCtx.WorkloadGenerator

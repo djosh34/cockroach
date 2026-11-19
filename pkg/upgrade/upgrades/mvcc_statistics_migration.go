@@ -22,11 +22,11 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/jobs"
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
+
 	// Import for the side effect of registering the MVCC statistics update job.
 	_ "github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/systemschema"
 	"github.com/cockroachdb/cockroach/pkg/sql/isql"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/upgrade"
 )
 
@@ -41,7 +41,6 @@ func createMVCCStatisticsTableAndJobMigration(
 		d.Settings,
 		d.Codec,
 		systemschema.SystemMVCCStatisticsTable,
-		tree.LocalityLevelTable,
 	)
 	if err != nil {
 		return err

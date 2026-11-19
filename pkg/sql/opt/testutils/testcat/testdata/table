@@ -62,7 +62,6 @@ CREATE TABLE uvwxy (
 )
 ----
 
-
 exec-ddl
 SHOW CREATE uvwxy
 ----
@@ -98,90 +97,6 @@ TABLE a
  └── UNIQUE INDEX a_a_key
       ├── a int
       └── rowid int not null default (unique_rowid()) [hidden] (storing)
-
-exec-ddl
-CREATE TABLE part1 (a INT PRIMARY KEY, b INT) PARTITION BY LIST (a) (
-  PARTITION p1 VALUES IN (1),
-  PARTITION p2 VALUES IN (3, 4, 5),
-  PARTITION p3 VALUES IN (DEFAULT)
-)
-----
-
-exec-ddl
-SHOW CREATE part1
-----
-TABLE part1
- ├── a int not null
- ├── b int
- ├── crdb_internal_mvcc_timestamp decimal [hidden] [system]
- ├── tableoid oid [hidden] [system]
- └── PRIMARY INDEX part1_pkey
-      ├── a int not null
-      └── partitions
-           ├── p1
-           │    └── partition by list prefixes
-           │         └── (1)
-           ├── p2
-           │    └── partition by list prefixes
-           │         ├── (3)
-           │         ├── (4)
-           │         └── (5)
-           └── p3
-                └── partition by list prefixes
-
-exec-ddl
-CREATE TABLE part2 (
-  a STRING,
-  b STRING,
-  c INT,
-  PRIMARY KEY(a,b,c),
-  INDEX (c) PARTITION BY LIST (c) (
-    PARTITION pi1 VALUES IN (1),
-    PARTITION pi2 VALUES IN (3, 4)
-  )
-) PARTITION BY LIST (a, b) (
-  PARTITION p1 VALUES IN (('foo', 'bar'), ('foo', 'baz'), ('qux', 'qux')),
-  PARTITION p2 VALUES IN (('waldo', DEFAULT)),
-  PARTITION p3 VALUES IN (DEFAULT)
-)
-----
-
-exec-ddl
-SHOW CREATE part2
-----
-TABLE part2
- ├── a string not null
- ├── b string not null
- ├── c int not null
- ├── crdb_internal_mvcc_timestamp decimal [hidden] [system]
- ├── tableoid oid [hidden] [system]
- ├── PRIMARY INDEX part2_pkey
- │    ├── a string not null
- │    ├── b string not null
- │    ├── c int not null
- │    └── partitions
- │         ├── p1
- │         │    └── partition by list prefixes
- │         │         ├── ('foo', 'bar')
- │         │         ├── ('foo', 'baz')
- │         │         └── ('qux', 'qux')
- │         ├── p2
- │         │    └── partition by list prefixes
- │         │         └── ('waldo')
- │         └── p3
- │              └── partition by list prefixes
- └── INDEX part2_c_idx
-      ├── c int not null
-      ├── a string not null
-      ├── b string not null
-      └── partitions
-           ├── pi1
-           │    └── partition by list prefixes
-           │         └── (1)
-           └── pi2
-                └── partition by list prefixes
-                     ├── (3)
-                     └── (4)
 
 exec-ddl
 CREATE TABLE inv (

@@ -57,7 +57,6 @@ func newEvalCtx(ctx context.Context, d Dependencies) *eval.Context {
 		ClientNoticeSender: d.ClientNoticeSender(),
 		Sequence:           &faketreeeval.DummySequenceOperators{},
 		Tenant:             &faketreeeval.DummyTenantOperator{},
-		Regions:            &faketreeeval.DummyRegionOperator{},
 		Settings:           d.ClusterSettings(),
 		Codec:              d.Codec(),
 		DescIDGenerator:    d.DescIDGenerator(),

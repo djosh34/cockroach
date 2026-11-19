@@ -743,7 +743,6 @@ func (ts *testServer) grantDefaultTenantCapabilities(
 		sql.SecondaryTenantScatterEnabled,
 		sql.SecondaryTenantSplitAtEnabled,
 		sql.SecondaryTenantZoneConfigsEnabled,
-		sql.SecondaryTenantsMultiRegionAbstractionsEnabled,
 	} {
 		// Update the override for this setting. We need to do this
 		// instead of calling .Override() on the setting directly: certain

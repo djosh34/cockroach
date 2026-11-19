@@ -73,20 +73,6 @@ var LeaseJitterFraction = settings.RegisterFloatSetting(
 	base.DefaultDescriptorLeaseJitterFraction,
 	settings.Fraction)
 
-// isSystemDatabaseMultiRegion returns if the system database is set-up for
-// multi-region.
-func (m *Manager) isSystemDatabaseMultiRegion(ctx context.Context) (bool, error) {
-	sysDBDesc, err := m.Acquire(ctx, m.storage.clock.Now(), keys.SystemDatabaseID)
-	if err != nil {
-		return false, err
-	}
-	defer sysDBDesc.Release(ctx)
-	if desc, ok := sysDBDesc.Underlying().(catalog.DatabaseDescriptor); ok && desc.IsMultiRegion() {
-		return true, nil
-	}
-	return false, nil
-}
-
 // WaitForNoVersion returns once there are no unexpired leases left
 // for any version of the descriptor.
 func (m *Manager) WaitForNoVersion(
@@ -94,15 +80,10 @@ func (m *Manager) WaitForNoVersion(
 ) error {
 
 	for lastCount, r := 0, retry.Start(retryOpts); r.Next(); {
-		// Detect if the system database is multi-region.
-		isMultiRegion, err := m.isSystemDatabaseMultiRegion(ctx)
-		if err != nil {
-			return err
-		}
 		// Check to see if there are any leases that still exist on the previous
 		// version of the descriptor.
 		now := m.storage.clock.Now()
-		singleRegionQuery, singleRegionQueryParam := getSingleRegionClause(ctx, isMultiRegion, m.settings)
+		singleRegionQuery, singleRegionQueryParam := getSingleRegionClause(ctx, m.settings)
 		stmt := fmt.Sprintf(`SELECT count(1) FROM system.public.lease AS OF SYSTEM TIME '%s' WHERE ("descID" = %d AND expiration > $1) %s`,
 			now.AsOfSystemTime(),
 			id,
@@ -167,15 +148,10 @@ func (m *Manager) WaitForOneVersion(
 		}); err != nil {
 			return nil, err
 		}
-		// Detect if the system database is multi-region.
-		isMultiRegion, err := m.isSystemDatabaseMultiRegion(ctx)
-		if err != nil {
-			return nil, err
-		}
 		// Check to see if there are any leases that still exist on the previous
 		// version of the descriptor.
 		descs := []IDVersion{NewIDVersionPrev(desc.GetName(), desc.GetID(), desc.GetVersion())}
-		count, err := CountLeases(ctx, m.storage.db.Executor(), isMultiRegion, m.settings, descs, m.storage.clock.Now())
+		count, err := CountLeases(ctx, m.storage.db.Executor(), m.settings, descs, m.storage.clock.Now())
 		if err != nil {
 			return nil, err
 		}

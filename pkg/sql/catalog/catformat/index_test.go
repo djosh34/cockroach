@@ -118,7 +118,6 @@ func TestIndexForDisplay(t *testing.T) {
 	testData := []struct {
 		index       descpb.IndexDescriptor
 		tableName   tree.TableName
-		partition   string
 		displayMode IndexDisplayMode
 		// if set to empty string, an error is expected to returned by
 		// indexForDisplay
@@ -128,7 +127,6 @@ func TestIndexForDisplay(t *testing.T) {
 		{
 			index:       baseIndex,
 			tableName:   descpb.AnonymousTable,
-			partition:   "",
 			displayMode: IndexDisplayDefOnly,
 			expected:    "INDEX baz (a ASC, b DESC)",
 			pgExpected:  "INDEX baz USING btree (a ASC, b DESC)",
@@ -136,7 +134,6 @@ func TestIndexForDisplay(t *testing.T) {
 		{
 			index:       baseIndex,
 			tableName:   descpb.AnonymousTable,
-			partition:   "",
 			displayMode: IndexDisplayShowCreate,
 			expected:    "",
 			pgExpected:  "",
@@ -144,7 +141,6 @@ func TestIndexForDisplay(t *testing.T) {
 		{
 			index:       baseIndex,
 			tableName:   tableName,
-			partition:   "",
 			displayMode: IndexDisplayDefOnly,
 			expected:    "INDEX baz ON foo.public.bar (a ASC, b DESC)",
 			pgExpected:  "INDEX baz ON foo.public.bar USING btree (a ASC, b DESC)",
@@ -152,7 +148,6 @@ func TestIndexForDisplay(t *testing.T) {
 		{
 			index:       baseIndex,
 			tableName:   tableName,
-			partition:   "",
 			displayMode: IndexDisplayShowCreate,
 			expected:    "CREATE INDEX baz ON foo.public.bar (a ASC, b DESC)",
 			pgExpected:  "CREATE INDEX baz ON foo.public.bar USING btree (a ASC, b DESC)",
@@ -160,7 +155,6 @@ func TestIndexForDisplay(t *testing.T) {
 		{
 			index:       uniqueIndex,
 			tableName:   descpb.AnonymousTable,
-			partition:   "",
 			displayMode: IndexDisplayDefOnly,
 			expected:    "UNIQUE INDEX baz (a ASC, b DESC)",
 			pgExpected:  "UNIQUE INDEX baz USING btree (a ASC, b DESC)",
@@ -168,7 +162,6 @@ func TestIndexForDisplay(t *testing.T) {
 		{
 			index:       uniqueIndex,
 			tableName:   tableName,
-			partition:   "",
 			displayMode: IndexDisplayShowCreate,
 			expected:    "CREATE UNIQUE INDEX baz ON foo.public.bar (a ASC, b DESC)",
 			pgExpected:  "CREATE UNIQUE INDEX baz ON foo.public.bar USING btree (a ASC, b DESC)",
@@ -176,7 +169,6 @@ func TestIndexForDisplay(t *testing.T) {
 		{
 			index:       jsonbInvertedIndex,
 			tableName:   descpb.AnonymousTable,
-			partition:   "",
 			displayMode: IndexDisplayDefOnly,
 			expected:    "INVERTED INDEX baz (a)",
 			pgExpected:  "INDEX baz USING gin (a)",
@@ -184,7 +176,6 @@ func TestIndexForDisplay(t *testing.T) {
 		{
 			index:       jsonbInvertedIndex,
 			tableName:   tableName,
-			partition:   "",
 			displayMode: IndexDisplayShowCreate,
 			expected:    "CREATE INVERTED INDEX baz ON foo.public.bar (a)",
 			pgExpected:  "CREATE INDEX baz ON foo.public.bar USING gin (a)",
@@ -192,7 +183,6 @@ func TestIndexForDisplay(t *testing.T) {
 		{
 			index:       storingIndex,
 			tableName:   descpb.AnonymousTable,
-			partition:   "",
 			displayMode: IndexDisplayDefOnly,
 			expected:    "INDEX baz (a ASC, b DESC) STORING (c)",
 			pgExpected:  "INDEX baz USING btree (a ASC, b DESC) STORING (c)",
@@ -200,7 +190,6 @@ func TestIndexForDisplay(t *testing.T) {
 		{
 			index:       storingIndex,
 			tableName:   tableName,
-			partition:   "",
 			displayMode: IndexDisplayShowCreate,
 			expected:    "CREATE INDEX baz ON foo.public.bar (a ASC, b DESC) STORING (c)",
 			pgExpected:  "CREATE INDEX baz ON foo.public.bar USING btree (a ASC, b DESC) STORING (c)",
@@ -208,7 +197,6 @@ func TestIndexForDisplay(t *testing.T) {
 		{
 			index:       partialIndex,
 			tableName:   descpb.AnonymousTable,
-			partition:   "",
 			displayMode: IndexDisplayDefOnly,
 			expected:    "INDEX baz (a ASC, b DESC) WHERE a > 1:::INT8",
 			pgExpected:  "INDEX baz USING btree (a ASC, b DESC) WHERE (a > 1)",
@@ -216,7 +204,6 @@ func TestIndexForDisplay(t *testing.T) {
 		{
 			index:       partialIndex,
 			tableName:   tableName,
-			partition:   "",
 			displayMode: IndexDisplayShowCreate,
 			expected:    "CREATE INDEX baz ON foo.public.bar (a ASC, b DESC) WHERE a > 1:::INT8",
 			pgExpected:  "CREATE INDEX baz ON foo.public.bar USING btree (a ASC, b DESC) WHERE (a > 1)",
@@ -224,7 +211,6 @@ func TestIndexForDisplay(t *testing.T) {
 		{
 			index:       expressionIndex,
 			tableName:   descpb.AnonymousTable,
-			partition:   "",
 			displayMode: IndexDisplayDefOnly,
 			expected:    "INDEX baz (a ASC, (a + b) DESC, b ASC)",
 			pgExpected:  "INDEX baz USING btree (a ASC, (a + b) DESC, b ASC)",
@@ -232,31 +218,13 @@ func TestIndexForDisplay(t *testing.T) {
 		{
 			index:       expressionIndex,
 			tableName:   tableName,
-			partition:   "",
 			displayMode: IndexDisplayShowCreate,
 			expected:    "CREATE INDEX baz ON foo.public.bar (a ASC, (a + b) DESC, b ASC)",
 			pgExpected:  "CREATE INDEX baz ON foo.public.bar USING btree (a ASC, (a + b) DESC, b ASC)",
 		},
 		{
-			index:       partialIndex,
-			tableName:   descpb.AnonymousTable,
-			partition:   " PARTITION BY LIST (a) (PARTITION p VALUES IN (2))",
-			displayMode: IndexDisplayDefOnly,
-			expected:    "INDEX baz (a ASC, b DESC) PARTITION BY LIST (a) (PARTITION p VALUES IN (2)) WHERE a > 1:::INT8",
-			pgExpected:  "INDEX baz USING btree (a ASC, b DESC) PARTITION BY LIST (a) (PARTITION p VALUES IN (2)) WHERE (a > 1)",
-		},
-		{
-			index:       partialIndex,
-			tableName:   tableName,
-			partition:   " PARTITION BY LIST (a) (PARTITION p VALUES IN (2))",
-			displayMode: IndexDisplayShowCreate,
-			expected:    "CREATE INDEX baz ON foo.public.bar (a ASC, b DESC) PARTITION BY LIST (a) (PARTITION p VALUES IN (2)) WHERE a > 1:::INT8",
-			pgExpected:  "CREATE INDEX baz ON foo.public.bar USING btree (a ASC, b DESC) PARTITION BY LIST (a) (PARTITION p VALUES IN (2)) WHERE (a > 1)",
-		},
-		{
 			index:       shardedIndex,
 			tableName:   descpb.AnonymousTable,
-			partition:   "",
 			displayMode: IndexDisplayDefOnly,
 			expected:    "INDEX baz (a DESC) USING HASH WITH (bucket_count=8)",
 			pgExpected:  "INDEX baz USING btree (a DESC) USING HASH WITH (bucket_count=8)",
@@ -264,7 +232,6 @@ func TestIndexForDisplay(t *testing.T) {
 		{
 			index:       shardedIndex,
 			tableName:   tableName,
-			partition:   "",
 			displayMode: IndexDisplayShowCreate,
 			expected:    "CREATE INDEX baz ON foo.public.bar (a DESC) USING HASH WITH (bucket_count=8)",
 			pgExpected:  "CREATE INDEX baz ON foo.public.bar USING btree (a DESC) USING HASH WITH (bucket_count=8)",
@@ -280,7 +247,6 @@ func TestIndexForDisplay(t *testing.T) {
 				&tc.tableName,
 				&tc.index,
 				false, /* isPrimary */
-				tc.partition,
 				tree.FmtSimple,
 				&semaCtx,
 				sd,
@@ -303,7 +269,6 @@ func TestIndexForDisplay(t *testing.T) {
 				&tc.tableName,
 				&tc.index,
 				false, /* isPrimary */
-				tc.partition,
 				tree.FmtPGCatalog,
 				&semaCtx,
 				sd,

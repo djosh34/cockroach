@@ -26,7 +26,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/kvserverbase"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgwirecancel"
@@ -103,11 +102,6 @@ type Context struct {
 	// The region entry in this variable is the gateway region.
 	Locality roachpb.Locality
 
-	// OriginalLocality is the initial Locality at the time the connection was
-	// established. Since Locality may be overridden in some paths, this provides
-	// a means of restoring the original Locality.
-	OriginalLocality roachpb.Locality
-
 	Tracer *tracing.Tracer
 
 	// The statement timestamp. May be different for every statement.
@@ -167,9 +161,6 @@ type Context struct {
 	Sequence SequenceOperators
 
 	Tenant TenantOperator
-
-	// Regions stores information about regions.
-	Regions RegionOperator
 
 	JoinTokenCreator JoinTokenCreator
 
@@ -268,11 +259,6 @@ type Context struct {
 
 	// ParseHelper makes date parsing more efficient.
 	ParseHelper pgdate.ParseHelper
-
-	// RemoteRegions contains the slice of remote regions in a multiregion
-	// database which owns a table accessed by the current SQL request.
-	// This slice is only populated during the optbuild stage.
-	RemoteRegions catpb.RegionNames
 
 	// JobsProfiler is the interface for builtins to extract job specific
 	// execution details that may have been aggregated during a job's lifetime.
@@ -422,16 +408,6 @@ type fakePlannerWithMonitor struct {
 // Mon is part of the Planner interface.
 func (p *fakePlannerWithMonitor) Mon() *mon.BytesMonitor {
 	return p.monitor
-}
-
-// IsANSIDML is part of the eval.Planner interface.
-func (p *fakePlannerWithMonitor) IsANSIDML() bool {
-	return false
-}
-
-// EnforceHomeRegion is part of the eval.Planner interface.
-func (p *fakePlannerWithMonitor) EnforceHomeRegion() bool {
-	return false
 }
 
 // MaybeReallocateAnnotations is part of the eval.Planner interface.

@@ -70,7 +70,6 @@ var (
 		"FavorCommonData":                         sqlsmith.FavorCommonData(),
 		"InsUpdOnly":                              sqlsmith.InsUpdOnly(),
 		"LowProbabilityWhereClauseWithJoinTables": sqlsmith.LowProbabilityWhereClauseWithJoinTables(),
-		"MultiRegionDDLs":                         sqlsmith.MultiRegionDDLs(),
 		"MutatingMode":                            sqlsmith.MutatingMode(),
 		"MutationsOnly":                           sqlsmith.MutationsOnly(),
 		"OnlyNoDropDDLs":                          sqlsmith.OnlyNoDropDDLs(),

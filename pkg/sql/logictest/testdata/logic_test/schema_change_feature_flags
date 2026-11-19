@@ -56,18 +56,6 @@ CREATE INDEX on t1 (a, b)
 statement error pq: feature ALTER DATABASE is part of the schema change category, which was disabled by the database administrator
 ALTER DATABASE d OWNER TO testuser
 
-# Test ALTER DATABASE ADD REGION.
-statement error pq: feature ALTER DATABASE is part of the schema change category, which was disabled by the database administrator
-ALTER DATABASE d ADD REGION "us-west-1"
-
-# Test ALTER DATABASE DROP REGION.
-statement error pq: feature ALTER DATABASE is part of the schema change category, which was disabled by the database administrator
-ALTER DATABASE d DROP REGION "us-west-1"
-
-# Test ALTER DATABASE SURVIVE.
-statement error pq: feature ALTER DATABASE is part of the schema change category, which was disabled by the database administrator
-ALTER DATABASE d SURVIVE REGION FAILURE
-
 # Test RENAME DATABASE.
 statement error pq: feature ALTER DATABASE is part of the schema change category, which was disabled by the database administrator
 ALTER DATABASE d RENAME TO r
@@ -75,10 +63,6 @@ ALTER DATABASE d RENAME TO r
 # Test REPARENT DATABASE
 statement error feature ALTER DATABASE is part of the schema change category, which was disabled by the database administrator
 ALTER DATABASE d CONVERT TO SCHEMA WITH PARENT test
-
-# Test ALTER TABLE PARTITION BY.
-statement error pq: feature ALTER TABLE is part of the schema change category, which was disabled by the database administrator
-ALTER TABLE t1 PARTITION BY NOTHING
 
 # Test ALTER TABLE ADD CONSTRAINT.
 statement error pq: feature ALTER TABLE is part of the schema change category, which was disabled by the database administrator
@@ -123,10 +107,6 @@ ALTER TABLE t RENAME TO r
 # Test ALTER TABLE SET SCHEMA.
 statement error pq: feature ALTER TABLE is part of the schema change category, which was disabled by the database administrator
 ALTER TABLE t SET SCHEMA s
-
-# Test ALTER TABLE SET LOCALITY REGIONAL BY ROW.
-statement error pq: feature ALTER TABLE is part of the schema change category, which was disabled by the database administrator
-ALTER TABLE t SET LOCALITY REGIONAL BY ROW
 
 # Test ALTER TABLE SPLIT AT.
 statement error pq: feature ALTER TABLE/INDEX SPLIT AT is part of the schema change category, which was disabled by the database administrator

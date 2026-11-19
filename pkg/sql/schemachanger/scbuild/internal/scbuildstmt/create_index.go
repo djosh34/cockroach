@@ -41,7 +41,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/storageparam/indexstorageparam"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/cockroach/pkg/util/errorutil/unimplemented"
-	"github.com/cockroachdb/cockroach/pkg/util/protoutil"
 	"github.com/cockroachdb/errors"
 )
 
@@ -129,19 +128,6 @@ func CreateIndex(b BuildCtx, n *tree.CreateIndex) {
 			panic(pgerror.Newf(pgcode.DuplicateRelation, "index with name %q already exists", n.Name))
 		}
 	}
-	// We don't support handling zone config related properties for tables required
-	// for regional by row tables.
-	if _, _, tbl := scpb.FindTable(relationElements); tbl != nil {
-		fallBackIfRegionalByRowTable(b, n, tbl.TableID)
-	}
-	_, _, partitioning := scpb.FindTablePartitioning(relationElements)
-	if partitioning != nil && n.PartitionByIndex != nil &&
-		n.PartitionByIndex.ContainsPartitions() {
-		panic(pgerror.New(
-			pgcode.FeatureNotSupported,
-			"cannot define PARTITION BY on an index if the table has a PARTITION ALL BY definition",
-		))
-	}
 	panicIfSchemaIsLocked(relationElements)
 
 	// Inverted indexes do not support hash sharding or unique.
@@ -160,26 +146,6 @@ func CreateIndex(b BuildCtx, n *tree.CreateIndex) {
 			b.IncrementSchemaChangeIndexCounter("multi_column_inverted")
 		}
 	}
-	relationElements.ForEach(func(_ scpb.Status, target scpb.TargetStatus, e scpb.Element) {
-		switch e.(type) {
-		case *scpb.TableLocalityGlobal, *scpb.TableLocalityPrimaryRegion, *scpb.TableLocalitySecondaryRegion:
-			if n.PartitionByIndex != nil {
-				panic(pgerror.New(pgcode.FeatureNotSupported,
-					"cannot define PARTITION BY on a new INDEX in a multi-region database",
-				))
-			}
-
-		case *scpb.TableLocalityRegionalByRow:
-			if n.PartitionByIndex != nil {
-				panic(pgerror.New(pgcode.FeatureNotSupported,
-					"cannot define PARTITION BY on a new INDEX in a multi-region database",
-				))
-			}
-			if n.Sharded != nil {
-				panic(pgerror.New(pgcode.FeatureNotSupported, "hash sharded indexes are not compatible with REGIONAL BY ROW tables"))
-			}
-		}
-	})
 	// Assign the ID here, since we may have added columns
 	// and made a new primary key above.
 	idxSpec.secondary.SourceIndexID = sourceIndex.IndexID
@@ -187,8 +153,6 @@ func CreateIndex(b BuildCtx, n *tree.CreateIndex) {
 	idxSpec.secondary.TemporaryIndexID = idxSpec.secondary.IndexID + 1
 	// Add columns for the secondary index.
 	addColumnsForSecondaryIndex(b, n, relation, &idxSpec)
-	// If necessary set up the partitioning descriptor for the index.
-	maybeAddPartitionDescriptorForIndex(b, n, &idxSpec)
 	// If necessary setup a partial predicate
 	maybeAddIndexPredicate(b, n, &idxSpec)
 	// Picks up any geoconfig parameters, hash sharded one are
@@ -409,127 +373,6 @@ func processColNodeType(
 			columnType.Type))
 	}
 	return invertedKind
-}
-
-// maybeAddPartitionDescriptorForIndex adds a partitioning descriptor and
-// any implicit columns needed to support it.
-func maybeAddPartitionDescriptorForIndex(b BuildCtx, n *tree.CreateIndex, idxSpec *indexSpec) {
-	tableID := idxSpec.secondary.TableID
-	relationElts := b.QueryByID(tableID)
-	// If partition by all is required, then setup the information
-	// for that.
-	_, _, partitioning := scpb.FindTablePartitioning(relationElts)
-	if partitioning != nil {
-		// Update AST to reflect the partition information.
-		n.PartitionByIndex = &tree.PartitionByIndex{
-			PartitionBy: &tree.PartitionBy{},
-		}
-		var indexImplicitCols []*scpb.IndexColumn
-		scpb.ForEachIndexColumn(relationElts, func(current scpb.Status, target scpb.TargetStatus, e *scpb.IndexColumn) {
-			if e.IndexID == idxSpec.secondary.SourceIndexID && e.Implicit {
-				indexImplicitCols = append(indexImplicitCols, e)
-			}
-		})
-		sort.Slice(indexImplicitCols, func(i, j int) bool {
-			return indexImplicitCols[i].OrdinalInKind < indexImplicitCols[j].OrdinalInKind
-		})
-
-		for _, ic := range indexImplicitCols {
-			columnName := mustRetrieveColumnNameElem(b, ic.TableID, ic.ColumnID)
-			n.PartitionByIndex.Fields = append(n.PartitionByIndex.Fields, tree.Name(columnName.Name))
-		}
-		// Recover the rest from the partitioning data.
-		scpb.ForEachIndexPartitioning(relationElts, func(current scpb.Status, target scpb.TargetStatus, e *scpb.IndexPartitioning) {
-			if e.IndexID == idxSpec.secondary.SourceIndexID {
-				idxSpec.partitioning = protoutil.Clone(e).(*scpb.IndexPartitioning)
-			}
-		})
-	}
-	if n.PartitionByIndex.ContainsPartitions() || idxSpec.partitioning != nil {
-		// Detect if the partitioning overlaps with any of the secondary index
-		// columns.
-		{
-			implicitColumns := make(map[catid.ColumnID]struct{})
-			_, _, primaryIdx := scpb.FindPrimaryIndex(relationElts)
-			scpb.ForEachIndexColumn(relationElts, func(current scpb.Status, target scpb.TargetStatus, e *scpb.IndexColumn) {
-				if e.IndexID == primaryIdx.IndexID {
-					if e.Implicit {
-						implicitColumns[e.ColumnID] = struct{}{}
-					}
-				}
-			})
-			for _, col := range idxSpec.columns {
-				if _, ok := implicitColumns[col.ColumnID]; !col.Implicit && ok {
-					panic(pgerror.New(
-						pgcode.FeatureNotSupported,
-						`hash sharded indexes cannot include implicit partitioning columns from "PARTITION ALL BY" or "LOCALITY REGIONAL BY ROW"`,
-					))
-				}
-			}
-		}
-		if idxSpec.partitioning == nil {
-			idxSpec.partitioning = &scpb.IndexPartitioning{
-				TableID: idxSpec.secondary.TableID,
-				IndexID: idxSpec.secondary.IndexID,
-				PartitioningDescriptor: b.IndexPartitioningDescriptor(n.Name.String(),
-					&idxSpec.secondary.Index, idxSpec.columns, n.PartitionByIndex.PartitionBy),
-			}
-		} else {
-			idxSpec.partitioning.IndexID = idxSpec.secondary.IndexID
-		}
-		var columnsToPrepend []*scpb.IndexColumn
-		for _, field := range n.PartitionByIndex.Fields {
-			// Resolve the column first.
-			ers := b.ResolveColumn(tableID, field, ResolveParams{RequiredPrivilege: privilege.CREATE})
-			_, _, fieldColumn := scpb.FindColumn(ers)
-			// If it already in the index we are done.
-			if fieldColumn.ColumnID == idxSpec.columns[0].ColumnID {
-				break
-			}
-			newIndexColumn := &scpb.IndexColumn{
-				IndexID:   idxSpec.secondary.IndexID,
-				TableID:   fieldColumn.TableID,
-				ColumnID:  fieldColumn.ColumnID,
-				Kind:      scpb.IndexColumn_KEY,
-				Direction: catenumpb.IndexColumn_ASC,
-				Implicit:  true,
-			}
-			// Check if the column is already a suffix, then we should
-			// move it out.
-			for pos, otherIC := range idxSpec.columns {
-				if otherIC.ColumnID == fieldColumn.ColumnID {
-					idxSpec.columns = append(idxSpec.columns[:pos], idxSpec.columns[pos+1:]...)
-					break
-				}
-			}
-			columnsToPrepend = append(columnsToPrepend, newIndexColumn)
-		}
-		idxSpec.columns = append(columnsToPrepend, idxSpec.columns...)
-		if n.Inverted {
-			b.IncrementSchemaChangeIndexCounter("partitioned_inverted")
-		}
-	}
-	// Warn against creating a non-partitioned index on a partitioned table,
-	// which is undesirable in most cases.
-	// Avoid the warning if we have PARTITION ALL BY as all indexes will implicitly
-	// have relevant partitioning columns prepended at the front.
-	scpb.ForEachIndexPartitioning(
-		b.QueryByID(idxSpec.secondary.TableID),
-		func(current scpb.Status, target scpb.TargetStatus, e *scpb.IndexPartitioning) {
-			if target == scpb.ToPublic &&
-				e.IndexID == idxSpec.secondary.SourceIndexID &&
-				e.NumColumns > 0 &&
-				partitioning == nil {
-				b.EvalCtx().ClientNoticeSender.BufferClientNotice(
-					b,
-					errors.WithHint(
-						pgnotice.Newf("creating non-partitioned index on partitioned table may not be performant"),
-						"Consider modifying the index such that it is also partitioned.",
-					),
-				)
-			}
-		},
-	)
 }
 
 // addColumnsForSecondaryIndex updates the index spec to add columns needed

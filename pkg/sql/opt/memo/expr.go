@@ -293,18 +293,6 @@ func (e *DistributeExpr) GetDistributions() (target, source physical.Distributio
 	return physical.Distribution{}, physical.Distribution{}, false
 }
 
-// HasHomeRegion returns true if the operation tree being distributed has a home
-// region.
-func (e *DistributeExpr) HasHomeRegion() bool {
-	inputDistributionProvidedPhysical := e.Input.ProvidedPhysical()
-
-	if inputDistributionProvidedPhysical != nil {
-		inputDistribution := inputDistributionProvidedPhysical.Distribution
-		return len(inputDistribution.Regions) == 1
-	}
-	return false
-}
-
 // GetRegionOfDistribution returns the single region name of the provided
 // distribution, if there is exactly one.
 func (e *DistributeExpr) GetRegionOfDistribution() (region string, ok bool) {
@@ -312,17 +300,6 @@ func (e *DistributeExpr) GetRegionOfDistribution() (region string, ok bool) {
 
 	if distributionProvidedPhysical != nil {
 		return distributionProvidedPhysical.Distribution.GetSingleRegion()
-	}
-	return "", false
-}
-
-// GetInputHomeRegion returns the single region name of the home region of the
-// input expression tree to the Distribute operation, if there is exactly one.
-func (e *DistributeExpr) GetInputHomeRegion() (inputHomeRegion string, ok bool) {
-	inputDistributionProvidedPhysical := e.Input.ProvidedPhysical()
-
-	if inputDistributionProvidedPhysical != nil {
-		return inputDistributionProvidedPhysical.Distribution.GetSingleRegion()
 	}
 	return "", false
 }
@@ -817,8 +794,7 @@ func (f *WindowFrame) String() string {
 func (s *ScanPrivate) IsCanonical() bool {
 	return s.Index == cat.PrimaryIndex &&
 		s.Constraint == nil &&
-		s.HardLimit == 0 &&
-		!s.LocalityOptimized
+		s.HardLimit == 0
 }
 
 // IsUnfiltered returns true if the ScanPrivate will produce all rows in the

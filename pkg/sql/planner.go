@@ -40,7 +40,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/idxusage"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
 	"github.com/cockroachdb/cockroach/pkg/sql/querycache"
-	"github.com/cockroachdb/cockroach/pkg/sql/regions"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catid"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/transform"
@@ -54,6 +53,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/envutil"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
 	"github.com/cockroachdb/cockroach/pkg/util/mon"
+	"github.com/cockroachdb/cockroach/pkg/util/rangedesc"
 	"github.com/cockroachdb/cockroach/pkg/util/ulid"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/logtags"
@@ -110,9 +110,6 @@ type extendedEvalContext struct {
 	SchemaChangerState *SchemaChangerState
 
 	statementPreparer statementPreparer
-
-	// validateDbZoneConfig should the DB zone config on commit.
-	validateDbZoneConfig *bool
 }
 
 // copyFromExecCfg copies relevant fields from an ExecutorConfig.
@@ -133,7 +130,6 @@ func (evalCtx *extendedEvalContext) copyFromExecCfg(execCfg *ExecutorConfig) {
 	evalCtx.ClusterName = execCfg.RPCContext.ClusterName()
 	evalCtx.NodeID = execCfg.NodeInfo.NodeID
 	evalCtx.Locality = execCfg.Locality
-	evalCtx.OriginalLocality = execCfg.Locality
 	evalCtx.NodesStatusServer = execCfg.NodesStatusServer
 	evalCtx.TenantStatusServer = execCfg.TenantStatusServer
 	evalCtx.SQLStatusServer = execCfg.SQLStatusServer
@@ -202,10 +198,6 @@ type planner struct {
 
 	// Corresponding Statement for this query.
 	stmt Statement
-
-	// StmtWithHomeRegionEnforced, if non-nil is the SQL statement for which a
-	// home region is being enforced.
-	StmtNoConstantsWithHomeRegionEnforced string
 
 	// pausablePortal is set when the query is from a pausable portal.
 	pausablePortal *PreparedPortal
@@ -431,7 +423,6 @@ func newInternalPlanner(
 	p.extendedEvalCtx.ClientNoticeSender = p
 	p.extendedEvalCtx.Sequence = p
 	p.extendedEvalCtx.Tenant = p
-	p.extendedEvalCtx.Regions = p
 	p.extendedEvalCtx.JoinTokenCreator = p
 	p.extendedEvalCtx.Gossip = p
 	p.extendedEvalCtx.JobsProfiler = p
@@ -439,7 +430,6 @@ func newInternalPlanner(
 	p.extendedEvalCtx.ClusterName = execCfg.RPCContext.ClusterName()
 	p.extendedEvalCtx.NodeID = execCfg.NodeInfo.NodeID
 	p.extendedEvalCtx.Locality = execCfg.Locality
-	p.extendedEvalCtx.OriginalLocality = execCfg.Locality
 
 	p.sessionDataMutatorIterator = smi
 	p.autoCommit = false
@@ -648,14 +638,6 @@ func (p *planner) InternalSQLTxn() descs.Txn {
 		p.internalSQLTxn.init(p.txn, ie)
 	}
 	return &p.internalSQLTxn
-}
-
-func (p *planner) regionsProvider() *regions.Provider {
-	if txn := p.InternalSQLTxn(); txn != nil {
-		_ = txn.Regions() // force initialization
-		return p.internalSQLTxn.extraTxnState.regionsProvider
-	}
-	return nil
 }
 
 func (p *planner) User() username.SQLUsername {
@@ -962,4 +944,34 @@ func (p *planner) AutoCommit() bool {
 // mustUseLeafTxn returns true if inner plans must use a leaf transaction.
 func (p *planner) mustUseLeafTxn() bool {
 	return atomic.LoadInt32(&p.atomic.innerPlansMustUseLeafTxn) >= 1
+}
+
+// GetRangeDescIterator is part of the eval.Planner interface.
+func (p *planner) GetRangeDescIterator(
+	ctx context.Context, span roachpb.Span,
+) (rangedesc.Iterator, error) {
+	return p.ExecCfg().RangeDescIteratorFactory.NewIterator(ctx, span)
+}
+
+// GetRangeDescByID is part of the eval.Planner interface.
+func (p *planner) GetRangeDescByID(
+	ctx context.Context, rangeID roachpb.RangeID,
+) (rangeDesc roachpb.RangeDescriptor, _ error) {
+	execCfg := p.execCfg
+	tenantSpan := execCfg.Codec.TenantSpan()
+	rangeDescIterator, err := execCfg.RangeDescIteratorFactory.NewIterator(ctx, tenantSpan)
+	if err != nil {
+		return rangeDesc, err
+	}
+	for rangeDescIterator.Valid() {
+		rangeDesc = rangeDescIterator.CurRangeDescriptor()
+		if rangeDesc.RangeID == rangeID {
+			break
+		}
+		rangeDescIterator.Next()
+	}
+	if !rangeDescIterator.Valid() {
+		return rangeDesc, errors.Newf("range with ID %d not found", rangeID)
+	}
+	return rangeDesc, nil
 }

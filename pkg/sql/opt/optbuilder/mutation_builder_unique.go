@@ -287,24 +287,20 @@ func (h *uniqueCheckHelper) init(mb *mutationBuilder, uniqueOrdinal int) bool {
 	// Check that the columns in the unique constraint aren't already known to
 	// form a lax key. This can happen if there is a unique index on a superset of
 	// these columns, where all other columns are computed columns that depend
-	// only on our columns. This is especially important for multi-region tables
-	// when the region column is computed.
+	// only on our columns.
 	//
 	// For example:
 	//
 	//   CREATE TABLE tab (
-	//     k INT PRIMARY KEY,
-	//     region crdb_internal_region AS (
-	//       CASE WHEN k < 10 THEN 'us-east1' ELSE 'us-west1' END
-	//     ) STORED
-	//   ) LOCALITY REGIONAL BY ROW AS region
+	//     k INT,
+	//     r INT AS (k % 10) STORED,
+	//     PRIMARY KEY (r, k),
+	//     UNIQUE WITHOUT INDEX (k)
+	//   )
 	//
-	// Because this is a REGIONAL BY ROW table, the region column is implicitly
-	// added to the front of every index, including the primary index. As a
-	// result, we would normally need to add a uniqueness check to all mutations
-	// to ensure that the primary key column (k in this case) remains unique.
-	// However, because the region column is computed and depends only on k, the
-	// presence of the unique index on (region, k) (i.e., the primary index) is
+	// We would normally need to add a uniqueness check to all mutations to
+	// ensure that k remains unique. However, because r is computed and depends
+	// only on k, the unique index on (r, k) (i.e., the primary index) is
 	// sufficient to guarantee the uniqueness of k.
 	var uniqueCols opt.ColSet
 	h.uniqueOrdinals.ForEach(func(ord int) {
@@ -563,7 +559,7 @@ func (h *uniqueCheckHelper) buildInsertionCheck(
 	if foundScan && len(scanFilters) != 0 {
 		newScanScope, _ := h.buildTableScan()
 		newPossibleScan := newScanScope.expr
-		// Hash-sharded REGIONAL BY ROW tables may include a projection which can
+		// Hash-sharded tables may include a projection which can
 		// be skipped over to find the applicable Scan.
 		if skipProjectExpr, ok := newPossibleScan.(*memo.ProjectExpr); ok {
 			newPossibleScan = skipProjectExpr.Input

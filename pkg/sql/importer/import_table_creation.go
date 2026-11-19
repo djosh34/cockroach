@@ -156,7 +156,6 @@ func MakeSimpleTableDescriptor(
 
 	evalCtx := eval.Context{
 		Sequence:           &importSequenceOperators{},
-		Regions:            makeImportRegionOperator(""),
 		SessionDataStack:   sessiondata.NewStack(&sessiondata.SessionData{}),
 		ClientNoticeSender: &faketreeeval.DummyClientNoticeSender{},
 		TxnTimestamp:       timeutil.Unix(0, walltime),
@@ -174,7 +173,6 @@ func MakeSimpleTableDescriptor(
 		db,
 		sc,
 		tableID,
-		nil, /* regionConfig */
 		hlc.Timestamp{WallTime: walltime},
 		catpb.NewBasePrivilegeDescriptor(username.AdminRoleName()),
 		affected,
@@ -182,11 +180,6 @@ func MakeSimpleTableDescriptor(
 		&evalCtx,
 		evalCtx.SessionData(), /* sessionData */
 		tree.PersistencePermanent,
-		// We need to bypass the LOCALITY on non multi-region check here because
-		// we cannot access the database region config at import level.
-		// There is code that only allows REGIONAL BY TABLE tables to be imported,
-		// which will safely execute even if the locality check is bypassed.
-		sql.NewTableDescOptionBypassLocalityOnNonMultiRegionDatabaseCheck(),
 	)
 	if err != nil {
 		return nil, err
@@ -212,67 +205,8 @@ func fixDescriptorFKState(tableDesc *tabledesc.Mutable) error {
 
 var (
 	errSequenceOperators = errors.New("sequence operations unsupported")
-	errRegionOperator    = errors.New("region operations unsupported")
 	errSchemaResolver    = errors.New("schema resolver unsupported")
 )
-
-// Implements the tree.RegionOperator interface.
-type importRegionOperator struct {
-	primaryRegion catpb.RegionName
-}
-
-func makeImportRegionOperator(primaryRegion catpb.RegionName) *importRegionOperator {
-	return &importRegionOperator{primaryRegion: primaryRegion}
-}
-
-// importDatabaseRegionConfig is a stripped down version of
-// multiregion.RegionConfig that is used by import.
-type importDatabaseRegionConfig struct {
-	primaryRegion catpb.RegionName
-}
-
-// IsValidRegionNameString implements the tree.DatabaseRegionConfig interface.
-func (i importDatabaseRegionConfig) IsValidRegionNameString(_ string) bool {
-	// Unimplemented.
-	return false
-}
-
-// PrimaryRegionString implements the tree.DatabaseRegionConfig interface.
-func (i importDatabaseRegionConfig) PrimaryRegionString() string {
-	return string(i.primaryRegion)
-}
-
-var _ eval.DatabaseRegionConfig = &importDatabaseRegionConfig{}
-
-// CurrentDatabaseRegionConfig is part of the eval.RegionOperator interface.
-func (so *importRegionOperator) CurrentDatabaseRegionConfig(
-	_ context.Context,
-) (eval.DatabaseRegionConfig, error) {
-	return importDatabaseRegionConfig{primaryRegion: so.primaryRegion}, nil
-}
-
-// ValidateAllMultiRegionZoneConfigsInCurrentDatabase is part of the eval.RegionOperator interface.
-func (so *importRegionOperator) ValidateAllMultiRegionZoneConfigsInCurrentDatabase(
-	_ context.Context,
-) error {
-	return errors.WithStack(errRegionOperator)
-}
-
-// ResetMultiRegionZoneConfigsForTable is part of the eval.RegionOperator
-// interface.
-func (so *importRegionOperator) ResetMultiRegionZoneConfigsForTable(
-	_ context.Context, _ int64,
-) error {
-	return errors.WithStack(errRegionOperator)
-}
-
-// ResetMultiRegionZoneConfigsForDatabase is part of the eval.RegionOperator
-// interface.
-func (so *importRegionOperator) ResetMultiRegionZoneConfigsForDatabase(
-	_ context.Context, _ int64,
-) error {
-	return errors.WithStack(errRegionOperator)
-}
 
 // Implements the eval.SequenceOperators interface.
 type importSequenceOperators struct{}

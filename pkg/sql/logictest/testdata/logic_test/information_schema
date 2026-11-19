@@ -5519,8 +5519,6 @@ enable_seqscan                                             on
 enable_shared_locking_for_serializable                     off
 enable_super_regions                                       off
 enable_zigzag_join                                         off
-enforce_home_region                                        off
-enforce_home_region_follower_reads_enabled                 off
 escape_string_warning                                      on
 expect_and_ignore_not_visible_columns_in_copy              off
 experimental_enable_implicit_column_partitioning           off
@@ -5550,7 +5548,6 @@ lc_monetary                                                C.UTF-8
 lc_numeric                                                 C.UTF-8
 lc_time                                                    C.UTF-8
 locality                                                   region=test,dc=dc1
-locality_optimized_partitioned_index_scan                  on
 lock_timeout                                               0
 log_timezone                                               UTC
 max_connections                                            -1

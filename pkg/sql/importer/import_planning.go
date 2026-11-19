@@ -34,7 +34,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/colinfo"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
@@ -297,15 +296,10 @@ func resolveUDTsUsedByImportInto(
 	ctx context.Context, p sql.PlanHookState, table *tabledesc.Mutable,
 ) ([]catalog.TypeDescriptor, error) {
 	typeDescs := make([]catalog.TypeDescriptor, 0)
-	var dbDesc catalog.DatabaseDescriptor
 	err := sql.DescsTxn(ctx, p.ExecCfg(), func(
 		ctx context.Context, txn isql.Txn, descriptors *descs.Collection,
 	) (err error) {
-		dbDesc, err = descriptors.ByID(txn.KV()).WithoutNonPublic().Get().Database(ctx, table.GetParentID())
-		if err != nil {
-			return err
-		}
-		typeIDs, _, err := table.GetAllReferencedTypeIDs(dbDesc,
+		typeIDs, _, err := table.GetAllReferencedTypeIDs(
 			func(id descpb.ID) (catalog.TypeDescriptor, error) {
 				immutDesc, err := descriptors.ByID(txn.KV()).WithoutNonPublic().Get().Type(ctx, id)
 				if err != nil {
@@ -896,25 +890,6 @@ func importPlanHook(
 			}
 		}
 
-		// Store the primary region of the database being imported into. This is
-		// used during job execution to evaluate certain default expressions and
-		// computed columns such as `gateway_region`.
-		var databasePrimaryRegion catpb.RegionName
-		if db.IsMultiRegion() {
-			if err := sql.DescsTxn(ctx, p.ExecCfg(), func(
-				ctx context.Context, txn isql.Txn, descsCol *descs.Collection,
-			) error {
-				regionConfig, err := sql.SynthesizeRegionConfig(ctx, txn.KV(), db.GetID(), descsCol)
-				if err != nil {
-					return err
-				}
-				databasePrimaryRegion = regionConfig.PrimaryRegion()
-				return nil
-			}); err != nil {
-				return errors.Wrap(err, "failed to resolve region config for multi region database")
-			}
-		}
-
 		telemetry.CountBucketed("import.files", int64(len(files)))
 
 		// Record telemetry for userfile being used as the import target.
@@ -943,17 +918,16 @@ func importPlanHook(
 		// StartableJob which we attached to the connExecutor somehow.
 
 		importDetails := jobspb.ImportDetails{
-			URIs:                  files,
-			Format:                format,
-			ParentID:              db.GetID(),
-			Tables:                tableDetails,
-			Types:                 typeDetails,
-			SSTSize:               sstSize,
-			Oversample:            oversample,
-			SkipFKs:               skipFKs,
-			ParseBundleSchema:     importStmt.Bundle,
-			DefaultIntSize:        p.SessionData().DefaultIntSize,
-			DatabasePrimaryRegion: databasePrimaryRegion,
+			URIs:              files,
+			Format:            format,
+			ParentID:          db.GetID(),
+			Tables:            tableDetails,
+			Types:             typeDetails,
+			SSTSize:           sstSize,
+			Oversample:        oversample,
+			SkipFKs:           skipFKs,
+			ParseBundleSchema: importStmt.Bundle,
+			DefaultIntSize:    p.SessionData().DefaultIntSize,
 		}
 
 		jr := jobs.Record{

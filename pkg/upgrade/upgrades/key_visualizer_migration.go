@@ -17,13 +17,13 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/jobs"
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
 	"github.com/cockroachdb/cockroach/pkg/keys"
+
 	// Import keyvisjob so that its init function will be called.
 	_ "github.com/cockroachdb/cockroach/pkg/keyvisualizer/keyvisjob"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/systemschema"
 	"github.com/cockroachdb/cockroach/pkg/sql/isql"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
 	"github.com/cockroachdb/cockroach/pkg/upgrade"
 )
@@ -43,8 +43,7 @@ func keyVisualizerTablesMigration(
 
 	for _, table := range tables {
 		err := createSystemTable(ctx, d.DB, d.Settings, keys.SystemSQLCodec,
-			table,
-			tree.LocalityLevelTable)
+			table)
 		if err != nil {
 			return err
 		}

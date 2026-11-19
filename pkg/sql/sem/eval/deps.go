@@ -35,13 +35,6 @@ import (
 	"github.com/lib/pq/oid"
 )
 
-// DatabaseRegionConfig is a wrapper around multiregion.RegionConfig
-// related methods which avoids a circular dependency between descpb and tree.
-type DatabaseRegionConfig interface {
-	IsValidRegionNameString(r string) bool
-	PrimaryRegionString() string
-}
-
 // HasAnyPrivilegeResult represents the non-error results of calling HasAnyPrivilege
 type HasAnyPrivilegeResult = int8
 
@@ -371,21 +364,6 @@ type Planner interface {
 	// IsActive returns if the version specified by key is active.
 	IsActive(ctx context.Context, key clusterversion.Key) bool
 
-	// GetMultiregionConfig synthesizes a new multiregion.RegionConfig describing
-	// the multiregion properties of the database identified via databaseID. The
-	// second return value is false if the database doesn't exist or is not
-	// multiregion.
-	GetMultiregionConfig(ctx context.Context, databaseID descpb.ID) (interface{}, bool)
-
-	// IsANSIDML returns true if the statement being planned is one of the 4 DML
-	// statements, SELECT, UPDATE, INSERT, DELETE, or an EXPLAIN of one of these
-	// statements.
-	IsANSIDML() bool
-
-	// EnforceHomeRegion returns true if the statement being planned is an ANSI
-	// DML statement and the enforce_home_region session setting is true.
-	EnforceHomeRegion() bool
-
 	// GetRangeDescIterator gets a rangedesc.Iterator for the specified span.
 	GetRangeDescIterator(context.Context, roachpb.Span) (rangedesc.Iterator, error)
 
@@ -552,29 +530,6 @@ type PrivilegedAccessor interface {
 
 	// IsSystemTable returns if a given descriptor ID is a system table.s
 	IsSystemTable(ctx context.Context, id int64) (bool, error)
-}
-
-// RegionOperator gives access to the current region, validation for all
-// regions, and the ability to reset the zone configurations for tables
-// or databases.
-type RegionOperator interface {
-
-	// CurrentDatabaseRegionConfig returns the RegionConfig of the current
-	// session database.
-	CurrentDatabaseRegionConfig(ctx context.Context) (DatabaseRegionConfig, error)
-
-	// ValidateAllMultiRegionZoneConfigsInCurrentDatabase validates whether the current
-	// database's multi-region zone configs are correctly setup. This includes
-	// all tables within the database.
-	ValidateAllMultiRegionZoneConfigsInCurrentDatabase(ctx context.Context) error
-
-	// ResetMultiRegionZoneConfigsForTable resets the given table's zone
-	// configuration to its multi-region default.
-	ResetMultiRegionZoneConfigsForTable(ctx context.Context, id int64) error
-
-	// ResetMultiRegionZoneConfigsForDatabase resets the given database's zone
-	// configuration to its multi-region default.
-	ResetMultiRegionZoneConfigsForDatabase(ctx context.Context, id int64) error
 }
 
 // SequenceOperators is used for various sql related functions that can

@@ -434,20 +434,6 @@ var optUseMultiColStatsClusterMode = settings.RegisterBoolSetting(
 	"default value for optimizer_use_multicol_stats session setting; enables usage of multi-column stats in the optimizer by default",
 	true,
 	settings.WithPublic)
-
-// localityOptimizedSearchMode controls the cluster default for the use of
-// locality optimized search. If enabled, the optimizer will try to plan scans
-// and lookup joins in which local nodes (i.e., nodes in the gateway region) are
-// searched for matching rows before remote nodes, in the hope that the
-// execution engine can avoid visiting remote nodes.
-var localityOptimizedSearchMode = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.defaults.locality_optimized_partitioned_index_scan.enabled",
-	"default value for locality_optimized_partitioned_index_scan session setting; "+
-		"enables searching for rows in the current region before searching remote regions",
-	true,
-	settings.WithPublic)
-
 var implicitSelectForUpdateClusterMode = settings.RegisterBoolSetting(
 	settings.ApplicationLevel,
 	"sql.defaults.implicit_select_for_update.enabled",
@@ -3302,10 +3288,6 @@ func (m *sessionDataMutator) SetOptimizerUseNotVisibleIndexes(val bool) {
 	m.data.OptimizerUseNotVisibleIndexes = val
 }
 
-func (m *sessionDataMutator) SetLocalityOptimizedSearch(val bool) {
-	m.data.LocalityOptimizedSearch = val
-}
-
 func (m *sessionDataMutator) SetImplicitSelectForUpdate(val bool) {
 	m.data.ImplicitSelectForUpdate = val
 }
@@ -3646,10 +3628,6 @@ func (m *sessionDataMutator) SetDeclareCursorStatementTimeoutEnabled(val bool) {
 	m.data.DeclareCursorStatementTimeoutEnabled = val
 }
 
-func (m *sessionDataMutator) SetEnforceHomeRegion(val bool) {
-	m.data.EnforceHomeRegion = val
-}
-
 func (m *sessionDataMutator) SetVariableInequalityLookupJoinEnabled(val bool) {
 	m.data.VariableInequalityLookupJoinEnabled = val
 }
@@ -3676,10 +3654,6 @@ func (m *sessionDataMutator) SetOptimizerUseImprovedSplitDisjunctionForJoins(val
 
 func (m *sessionDataMutator) SetInjectRetryErrorsOnCommitEnabled(val bool) {
 	m.data.InjectRetryErrorsOnCommitEnabled = val
-}
-
-func (m *sessionDataMutator) SetEnforceHomeRegionFollowerReadsEnabled(val bool) {
-	m.data.EnforceHomeRegionFollowerReadsEnabled = val
 }
 
 func (m *sessionDataMutator) SetOptimizerAlwaysUseHistograms(val bool) {

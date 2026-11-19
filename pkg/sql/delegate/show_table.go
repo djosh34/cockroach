@@ -66,13 +66,8 @@ WITH zone_configs AS (
 			string_agg(
 				raw_config_sql,
 				e';\n'
-				ORDER BY partition_name, index_name
-			) AS raw,
-			string_agg(
-				crdb_internal.filter_multiregion_fields_from_zone_config_sql(raw_config_sql),
-				e';\n'
-				ORDER BY partition_name, index_name
-			) AS mr
+				ORDER BY index_name
+			) AS raw
 		FROM crdb_internal.zones
     WHERE database_name = %[1]s
     AND schema_name = %[5]s
@@ -84,17 +79,8 @@ SELECT
     %[3]s AS table_name,
     concat(` + createField + `,
         CASE
-				WHEN is_multi_region THEN
-					CASE
-						WHEN (SELECT mr FROM zone_configs) IS NULL THEN NULL
-						ELSE concat(e';\n', (SELECT mr FROM zone_configs))
-					END
         WHEN (SELECT raw FROM zone_configs) IS NOT NULL THEN
 					concat(e';\n', (SELECT raw FROM zone_configs))
-        WHEN NOT has_partitions
-          THEN NULL
-				ELSE
-					e'\n-- Warning: Partitioned table with no zone configurations.\n'
         END
     ) AS create_statement
 FROM

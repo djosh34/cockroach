@@ -207,7 +207,6 @@ func TestRandomParquetExports(t *testing.T) {
 		)
 
 		stmts := randgen.RandCreateTables(rng, tablePrefix, numTables,
-			false, /* isMultiRegion */
 			randgen.PartialIndexMutator,
 			randgen.ForeignKeyMutator,
 		)

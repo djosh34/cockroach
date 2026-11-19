@@ -32,7 +32,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/privilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
-	"github.com/cockroachdb/cockroach/pkg/sql/sqlerrors"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqltelemetry"
 	"github.com/cockroachdb/cockroach/pkg/sql/syntheticprivilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
@@ -51,7 +50,6 @@ type optionValue struct {
 
 type setZoneConfigNode struct {
 	zoneSpecifier tree.ZoneSpecifier
-	allIndexes    bool
 	yamlConfig    tree.TypedExpr
 	options       map[tree.Name]optionValue
 	setDefault    bool
@@ -258,14 +256,6 @@ func (p *planner) SetZoneConfig(ctx context.Context, n *tree.SetZoneConfig) (pla
 		return nil, err
 	}
 
-	if err := p.CheckZoneConfigChangePermittedForMultiRegion(
-		ctx,
-		n.ZoneSpecifier,
-		n.Options,
-	); err != nil {
-		return nil, err
-	}
-
 	yamlConfig, err := p.getUpdatedZoneConfigYamlConfig(ctx, n.YAMLConfig)
 	if err != nil {
 		return nil, err
@@ -278,7 +268,6 @@ func (p *planner) SetZoneConfig(ctx context.Context, n *tree.SetZoneConfig) (pla
 
 	return &setZoneConfigNode{
 		zoneSpecifier: n.ZoneSpecifier,
-		allIndexes:    n.AllIndexes,
 		yamlConfig:    yamlConfig,
 		options:       options,
 		setDefault:    n.SetDefault,
@@ -437,7 +426,7 @@ func (n *setZoneConfigNode) startExec(params runParams) error {
 		sqltelemetry.SchemaChangeAlterCounterWithExtra(n.zoneSpecifier.TelemetryName(), "configure_zone"),
 	)
 
-	// If the specifier is for a table, partition or index, this will
+	// If the specifier is for a table or index, this will
 	// resolve the table descriptor. If the specifier is for a database
 	// or range, this is a no-op and a nil pointer is returned as
 	// descriptor.
@@ -455,57 +444,6 @@ func (n *setZoneConfigNode) startExec(params runParams) error {
 	// Disallow schema changes if it's a table and its schema is locked.
 	if err = checkTableSchemaUnlocked(table); err != nil {
 		return err
-	}
-
-	if n.zoneSpecifier.TargetsPartition() && len(n.zoneSpecifier.TableOrIndex.Index) == 0 && !n.allIndexes {
-		// Backward compatibility for ALTER PARTITION ... OF TABLE. Determine which
-		// index has the specified partition.
-		partitionName := string(n.zoneSpecifier.Partition)
-
-		var indexes []catalog.Index
-		for _, idx := range table.NonDropIndexes() {
-			if idx.GetPartitioning().FindPartitionByName(partitionName) != nil {
-				indexes = append(indexes, idx)
-			}
-		}
-
-		switch len(indexes) {
-		case 0:
-			return fmt.Errorf("partition %q does not exist on table %q", partitionName, table.GetName())
-		case 1:
-			n.zoneSpecifier.TableOrIndex.Index = tree.UnrestrictedName(indexes[0].GetName())
-		case 2:
-			// Temporary indexes create during backfill should always share the same
-			// zone configs as the corresponding new index.
-			if catalog.IsCorrespondingTemporaryIndex(indexes[1], indexes[0]) {
-				n.zoneSpecifier.TableOrIndex.Index = tree.UnrestrictedName(indexes[0].GetName())
-				break
-			}
-			fallthrough
-		default:
-			err := fmt.Errorf(
-				"partition %q exists on multiple indexes of table %q", partitionName, table.GetName())
-			err = pgerror.WithCandidateCode(err, pgcode.InvalidParameterValue)
-			err = errors.WithHint(err, "try ALTER PARTITION ... OF INDEX ...")
-			return err
-		}
-	}
-
-	// If this is an ALTER ALL PARTITIONS statement, we need to find all indexes
-	// with the specified partition name and apply the zone configuration to all
-	// of them.
-	var specifiers []tree.ZoneSpecifier
-	if n.zoneSpecifier.TargetsPartition() && n.allIndexes {
-		sqltelemetry.IncrementPartitioningCounter(sqltelemetry.AlterAllPartitions)
-		for _, idx := range table.NonDropIndexes() {
-			if idx.GetPartitioning().FindPartitionByName(string(n.zoneSpecifier.Partition)) != nil {
-				zs := n.zoneSpecifier
-				zs.TableOrIndex.Index = tree.UnrestrictedName(idx.GetName())
-				specifiers = append(specifiers, zs)
-			}
-		}
-	} else {
-		specifiers = append(specifiers, n.zoneSpecifier)
 	}
 
 	applyZoneConfig := func(zs tree.ZoneSpecifier) error {
@@ -544,7 +482,7 @@ func (n *setZoneConfigNode) startExec(params runParams) error {
 		// resolveSubzone determines the sub-parts of the zone
 		// specifier. This ought to succeed regardless of whether there is
 		// already a zone config.
-		index, partition, err := resolveSubzone(&zs, table)
+		index, err := resolveSubzone(&zs, table)
 		if err != nil {
 			return err
 		}
@@ -571,7 +509,7 @@ func (n *setZoneConfigNode) startExec(params runParams) error {
 
 		var partialSubzone *zonepb.Subzone
 		if index != nil {
-			partialSubzone = partialZone.GetSubzoneExact(uint32(index.GetID()), partition)
+			partialSubzone = partialZone.GetSubzoneExact(uint32(index.GetID()), "")
 			if partialSubzone == nil {
 				partialSubzone = &zonepb.Subzone{Config: *zonepb.NewZoneConfig()}
 			}
@@ -587,7 +525,7 @@ func (n *setZoneConfigNode) startExec(params runParams) error {
 		// These zones are only used for validations. The merged zone is will
 		// not be written.
 		_, completeZone, completeSubzone, err := GetZoneConfigInTxn(
-			params.ctx, params.p.txn, params.p.Descriptors(), targetID, index, partition, n.setDefault,
+			params.ctx, params.p.txn, params.p.Descriptors(), targetID, index, n.setDefault,
 		)
 
 		if errors.Is(err, errNoZoneConfigApplies) {
@@ -627,29 +565,16 @@ func (n *setZoneConfigNode) startExec(params runParams) error {
 				); err != nil {
 					return err
 				}
-				// In the case we have just an index, we should copy from the inherited
-				// zone's fields (whether that was the table or database).
-				if partition == "" {
-					partialSubzone.Config.CopyFromZone(zoneInheritedFields, copyFromParentList)
-				} else {
-					// In the case of updating a partition, we need try inheriting fields
-					// from the subzone's index, and inherit the remainder from the zone.
-					subzoneInheritedFields := zonepb.ZoneConfig{}
-					if indexSubzone := completeZone.GetSubzone(uint32(index.GetID()), ""); indexSubzone != nil {
-						subzoneInheritedFields.InheritFromParent(&indexSubzone.Config)
-					}
-					subzoneInheritedFields.InheritFromParent(&zoneInheritedFields)
-					// After inheriting fields, copy the requested ones into the
-					// partialSubzone.Config.
-					partialSubzone.Config.CopyFromZone(subzoneInheritedFields, copyFromParentList)
-				}
+				// Copy from the inherited zone's fields (whether that was the table or
+				// database).
+				partialSubzone.Config.CopyFromZone(zoneInheritedFields, copyFromParentList)
 			}
 		}
 
 		if deleteZone {
 			if index != nil {
-				didDelete := completeZone.DeleteSubzone(uint32(index.GetID()), partition)
-				_ = partialZone.DeleteSubzone(uint32(index.GetID()), partition)
+				didDelete := completeZone.DeleteSubzone(uint32(index.GetID()), "")
+				_ = partialZone.DeleteSubzone(uint32(index.GetID()), "")
 				if !didDelete {
 					// If we didn't do any work, return early. We'd otherwise perform an
 					// update that would make it look like one row was affected.
@@ -745,7 +670,7 @@ func (n *setZoneConfigNode) startExec(params runParams) error {
 			}
 
 			if err := validateZoneAttrsAndLocalities(
-				params.ctx, params.p.InternalSQLTxn().Regions(), params.p.ExecCfg(), currentZone, &newZone,
+				params.ctx, params.p.ExecCfg(), currentZone, &newZone,
 			); err != nil {
 				return err
 			}
@@ -784,9 +709,8 @@ func (n *setZoneConfigNode) startExec(params runParams) error {
 					completeZone = completeZoneWithRaw.ZoneConfigProto()
 				}
 				completeZone.SetSubzone(zonepb.Subzone{
-					IndexID:       uint32(index.GetID()),
-					PartitionName: partition,
-					Config:        newZone,
+					IndexID: uint32(index.GetID()),
+					Config:  newZone,
 				})
 
 				// The partial zone might just be empty. If so,
@@ -796,23 +720,20 @@ func (n *setZoneConfigNode) startExec(params runParams) error {
 				}
 
 				partialZone.SetSubzone(zonepb.Subzone{
-					IndexID:       uint32(index.GetID()),
-					PartitionName: partition,
-					Config:        finalZone,
+					IndexID: uint32(index.GetID()),
+					Config:  finalZone,
 				})
 
 				// Also set the same zone configs for any corresponding temporary indexes.
 				if tempIndex != nil {
 					completeZone.SetSubzone(zonepb.Subzone{
-						IndexID:       uint32(tempIndex.GetID()),
-						PartitionName: partition,
-						Config:        newZone,
+						IndexID: uint32(tempIndex.GetID()),
+						Config:  newZone,
 					})
 
 					partialZone.SetSubzone(zonepb.Subzone{
-						IndexID:       uint32(tempIndex.GetID()),
-						PartitionName: partition,
-						Config:        finalZone,
+						IndexID: uint32(tempIndex.GetID()),
+						Config:  finalZone,
 					})
 				}
 			}
@@ -875,19 +796,7 @@ func (n *setZoneConfigNode) startExec(params runParams) error {
 		}
 		return params.p.logEvent(params.ctx, targetID, info)
 	}
-	for _, zs := range specifiers {
-		// Note(solon): Currently the zone configurations are applied serially for
-		// each specifier. This could certainly be made more efficient. For
-		// instance, we should only need to write to the system.zones table once
-		// rather than once for every specifier. However, the number of specifiers
-		// is expected to be low--it's bounded by the number of indexes on the
-		// table--so I'm holding off on adding that complexity unless we find it's
-		// necessary.
-		if err := applyZoneConfig(zs); err != nil {
-			return err
-		}
-	}
-	return nil
+	return applyZoneConfig(n.zoneSpecifier)
 }
 
 func (n *setZoneConfigNode) Next(runParams) (bool, error) { return false, nil }
@@ -1014,11 +923,10 @@ func accumulateNewUniqueConstraints(currentZone, newZone *zonepb.ZoneConfig) []z
 //
 // validateZoneAttrsAndLocalities is tenant aware in its validation. Secondary
 // tenants don't have access to the NodeStatusServer, and as such, aren't
-// allowed to set non-locality attributes in their constraints. Furthermore,
-// their access is validated using the descs.RegionProvider.
+// allowed to set non-locality attributes in their constraints. Their regions
+// come from the tenant status server.
 func validateZoneAttrsAndLocalities(
 	ctx context.Context,
-	regionProvider descs.RegionProvider,
 	execCfg *ExecutorConfig,
 	currentZone, newZone *zonepb.ZoneConfig,
 ) error {
@@ -1033,8 +941,11 @@ func validateZoneAttrsAndLocalities(
 		}
 		return validateZoneAttrsAndLocalitiesForSystemTenant(ctx, ss.ListNodesInternal, currentZone, newZone)
 	}
+	getRegions := func(ctx context.Context) (*serverpb.RegionsResponse, error) {
+		return execCfg.TenantStatusServer.Regions(ctx, &serverpb.RegionsRequest{})
+	}
 	return validateZoneLocalitiesForSecondaryTenants(
-		ctx, regionProvider.GetRegions, currentZone, newZone, execCfg.Codec, execCfg.Settings,
+		ctx, getRegions, currentZone, newZone, execCfg.Codec, execCfg.Settings,
 	)
 }
 
@@ -1303,13 +1214,12 @@ func RemoveIndexZoneConfigs(
 	}
 
 	if zcRewriteNecessary {
-		// Ignore CCL required error to allow schema change to progress.
 		_, err = writeZoneConfig(
 			ctx, txn, tableDesc.GetID(), tableDesc, zone,
 			zoneWithRaw.GetRawBytesInStorage(), execCfg,
 			false /* hasNewSubzones */, kvTrace,
 		)
-		if err != nil && !sqlerrors.IsCCLRequiredError(err) {
+		if err != nil {
 			return err
 		}
 	}

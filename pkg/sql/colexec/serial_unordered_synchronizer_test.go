@@ -59,8 +59,6 @@ func TestSerialUnorderedSynchronizer(t *testing.T) {
 		&execinfra.FlowCtx{Gateway: true},
 		0, /* processorID */
 		inputs,
-		0,   /* serialInputIdxExclusiveUpperBound */
-		nil, /* exceedsInputIdxExclusiveUpperBoundError */
 	)
 	s.Init(ctx)
 	resultBatches := 0

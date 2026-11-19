@@ -463,8 +463,6 @@ func mysqlTableToCockroach(
 			time,
 			privilegeDesc,
 			tree.PersistencePermanent,
-			// If this is multi-region, this will get added by WriteDescriptors.
-			false, /* isMultiRegion */
 		)
 		if err != nil {
 			return nil, nil, err

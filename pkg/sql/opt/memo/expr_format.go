@@ -362,7 +362,7 @@ func (f *ExprFmtCtx) formatRelational(e RelExpr, tp treeprinter.Node) {
 		colList = t.Cols
 
 	case *UnionExpr, *IntersectExpr, *ExceptExpr,
-		*UnionAllExpr, *IntersectAllExpr, *ExceptAllExpr, *LocalityOptimizedSearchExpr:
+		*UnionAllExpr, *IntersectAllExpr, *ExceptAllExpr:
 		colList = e.Private().(*SetPrivate).OutCols
 
 	default:
@@ -412,7 +412,7 @@ func (f *ExprFmtCtx) formatRelational(e RelExpr, tp treeprinter.Node) {
 	// Special-case handling for set operators to show the left and right
 	// input columns that correspond to the output columns.
 	case *UnionExpr, *IntersectExpr, *ExceptExpr,
-		*UnionAllExpr, *IntersectAllExpr, *ExceptAllExpr, *LocalityOptimizedSearchExpr:
+		*UnionAllExpr, *IntersectAllExpr, *ExceptAllExpr:
 		private := e.Private().(*SetPrivate)
 		if !f.HasFlags(ExprFmtHideColumns) {
 			f.formatRelColList(e, tp, "left columns:", private.LeftCols)
@@ -570,10 +570,6 @@ func (f *ExprFmtCtx) formatRelational(e RelExpr, tp treeprinter.Node) {
 			if len(t.LookupExpr) > 0 {
 				n := tp.Childf("lookup expression")
 				f.formatExpr(&t.LookupExpr, n)
-			}
-			if len(t.RemoteLookupExpr) > 0 {
-				n := tp.Childf("remote lookup expression")
-				f.formatExpr(&t.RemoteLookupExpr, n)
 			}
 		}
 		if t.LookupColsAreTableKey {

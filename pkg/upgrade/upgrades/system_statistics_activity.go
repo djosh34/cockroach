@@ -16,7 +16,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/systemschema"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/upgrade"
 )
 
@@ -33,7 +32,7 @@ func systemStatisticsActivityTableMigration(
 
 	for _, table := range tables {
 		err := createSystemTable(ctx, d.DB, d.Settings, d.Codec,
-			table, tree.LocalityLevelTable)
+			table)
 		if err != nil {
 			return err
 		}

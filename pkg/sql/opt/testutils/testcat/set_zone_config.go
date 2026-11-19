@@ -27,35 +27,6 @@ func (tc *Catalog) SetZoneConfig(stmt *tree.SetZoneConfig) cat.Zone {
 	tc.qualifyTableName(&tabName)
 	tab := tc.Table(&tabName)
 
-	// Handle the case of a zone config targeting a partition.
-	if stmt.TargetsPartition() {
-		partitionName := string(stmt.Partition)
-		var index *Index
-		if stmt.TableOrIndex.Index == "" {
-			// This partition is in the primary index.
-			index = tab.Indexes[0]
-		} else {
-			// This partition is in a secondary index.
-			for _, idx := range tab.Indexes {
-				if idx.IdxName == string(stmt.TableOrIndex.Index) {
-					index = idx
-					break
-				}
-			}
-		}
-		if index == nil {
-			panic(fmt.Errorf("\"%q\" is not an index", stmt.TableOrIndex.Index))
-		}
-
-		for i := range index.partitions {
-			if index.partitions[i].name == partitionName {
-				index.partitions[i].zone = makeZoneConfig(stmt.Options)
-				return index.partitions[i].zone
-			}
-		}
-		panic(fmt.Errorf("\"%q\" is not a partition", stmt.Partition))
-	}
-
 	// The zone config must target an entire index.
 
 	// Handle special case of primary index.

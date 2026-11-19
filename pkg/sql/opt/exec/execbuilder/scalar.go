@@ -13,7 +13,6 @@ package execbuilder
 import (
 	"context"
 
-	"github.com/cockroachdb/cockroach/pkg/sql/execinfra"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/exec"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/memo"
@@ -21,15 +20,12 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/props"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/props/physical"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/xform"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/builtins/builtinsregistry"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree/treebin"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree/treecmp"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/volatility"
-	"github.com/cockroachdb/cockroach/pkg/sql/sqlerrors"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/cockroach/pkg/util/errorutil"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
@@ -750,26 +746,6 @@ func (b *Builder) buildSubquery(
 	subquery := scalar.(*memo.SubqueryExpr)
 	input := subquery.Input
 
-	if b.evalCtx.SessionData().EnforceHomeRegion && b.IsANSIDML {
-		inputDistributionProvidedPhysical := input.ProvidedPhysical()
-		if homeRegion, ok := inputDistributionProvidedPhysical.Distribution.GetSingleRegion(); ok {
-			if gatewayRegion, ok := b.evalCtx.GetLocalRegion(); ok {
-				if homeRegion != gatewayRegion {
-					return nil, pgerror.Newf(pgcode.QueryNotRunningInHomeRegion,
-						`%s. Try running the query from region '%s'. %s`,
-						execinfra.QueryNotRunningInHomeRegionMessagePrefix,
-						homeRegion,
-						sqlerrors.EnforceHomeRegionFurtherInfo,
-					)
-				}
-			}
-		} else {
-			return nil, pgerror.Newf(pgcode.QueryHasNoHomeRegion,
-				"Query has no home region. Try adding a LIMIT clause. %s",
-				sqlerrors.EnforceHomeRegionFurtherInfo)
-		}
-	}
-
 	// TODO(radu): for now we only support the trivial projection.
 	cols := input.Relational().OutputCols
 	if cols.Len() != 1 {
@@ -848,7 +824,7 @@ func (b *Builder) buildSubquery(
 			ctx context.Context, ref tree.RoutineExecFactory, args tree.Datums, fn tree.RoutinePlanGeneratedFunc,
 		) error {
 			ef := ref.(exec.Factory)
-			eb := New(ctx, ef, b.optimizer, b.mem, b.catalog, input, b.semaCtx, b.evalCtx, false /* allowAutoCommit */, b.IsANSIDML)
+			eb := New(ctx, ef, b.optimizer, b.mem, b.catalog, input, b.semaCtx, b.evalCtx, false /* allowAutoCommit */)
 			eb.withExprs = withExprs
 			eb.disableTelemetry = true
 			eb.planLazySubqueries = true
@@ -1206,7 +1182,7 @@ func (b *Builder) buildRoutinePlanGenerator(
 
 			// Build the memo into a plan.
 			ef := ref.(exec.Factory)
-			eb := New(ctx, ef, &o, f.Memo(), b.catalog, optimizedExpr, b.semaCtx, b.evalCtx, false /* allowAutoCommit */, b.IsANSIDML)
+			eb := New(ctx, ef, &o, f.Memo(), b.catalog, optimizedExpr, b.semaCtx, b.evalCtx, false /* allowAutoCommit */)
 			eb.withExprs = withExprs
 			eb.disableTelemetry = true
 			eb.planLazySubqueries = true

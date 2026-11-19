@@ -183,8 +183,6 @@ func (n *createViewNode) startExec(params runParams) error {
 	}
 
 	var newDesc *tabledesc.Mutable
-	applyGlobalMultiRegionZoneConfig := false
-
 	var retErr error
 	params.p.runWithOptions(resolveFlags{contextDatabaseID: n.dbDesc.GetID()}, func() {
 		retErr = func() error {
@@ -229,7 +227,6 @@ func (n *createViewNode) startExec(params runParams) error {
 					params.p.EvalContext(),
 					params.p.EvalContext().Settings,
 					createView.Persistence,
-					n.dbDesc.IsMultiRegion(),
 					params.p)
 				if err != nil {
 					return err
@@ -252,11 +249,6 @@ func (n *createViewNode) startExec(params runParams) error {
 					version := params.ExecCfg().Settings.Version.ActiveVersion(params.ctx)
 					if err := desc.AllocateIDs(params.ctx, version); err != nil {
 						return err
-					}
-					// For multi-region databases, we want this descriptor to be GLOBAL instead.
-					if n.dbDesc.IsMultiRegion() {
-						desc.SetTableLocalityGlobal()
-						applyGlobalMultiRegionZoneConfig = true
 					}
 				}
 
@@ -328,26 +320,6 @@ func (n *createViewNode) startExec(params runParams) error {
 				return err
 			}
 
-			if applyGlobalMultiRegionZoneConfig {
-				regionConfig, err := SynthesizeRegionConfig(params.ctx, params.p.txn, n.dbDesc.GetID(), params.p.Descriptors())
-				if err != nil {
-					return err
-				}
-				if err := ApplyZoneConfigForMultiRegionTable(
-					params.ctx,
-					params.p.InternalSQLTxn(),
-					params.p.ExecCfg(),
-					params.p.extendedEvalCtx.Tracing.KVTracingEnabled(),
-					regionConfig,
-					newDesc,
-					applyZoneConfigForMultiRegionTableOptionTableNewConfig(
-						tabledesc.LocalityConfigGlobal(),
-					),
-				); err != nil {
-					return err
-				}
-			}
-
 			// Log Create View event. This is an auditable log event and is
 			// recorded in the same transaction as the table descriptor update.
 			return params.p.logEvent(params.ctx,
@@ -386,7 +358,6 @@ func makeViewTableDesc(
 	evalCtx *eval.Context,
 	st *cluster.Settings,
 	persistence tree.Persistence,
-	isMultiRegion bool,
 	sc resolver.SchemaResolver,
 ) (tabledesc.Mutable, error) {
 	desc := tabledesc.InitTableDescriptor(
@@ -399,10 +370,6 @@ func makeViewTableDesc(
 		persistence,
 	)
 	desc.ViewQuery = viewQuery
-	if isMultiRegion {
-		desc.SetTableLocalityRegionalByTable(tree.PrimaryRegionNotSpecifiedName)
-	}
-
 	if sc != nil {
 		sequenceReplacedQuery, err := replaceSeqNamesWithIDs(ctx, sc, viewQuery, false /* multiStmt */)
 		if err != nil {

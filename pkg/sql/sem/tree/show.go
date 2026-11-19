@@ -20,7 +20,6 @@
 package tree
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/lexbase"
@@ -263,66 +262,6 @@ func (s *ShowJobOptions) CombineWith(other *ShowJobOptions) error {
 }
 
 var _ NodeFormatter = &ShowJobOptions{}
-
-// ShowSurvivalGoal represents a SHOW SURVIVAL GOAL statement
-type ShowSurvivalGoal struct {
-	DatabaseName Name
-}
-
-// Format implements the NodeFormatter interface.
-func (node *ShowSurvivalGoal) Format(ctx *FmtCtx) {
-	ctx.WriteString("SHOW SURVIVAL GOAL FROM DATABASE")
-	if node.DatabaseName != "" {
-		ctx.WriteString(" ")
-		ctx.FormatNode(&node.DatabaseName)
-	}
-}
-
-// ShowRegionsFrom denotes what kind of SHOW REGIONS command is being used.
-type ShowRegionsFrom int
-
-const (
-	// ShowRegionsFromCluster represents SHOW REGIONS FROM CLUSTER.
-	ShowRegionsFromCluster ShowRegionsFrom = iota
-	// ShowRegionsFromDatabase represents SHOW REGIONS FROM DATABASE.
-	ShowRegionsFromDatabase
-	// ShowRegionsFromAllDatabases represents SHOW REGIONS FROM ALL DATABASES.
-	ShowRegionsFromAllDatabases
-	// ShowRegionsFromDefault represents SHOW REGIONS.
-	ShowRegionsFromDefault
-	// ShowSuperRegionsFromDatabase represents SHOW SUPER REGIONS FROM DATABASE.
-	ShowSuperRegionsFromDatabase
-)
-
-// ShowRegions represents a SHOW REGIONS statement
-type ShowRegions struct {
-	ShowRegionsFrom ShowRegionsFrom
-	DatabaseName    Name
-}
-
-// Format implements the NodeFormatter interface.
-func (node *ShowRegions) Format(ctx *FmtCtx) {
-	if node.ShowRegionsFrom == ShowSuperRegionsFromDatabase {
-		ctx.WriteString("SHOW SUPER REGIONS")
-	} else {
-		ctx.WriteString("SHOW REGIONS")
-	}
-	switch node.ShowRegionsFrom {
-	case ShowRegionsFromDefault:
-	case ShowRegionsFromAllDatabases:
-		ctx.WriteString(" FROM ALL DATABASES")
-	case ShowRegionsFromDatabase, ShowSuperRegionsFromDatabase:
-		ctx.WriteString(" FROM DATABASE")
-		if node.DatabaseName != "" {
-			ctx.WriteString(" ")
-			ctx.FormatNode(&node.DatabaseName)
-		}
-	case ShowRegionsFromCluster:
-		ctx.WriteString(" FROM CLUSTER")
-	default:
-		panic(fmt.Sprintf("unknown ShowRegionsFrom: %v", node.ShowRegionsFrom))
-	}
-}
 
 // ShowSessions represents a SHOW SESSIONS statement
 type ShowSessions struct {
@@ -870,32 +809,6 @@ type ShowHistogram struct {
 // Format implements the NodeFormatter interface.
 func (node *ShowHistogram) Format(ctx *FmtCtx) {
 	ctx.Printf("SHOW HISTOGRAM %d", node.HistogramID)
-}
-
-// ShowPartitions represents a SHOW PARTITIONS statement.
-type ShowPartitions struct {
-	IsDB     bool
-	Database Name
-
-	IsIndex bool
-	Index   TableIndexName
-
-	IsTable bool
-	Table   *UnresolvedObjectName
-}
-
-// Format implements the NodeFormatter interface.
-func (node *ShowPartitions) Format(ctx *FmtCtx) {
-	if node.IsDB {
-		ctx.Printf("SHOW PARTITIONS FROM DATABASE ")
-		ctx.FormatNode(&node.Database)
-	} else if node.IsIndex {
-		ctx.Printf("SHOW PARTITIONS FROM INDEX ")
-		ctx.FormatNode(&node.Index)
-	} else {
-		ctx.Printf("SHOW PARTITIONS FROM TABLE ")
-		ctx.FormatNode(node.Table)
-	}
 }
 
 // ScheduledJobExecutorType is a type identifying the names of

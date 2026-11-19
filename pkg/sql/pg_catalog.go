@@ -2039,13 +2039,11 @@ func indexDefFromDescriptor(
 	index catalog.Index,
 ) (string, error) {
 	tableName := tree.MakeTableNameWithSchema(tree.Name(db.GetName()), tree.Name(sc.GetName()), tree.Name(table.GetName()))
-	partitionStr := ""
 	fmtStr, err := catformat.IndexForDisplay(
 		ctx,
 		table,
 		&tableName,
 		index,
-		partitionStr,
 		tree.FmtPGCatalog,
 		p.SemaCtx(),
 		p.SessionData(),

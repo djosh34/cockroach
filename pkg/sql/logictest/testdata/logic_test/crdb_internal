@@ -1251,11 +1251,6 @@ WHERE descriptor_id = 'defaultdb.public.in_other_db'::regclass::int
 database_name  schema_name  descriptor_name
 defaultdb      public       in_other_db
 
-query TT
-SELECT * FROM crdb_internal.regions ORDER BY 1
-----
-test  {}
-
 # Regression test for incorrectly handling tree.DOidWrappers by some builtins
 # (#69684).
 statement ok

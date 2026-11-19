@@ -147,7 +147,6 @@ type planNodeReadingOwnWrites interface {
 	ReadingOwnWrites()
 }
 
-var _ planNode = &alterIndexNode{}
 var _ planNode = &alterIndexVisibleNode{}
 var _ planNode = &alterSchemaNode{}
 var _ planNode = &alterSequenceNode{}
@@ -236,7 +235,6 @@ var _ planNodeFastPath = &setZoneConfigNode{}
 var _ planNodeFastPath = &controlJobsNode{}
 var _ planNodeFastPath = &controlSchedulesNode{}
 
-var _ planNodeReadingOwnWrites = &alterIndexNode{}
 var _ planNodeReadingOwnWrites = &alterSchemaNode{}
 var _ planNodeReadingOwnWrites = &alterSequenceNode{}
 var _ planNodeReadingOwnWrites = &alterTableNode{}

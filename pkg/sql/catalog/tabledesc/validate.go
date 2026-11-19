@@ -20,7 +20,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catprivilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/colinfo"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/multiregion"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/schemaexpr"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/typedesc"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
@@ -153,7 +152,7 @@ func (desc *wrapper) ValidateForwardReferences(
 
 	if dbDesc != nil {
 		// Validate the all types present in the descriptor exist.
-		typeIDs, _, err := desc.GetAllReferencedTypeIDs(dbDesc, vdg.GetTypeDescriptor)
+		typeIDs, _, err := desc.GetAllReferencedTypeIDs(vdg.GetTypeDescriptor)
 		if err != nil {
 			vea.Report(err)
 		} else {
@@ -161,12 +160,6 @@ func (desc *wrapper) ValidateForwardReferences(
 				_, err := vdg.GetTypeDescriptor(id)
 				vea.Report(err)
 			}
-		}
-
-		// Validate table locality.
-		if err := multiregion.ValidateTableLocalityConfig(desc, dbDesc, vdg); err != nil {
-			vea.Report(errors.Wrap(err, "invalid locality config"))
-			return
 		}
 	}
 

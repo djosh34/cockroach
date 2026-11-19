@@ -1469,31 +1469,26 @@ func (s *SQLServer) preStart(
 		return errors.Wrap(err, "initializing settings")
 	}
 
-	// Load the multi-region enum by reading the system database's descriptor.
-	// This also serves as a simple check to see if a tenant exist (i.e. by
-	// checking whether the system db has been bootstrapped).
-	regionPhysicalRep, err := startup.RunIdempotentWithRetryEx(ctx,
+	// Read the system database's descriptor. This serves as a simple check to
+	// see if a tenant exists (i.e. by checking whether the system db has been
+	// bootstrapped).
+	if _, err := startup.RunIdempotentWithRetryEx(ctx,
 		stopper.ShouldQuiesce(),
-		"sql get locality",
-		func(ctx context.Context) ([]byte, error) {
-			res, err := sql.GetLocalityRegionEnumPhysicalRepresentation(
-				ctx, s.internalDB, keys.SystemDatabaseID, s.distSQLServer.Locality,
-			)
-			if errors.Is(err, sql.ErrNotMultiRegionDatabase) {
-				err = nil
-			}
-			return res, err
-		})
-	if err != nil {
+		"sql get system database",
+		func(ctx context.Context) (struct{}, error) {
+			return struct{}{}, s.internalDB.DescsTxn(ctx, func(ctx context.Context, txn descs.Txn) error {
+				_, err := txn.Descriptors().ByID(txn.KV()).Get().Database(ctx, keys.SystemDatabaseID)
+				return err
+			})
+		}); err != nil {
 		return err
 	}
 
-	s.leaseMgr.SetRegionPrefix(regionPhysicalRep)
-
 	s.execCfg.ContentionRegistry.Start(ctx, stopper)
 
-	// Start the sql liveness subsystem. We'll need it to get a session.
-	s.sqlLivenessProvider.Start(ctx, regionPhysicalRep)
+	// Start the sql liveness subsystem. We'll need it to get a session. The
+	// system database has a single region, so the default region prefix is used.
+	s.sqlLivenessProvider.Start(ctx, nil /* regionPhysicalRep */)
 
 	session, err := s.sqlLivenessProvider.Session(ctx)
 	if err != nil {
@@ -1503,7 +1498,7 @@ func (s *SQLServer) preStart(
 
 	// Start instance ID reclaim loop.
 	if err := s.sqlInstanceStorage.RunInstanceIDReclaimLoop(
-		ctx, stopper, timeutil.DefaultTimeSource{}, s.internalDB, session,
+		ctx, stopper, timeutil.DefaultTimeSource{}, session,
 	); err != nil {
 		return err
 	}

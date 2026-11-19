@@ -55,7 +55,6 @@ func IndexForDisplay(
 	table catalog.TableDescriptor,
 	tableName *tree.TableName,
 	index catalog.Index,
-	partition string,
 	formatFlags tree.FmtFlags,
 	semaCtx *tree.SemaContext,
 	sessionData *sessiondata.SessionData,
@@ -67,7 +66,6 @@ func IndexForDisplay(
 		tableName,
 		index.IndexDesc(),
 		index.Primary(),
-		partition,
 		formatFlags,
 		semaCtx,
 		sessionData,
@@ -81,7 +79,6 @@ func indexForDisplay(
 	tableName *tree.TableName,
 	index *descpb.IndexDescriptor,
 	isPrimary bool,
-	partition string,
 	formatFlags tree.FmtFlags,
 	semaCtx *tree.SemaContext,
 	sessionData *sessiondata.SessionData,
@@ -145,8 +142,6 @@ func indexForDisplay(
 		}
 		f.WriteByte(')')
 	}
-
-	f.WriteString(partition)
 
 	if !f.HasFlags(tree.FmtPGCatalog) {
 		if err := formatStorageConfigs(table, index, f); err != nil {

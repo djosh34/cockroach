@@ -984,14 +984,7 @@ func (s *vectorizedFlowCreator) setupInput(
 			}
 			s.closers = append(s.closers, os)
 		} else if input.Type == execinfrapb.InputSyncSpec_SERIAL_UNORDERED || opt == flowinfra.FuseAggressively {
-			var err error
-			if input.EnforceHomeRegionError != nil {
-				err = input.EnforceHomeRegionError.ErrorDetail(ctx)
-				if flowCtx.EvalCtx.SessionData().EnforceHomeRegionFollowerReadsEnabled {
-					err = execinfra.NewDynamicQueryHasNoHomeRegionError(err)
-				}
-			}
-			sync := colexec.NewSerialUnorderedSynchronizer(flowCtx, processorID, inputStreamOps, input.EnforceHomeRegionStreamExclusiveUpperBound, err)
+			sync := colexec.NewSerialUnorderedSynchronizer(flowCtx, processorID, inputStreamOps)
 			opWithMetaInfo = colexecargs.OpWithMetaInfo{
 				Root:            sync,
 				MetadataSources: colexecop.MetadataSources{sync},

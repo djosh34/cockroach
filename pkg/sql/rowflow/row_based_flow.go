@@ -340,20 +340,7 @@ func (f *rowBasedFlow) setupInputSyncs(
 				if is.Type == execinfrapb.InputSyncSpec_ORDERED {
 					ordering = execinfrapb.ConvertToColumnOrdering(is.Ordering)
 				}
-				var returnErrorFunc func() error
-				if is.EnforceHomeRegionError != nil {
-					returnErrorFunc = func() error {
-						enforceHomeRegionError := is.EnforceHomeRegionError.ErrorDetail(ctx)
-						if f.FlowCtx.EvalCtx.SessionData().EnforceHomeRegionFollowerReadsEnabled {
-							enforceHomeRegionError = execinfra.NewDynamicQueryHasNoHomeRegionError(enforceHomeRegionError)
-						}
-						return enforceHomeRegionError
-					}
-				}
-				sync, err = makeSerialSync(ordering, f.EvalCtx, streams,
-					is.EnforceHomeRegionStreamExclusiveUpperBound,
-					returnErrorFunc,
-				)
+				sync, err = makeSerialSync(ordering, f.EvalCtx, streams)
 				if err != nil {
 					return nil, err
 				}

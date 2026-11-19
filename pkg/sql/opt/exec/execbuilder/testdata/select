@@ -1385,7 +1385,6 @@ vectorized: true
               table: abcd@abcd_pkey
               spans: FULL SCAN
 
-
 query T
 EXPLAIN (VERBOSE) SELECT a + x FROM (SELECT a, b, a + b + c AS x FROM abcd) ORDER BY a DESC, b DESC
 ----

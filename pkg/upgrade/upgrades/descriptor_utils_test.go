@@ -24,7 +24,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/tabledesc"
 	"github.com/cockroachdb/cockroach/pkg/sql/privilege"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/cockroach/pkg/testutils/sqlutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/testcluster"
@@ -96,7 +95,7 @@ SELECT *
 	require.Len(t, checkEntries(t), 0)
 	descDB := tc.Server(0).InternalDB().(descs.DB)
 	require.NoError(t, upgrades.CreateSystemTable(
-		ctx, descDB, tc.Server(0).ClusterSettings(), keys.SystemSQLCodec, table, tree.LocalityLevelGlobal,
+		ctx, descDB, tc.Server(0).ClusterSettings(), keys.SystemSQLCodec, table,
 	))
 	require.Len(t, checkEntries(t), 1)
 	sqlDB.CheckQueryResults(t,
@@ -105,7 +104,7 @@ SELECT *
 
 	// Make sure it's idempotent.
 	require.NoError(t, upgrades.CreateSystemTable(
-		ctx, descDB, tc.Server(0).ClusterSettings(), keys.SystemSQLCodec, table, tree.LocalityLevelGlobal,
+		ctx, descDB, tc.Server(0).ClusterSettings(), keys.SystemSQLCodec, table,
 	))
 	require.Len(t, checkEntries(t), 1)
 

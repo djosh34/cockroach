@@ -16,9 +16,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/keys"
 	"github.com/cockroachdb/cockroach/pkg/kv"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
-	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
-	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/nstree"
@@ -68,10 +66,6 @@ type Dependencies interface {
 	// FeatureChecker returns something that checks schema feature flags.
 	FeatureChecker() FeatureChecker
 
-	// IndexPartitioningCCLCallback returns the CCL callback for creating
-	// partitioning descriptors for indexes.
-	IndexPartitioningCCLCallback() CreatePartitioningCCLCallback
-
 	// DescriptorCommentGetter returns a CommentCache
 	// Implementation.
 	DescriptorCommentGetter() CommentGetter
@@ -91,20 +85,6 @@ type Dependencies interface {
 	// ReferenceProviderFactory returns a ReferenceProviderFactory.
 	ReferenceProviderFactory() ReferenceProviderFactory
 }
-
-// CreatePartitioningCCLCallback is the type of the CCL callback for creating
-// partitioning descriptors for indexes.
-type CreatePartitioningCCLCallback func(
-	ctx context.Context,
-	st *cluster.Settings,
-	evalCtx *eval.Context,
-	columnLookupFn func(tree.Name) (catalog.Column, error),
-	oldNumImplicitColumns int,
-	oldKeyColumnNames []string,
-	partBy *tree.PartitionBy,
-	allowedNewColumnNames []tree.Name,
-	allowImplicitPartitioning bool,
-) (newImplicitCols []catalog.Column, newPartitioning catpb.PartitioningDescriptor, err error)
 
 // CatalogReader should implement descriptor resolution, namespace lookups, and
 // all such catalog read operations for the builder. The following contract must

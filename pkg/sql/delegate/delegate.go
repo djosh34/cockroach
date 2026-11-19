@@ -86,9 +86,6 @@ func TryDelegate(
 	case *tree.ShowConstraints:
 		return d.delegateShowConstraints(t)
 
-	case *tree.ShowPartitions:
-		return d.delegateShowPartitions(t)
-
 	case *tree.ShowGrants:
 		return d.delegateShowGrants(t)
 
@@ -110,12 +107,6 @@ func TryDelegate(
 
 	case *tree.ShowRangeForRow:
 		return d.delegateShowRangeForRow(t)
-
-	case *tree.ShowSurvivalGoal:
-		return d.delegateShowSurvivalGoal(t)
-
-	case *tree.ShowRegions:
-		return d.delegateShowRegions(t)
 
 	case *tree.ShowRoleGrants:
 		return d.delegateShowRoleGrants(t)

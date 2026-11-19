@@ -43,7 +43,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/schematelemetry/schematelemetrycontroller"
 	"github.com/cockroachdb/cockroach/pkg/sql/clusterunique"
 	"github.com/cockroachdb/cockroach/pkg/sql/contention/txnidcache"
-	"github.com/cockroachdb/cockroach/pkg/sql/execinfra"
 	"github.com/cockroachdb/cockroach/pkg/sql/execstats"
 	"github.com/cockroachdb/cockroach/pkg/sql/idxrecommendations"
 	"github.com/cockroachdb/cockroach/pkg/sql/idxusage"
@@ -1448,9 +1447,6 @@ type connExecutor struct {
 		// comprising statements.
 		numRows int
 
-		// validateDbZoneConfig should the DB zone config on commit.
-		validateDbZoneConfig bool
-
 		// txnCounter keeps track of how many SQL txns have been open since
 		// the start of the session. This is used for logging, to
 		// distinguish statements that belong to separate SQL transactions.
@@ -2020,7 +2016,6 @@ func (ex *connExecutor) resetExtraTxnState(ctx context.Context, ev txnEvent, pay
 	} else {
 		ex.extraTxnState.descCollection.ReleaseAll(ctx)
 		ex.extraTxnState.jobs.reset()
-		ex.extraTxnState.validateDbZoneConfig = false
 		ex.extraTxnState.schemaChangerState.memAcc.Clear(ctx)
 		ex.extraTxnState.schemaChangerState = &SchemaChangerState{
 			mode:   ex.sessionData().NewSchemaChangerMode,
@@ -3366,14 +3361,6 @@ func (ex *connExecutor) convertRetriableErrorIntoUserVisibleError(
 func (ex *connExecutor) makeErrEvent(err error, stmt tree.Statement) (fsm.Event, fsm.EventPayload) {
 
 	retriable := errIsRetriable(err)
-	if retriable && execinfra.IsDynamicQueryHasNoHomeRegionError(err) {
-		// Retry only # of remote regions times if the retry is due to the
-		// enforce_home_region setting.
-		retriable = int(ex.state.mu.autoRetryCounter) < len(ex.planner.EvalContext().RemoteRegions)
-		if !retriable {
-			err = execinfra.MaybeGetNonRetryableDynamicQueryHasNoHomeRegionError(err)
-		}
-	}
 	if retriable {
 		var rc rewindCapability
 		var canAutoRetry bool
@@ -3599,7 +3586,6 @@ func (ex *connExecutor) initEvalCtx(ctx context.Context, evalCtx *extendedEvalCo
 			ClientNoticeSender:             p,
 			Sequence:                       p,
 			Tenant:                         p,
-			Regions:                        p,
 			JoinTokenCreator:               p,
 			Gossip:                         p,
 			PreparedStatementState:         &ex.extraTxnState.prepStmtsNamespace,
@@ -3620,15 +3606,14 @@ func (ex *connExecutor) initEvalCtx(ctx context.Context, evalCtx *extendedEvalCo
 			ULIDEntropy:                    ulid.Monotonic(crypto_rand.Reader, 0),
 			CidrLookup:                     p.execCfg.CidrLookup,
 		},
-		Tracing:              &ex.sessionTracing,
-		MemMetrics:           &ex.memMetrics,
-		Descs:                ex.extraTxnState.descCollection,
-		TxnModesSetter:       ex,
-		jobs:                 ex.extraTxnState.jobs,
-		validateDbZoneConfig: &ex.extraTxnState.validateDbZoneConfig,
-		statsProvider:        ex.server.sqlStats,
-		indexUsageStats:      ex.indexUsageStats,
-		statementPreparer:    ex,
+		Tracing:           &ex.sessionTracing,
+		MemMetrics:        &ex.memMetrics,
+		Descs:             ex.extraTxnState.descCollection,
+		TxnModesSetter:    ex,
+		jobs:              ex.extraTxnState.jobs,
+		statsProvider:     ex.server.sqlStats,
+		indexUsageStats:   ex.indexUsageStats,
+		statementPreparer: ex,
 	}
 	evalCtx.copyFromExecCfg(ex.server.cfg)
 }
@@ -3716,21 +3701,6 @@ func (ex *connExecutor) resetPlanner(
 	ctx context.Context, p *planner, txn *kv.Txn, stmtTS time.Time,
 ) {
 	p.resetPlanner(ctx, txn, stmtTS, ex.sessionData(), ex.state.mon)
-	autoRetryReason := ex.state.mu.autoRetryReason
-	// Make sure the default locality specifies the actual gateway region at the
-	// start of query compilation. It could have been overridden to a remote
-	// region when the enforce_home_region session setting is true.
-	p.EvalContext().Locality = p.EvalContext().OriginalLocality
-	if execinfra.IsDynamicQueryHasNoHomeRegionError(autoRetryReason) {
-		if int(ex.state.mu.autoRetryCounter) <= len(p.EvalContext().RemoteRegions) {
-			// Set a fake gateway region for use by the optimizer to inform its
-			// decision on which region to access first in locality-optimized scan
-			// and join operations. This setting does not affect the distsql planner,
-			// and local plans will continue to be run from the actual gateway region.
-			p.EvalContext().Locality =
-				p.EvalContext().Locality.CopyReplaceKeyValue("region", string(p.EvalContext().RemoteRegions[ex.state.mu.autoRetryCounter-1]))
-		}
-	}
 	ex.resetEvalCtx(&p.extendedEvalCtx, txn, stmtTS)
 }
 
