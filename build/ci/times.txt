@@ -1,0 +1,2 @@
+# Seconds per test package or logic test, measured on CI.
+# build/ci/test.sh uses them to balance the shards.

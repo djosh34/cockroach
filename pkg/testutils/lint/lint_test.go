@@ -124,12 +124,14 @@ func TestLint(t *testing.T) {
 
 	pkgVar, pkgSpecified := os.LookupEnv("PKG")
 
-	var nogoConfig map[string]any
-	nogoJson, err := os.ReadFile(filepath.Join(crdbDir, "build", "bazelutil", "nogo_config.json"))
+	// analyzers.json lists, per analyzer, the files whose findings are
+	// ignored, and the printf-like functions of this repository.
+	var analyzerConfig map[string]any
+	analyzerJSON, err := os.ReadFile(filepath.Join(pkgDir, "testutils", "lint", "analyzers.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal(nogoJson, &nogoConfig); err != nil {
+	if err := json.Unmarshal(analyzerJSON, &analyzerConfig); err != nil {
 		t.Error(err)
 	}
 
@@ -238,13 +240,9 @@ func TestLint(t *testing.T) {
 			stream.GrepNot(`_string\.go`),
 			stream.GrepNot(`_generated(_test)?\.go`),
 			stream.GrepNot(`/embedded.go`),
-			stream.GrepNot(`geo/geographiclib/geodesic\.c$`),
-			stream.GrepNot(`geo/geographiclib/geodesic\.h$`),
 			// The opentelemetry-proto files are copied from otel with their own
 			// license.
 			stream.GrepNot(`opentelemetry-proto/.*.proto$`),
-			// These files are copied from bazel upstream with its own license.
-			stream.GrepNot(`build/bazel/bes/.*.proto$`),
 		), func(filename string) {
 			file, err := os.Open(filepath.Join(pkgDir, filename))
 			if err != nil {
@@ -449,15 +447,11 @@ func TestLint(t *testing.T) {
 			excludes []string
 		}{
 			{re: `\bos\.(Getenv|LookupEnv)\("COCKROACH`,
-				excludes: []string{
-					":!cmd/bazci/githubpost",
-				},
+				excludes: []string{},
 			},
 			{
 				re: `\bos\.(Getenv|LookupEnv)\(`,
 				excludes: []string{
-					":!acceptance",
-					":!build/bazel",
 					// KMS requires AWS credentials from environment variables.
 					":!cloud",
 					":!internal/reporoot/reporoot.go",
@@ -467,19 +461,14 @@ func TestLint(t *testing.T) {
 					":!testutils/lint",
 					":!util/envutil/env.go",
 					":!testutils/data_path.go",
-					":!testutils/bazelcodecover/code_cover_on.go", // For BAZEL_COVER_DIR.
 					":!util/log/tracebacks.go",
 					":!util/sdnotify/sdnotify_unix.go",
 					":!util/grpcutil",                        // GRPC_GO_* variables
-					":!roachprod",                            // roachprod requires AWS environment variables
 					":!cli/env.go",                           // The CLI needs the PGHOST variable.
 					":!cli/start.go",                         // The CLI needs the GOMEMLIMIT variable.
-					":!internal/codeowners/codeowners.go",    // For BAZEL_TEST.
-					":!internal/team/team.go",                // For BAZEL_TEST.
 					":!util/log/test_log_scope.go",           // For TEST_UNDECLARED_OUTPUT_DIR, REMOTE_EXEC
 					":!testutils/datapathutils/data_path.go", // For TEST_UNDECLARED_OUTPUT_DIR, REMOTE_EXEC
 					":!testutils/backup.go",                  // For BACKUP_TESTING_BUCKET
-					":!compose/compose_test.go",              // For PATH.
 				},
 			},
 		} {
@@ -1629,10 +1618,8 @@ func TestLint(t *testing.T) {
 			stream.Uniq(),
 			stream.Grep(`^`+settingsPkgPrefix+`: | `+grepBuf.String()),
 			stream.GrepNot(`cockroach/pkg/cmd/`),
-			stream.GrepNot(`cockroach/pkg/roachprod/logger: log$`),
 			stream.GrepNot(`cockroach/pkg/testutils/lint: log$`),
 			stream.GrepNot(`cockroach/pkg/util/sysutil: syscall$`),
-			stream.GrepNot(`cockroachdb/cockroach/pkg/build/bazel/util/tinystringer: errors$`),
 			stream.GrepNot(`cockroachdb/cockroach/pkg/util/grpcutil: github\.com/cockroachdb\/errors\/errbase$`),
 			stream.GrepNot(`cockroachdb/cockroach/pkg/util/future: github\.com/cockroachdb\/errors\/errbase$`),
 			stream.GrepNot(`cockroach/pkg/util/log: github\.com/pkg/errors$`),
@@ -1801,22 +1788,11 @@ func TestLint(t *testing.T) {
 			filter,
 			stream.GrepNot(`\.pb\.go`),
 			stream.GrepNot(`\.pb\.gw\.go`),
-			// NB: we define a data structure here that mirrors the shape of a stdlib
-			// data structure. This causes staticcheck to think fields in the structure
-			// are unused, when in fact the runtime uses them.
-			stream.GrepNot(`pkg/util/goschedstats/runtime_go1\.19\.go:.*\(U1000\)`),
-			// NB: Looks like false positives in this file. Maybe due to the bazel build tag.
-			// If this situation gets much worse, we can look at running staticcheck multiple
-			// times and merging the results: https://staticcheck.io/docs/running-staticcheck/cli/build-tags/
-			// This is more trouble than it's worth right now.
-			stream.GrepNot(`pkg/cmd/mirror/go/mirror.go`),
 		}
-		for analyzerName, config := range nogoConfig {
+		for analyzerName, config := range analyzerConfig {
 			if !staticcheckCheckNameRe.MatchString(analyzerName) {
 				continue
 			}
-			// NB: We're not loading only_files because right now we don't need it.
-			// This could lead to disagreements between `nogo` and `lint` if things change.
 			excludeFiles := config.(map[string]any)["exclude_files"]
 			if excludeFiles == nil {
 				continue
@@ -2299,8 +2275,8 @@ func TestLint(t *testing.T) {
 		//    A function may be a Printf or Print wrapper if its last argument is ...interface{}.
 		//    If the next-to-last argument is a string, then this may be a Printf wrapper.
 		//    Otherwise it may be a Print wrapper.
-		// Note we retrieve the list of printfuncs from nogo_config.json.
-		analyzerFlags := nogoConfig["printf"].(map[string]any)
+		// Note we retrieve the list of printfuncs from analyzers.json.
+		analyzerFlags := analyzerConfig["printf"].(map[string]any)
 		printfuncs := analyzerFlags["analyzer_flags"].(map[string]any)["funcs"].(string)
 		nakedGoroutineExceptions := `(` + strings.Join([]string{
 			`pkg/.*_test\.go`,

@@ -12,7 +12,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/keyvault/azkeys v0.9.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.6.1
 	github.com/Azure/go-autorest/autorest v0.11.20
-	github.com/BurntSushi/toml v1.2.1
+	github.com/BurntSushi/toml v1.4.1-0.20240526193622-a339e1f7089c
 	github.com/Masterminds/semver/v3 v3.1.1
 	github.com/MichaelTJones/walk v0.0.0-20161122175330-4748e29d5718
 	github.com/NYTimes/gziphandler v0.0.0-20170623195520-56545f4a5d46
@@ -78,7 +78,7 @@ require (
 	github.com/golang/snappy v0.0.4
 	github.com/google/btree v1.0.1
 	github.com/google/flatbuffers v2.0.8+incompatible
-	github.com/google/go-cmp v0.6.0
+	github.com/google/go-cmp v0.7.0
 	github.com/google/go-github v17.0.0+incompatible
 	github.com/google/go-github/v42 v42.0.0
 	github.com/google/pprof v0.0.0-20210827144239-02619b876842
@@ -162,7 +162,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.3.0
 	go.opentelemetry.io/otel/trace v1.3.0
 	golang.org/x/crypto v0.59.0
-	golang.org/x/exp v0.0.0-20230626212559-97b1e661b5df
+	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
 	golang.org/x/net v0.63.0
 	golang.org/x/oauth2 v0.7.0
 	golang.org/x/perf v0.0.0-20230113213139-801c7ef9e5c5
@@ -178,7 +178,7 @@ require (
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
-	honnef.co/go/tools v0.4.5
+	honnef.co/go/tools v0.8.2
 	vitess.io/vitess v0.0.0-00010101000000-000000000000
 )
 
@@ -347,7 +347,7 @@ require (
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.7.0 // indirect
 	go.uber.org/zap v1.19.0 // indirect
-	golang.org/x/exp/typeparams v0.0.0-20221208152030-732eee02a75a // indirect
+	golang.org/x/exp/typeparams v0.0.0-20231108232855-2478ac86f678 // indirect
 	golang.org/x/mod v0.43.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
@@ -378,9 +378,12 @@ replace go.etcd.io/raft/v3 => github.com/cockroachdb/raft/v3 v3.0.0-202406121436
 tool (
 	github.com/cockroachdb/crlfmt
 	github.com/cockroachdb/gostdlib/x/tools/cmd/goimports
+	github.com/cockroachdb/returncheck
 	github.com/golang/mock/mockgen
 	github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
+	github.com/kisielk/errcheck
 	github.com/mmatczuk/go_generics/cmd/go_generics
 	github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc
 	golang.org/x/tools/cmd/goyacc
+	honnef.co/go/tools/cmd/staticcheck
 )
