@@ -978,33 +978,11 @@ func (f *ExprFmtCtx) formatScalarWithLabel(
 			}
 			n = tp.Child("body")
 			for i := range udf.Def.Body {
-				if i == 0 && udf.Def.CursorDeclaration != nil {
-					// The first statement is opening a cursor.
-					cur := n.Child("open-cursor")
-					f.formatExpr(udf.Def.Body[i], cur)
-					continue
-				}
 				f.formatExpr(udf.Def.Body[i], n)
 			}
 			delete(f.seenUDFs, udf.Def)
 		} else {
 			tp.Child("recursive-call")
-		}
-		if udf.Def.ExceptionBlock != nil {
-			n = tp.Child("exception-handler")
-			for i := range udf.Def.ExceptionBlock.Codes {
-				code := udf.Def.ExceptionBlock.Codes[i]
-				body := udf.Def.ExceptionBlock.Actions[i].Body
-				var branch treeprinter.Node
-				if code.String() == "OTHERS" {
-					branch = n.Child("OTHERS")
-				} else {
-					branch = n.Childf("SQLSTATE '%s'", code)
-				}
-				for j := range body {
-					f.formatExpr(body[j], branch)
-				}
-			}
 		}
 	}
 

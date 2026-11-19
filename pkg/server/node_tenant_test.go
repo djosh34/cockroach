@@ -26,9 +26,6 @@ import (
 )
 
 // Check that redactRecording strips sensitive details from recordings.
-//
-// See kvccl.TestTenantTracesAreRedacted for an end-to-end test of tenant trace
-// redaction.
 func TestRedactRecording(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 

@@ -45,10 +45,7 @@ Uploads and imports a table from the local dump file into the cockroach cluster 
 }
 
 // importCLITestingKnobs are set when the CLI import command is run from a unit
-// test. Since import is a CCL feature there is currently no infrastructure to
-// test it without replicating a lot of the test utility methods found in
-// pkg/cli, in pkg/cliccl.
-// Considering IMPORT is a well tested feature, the testing knobs allow us to
+// test. Considering IMPORT is a well tested feature, the testing knobs allow us to
 // bypass the run of an actual IMPORT but test all CLI logic upto the point
 // where we run the IMPORT query.
 type importCLITestingKnobs struct {

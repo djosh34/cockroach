@@ -42,8 +42,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/kv/kvclient/kvtenant"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvclient/rangecache"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvclient/rangefeed"
-	"github.com/cockroachdb/cockroach/pkg/kv/kvclient/rangefeed/rangefeedcache"
-	"github.com/cockroachdb/cockroach/pkg/kv/kvpb"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/kvserverbase"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/protectedts"
 	"github.com/cockroachdb/cockroach/pkg/multitenant/tenantcapabilities"
@@ -114,7 +112,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/metric"
 	"github.com/cockroachdb/cockroach/pkg/util/mon"
 	"github.com/cockroachdb/cockroach/pkg/util/rangedesc"
-	"github.com/cockroachdb/cockroach/pkg/util/retry"
 	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil/pgdate"
 	"github.com/cockroachdb/cockroach/pkg/util/tracing"
@@ -1316,8 +1313,6 @@ type ExecutorConfig struct {
 	TenantTestingKnobs                   *TenantTestingKnobs
 	TTLTestingKnobs                      *TTLTestingKnobs
 	SchemaTelemetryTestingKnobs          *SchemaTelemetryTestingKnobs
-	BackupRestoreTestingKnobs            *BackupRestoreTestingKnobs
-	StreamingTestingKnobs                *StreamingTestingKnobs
 	SQLStatsTestingKnobs                 *sqlstats.TestingKnobs
 	TelemetryLoggingTestingKnobs         *TelemetryLoggingTestingKnobs
 	SpanConfigTestingKnobs               *spanconfig.TestingKnobs
@@ -1773,103 +1768,6 @@ type SchemaTelemetryTestingKnobs struct {
 
 // ModuleTestingKnobs implements the base.ModuleTestingKnobs interface.
 func (*SchemaTelemetryTestingKnobs) ModuleTestingKnobs() {}
-
-// BackupRestoreTestingKnobs contains knobs for backup and restore behavior.
-//
-// TODO (msbutler): move these to backupccl
-type BackupRestoreTestingKnobs struct {
-	// CaptureResolvedTableDescSpans allows for intercepting the spans which are
-	// resolved during backup planning, and will eventually be backed up during
-	// execution.
-	CaptureResolvedTableDescSpans func([]roachpb.Span)
-
-	// RunAfterSplitAndScatteringEntry allows blocking the RESTORE job after a
-	// single RestoreSpanEntry has been split and scattered.
-	RunAfterSplitAndScatteringEntry func(ctx context.Context)
-
-	// RunAfterProcessingRestoreSpanEntry allows blocking the RESTORE job after a
-	// single RestoreSpanEntry has been processed and added to the SSTBatcher.
-	RunAfterProcessingRestoreSpanEntry func(ctx context.Context, entry *execinfrapb.RestoreSpanEntry) error
-
-	// RunAfterExportingSpanEntry allows blocking the BACKUP job after a single
-	// span has been exported.
-	RunAfterExportingSpanEntry func(ctx context.Context, response *kvpb.ExportResponse)
-
-	// BackupMonitor is used to overwrite the monitor used by backup during
-	// testing. This is typically the bulk mem monitor if not
-	// specified here.
-	BackupMemMonitor *mon.BytesMonitor
-
-	RestoreDistSQLRetryPolicy *retry.Options
-
-	RunBeforeRestoreFlow func() error
-
-	RunAfterRestoreFlow func() error
-}
-
-var _ base.ModuleTestingKnobs = &BackupRestoreTestingKnobs{}
-
-// ModuleTestingKnobs implements the base.ModuleTestingKnobs interface.
-func (*BackupRestoreTestingKnobs) ModuleTestingKnobs() {}
-
-// StreamingTestingKnobs contains knobs for streaming behavior.
-type StreamingTestingKnobs struct {
-	// RunAfterReceivingEvent allows blocking the stream ingestion processor after
-	// a single event has been received.
-	RunAfterReceivingEvent func(ctx context.Context) error
-
-	// ElideCheckpointEvent elides checkpoint event ingestion if this returns true
-	ElideCheckpointEvent func(nodeId base.SQLInstanceID, frontier hlc.Timestamp) bool
-
-	// BeforeClientSubscribe allows observation of parameters about to be passed
-	// to a streaming client
-	BeforeClientSubscribe func(addr string, token string, startTime hlc.Timestamp)
-
-	// BeforeIngestionStart allows blocking the stream ingestion job
-	// before a stream ingestion happens.
-	BeforeIngestionStart func(ctx context.Context) error
-
-	// AfterReplicationFlowPlan allows the caller to inspect the ingestion and
-	// frontier specs generated for the replication job.
-	AfterReplicationFlowPlan func(map[base.SQLInstanceID]*execinfrapb.StreamIngestionDataSpec,
-		*execinfrapb.StreamIngestionFrontierSpec)
-
-	AfterPersistingPartitionSpecs func()
-
-	// OverrideRevertRangeBatchSize allows overriding the `MaxSpanRequestKeys`
-	// used when sending a RevertRange request.
-	OverrideRevertRangeBatchSize int64
-
-	// AfterCutoverStarted allows blocking after the cutover has started.
-	AfterCutoverStarted func()
-
-	// OnCutoverProgressUpdate is called on every progress update
-	// call during the cutover process.
-	OnCutoverProgressUpdate func(remainingSpans roachpb.Spans)
-
-	// CutoverProgressShouldUpdate overrides the standard logic
-	// for whether the job record is updated on a progress update.
-	CutoverProgressShouldUpdate func() bool
-
-	DistSQLRetryPolicy *retry.Options
-
-	AfterRetryIteration func(err error)
-
-	MockSpanConfigTableName *tree.TableName
-
-	RightAfterSpanConfigFlush func(ctx context.Context, bufferedUpdates []spanconfig.Record, bufferedDeletes []spanconfig.Target)
-
-	AfterResumerJobLoad func(err error) error
-
-	SkipSpanConfigReplication bool
-
-	SpanConfigRangefeedCacheKnobs *rangefeedcache.TestingKnobs
-}
-
-var _ base.ModuleTestingKnobs = &StreamingTestingKnobs{}
-
-// ModuleTestingKnobs implements the base.ModuleTestingKnobs interface.
-func (*StreamingTestingKnobs) ModuleTestingKnobs() {}
 
 func shouldDistributeGivenRecAndMode(
 	rec distRecommendation, mode sessiondatapb.DistSQLExecMode,
@@ -3082,7 +2980,7 @@ func (it *sessionDataMutatorIterator) mutator(
 }
 
 // SetSessionDefaultIntSize sets the default int size for the session.
-// It is exported for use in import which is a CCL package.
+// It is exported for use in import.
 func (it *sessionDataMutatorIterator) SetSessionDefaultIntSize(size int32) {
 	it.applyOnEachMutator(func(m sessionDataMutator) {
 		m.SetDefaultIntSize(size)

@@ -16,7 +16,6 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
-	// To enable the CCL-only functions.
 	"github.com/cockroachdb/cockroach/pkg/configprofiles"
 	"github.com/cockroachdb/cockroach/pkg/server/autoconfig/autoconfigpb"
 	"github.com/cockroachdb/cockroach/pkg/testutils/serverutils"

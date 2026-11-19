@@ -404,8 +404,7 @@ func replaceSeqNamesWithIDs(
 
 // replaceSeqNamesWithIDsLang walks the query in queryStr, replacing any
 // sequence names with their IDs and returning a new query string with the names
-// replaced. Queries may be in either the SQL or PLpgSQL language, indicated by
-// lang.
+// replaced. Only the SQL language, indicated by lang, is supported.
 func replaceSeqNamesWithIDsLang(
 	ctx context.Context,
 	sc resolver.SchemaResolver,
@@ -487,7 +486,7 @@ func serializeUserDefinedTypes(
 // serializeUserDefinedTypesLang walks the given query and serializes any
 // user defined types as IDs, so that renaming the type does not cause
 // corruption, and returns a new query string containing the replacement IDs.
-// The query may be in either the SQL or PLpgSQL language, indicated by lang.
+// Only the SQL language, indicated by lang, is supported.
 func serializeUserDefinedTypesLang(
 	ctx context.Context,
 	semaCtx *tree.SemaContext,

@@ -49,8 +49,7 @@ type Dependencies interface {
 	AuthorizationAccessor() AuthorizationAccessor
 
 	// ClusterID returns the ID of the cluster.
-	// So far this is used only to build a eval.Context, for the purpose
-	// of checking whether CCL features are enabled.
+	// So far this is used only to build a eval.Context.
 	ClusterID() uuid.UUID
 
 	// Codec returns the current session data, as in execCfg.

@@ -591,24 +591,10 @@ USE d;
 CREATE TYPE e1 AS ENUM('check', 'enum', 'value', 'reference', 'cases', 'unused value');
 -- case 1: enum value referenced within a UDF with language = SQL.
 CREATE FUNCTION f1() RETURNS e1 LANGUAGE SQL AS $$ SELECT 'check'::e1 $$;
--- case 2: enum value referenced within a UDF with language = PLPGSQL.
-CREATE FUNCTION f2() RETURNS e1 AS $$                                                                                                                          
-  begin                                                                              
-  	select 'enum'::e1;                                                                     
-  end $$                                                                               
-  language plpgsql;
 -- case 3: array type alias for enum referenced within a UDF with language = SQL.
 CREATE TYPE e2 AS ENUM('check', 'array', 'type', 'usage', 'cases', 'within', 'udfs', 'unused value');
 CREATE FUNCTION f3() RETURNS _e2 LANGUAGE SQL AS $$ SELECT '{check, array, type}'::_e2; $$;
 CREATE FUNCTION f4() RETURNS e2[] LANGUAGE SQL AS $$ SELECT ARRAY['usage'::e2, 'cases'::e2]; $$;
--- case 4: array type alias for enum referenced within a UDF with language = PLPGSQL.
-CREATE FUNCTION f5() RETURNS e2[] AS $$
-	declare
-		b e2[] := ARRAY['within'::e2, 'udfs'::e2];
-  begin                                                                              
-  	return b;                                                                     
-  end $$                                                                               
-  language plpgsql;
 -- case 5: enum value referenced with a view query.
 CREATE TYPE e3 AS ENUM('check', 'enum', 'type', 'usage', 'cases', 'within', 'views', 'unused value');
 CREATE VIEW v1 AS (SELECT 'check'::e3);
@@ -642,22 +628,12 @@ CREATE TABLE t4(id int, enum_val e5 DEFAULT 'usage'::e5 ON UPDATE 'update expr':
 			"could not remove enum value \"check\" as it is being used in a UDF \"f1\"",
 		},
 		{
-			`ALTER TYPE e1 DROP VALUE 'enum'`,
-			false,
-			"could not remove enum value \"enum\" as it is being used in a UDF \"f2\"",
-		},
-		{
 			`ALTER TYPE e1 DROP VALUE 'unused value'`,
 			true,
 			"",
 		},
 		{
 			`DROP FUNCTION f1; ALTER TYPE e1 DROP VALUE 'check'`,
-			true,
-			"",
-		},
-		{
-			`DROP FUNCTION f2; ALTER TYPE e1 DROP VALUE 'enum'`,
 			true,
 			"",
 		},
@@ -672,11 +648,6 @@ CREATE TABLE t4(id int, enum_val e5 DEFAULT 'usage'::e5 ON UPDATE 'update expr':
 			"could not remove enum value \"usage\" as it is being used in a UDF \"f4\"",
 		},
 		{
-			`ALTER TYPE e2 DROP VALUE 'within'`,
-			false,
-			"could not remove enum value \"within\" as it is being used in a UDF \"f5\"",
-		},
-		{
 			`ALTER TYPE e2 DROP VALUE 'unused value'`,
 			true,
 			"",
@@ -688,11 +659,6 @@ CREATE TABLE t4(id int, enum_val e5 DEFAULT 'usage'::e5 ON UPDATE 'update expr':
 		},
 		{
 			`DROP FUNCTION f4; ALTER TYPE e2 DROP VALUE 'usage'`,
-			true,
-			"",
-		},
-		{
-			`DROP FUNCTION f5; ALTER TYPE e2 DROP VALUE 'within'`,
 			true,
 			"",
 		},

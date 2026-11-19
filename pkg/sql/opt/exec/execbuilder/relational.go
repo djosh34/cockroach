@@ -2644,8 +2644,6 @@ func (b *Builder) buildCall(c *memo.CallExpr) (execPlan, error) {
 		udf.Def.SetReturning,
 		udf.TailCall,
 		true, /* procedure */
-		nil,  /* blockState */
-		nil,  /* cursorDeclaration */
 	)
 
 	var ep execPlan

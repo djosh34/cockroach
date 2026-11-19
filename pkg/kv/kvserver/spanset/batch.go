@@ -720,7 +720,7 @@ func (s spanSetWriter) BufferedSize() int {
 	return s.w.BufferedSize()
 }
 
-// ReadWriter is used outside of the spanset package internally, in ccl.
+// ReadWriter is used outside of the spanset package internally.
 type ReadWriter struct {
 	spanSetReader
 	spanSetWriter

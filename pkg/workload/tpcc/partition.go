@@ -11,11 +11,6 @@
 package tpcc
 
 import (
-	"bytes"
-	gosql "database/sql"
-	"fmt"
-	"strings"
-
 	"github.com/cockroachdb/errors"
 	"golang.org/x/exp/rand"
 )

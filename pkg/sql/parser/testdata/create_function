@@ -126,7 +126,6 @@ CREATE OR REPLACE FUNCTION _(IN _ INT8)
 	LANGUAGE SQL
 	BEGIN ATOMIC SELECT 1; SELECT _; END -- identifiers removed
 
-
 parse
 CREATE OR REPLACE FUNCTION f(a "cool Type") RETURNS "Hot Type 🔥" LANGUAGE SQL BEGIN ATOMIC SELECT NULL:::"Hot Type 🔥"; END
 ----
@@ -146,7 +145,6 @@ CREATE OR REPLACE FUNCTION _(IN _ _)
 	RETURNS _
 	LANGUAGE SQL
 	BEGIN ATOMIC SELECT NULL:::_; END -- identifiers removed
-
 
 parse
 CREATE OR REPLACE FUNCTION f(a INT) RETURNS INT LANGUAGE SQL BEGIN ATOMIC SELECT 1; SELECT $1; END
@@ -484,44 +482,6 @@ using the support form.
 We appreciate your feedback.
 ----
 ----
-
-parse
-CREATE FUNCTION populate() RETURNS integer AS $$
-DECLARE
-    -- declarations
-BEGIN
-    PERFORM my_function();
-END;
-$$ LANGUAGE plpgsql
-----
-CREATE FUNCTION populate()
-	RETURNS INT8
-	LANGUAGE plpgsql
-	AS $$
-DECLARE
-    -- declarations
-BEGIN
-    PERFORM my_function();
-END;
-$$ -- normalized!
-CREATE FUNCTION populate()
-	RETURNS INT8
-	LANGUAGE plpgsql
-	AS $$
-DECLARE
-    -- declarations
-BEGIN
-    PERFORM my_function();
-END;
-$$ -- fully parenthesized
-CREATE FUNCTION populate()
-	RETURNS INT8
-	LANGUAGE plpgsql
-	AS $$_$$ -- literals removed
-CREATE FUNCTION _()
-	RETURNS INT8
-	LANGUAGE plpgsql
-	AS $$_$$ -- identifiers removed
 
 error
 CREATE FUNCTION f() RETURNS TABLE 'SELECT 1' LANGUAGE SQL

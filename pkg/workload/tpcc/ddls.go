@@ -13,7 +13,6 @@ package tpcc
 import (
 	gosql "database/sql"
 	"fmt"
-	"strings"
 
 	"github.com/cockroachdb/errors"
 	"golang.org/x/sync/errgroup"

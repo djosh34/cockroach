@@ -258,8 +258,6 @@ func TestLint(t *testing.T) {
 			stream.GrepNot(`opentelemetry-proto/.*.proto$`),
 			// These files are copied from bazel upstream with its own license.
 			stream.GrepNot(`build/bazel/bes/.*.proto$`),
-			// Generated files for plpgsql.
-			stream.GrepNot(`sql/plpgsql/parser/plpgsqllexbase/.*.go`),
 		), func(filename string) {
 			file, err := os.Open(filepath.Join(pkgDir, filename))
 			if err != nil {
@@ -1336,7 +1334,6 @@ func TestLint(t *testing.T) {
 			":!sql/pgwire/pgerror/severity.go",
 			":!sql/pgwire/pgerror/with_candidate_code.go",
 			":!sql/pgwire/pgwirebase/too_big_error.go",
-			":!sql/plpgsql/plpgsql_error.go",
 			":!sql/protoreflect/redact.go",
 			":!sql/colexecerror/error.go",
 			":!util/timeutil/timeout_error.go",
@@ -1510,7 +1507,7 @@ func TestLint(t *testing.T) {
 		if pkgSpecified {
 			skip.IgnoreLint(t, "PKG specified")
 		}
-		ignore := `zcgo*|\.(pb(\.gw)?)|(\.[eo]g)\.go|/testdata/|^sql/parser/sql\.go$|(_)?generated(_test)?\.go$|^sql/pgrepl/pgreplparser/pgrepl\.go$|^sql/plpgsql/parser/plpgsql\.go$`
+		ignore := `zcgo*|\.(pb(\.gw)?)|(\.[eo]g)\.go|/testdata/|^sql/parser/sql\.go$|(_)?generated(_test)?\.go$|^sql/pgrepl/pgreplparser/pgrepl\.go$`
 		cmd, stderr, filter, err := dirCmd(pkgDir, "crlfmt", "-fast", "-ignore", ignore, "-tab", "2", ".")
 		if err != nil {
 			t.Fatal(err)
@@ -1656,7 +1653,6 @@ func TestLint(t *testing.T) {
 			stream.GrepNot(`cockroach/pkg/(server/serverpb|ts/tspb): github\.com/golang/protobuf/proto$`),
 			stream.GrepNot(`cockroachdb/cockroach/pkg/rpc: github\.com/golang/protobuf/proto$`),
 			stream.GrepNot(`cockroachdb/cockroach/pkg/sql/lexbase/allkeywords: log$`),
-			stream.GrepNot(`cockroachdb/cockroach/pkg/sql/plpgsql/parser/plpgsqllexbase/allkeywords: log$`),
 			stream.GrepNot(`cockroachdb/cockroach/pkg/util/timeutil/gen: log$`),
 			stream.GrepNot(`cockroachdb/cockroach/pkg/kv/kvpb/gen: log$`),
 			stream.GrepNot(`cockroachdb/cockroach/pkg/util/log/gen: log$`),

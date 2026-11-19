@@ -876,7 +876,6 @@ var debugPebbleOpts = struct {
 }{}
 
 // DebugPebbleCmd is the root of all debug pebble commands.
-// Exported to allow modification by CCL code.
 var DebugPebbleCmd = &cobra.Command{
 	Use:   "pebble [command]",
 	Short: "run a Pebble introspection tool command",
@@ -1297,22 +1296,6 @@ func runDebugIntentCount(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// DebugCommandsRequiringEncryption lists debug commands that access Pebble through the engine
-// and need encryption flags (injected by CCL code).
-// Note: do NOT include commands that just call Pebble code without setting up an engine.
-var DebugCommandsRequiringEncryption = []*cobra.Command{
-	debugCheckStoreCmd,
-	debugCompactCmd,
-	debugGCCmd,
-	debugIntentCount,
-	debugKeysCmd,
-	debugRaftLogCmd,
-	debugRangeDataCmd,
-	debugRangeDescriptorsCmd,
-	debugRecoverCollectInfoCmd,
-	debugRecoverExecuteCmd,
-}
-
 // Debug commands. All commands in this list to be added to root debug command.
 var debugCmds = []*cobra.Command{
 	debugCheckStoreCmd,
@@ -1341,7 +1324,7 @@ var debugCmds = []*cobra.Command{
 	debugRecoverCmd,
 }
 
-// DebugCmd is the root of all debug commands. Exported to allow modification by CCL code.
+// DebugCmd is the root of all debug commands.
 var DebugCmd = &cobra.Command{
 	Use:   "debug [command]",
 	Short: "debugging commands",

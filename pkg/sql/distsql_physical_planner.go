@@ -159,11 +159,6 @@ const (
 	DistributionTypeSystemTenantOnly
 )
 
-// ReplicaOraclePolicy controls which policy the physical planner uses to choose
-// a replica for a given range. It is exported so that it may be overwritten
-// during initialization by CCL code to enable follower reads.
-var ReplicaOraclePolicy = replicaoracle.BinPackingChoice
-
 // NewDistSQLPlanner initializes a DistSQLPlanner.
 //
 // sqlInstanceID is the ID of the node on which this planner runs. It is used to
@@ -285,7 +280,7 @@ func (dsp *DistSQLPlanner) ConstructAndSetSpanResolver(
 		log.Fatal(ctx, "trying to construct and set span resolver when one already exists")
 	}
 	sr := physicalplan.NewSpanResolver(dsp.st, dsp.distSender, dsp.nodeDescs, nodeID, locality,
-		dsp.clock, dsp.rpcCtx, ReplicaOraclePolicy)
+		dsp.clock, dsp.rpcCtx, replicaoracle.BinPackingChoice)
 	dsp.SetSpanResolver(sr)
 }
 

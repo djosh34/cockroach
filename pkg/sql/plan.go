@@ -114,7 +114,7 @@ type mutationPlanNode interface {
 	rowsWritten() int64
 }
 
-// PlanNode is the exported name for planNode. Useful for CCL hooks.
+// PlanNode is the exported name for planNode. Useful for plan hooks.
 type PlanNode = planNode
 
 // planNodeFastPath is implemented by nodes that can perform all their

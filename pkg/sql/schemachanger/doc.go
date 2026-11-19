@@ -213,8 +213,7 @@ package schemachanger
 //
 // The `schemachanger_test` package mainly contains integration tests which
 // perform data-driven end-to-end testing of the declarative schema changer. See
-// also `schemachangerccl_test` which is the same thing but quarantined in
-// `pkg/ccl`, and `sctest/...` for common definitions. These integration tests
+// also `sctest/...` for common definitions. These integration tests
 // operate on the following basis. After some initial setup, one or more DDL
 // statements are provided. These are fed into the declarative schema changer
 // and each test verifies its behavior with respect to a specific thing:

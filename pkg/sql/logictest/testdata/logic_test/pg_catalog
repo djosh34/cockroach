@@ -5048,4 +5048,3 @@ SELECT * FROM pg_language ORDER BY oid
 oid    lanname   lanowner    lanispl  lanpltrusted  lanplcallfoid  laninline  lanvalidator  lanacl
 12     internal  2310524507  false    false         0              0          0             NULL
 14     sql       2310524507  false    true          0              0          0             NULL
-14024  plpgsql   2310524507  true     true          0              0          0             NULL

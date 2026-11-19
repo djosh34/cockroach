@@ -85,7 +85,6 @@ go_test(
 sctest_gen(
     name = "test_gen",
     out = "sctest_generated_test.go",
-    ccl = False,
     new_cluster_factory = "sctest.SingleNodeTestClusterFactory{}",
     package = "schemachanger",
     test_data = [

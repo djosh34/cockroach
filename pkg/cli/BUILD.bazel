@@ -238,7 +238,6 @@ go_library(
         "@com_github_cockroachdb_errors//hintdetail",
         "@com_github_cockroachdb_errors//oserror",
         "@com_github_cockroachdb_logtags//:logtags",
-        "@com_github_cockroachdb_pebble//:pebble",
         "@com_github_cockroachdb_pebble//objstorage/remote",
         "@com_github_cockroachdb_pebble//tool",
         "@com_github_cockroachdb_pebble//vfs",

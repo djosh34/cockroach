@@ -332,13 +332,6 @@ func TestLogic_cast(
 	runLogicTest(t, "cast")
 }
 
-func TestLogic_ccl(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "ccl")
-}
-
 func TestLogic_check_constraints(
 	t *testing.T,
 ) {
@@ -906,13 +899,6 @@ func TestLogic_generator_probe_ranges(
 	runLogicTest(t, "generator_probe_ranges")
 }
 
-func TestLogic_generic_license(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "generic_license")
-}
-
 func TestLogic_geospatial(
 	t *testing.T,
 ) {
@@ -1466,13 +1452,6 @@ func TestLogic_partial_txn_commit(
 	runLogicTest(t, "partial_txn_commit")
 }
 
-func TestLogic_partitioning(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "partitioning")
-}
-
 func TestLogic_pg_builtins(
 	t *testing.T,
 ) {
@@ -1527,20 +1506,6 @@ func TestLogic_pgoidtype(
 ) {
 	defer leaktest.AfterTest(t)()
 	runLogicTest(t, "pgoidtype")
-}
-
-func TestLogic_plpgsql_builtins(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "plpgsql_builtins")
-}
-
-func TestLogic_plpgsql_license(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "plpgsql_license")
 }
 
 func TestLogic_poison_after_push(
@@ -2101,13 +2066,6 @@ func TestLogic_show_tenant_fingerprints(
 ) {
 	defer leaktest.AfterTest(t)()
 	runLogicTest(t, "show_tenant_fingerprints")
-}
-
-func TestLogic_show_transfer_state(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "show_transfer_state")
 }
 
 func TestLogic_show_var(

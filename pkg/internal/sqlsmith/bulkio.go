@@ -25,10 +25,8 @@ func (s *Smither) bulkIOEnabled() bool {
 	return s.bulkSrv != nil
 }
 
-// enableBulkIO enables bulk IO statements. The smither database must pass
-// the CCL check (either it must have a license or the check is disabled
-// in a test). It works by starting an in-memory fileserver to hold the
-// data for backups and exports.
+// enableBulkIO enables bulk IO statements. It works by starting an in-memory
+// fileserver to hold the data for imports and exports.
 func (s *Smither) enableBulkIO() {
 	s.bulkSrv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.lock.Lock()

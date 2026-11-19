@@ -26,10 +26,8 @@ import (
 )
 
 // runImportCLICommand runs the import CLI command in a special way for the
-// purpose of unit testing. Since import requires a CCL binary and the CLI test
-// infrastructure has not yet been ported to test ccl backed CLI commands, we
-// use this method to test everything except the actual IMPORT, which we
-// consider a well tested feature on its own.
+// purpose of unit testing. It tests everything except the actual IMPORT, which
+// we consider a well tested feature on its own.
 // Instead of running the import, test knobs return the complete IMPORT query
 // that would have been run, as well as the target database of the IMPORT query.
 // Apart from checking the query's correctness, this method ensures that

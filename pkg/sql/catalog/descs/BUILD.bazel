@@ -34,7 +34,6 @@ go_library(
         "//pkg/keys",
         "//pkg/kv",
         "//pkg/roachpb",
-        "//pkg/server/serverpb",
         "//pkg/settings/cluster",
         "//pkg/spanconfig",
         "//pkg/sql/catalog",

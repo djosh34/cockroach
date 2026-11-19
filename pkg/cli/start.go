@@ -138,12 +138,6 @@ var customLoggingSetupCmds = append(
 	serverCmds, debugCheckLogConfigCmd, demoCmd, statementBundleRecreateCmd,
 )
 
-// RegisterCommandWithCustomLogging is used by cliccl to note commands which
-// want to suppress default logging setup.
-func RegisterCommandWithCustomLogging(cmd *cobra.Command) {
-	customLoggingSetupCmds = append(customLoggingSetupCmds, cmd)
-}
-
 func initBlockProfile() {
 	// Enable the block profile for a sample of mutex and channel operations.
 	// Smaller values provide more accurate profiles but are more

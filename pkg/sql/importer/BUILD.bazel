@@ -3,7 +3,6 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 filegroup(
     name = "testdata",
     srcs = glob(["testdata/**"]),
-    visibility = ["//pkg/ccl/importerccl:__subpackages__"],
 )
 
 go_library(
@@ -94,7 +93,6 @@ go_library(
         "//pkg/sql/sem/tree",
         "//pkg/sql/sessiondata",
         "//pkg/sql/sqlerrors",
-        "//pkg/sql/sqltelemetry",
         "//pkg/sql/stats",
         "//pkg/sql/types",
         "//pkg/storage",

@@ -18,7 +18,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
-	// Ensure that the CCL packages are imported to see all cluster settings.
 	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/sql/lexbase"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"

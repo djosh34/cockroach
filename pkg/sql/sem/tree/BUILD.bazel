@@ -6,8 +6,8 @@ go_library(
     name = "tree",
     srcs = [
         "alter_database.go",
-        "alter_index.go",
         "alter_default_privileges.go",
+        "alter_index.go",
         "alter_range.go",
         "alter_role.go",
         "alter_schema.go",

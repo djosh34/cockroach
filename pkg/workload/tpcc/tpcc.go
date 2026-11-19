@@ -146,20 +146,20 @@ var tpccMeta = workload.Meta{
 		g := &tpcc{}
 		g.flags.FlagSet = pflag.NewFlagSet(`tpcc`, pflag.ContinueOnError)
 		g.flags.Meta = map[string]workload.FlagMeta{
-			`mix`:                      {RuntimeOnly: true},
-			`client-partitions`:        {RuntimeOnly: true},
-			`partition-affinity`:       {RuntimeOnly: true},
-			`active-warehouses`:        {RuntimeOnly: true},
-			`scatter`:                  {RuntimeOnly: true},
-			`split`:                    {RuntimeOnly: true},
-			`wait`:                     {RuntimeOnly: true},
-			`workers`:                  {RuntimeOnly: true},
-			`conns`:                    {RuntimeOnly: true},
-			`idle-conns`:               {RuntimeOnly: true},
-			`isolation-level`:          {RuntimeOnly: true},
-			`txn-retries`:              {RuntimeOnly: true},
-			`expensive-checks`:         {RuntimeOnly: true, CheckConsistencyOnly: true},
-			`deprecated-fk-indexes`:    {RuntimeOnly: true},
+			`mix`:                   {RuntimeOnly: true},
+			`client-partitions`:     {RuntimeOnly: true},
+			`partition-affinity`:    {RuntimeOnly: true},
+			`active-warehouses`:     {RuntimeOnly: true},
+			`scatter`:               {RuntimeOnly: true},
+			`split`:                 {RuntimeOnly: true},
+			`wait`:                  {RuntimeOnly: true},
+			`workers`:               {RuntimeOnly: true},
+			`conns`:                 {RuntimeOnly: true},
+			`idle-conns`:            {RuntimeOnly: true},
+			`isolation-level`:       {RuntimeOnly: true},
+			`txn-retries`:           {RuntimeOnly: true},
+			`expensive-checks`:      {RuntimeOnly: true, CheckConsistencyOnly: true},
+			`deprecated-fk-indexes`: {RuntimeOnly: true},
 		}
 
 		g.flags.IntVar(&g.warehouses, `warehouses`, 1, `Number of warehouses for loading`)

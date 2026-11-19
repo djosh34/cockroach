@@ -55,8 +55,8 @@ message FileEntry {
   // Env type identifies which rocksdb::Env is responsible for this file.
   EnvType env_type = 1;
 
-  // Env-specific fields for non-0 env. These are known by CCL code only.
-  // This is a serialized protobuf. We cannot use protobuf.Any since we use
+  // Env-specific fields for non-0 env. Encrypted stores are unsupported, so
+  // nothing reads them. This is a serialized protobuf. We cannot use protobuf.Any since we use
   // MessageLite in C++.
   bytes encryption_settings = 2;
 }

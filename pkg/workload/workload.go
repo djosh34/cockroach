@@ -364,18 +364,6 @@ type InitialDataLoader interface {
 	InitialDataLoad(context.Context, *gosql.DB, Generator) (int64, error)
 }
 
-// ImportDataLoader is a hook for binaries that include CCL code to inject an
-// IMPORT-based InitialDataLoader implementation.
-var ImportDataLoader InitialDataLoader = requiresCCLBinaryDataLoader(`IMPORT`)
-
-type requiresCCLBinaryDataLoader string
-
-func (l requiresCCLBinaryDataLoader) InitialDataLoad(
-	context.Context, *gosql.DB, Generator,
-) (int64, error) {
-	return 0, errors.Errorf(`loading initial data with %s requires a CCL binary`, l)
-}
-
 // QueryLoad represents some SQL query workload performable on a database
 // initialized with the requisite tables.
 type QueryLoad struct {

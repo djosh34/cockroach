@@ -332,13 +332,6 @@ func TestLogic_cast(
 	runLogicTest(t, "cast")
 }
 
-func TestLogic_ccl(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "ccl")
-}
-
 func TestLogic_check_constraints(
 	t *testing.T,
 ) {
@@ -1319,13 +1312,6 @@ func TestLogic_partial_txn_commit(
 	runLogicTest(t, "partial_txn_commit")
 }
 
-func TestLogic_partitioning(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "partitioning")
-}
-
 func TestLogic_pg_builtins(
 	t *testing.T,
 ) {
@@ -1373,13 +1359,6 @@ func TestLogic_pgoidtype(
 ) {
 	defer leaktest.AfterTest(t)()
 	runLogicTest(t, "pgoidtype")
-}
-
-func TestLogic_plpgsql_builtins(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "plpgsql_builtins")
 }
 
 func TestLogic_poison_after_push(
@@ -1884,13 +1863,6 @@ func TestLogic_show_indexes(
 ) {
 	defer leaktest.AfterTest(t)()
 	runLogicTest(t, "show_indexes")
-}
-
-func TestLogic_show_transfer_state(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runLogicTest(t, "show_transfer_state")
 }
 
 func TestLogic_show_var(

@@ -1163,9 +1163,3 @@ func extraClientFlagInit() error {
 	}
 	return nil
 }
-
-// RegisterFlags exists so that other packages can register flags using the
-// Register<Type>FlagDepth functions and end up in a call frame in the cli
-// package rather than the cliccl package to defeat the duplicate envvar
-// registration logic.
-func RegisterFlags(f func()) { f() }

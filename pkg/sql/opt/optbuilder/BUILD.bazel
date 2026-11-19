@@ -53,7 +53,6 @@ go_library(
         "//pkg/kv/kvserver/concurrency/isolation",
         "//pkg/server/telemetry",
         "//pkg/settings",
-        "//pkg/sql/catalog/catpb",
         "//pkg/sql/catalog/colinfo",
         "//pkg/sql/catalog/descpb",
         "//pkg/sql/catalog/funcinfo",

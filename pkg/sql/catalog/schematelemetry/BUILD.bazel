@@ -24,7 +24,6 @@ go_library(
         "//pkg/sql/catalog/redact",
         "//pkg/sql/catalog/schematelemetry/schematelemetrycontroller",
         "//pkg/sql/isql",
-        "//pkg/sql/sem/builtins",
         "//pkg/sql/sem/builtins/builtinconstants",
         "//pkg/sql/sem/tree",
         "//pkg/sql/sessiondata",

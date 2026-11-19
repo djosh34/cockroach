@@ -2818,7 +2818,7 @@ alter_unsupported_stmt:
   }
 
 // %Help: IMPORT - load data from file in a distributed manner
-// %Category: CCL
+// %Category: DML
 // %Text:
 // -- Import both schema and table data:
 // IMPORT [ TABLE <tablename> FROM ]
@@ -2872,7 +2872,7 @@ import_stmt:
 | IMPORT error // SHOW HELP: IMPORT
 
 // %Help: EXPORT - export data to file in a distributed manner
-// %Category: CCL
+// %Category: DML
 // %Text:
 // EXPORT INTO <format> <datafile> [WITH <option> [= value] [,...]] FROM <query>
 //

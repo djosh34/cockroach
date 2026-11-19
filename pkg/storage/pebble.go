@@ -1026,10 +1026,6 @@ func (r remoteStorageAdaptor) CreateStorage(locator remote.Locator) (remote.Stor
 	return &externalStorageWrapper{p: r.p, ctx: r.ctx, es: es}, err
 }
 
-// ConfigureForSharedStorage is used to configure a pebble Options for shared
-// storage.
-var ConfigureForSharedStorage func(opts *pebble.Options, storage remote.Storage) error
-
 // NewPebble creates a new Pebble instance, at the specified path.
 // Do not use directly (except in test); use Open instead.
 //
@@ -1293,25 +1289,11 @@ func NewPebble(ctx context.Context, cfg PebbleConfig) (p *Pebble, err error) {
 	p.eventListener = &el
 	opts.EventListener = &el
 
-	// If both cfg.SharedStorage and cfg.RemoteStorageFactory are set, CRDB uses
-	// cfg.SharedStorage. Note that eventually we will enable using both at the
-	// same time, but we don't have the right abstractions in place to do that
-	// today.
-	//
-	// We prefer cfg.SharedStorage, since the Locator -> Storage mapping contained
-	// in it is needed for CRDB to function properly.
 	if cfg.SharedStorage != nil {
-		esWrapper := &externalStorageWrapper{p: p, es: cfg.SharedStorage, ctx: ctx}
-		if ConfigureForSharedStorage == nil {
-			return nil, errors.New("shared storage requires CCL features")
-		}
-		if err := ConfigureForSharedStorage(opts, esWrapper); err != nil {
-			return nil, errors.Wrap(err, "error when configuring shared storage")
-		}
-	} else {
-		if cfg.RemoteStorageFactory != nil {
-			opts.Experimental.RemoteStorage = remoteStorageAdaptor{p: p, ctx: ctx, factory: cfg.RemoteStorageFactory}
-		}
+		return nil, errors.New("shared storage is unsupported")
+	}
+	if cfg.RemoteStorageFactory != nil {
+		opts.Experimental.RemoteStorage = remoteStorageAdaptor{p: p, ctx: ctx, factory: cfg.RemoteStorageFactory}
 	}
 
 	// Read the current store cluster version.

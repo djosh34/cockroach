@@ -986,8 +986,6 @@ func (expr *ComparisonExpr) TypeCheck(
 var (
 	errStarNotAllowed      = pgerror.New(pgcode.Syntax, "cannot use \"*\" in this context")
 	errInvalidDefaultUsage = pgerror.New(pgcode.Syntax, "DEFAULT can only appear in a VALUES list within INSERT or on the right side of a SET")
-	errInvalidMaxUsage     = pgerror.New(pgcode.Syntax, "MAXVALUE can only appear within a range partition expression")
-	errInvalidMinUsage     = pgerror.New(pgcode.Syntax, "MINVALUE can only appear within a range partition expression")
 	errPrivateFunction     = pgerror.New(pgcode.ReservedName, "function reserved for internal use")
 )
 
@@ -1752,20 +1750,6 @@ func (expr DefaultVal) TypeCheck(
 	_ context.Context, _ *SemaContext, desired *types.T,
 ) (TypedExpr, error) {
 	return nil, errInvalidDefaultUsage
-}
-
-// TypeCheck implements the Expr interface.
-func (expr PartitionMinVal) TypeCheck(
-	_ context.Context, _ *SemaContext, desired *types.T,
-) (TypedExpr, error) {
-	return nil, errInvalidMinUsage
-}
-
-// TypeCheck implements the Expr interface.
-func (expr PartitionMaxVal) TypeCheck(
-	_ context.Context, _ *SemaContext, desired *types.T,
-) (TypedExpr, error) {
-	return nil, errInvalidMaxUsage
 }
 
 // TypeCheck implements the Expr interface.

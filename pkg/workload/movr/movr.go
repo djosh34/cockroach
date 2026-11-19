@@ -15,7 +15,6 @@ import (
 	gosql "database/sql"
 	"fmt"
 	"math"
-	"sort"
 	"strings"
 	"sync"
 	"time"

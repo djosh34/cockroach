@@ -225,9 +225,8 @@ This counts the number of ranges with an active rangefeed that are performing ca
 )
 
 // CanSendToFollower is used by the DistSender to determine if it needs to look
-// up the current lease holder for a request. It is used by the
-// followerreadsccl code to inject logic to check if follower reads are enabled.
-// By default, without CCL code, this function returns false.
+// up the current lease holder for a request. It always returns false; tests
+// replace it to exercise the follower read paths.
 var CanSendToFollower = func(
 	_ uuid.UUID,
 	_ *cluster.Settings,
@@ -530,7 +529,7 @@ type DistSender struct {
 	nodeDialer      *nodedialer.Dialer
 	rpcRetryOptions retry.Options
 	asyncSenderSem  *quotapool.IntPool
-	// clusterID is the logical cluster ID used to verify access to enterprise features.
+	// clusterID is the logical cluster ID.
 	// It is copied out of the rpcContext at construction time and used in
 	// testing.
 	logicalClusterID *base.ClusterIDContainer

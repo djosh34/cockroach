@@ -19,6 +19,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/cmd/reduce/reduce"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser/statements"
+
 	// Import builtins.
 	_ "github.com/cockroachdb/cockroach/pkg/sql/sem/builtins"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"

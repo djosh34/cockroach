@@ -155,7 +155,6 @@ const (
 	hMisc         = "miscellaneous"
 	hCfg          = "configuration"
 	hExperimental = "experimental"
-	hCCL          = "enterprise features"
 )
 
 // HelpMessageBody defines the body of a help text. The messages are

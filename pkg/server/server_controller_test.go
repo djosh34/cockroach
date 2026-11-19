@@ -62,14 +62,10 @@ func TestServerController(t *testing.T) {
 	// The actual error seen will exist as long as in-memory
 	// servers use the standard KV connector.
 	//
-	// To make this error go away, we need either to place
-	// this test in a separate CCL package, or to make these servers
-	// use a new non-CCL connector.
-	//
 	// However, none of this is necessary to test the
 	// controller itself: it's sufficient to see that the
 	// tenant constructor was called.
-	require.Error(t, err, "tenant connector requires a CCL binary")
+	require.Error(t, err, "tenant server could not be started")
 	// TODO(knz): test something about d.
 }
 
