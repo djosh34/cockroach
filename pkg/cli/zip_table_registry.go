@@ -525,7 +525,6 @@ GROUP BY collection_ts, contention_duration, waiting_txn_id, waiting_txn_fingerp
 			"schema_name",
 			"table_name",
 			"index_name",
-			"partition_name",
 			"raw_config_yaml",
 			"raw_config_sql",
 			"raw_config_protobuf",

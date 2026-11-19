@@ -1871,7 +1871,7 @@ func maybeUpdateZoneConfigsForPKChange(
 	_, err = writeZoneConfig(
 		ctx, txn, table.ID, table,
 		zoneWithRaw.ZoneConfigProto(), zoneWithRaw.GetRawBytesInStorage(),
-		execCfg, false, kvTrace,
+		execCfg, kvTrace,
 	)
 	if err != nil {
 		return err

@@ -4,7 +4,6 @@ load("//build:STRINGER.bzl", "stringer")
 go_library(
     name = "sctest",
     srcs = [
-        "backup.go",
         "comparator.go",
         "cumulative.go",
         "decomp.go",

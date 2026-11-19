@@ -112,12 +112,6 @@ send "\\demo add region=ca-central,zone=a\r"
 eexpect "node 6 has been added with locality \"region=ca-central,zone=a\""
 eexpect "defaultdb>"
 
-send "show regions from cluster;\r"
-eexpect "ca-central | \{a\}"
-eexpect "us-east1   | \{b,c,d\}"
-eexpect "us-west1   | \{b\}"
-eexpect "defaultdb>"
-
 # We use kv_node_status here because gossip_liveness is timing dependant.
 # Node 4's status entry should have been removed by now.
 send "select node_id, locality from crdb_internal.kv_node_status;\r"

@@ -327,6 +327,21 @@ func ValidatePrivileges(privileges List, objectType ObjectType) error {
 	return nil
 }
 
+// ValidateGrantable returns an error if any privilege in privileges can no
+// longer be granted. BACKUP and RESTORE belonged to the removed backup
+// feature. Their bits stay valid so that stored privilege descriptors keep
+// decoding and existing grants can still be revoked.
+func ValidateGrantable(privileges List) error {
+	for _, priv := range privileges {
+		switch priv {
+		case BACKUP, RESTORE:
+			return pgerror.Newf(pgcode.FeatureNotSupported,
+				"privilege %s is unsupported", priv.DisplayName())
+		}
+	}
+	return nil
+}
+
 // GetValidPrivilegesForObject returns the list of valid privileges for the
 // specified object type.
 func GetValidPrivilegesForObject(objectType ObjectType) (List, error) {

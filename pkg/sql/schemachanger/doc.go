@@ -223,8 +223,6 @@ package schemachanger
 //  - TestRollback tests schema changer behavior with respect to errors thrown
 //    at any point during the schema change where one may legitimately be
 //    expected;
-//  - TestBackup tests behavior after restoring a backup performed at any point
-//    during the ongoing schema change;
 //  - TestPause tests behavior after pausing the schema change job;
 //  - and so forth...
 //

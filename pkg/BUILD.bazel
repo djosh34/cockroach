@@ -1173,6 +1173,7 @@ GO_TARGETS = [
     "//pkg/obsservice/obspb/opentelemetry-proto/resource/v1:resource",
     "//pkg/obsservice/obspb:obspb",
     "//pkg/release:release",
+    "//pkg/repstream/streampb:streampb",
     "//pkg/roachpb:roachpb",
     "//pkg/roachpb:roachpb_test",
     "//pkg/roachprod/logger:logger",

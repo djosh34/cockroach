@@ -762,7 +762,6 @@ func (n *setZoneConfigNode) startExec(params runParams) error {
 		}
 
 		// Write the partial zone configuration.
-		hasNewSubzones := !deleteZone && index != nil
 		execConfig := params.extendedEvalCtx.ExecCfg
 		zoneToWrite := partialZone
 		// TODO(ajwerner): This is extremely fragile because we accept a nil table
@@ -775,7 +774,6 @@ func (n *setZoneConfigNode) startExec(params runParams) error {
 			zoneToWrite,
 			partialZoneWithRaw.GetRawBytesInStorage(),
 			execConfig,
-			hasNewSubzones,
 			params.extendedEvalCtx.Tracing.KVTracingEnabled(),
 		)
 		if err != nil {
@@ -1103,12 +1101,13 @@ func prepareZoneConfigWrites(
 	table catalog.TableDescriptor,
 	z *zonepb.ZoneConfig,
 	expectedExistingRawBytes []byte,
-	hasNewSubzones bool,
 ) (_ *zoneConfigUpdate, err error) {
 	if len(z.Subzones) > 0 {
-		st := execCfg.Settings
-		z.SubzoneSpans, err = GenerateSubzoneSpans(
-			st, execCfg.NodeInfo.LogicalClusterID(), execCfg.Codec, table, z.Subzones, hasNewSubzones)
+		partitionSpans, err := storedPartitionSpans(z, expectedExistingRawBytes)
+		if err != nil {
+			return nil, err
+		}
+		z.SubzoneSpans, err = GenerateSubzoneSpans(execCfg.Codec, table, z.Subzones, partitionSpans)
 		if err != nil {
 			return nil, err
 		}
@@ -1130,10 +1129,9 @@ func writeZoneConfig(
 	zone *zonepb.ZoneConfig,
 	expectedExistingRawBytes []byte,
 	execCfg *ExecutorConfig,
-	hasNewSubzones bool,
 	kvTrace bool,
 ) (numAffected int, err error) {
-	update, err := prepareZoneConfigWrites(ctx, execCfg, targetID, table, zone, expectedExistingRawBytes, hasNewSubzones)
+	update, err := prepareZoneConfigWrites(ctx, execCfg, targetID, table, zone, expectedExistingRawBytes)
 	if err != nil {
 		return 0, err
 	}
@@ -1214,8 +1212,7 @@ func RemoveIndexZoneConfigs(
 	if zcRewriteNecessary {
 		_, err = writeZoneConfig(
 			ctx, txn, tableDesc.GetID(), tableDesc, zone,
-			zoneWithRaw.GetRawBytesInStorage(), execCfg,
-			false /* hasNewSubzones */, kvTrace,
+			zoneWithRaw.GetRawBytesInStorage(), execCfg, kvTrace,
 		)
 		if err != nil {
 			return err
