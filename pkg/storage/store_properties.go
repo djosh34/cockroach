@@ -20,11 +20,10 @@ import (
 )
 
 func computeStoreProperties(
-	ctx context.Context, dir string, readonly bool, encryptionEnabled bool,
+	ctx context.Context, dir string, readonly bool,
 ) roachpb.StoreProperties {
 	props := roachpb.StoreProperties{
-		ReadOnly:  readonly,
-		Encrypted: encryptionEnabled,
+		ReadOnly: readonly,
 	}
 
 	// In-memory store?

@@ -192,26 +192,16 @@ func initTraceDir(ctx context.Context, dir string) {
 func initTempStorageConfig(
 	ctx context.Context, st *cluster.Settings, stopper *stop.Stopper, stores base.StoreSpecList,
 ) (base.TempStorageConfig, error) {
-	// Initialize the target directory for temporary storage. If encryption at
-	// rest is enabled in any fashion, we'll want temp storage to be encrypted
-	// too. To achieve this, we use the first encrypted store as temp dir
-	// target, if any. If we can't find one, we use the first StoreSpec in the
-	// list.
+	// Initialize the target directory for temporary storage. We use the first
+	// on-disk StoreSpec as temp dir target, or the first StoreSpec if all are
+	// in memory.
 	//
 	// While we look, we also clean up any abandoned temporary directories. We
-	// don't know which store spec was used previously—and it may change if
-	// encryption gets enabled after the fact—so we check each store.
+	// don't know which store spec was used previously, so we check each store.
 	specIdxDisk := -1
-	specIdxEncrypted := -1
 	for i, spec := range stores.Specs {
 		if spec.InMemory {
 			continue
-		}
-		if spec.IsEncrypted() && specIdxEncrypted == -1 {
-			// TODO(jackson): One store's EncryptionOptions may say to encrypt
-			// with a real key, while another store's say to use key=plain.
-			// This provides no guarantee that we'll use the encrypted one's.
-			specIdxEncrypted = i
 		}
 		if specIdxDisk == -1 {
 			specIdxDisk = i
@@ -225,11 +215,8 @@ func initTempStorageConfig(
 
 	// Use first store by default. This might be an in-memory store.
 	specIdx := 0
-	if specIdxEncrypted >= 0 {
-		// Prefer an encrypted store.
-		specIdx = specIdxEncrypted
-	} else if specIdxDisk >= 0 {
-		// Prefer a non-encrypted on-disk store.
+	if specIdxDisk >= 0 {
+		// Prefer an on-disk store.
 		specIdx = specIdxDisk
 	}
 	useStore := stores.Specs[specIdx]

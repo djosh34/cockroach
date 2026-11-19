@@ -764,7 +764,6 @@ func (cfg *Config) CreateEngines(ctx context.Context) (Engines, error) {
 
 		storageConfigOpts := []storage.ConfigOption{
 			storage.Attributes(spec.Attributes),
-			storage.EncryptionAtRest(spec.EncryptionOptions),
 			storage.If(storeKnobs.SmallEngineBlocks, storage.BlockSize(1)),
 			storage.BlockConcurrencyLimitDivisor(len(cfg.Stores.Specs)),
 		}

@@ -3727,19 +3727,6 @@ func (s *systemStatusServer) Stores(
 			StoreID: store.Ident.StoreID,
 		}
 
-		envStats, err := store.TODOEngine().GetEnvStats()
-		if err != nil {
-			return err
-		}
-
-		if len(envStats.EncryptionStatus) > 0 {
-			storeDetails.EncryptionStatus = envStats.EncryptionStatus
-		}
-		storeDetails.TotalFiles = envStats.TotalFiles
-		storeDetails.TotalBytes = envStats.TotalBytes
-		storeDetails.ActiveKeyFiles = envStats.ActiveKeyFiles
-		storeDetails.ActiveKeyBytes = envStats.ActiveKeyBytes
-
 		resp.Stores = append(resp.Stores, storeDetails)
 
 		return nil

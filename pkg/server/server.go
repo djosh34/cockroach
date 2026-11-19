@@ -17,7 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"sync"
 	"time"
 
@@ -1623,13 +1622,9 @@ func (s *topLevelServer) PreStart(ctx context.Context) error {
 		listenHTTP:   s.cfg.HTTPAdvertiseAddr,
 	}.Iter()
 
-	encryptedStore := false
 	for _, storeSpec := range s.cfg.Stores.Specs {
 		if storeSpec.InMemory {
 			continue
-		}
-		if storeSpec.IsEncrypted() {
-			encryptedStore = true
 		}
 
 		for name, val := range listenerFiles {
@@ -1852,11 +1847,10 @@ func (s *topLevelServer) PreStart(ctx context.Context) error {
 	// Configure the Sentry reporter to add some additional context to reports.
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetTags(map[string]string{
-			"cluster":         s.StorageClusterID().String(),
-			"node":            s.NodeID().String(),
-			"server_id":       fmt.Sprintf("%s-%s", s.StorageClusterID().Short(), s.NodeID()),
-			"engine_type":     s.cfg.StorageEngine.String(),
-			"encrypted_store": strconv.FormatBool(encryptedStore),
+			"cluster":     s.StorageClusterID().String(),
+			"node":        s.NodeID().String(),
+			"server_id":   fmt.Sprintf("%s-%s", s.StorageClusterID().Short(), s.NodeID()),
+			"engine_type": s.cfg.StorageEngine.String(),
 		})
 	})
 

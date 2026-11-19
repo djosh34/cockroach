@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
 
@@ -636,13 +635,9 @@ func (s *SQLServerWrapper) PreStart(ctx context.Context) error {
 		listenHTTP:   s.sqlServer.cfg.HTTPAdvertiseAddr,
 	}.Iter()
 
-	encryptedStore := false
 	for _, storeSpec := range s.sqlServer.cfg.Stores.Specs {
 		if storeSpec.InMemory {
 			continue
-		}
-		if storeSpec.IsEncrypted() {
-			encryptedStore = true
 		}
 
 		for name, val := range listenerFiles {
@@ -703,8 +698,7 @@ func (s *SQLServerWrapper) PreStart(ctx context.Context) error {
 	// to add this information. See below.
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetTags(map[string]string{
-			"engine_type":     s.sqlServer.cfg.StorageEngine.String(),
-			"encrypted_store": strconv.FormatBool(encryptedStore),
+			"engine_type": s.sqlServer.cfg.StorageEngine.String(),
 		})
 	})
 

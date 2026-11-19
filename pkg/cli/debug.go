@@ -66,7 +66,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/errors/oserror"
-	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/objstorage/remote"
 	"github.com/cockroachdb/pebble/tool"
 	"github.com/cockroachdb/pebble/vfs"
@@ -96,16 +95,6 @@ Create a ballast file to fill the store directory up to a given amount
 	Args: cobra.ExactArgs(1),
 	RunE: runDebugBallast,
 }
-
-// PopulateStorageConfigHook is a callback set by CCL code.
-// It populates any needed fields in the StorageConfig.
-// It must stay unset in OSS code.
-var PopulateStorageConfigHook func(*base.StorageConfig) error
-
-// EncryptedStorePathsHook is a callback set by CCL code.
-// It returns the store paths that are encrypted.
-// It must stay unset in OSS code.
-var EncryptedStorePathsHook func() []string
 
 func parsePositiveInt(arg string) (int64, error) {
 	i, err := strconv.ParseInt(arg, 10, 64)
@@ -186,7 +175,6 @@ func OpenEngine(
 		serverCfg.Settings,
 		storage.MaxOpenFiles(int(maxOpenFiles)),
 		storage.CacheSize(server.DefaultCacheSize),
-		storage.Hook(PopulateStorageConfigHook),
 		storage.CombineOptions(opts...))
 	if err != nil {
 		return nil, err
@@ -1390,12 +1378,6 @@ func (m lockValueFormatter) Format(f fmt.State, c rune) {
 	fmt.Fprint(f, kvserver.SprintIntent(m.value))
 }
 
-// pebbleToolFS is the vfs.FS that the pebble tool should use.
-// It is necessary because an FS must be passed to tool.New before
-// the command line flags are parsed (i.e. before we can determine
-// if we have an encrypted FS).
-var pebbleToolFS = &autoDecryptFS{}
-
 func init() {
 	DebugCmd.AddCommand(debugCmds...)
 
@@ -1422,16 +1404,7 @@ func init() {
 	pebbleTool := tool.New(
 		tool.Mergers(storage.MVCCMerger),
 		tool.DefaultComparer(storage.EngineComparer),
-		tool.FS(pebbleToolFS),
-		tool.OpenErrEnhancer(func(err error) error {
-			if pebble.IsCorruptionError(err) {
-				// None of the wrappers provided by the error library allow adding a
-				// message that shows up with "%s" after the original message.
-				// nolint:errwrap
-				return errors.Newf("%v\nIf this is an encrypted store, make sure the correct encryption key is set.", err)
-			}
-			return err
-		}),
+		tool.FS(vfs.Default),
 	)
 	DebugPebbleCmd.AddCommand(pebbleTool.Commands...)
 	f := DebugPebbleCmd.PersistentFlags()
@@ -1593,32 +1566,8 @@ func initPebbleCmds(cmd *cobra.Command, pebbleTool *tool.T) {
 				})
 				pebbleTool.ConfigureSharedStorage(factory, remote.CreateOnSharedLower, "" /* createOnSharedLocator */)
 			}
-			pebbleCryptoInitializer(cmd.Context())
 			return nil
 		}
 		initPebbleCmds(c, pebbleTool)
-	}
-}
-
-func pebbleCryptoInitializer(ctx context.Context) {
-	if EncryptedStorePathsHook != nil && PopulateStorageConfigHook != nil {
-		encryptedPaths := EncryptedStorePathsHook()
-		resolveFn := func(dir string) (vfs.FS, error) {
-			storageConfig := base.StorageConfig{
-				Settings: serverCfg.Settings,
-				Dir:      dir,
-			}
-			if err := PopulateStorageConfigHook(&storageConfig); err != nil {
-				return nil, err
-			}
-			_, encryptedEnv, err := storage.ResolveEncryptedEnvOptions(
-				ctx, &storageConfig, vfs.Default, false /* readOnly */)
-			if err != nil {
-				return nil, err
-			}
-			return encryptedEnv.FS, nil
-
-		}
-		pebbleToolFS.Init(encryptedPaths, resolveFn)
 	}
 }

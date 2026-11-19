@@ -227,30 +227,6 @@ func PebbleOptions(pebbleOptions string, parseHooks *pebble.ParseHooks) ConfigOp
 	}
 }
 
-// EncryptionAtRest configures an engine to use encryption-at-rest. It is used
-// for configuring in-memory engines, which are used in tests. It is not safe
-// to modify the given slice afterwards as it is captured by reference.
-func EncryptionAtRest(encryptionOptions []byte) ConfigOption {
-	return func(cfg *engineConfig) error {
-		if len(encryptionOptions) > 0 {
-			cfg.UseFileRegistry = true
-			cfg.EncryptionOptions = encryptionOptions
-		}
-		return nil
-	}
-}
-
-// Hook configures a hook to initialize additional storage options. It's used
-// to initialize encryption-at-rest details in CCL builds.
-func Hook(hookFunc func(*base.StorageConfig) error) ConfigOption {
-	return func(cfg *engineConfig) error {
-		if hookFunc == nil {
-			return nil
-		}
-		return hookFunc(&cfg.PebbleConfig.StorageConfig)
-	}
-}
-
 // BlockConcurrencyLimitDivisor sets the divisor used to calculate the block
 // load concurrency limit: the current value of the BlockLoadConcurrencyLimit
 // setting divided by the divisor. It should be set to the number of stores.

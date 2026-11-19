@@ -6,7 +6,6 @@ go_library(
     name = "cli",
     srcs = [
         "auth.go",
-        "auto_decrypt_fs.go",
         "cert.go",
         "cli.go",
         "client_url.go",
@@ -310,7 +309,6 @@ go_test(
     name = "cli_test",
     size = "large",
     srcs = [
-        "auto_decrypt_fs_test.go",
         "cert_test.go",
         "cli_debug_test.go",
         "cli_test.go",

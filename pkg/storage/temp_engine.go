@@ -78,9 +78,6 @@ func newPebbleTempEngine(
 		tempStorage.Settings,
 		CacheSize(cacheSize),
 		func(cfg *engineConfig) error {
-			cfg.UseFileRegistry = storeSpec.UseFileRegistry
-			cfg.EncryptionOptions = storeSpec.EncryptionOptions
-
 			// The Pebble temp engine does not use MVCC Encoding. Instead, the
 			// caller-provided key is used as-is (with the prefix prepended). See
 			// pebbleMap.makeKey and pebbleMap.makeKeyWithSequence on how this works.
