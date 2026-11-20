@@ -98,6 +98,16 @@ func (a *Authorizer) HasCapabilityForBatch(
 		return nil
 	}
 
+	// A commit trigger splits, merges or changes the replicas of a range. Only
+	// KV itself creates one, on behalf of a request that the capabilities
+	// below already checked. A tenant that sends one directly would skip
+	// those checks.
+	for _, ru := range ba.Requests {
+		if et, ok := ru.GetInner().(*kvpb.EndTxnRequest); ok && et.InternalCommitTrigger != nil {
+			return errors.Newf("client tenant may not send an EndTxn with a commit trigger")
+		}
+	}
+
 	cp, mode := a.getMode(ctx, tenID)
 	switch mode {
 	case authorizerModeOn:

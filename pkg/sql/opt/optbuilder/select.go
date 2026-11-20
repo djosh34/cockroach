@@ -341,14 +341,20 @@ func (b *Builder) buildView(
 		b.factory.Metadata().AddView(view)
 	}
 
-	// When building the view, we don't want to check for the SELECT privilege
-	// on the underlying tables, just on the view itself. Checking on the
-	// underlying tables as well would defeat the purpose of having separate
-	// SELECT privileges on the view, which is intended to allow for exposing
-	// some subset of a restricted table's data to less privileged users.
-	if !b.skipSelectPrivilegeChecks {
-		b.skipSelectPrivilegeChecks = true
-		defer func() { b.skipSelectPrivilegeChecks = false }()
+	// When building the view, the SELECT privilege on the underlying tables is
+	// checked for the owner of the view, not for the current user, as in
+	// Postgres. This lets a view expose some subset of a restricted table's
+	// data to less privileged users, but only while its owner may read it.
+	// System views keep skipping the check.
+	if view.IsSystemView() {
+		if !b.skipSelectPrivilegeChecks {
+			b.skipSelectPrivilegeChecks = true
+			defer func() { b.skipSelectPrivilegeChecks = false }()
+		}
+	} else {
+		prevPrivilegeView := b.privilegeView
+		b.privilegeView = view
+		defer func() { b.privilegeView = prevPrivilegeView }()
 	}
 	trackDeps := b.trackSchemaDeps
 	if trackDeps {

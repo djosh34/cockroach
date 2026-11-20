@@ -24,6 +24,10 @@ import (
 	"github.com/pierrec/lz4/v4"
 )
 
+// maxDecompressedSize bounds the output of decompress(). A small crafted input
+// could otherwise expand into enough memory to crash the node.
+const maxDecompressedSize = 128 << 20
+
 type codec interface {
 	compress(uncompressedData []byte) ([]byte, error)
 	decompress(compressedData []byte) ([]byte, error)
@@ -181,9 +185,13 @@ func decompressUsing(
 		err = errors.CombineErrors(err, r.Close())
 	}()
 
-	decompressedBytes, err := io.ReadAll(r)
+	decompressedBytes, err := io.ReadAll(io.LimitReader(r, maxDecompressedSize+1))
 	if err != nil {
 		return nil, err
+	}
+	if len(decompressedBytes) > maxDecompressedSize {
+		return nil, pgerror.Newf(pgcode.ProgramLimitExceeded,
+			"decompressed data exceeds the limit of %d bytes", maxDecompressedSize)
 	}
 	return decompressedBytes, nil
 }

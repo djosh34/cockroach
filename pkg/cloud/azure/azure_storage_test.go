@@ -276,6 +276,25 @@ func TestMakeAzureStorageURLFromEnvironment(t *testing.T) {
 	}
 }
 
+// TestAzureAccountNameIsOneHostLabel checks that the account name, which a
+// user who is not an admin may choose, cannot make the node call another host.
+func TestAzureAccountNameIsOneHostLabel(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	for _, name := range []string{"attacker.example.com/", "x@attacker.example.com#", "a.b"} {
+		t.Run(name, func(t *testing.T) {
+			_, err := makeAzureStorage(context.Background(), cloud.ExternalStorageContext{Settings: cluster.MakeTestingClusterSettings()}, cloudpb.ExternalStorage{
+				AzureConfig: &cloudpb.ExternalStorage_Azure{
+					Container:   "container",
+					AccountName: name,
+					AccountKey:  base64.StdEncoding.EncodeToString([]byte("key")),
+					Environment: azure.PublicCloud.Name,
+				},
+			})
+			require.ErrorContains(t, err, "account name")
+		})
+	}
+}
+
 func TestAzureStorageFileImplicitAuth(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 

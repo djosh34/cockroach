@@ -144,6 +144,13 @@ func (p *planner) DeserializeSessionState(
 	if err := p.checkCanBecomeUser(ctx, sd.User()); err != nil {
 		return nil, err
 	}
+	// is_superuser is read-only, so it comes from the user's roles, not from
+	// the serialized state.
+	isSuperuser, err := p.UserHasAdminRole(ctx, sd.User())
+	if err != nil {
+		return nil, err
+	}
+	sd.IsSuperuser = isSuperuser
 
 	for _, prepStmt := range m.PreparedStatements {
 		stmts, err := parser.ParseWithInt(

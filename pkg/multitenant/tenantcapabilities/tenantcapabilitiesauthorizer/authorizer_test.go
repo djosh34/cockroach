@@ -185,3 +185,28 @@ func TestAllBatchRequestTypesHaveAssociatedCaps(t *testing.T) {
 		}
 	}
 }
+
+// TestEndTxnWithCommitTrigger checks that a secondary tenant cannot commit a
+// transaction with a commit trigger, which would split or merge a range
+// without the capability for it.
+func TestEndTxnWithCommitTrigger(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	ctx := context.Background()
+	settings := cluster.MakeTestingClusterSettings()
+	authorizer := New(settings, nil /* TestingKnobs */)
+	tenID := roachpb.MustMakeTenantID(10)
+	authorizer.BindReader(mockReader{tenID: &tenantcapabilitiespb.TenantCapabilities{}})
+
+	batch := func(trigger *roachpb.InternalCommitTrigger) *kvpb.BatchRequest {
+		ba := &kvpb.BatchRequest{}
+		ba.Add(&kvpb.EndTxnRequest{Commit: true, InternalCommitTrigger: trigger})
+		return ba
+	}
+	split := &roachpb.InternalCommitTrigger{SplitTrigger: &roachpb.SplitTrigger{}}
+	for _, mode := range []authorizerModeType{authorizerModeOn, authorizerModeV222} {
+		authorizerMode.Override(ctx, &settings.SV, int64(mode))
+		require.NoError(t, authorizer.HasCapabilityForBatch(ctx, tenID, batch(nil)))
+		require.ErrorContains(t, authorizer.HasCapabilityForBatch(ctx, tenID, batch(split)), "commit trigger")
+		require.NoError(t, authorizer.HasCapabilityForBatch(ctx, roachpb.SystemTenantID, batch(split)))
+	}
+}

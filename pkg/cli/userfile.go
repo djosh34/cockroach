@@ -269,6 +269,11 @@ func runUserFileGet(cmd *cobra.Command, args []string) (resErr error) {
 
 	for _, src := range files {
 		file := displayPath + src
+		// Any SQL user who can write to the file table chooses these names, so
+		// a name must not reach outside the destination, for example with "..".
+		if !filepath.IsLocal(filepath.FromSlash(file)) {
+			return errors.Newf("refusing to download %q: the name leaves the destination directory", file)
+		}
 		var fileDest string
 		if len(files) > 1 {
 			// If we matched multiple files, write their name in to dest or cwd.

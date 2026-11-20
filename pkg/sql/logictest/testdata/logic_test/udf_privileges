@@ -799,3 +799,76 @@ SET ROLE root
 
 subtest end
 
+
+# The owner of a schema may drop a routine in it, but only the owner of the
+# routine may replace or alter it: the new body would run with the privileges
+# of whoever calls the routine.
+subtest schema_owner_cannot_change_routine
+
+statement ok
+CREATE SCHEMA sc_owned_by_testuser AUTHORIZATION testuser
+
+statement ok
+CREATE FUNCTION sc_owned_by_testuser.f_owned_by_root() RETURNS INT LANGUAGE SQL AS $$ SELECT 1 $$
+
+user testuser
+
+statement error must be owner of function f_owned_by_root
+CREATE OR REPLACE FUNCTION sc_owned_by_testuser.f_owned_by_root() RETURNS INT LANGUAGE SQL AS $$ SELECT 2 $$
+
+statement error must be owner of function f_owned_by_root
+ALTER FUNCTION sc_owned_by_testuser.f_owned_by_root() IMMUTABLE
+
+statement error must be owner of function f_owned_by_root
+ALTER FUNCTION sc_owned_by_testuser.f_owned_by_root() RENAME TO g
+
+statement ok
+DROP FUNCTION sc_owned_by_testuser.f_owned_by_root
+
+user root
+
+statement ok
+DROP SCHEMA sc_owned_by_testuser
+
+subtest end
+
+# A check constraint is validated as the user who added it. Run as root, a
+# function in the constraint could do what that user may not.
+subtest check_validation_runs_as_user
+
+statement ok
+CREATE TABLE check_val_target (a INT);
+GRANT INSERT ON check_val_target TO testuser
+
+user testuser
+
+statement ok
+CREATE FUNCTION check_val_write() RETURNS BOOL LANGUAGE SQL AS $$ INSERT INTO check_val_target VALUES (1); SELECT true $$
+
+statement ok
+CREATE TABLE check_val_own (a INT);
+INSERT INTO check_val_own VALUES (1)
+
+user root
+
+statement ok
+REVOKE INSERT ON check_val_target FROM testuser
+
+user testuser
+
+statement error does not have INSERT privilege on relation check_val_target
+ALTER TABLE check_val_own ADD CONSTRAINT c CHECK (check_val_write())
+
+user root
+
+query I
+SELECT count(*) FROM check_val_target
+----
+0
+
+statement ok
+DROP TABLE check_val_own;
+DROP FUNCTION check_val_write;
+DROP TABLE check_val_target
+
+subtest end

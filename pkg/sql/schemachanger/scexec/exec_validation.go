@@ -67,8 +67,17 @@ func executeValidateConstraint(
 		return err
 	}
 
-	// Execute the validation operation as a root user.
+	// Execute the validation operation as a root user, except for a check
+	// constraint: its expression may call functions, so it runs as the user
+	// who added it.
 	execOverride := sessiondata.RootUserSessionDataOverride
+	if ck := constraint.AsCheck(); ck != nil && !ck.IsNotNullColumnConstraint() {
+		job := deps.TransactionalJobRegistry().CurrentJob()
+		if job == nil {
+			return errors.AssertionFailedf("validating check constraint %q without a job", ck.GetName())
+		}
+		execOverride = sessiondata.InternalExecutorOverride{User: job.Payload().UsernameProto.Decode()}
+	}
 	err = deps.Validator().ValidateConstraint(ctx, table, constraint, op.IndexIDForValidation, execOverride)
 	if err != nil {
 		return scerrors.SchemaChangerUserError(err)

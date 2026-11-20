@@ -176,7 +176,7 @@ func maybeAssignSequenceOwner(b BuildCtx, sequence *scpb.Namespace, owner *tree.
 			"Specify OWNED BY table.column or OWNED BY NONE."))
 	}
 	// Resolve table first to validate it's sane.
-	tableElts := b.ResolveTable(owner.TableName, ResolveParams{})
+	tableElts := b.ResolveTable(owner.TableName, ResolveParams{RequireOwnership: true})
 	_, _, tbl := scpb.FindTable(tableElts)
 	_, _, tblNamespace := scpb.FindNamespace(tableElts)
 	if tblNamespace.DatabaseID != sequence.DatabaseID {

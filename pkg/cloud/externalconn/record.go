@@ -24,6 +24,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
+	"github.com/cockroachdb/cockroach/pkg/sql/syntheticprivilege"
 	"github.com/cockroachdb/cockroach/pkg/util/protoutil"
 	"github.com/cockroachdb/errors"
 	"github.com/lib/pq/oid"
@@ -96,9 +97,9 @@ func LoadExternalConnection(
 	// Loading an External Connection is only allowed for users with the `USAGE`
 	// privilege. We run the query as `node` since the user might not have
 	// `SELECT` on the system table.
-	row, cols, err := txn.QueryRowExWithCols(ctx, "lookup-schedule", txn.KV(),
+	row, cols, err := txn.QueryRowExWithCols(ctx, "lookup-external-connection", txn.KV(),
 		sessiondata.NodeUserSessionDataOverride,
-		fmt.Sprintf("SELECT * FROM system.external_connections WHERE connection_name = '%s'", name))
+		"SELECT * FROM system.external_connections WHERE connection_name = $1", name)
 
 	if err != nil {
 		return nil, errors.CombineErrors(err, &externalConnectionNotFoundError{connectionName: name})
@@ -112,6 +113,35 @@ func LoadExternalConnection(
 		return nil, err
 	}
 	return ec, nil
+}
+
+// CheckUsage returns an error unless user may use the external connection
+// called name: user is an admin, or user, one of its roles or public holds
+// USAGE or ALL on the connection.
+func CheckUsage(ctx context.Context, txn isql.Txn, user username.SQLUsername, name string) error {
+	if user.IsRootUser() || user.IsNodeUser() {
+		return nil
+	}
+	path := (&syntheticprivilege.ExternalConnectionPrivilege{ConnectionName: name}).GetPath()
+	// The query runs as node because the user may not read system.privileges.
+	// CASE keeps pg_has_role away from public, which is not a stored role.
+	row, err := txn.QueryRowEx(ctx, "check-external-connection-usage", txn.KV(),
+		sessiondata.NodeUserSessionDataOverride, `
+SELECT pg_has_role($1::STRING, 'admin', 'MEMBER') OR EXISTS (
+  SELECT 1 FROM system.privileges
+  WHERE path = $2::STRING
+    AND ('USAGE' = ANY (privileges) OR 'ALL' = ANY (privileges))
+    AND CASE WHEN username = 'public' THEN true
+        ELSE pg_has_role($1::STRING, username, 'MEMBER') END
+)`, user.Normalized(), path)
+	if err != nil {
+		return err
+	}
+	if row == nil || row[0] != tree.DBoolTrue {
+		return pgerror.Newf(pgcode.InsufficientPrivilege,
+			"user %s does not have USAGE privilege on external connection %s", user, name)
+	}
+	return nil
 }
 
 // ConnectionName returns the connection_name.

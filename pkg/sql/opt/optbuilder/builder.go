@@ -115,9 +115,14 @@ type Builder struct {
 
 	// If set, the planner will skip checking for the SELECT privilege when
 	// resolving data sources (tables, views, etc). This is used when compiling
-	// views and the view SELECT privilege has already been checked. This should
-	// be used with care.
+	// system views and the view SELECT privilege has already been checked. This
+	// should be used with care.
 	skipSelectPrivilegeChecks bool
+
+	// If set, the SELECT privilege on data sources is checked for the owner of
+	// this view instead of the current user. This is used when compiling a
+	// view, as in Postgres.
+	privilegeView cat.View
 
 	// views contains a cache of views that have already been parsed, in case they
 	// are referenced multiple times in the same query.

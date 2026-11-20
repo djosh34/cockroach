@@ -268,6 +268,13 @@ func (tc *Catalog) CheckPrivilege(ctx context.Context, o cat.Object, priv privil
 	return tc.CheckAnyPrivilege(ctx, o)
 }
 
+// CheckViewOwnerPrivilege is part of the cat.Catalog interface.
+func (tc *Catalog) CheckViewOwnerPrivilege(
+	ctx context.Context, view cat.View, o cat.Object, priv privilege.Kind,
+) error {
+	return tc.CheckAnyPrivilege(ctx, o)
+}
+
 // CheckAnyPrivilege is part of the cat.Catalog interface.
 func (tc *Catalog) CheckAnyPrivilege(ctx context.Context, o cat.Object) error {
 	switch t := o.(type) {

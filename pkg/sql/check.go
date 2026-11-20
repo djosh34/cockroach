@@ -44,6 +44,10 @@ import (
 // `indexIDForValidation`, if non-zero, is used to explicit hint the
 // validation query to validate against a specific index.
 //
+// The query runs as user. The expression may call user-defined functions or
+// builtins that check privileges, so user must be the one who added the
+// constraint: as root, these would run with root's privileges.
+//
 // It operates entirely on the current goroutine and is thus able to
 // reuse an existing kv.Txn safely.
 func validateCheckExpr(
@@ -54,6 +58,7 @@ func validateCheckExpr(
 	exprStr string,
 	tableDesc *tabledesc.Mutable,
 	indexIDForValidation descpb.IndexID,
+	user username.SQLUsername,
 ) (violatingRow tree.Datums, formattedCkExpr string, err error) {
 	formattedCkExpr, err = schemaexpr.FormatExprForDisplay(ctx, tableDesc, exprStr, semaCtx, sessionData, tree.FmtParsable)
 	if err != nil {
@@ -70,7 +75,7 @@ func validateCheckExpr(
 		ctx,
 		"validate check constraint",
 		txn.KV(),
-		sessiondata.RootUserSessionDataOverride,
+		sessiondata.InternalExecutorOverride{User: user},
 		queryStr)
 	if err != nil {
 		return nil, formattedCkExpr, err

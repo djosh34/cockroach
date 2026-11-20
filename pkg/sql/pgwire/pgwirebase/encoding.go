@@ -1005,6 +1005,14 @@ func decodeBinaryTuple(ctx context.Context, evalCtx *eval.Context, b []byte) (tr
 		return nil, errors.WithDetailf(pgerror.New(pgcode.Syntax, "tuple must have non-negative number of elements"),
 			"numberOfElements=%d", numberOfElements)
 	}
+	// Each element takes at least an OID and a length. Checking this before
+	// allocating keeps a crafted count from allocating far more memory than
+	// the message holds.
+	if maxElements := (bufferLength - tupleHeaderSize) / (oidSize + elementSize); int(numberOfElements) > maxElements {
+		return nil, errors.WithDetailf(
+			pgerror.Newf(pgcode.Syntax, "tuple has more elements than its %d bytes can hold", bufferLength),
+			"numberOfElements=%d", numberOfElements)
+	}
 	bufferStartIdx = bufferEndIdx
 
 	typs := make([]*types.T, numberOfElements)

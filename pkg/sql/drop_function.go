@@ -176,6 +176,22 @@ func (p *planner) checkPrivilegesForDropFunction(
 	return mutable, nil
 }
 
+// checkPrivilegesForAlterFunction returns the mutable descriptor of the
+// routine if the user owns it or is an admin. Unlike DROP, owning the schema is
+// not enough: a changed routine runs with the privileges of whoever calls it.
+func (p *planner) checkPrivilegesForAlterFunction(
+	ctx context.Context, fnID descpb.ID,
+) (*funcdesc.Mutable, error) {
+	mutable, err := p.Descriptors().MutableByID(p.Txn()).Function(ctx, fnID)
+	if err != nil {
+		return nil, err
+	}
+	if err := p.checkOwnershipOrAdmin(ctx, mutable, "function"); err != nil {
+		return nil, err
+	}
+	return mutable, nil
+}
+
 func (p *planner) canDropFunction(ctx context.Context, fnDesc catalog.FunctionDescriptor) error {
 	hasOwernship, err := p.HasOwnershipOnSchema(ctx, fnDesc.GetParentSchemaID(), fnDesc.GetParentID())
 	if err != nil {

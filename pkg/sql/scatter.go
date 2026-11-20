@@ -21,6 +21,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/privilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
+	"github.com/cockroachdb/cockroach/pkg/sql/syntheticprivilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/errors"
 )
@@ -33,7 +34,7 @@ type scatterNode struct {
 
 // Scatter moves ranges to random stores
 // (`ALTER TABLE/INDEX ... SCATTER ...` statement)
-// Privileges: INSERT on table.
+// Privileges: INSERT on table and the REPAIRCLUSTERMETADATA system privilege.
 func (p *planner) Scatter(ctx context.Context, n *tree.Scatter) (planNode, error) {
 
 	if err := requireSystemTenantOrClusterSetting(p.ExecCfg().Codec, p.ExecCfg().Settings, SecondaryTenantScatterEnabled); err != nil {
@@ -42,6 +43,12 @@ func (p *planner) Scatter(ctx context.Context, n *tree.Scatter) (planNode, error
 
 	_, tableDesc, index, err := p.getTableAndIndex(ctx, &n.TableOrIndex, privilege.INSERT, true /* skipCache */)
 	if err != nil {
+		return nil, err
+	}
+	// Scattering moves replicas, which affects the whole cluster.
+	if err := p.CheckPrivilege(
+		ctx, syntheticprivilege.GlobalPrivilegeObject, privilege.REPAIRCLUSTERMETADATA,
+	); err != nil {
 		return nil, err
 	}
 

@@ -152,6 +152,9 @@ func MakeAzureKMS(ctx context.Context, uri string, env cloud.KMSEnv) (cloud.KMS,
 		return nil, errors.Wrap(err, "azure kms environment")
 	}
 
+	if !hostLabel.MatchString(kmsURIParams.vaultName) {
+		return nil, errors.Newf("azure kms: vault name %q is not valid", kmsURIParams.vaultName)
+	}
 	u, err := url.Parse(fmt.Sprintf("https://%s.%s", kmsURIParams.vaultName, azureEnv.KeyVaultDNSSuffix))
 	if err != nil {
 		return nil, errors.Wrap(err, "azure kms vault url")
