@@ -205,3 +205,19 @@ func TestParallelImportProducerHandlesCancellation(t *testing.T) {
 			return nil
 		}))
 }
+
+// TestEmittedRowLowWatermarkCountsOnlySentRows checks that the rows of a
+// worker that is about to send its batch do not count for the batches of
+// other workers yet. Before, a worker published its row before sending, so
+// another worker's batch could arrive first with a LastRow that counted rows
+// still on their way, and a resumed IMPORT could skip them.
+func TestEmittedRowLowWatermarkCountsOnlySentRows(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+
+	minEmitted := make([]int64, 2)
+	// Worker 1 computes the LastRow of its batch with rows up to 1500, but has
+	// not sent the batch yet.
+	require.Equal(t, int64(0), emittedRowLowWatermark(1, 1500, minEmitted))
+	// A batch of worker 0 must not count the rows of worker 1 yet.
+	require.Equal(t, int64(0), emittedRowLowWatermark(0, 2500, minEmitted))
+}
