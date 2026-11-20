@@ -31,7 +31,7 @@ end_test
 
 start_test "Check that a server can be started in a zero directory."
 send "\$b/\$(basename $argv) start-single-node --insecure --store=path=\$ppwd/logs/cockroach-data\r"
-eexpect "CockroachDB node starting"
+eexpect "patchroaddb node starting"
 send "\003"
 eexpect "interrupted"
 eexpect ":/# "

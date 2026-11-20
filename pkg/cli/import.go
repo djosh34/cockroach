@@ -26,7 +26,7 @@ import (
 
 var importDumpFileCmd = &cobra.Command{
 	Use:   "db <format> <source>",
-	Short: "import a pgdump or mysqldump file into CockroachDB",
+	Short: "import a pgdump or mysqldump file into patchroaddb",
 	Long: `
 Uploads and imports a local dump file into the patchroaddb cluster via userfile storage.
 `,
@@ -36,7 +36,7 @@ Uploads and imports a local dump file into the patchroaddb cluster via userfile 
 
 var importDumpTableCmd = &cobra.Command{
 	Use:   "table <table> <format> <source>",
-	Short: "import a table from a pgdump or mysqldump file into CockroachDB",
+	Short: "import a table from a pgdump or mysqldump file into patchroaddb",
 	Long: `
 Uploads and imports a table from the local dump file into the patchroaddb cluster via userfile storage.
 `,

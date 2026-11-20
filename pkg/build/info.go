@@ -87,7 +87,11 @@ func BinaryVersion() string {
 }
 
 func init() {
-	// Allow tests to override the version.txt contents.
+	// Allow tests to override the version.txt contents. Only test builds
+	// read this variable, so a release shows only its own version.
+	if !buildutil.CrdbTestBuild {
+		return
+	}
 	if versionOverride := envutil.EnvOrDefaultString(
 		"COCKROACH_TESTING_VERSION_OVERRIDE", ""); versionOverride != "" {
 		TestingOverrideVersion(versionOverride)

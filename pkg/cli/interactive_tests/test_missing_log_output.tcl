@@ -8,7 +8,7 @@ eexpect ":/# "
 
 start_test "Check that a server encountering a fatal error when not logging to stderr exits with the right code."
 send "$argv start-single-node -s=path=logs/db --insecure\r"
-eexpect "CockroachDB node starting"
+eexpect "patchroaddb node starting"
 system "$argv sql --insecure -e \"select crdb_internal.force_log_fatal('helloworld')\" || true"
 eexpect ":/# "
 send "echo \$?\r"
@@ -19,7 +19,7 @@ end_test
 start_test "Check that a broken stderr prints a message to the log files."
 # We use --log-file-max-size to avoid rotations during the test.
 send "$argv start-single-node -s=path=logs/db --log-file-max-size=100M --insecure --logtostderr --vmodule=*=1 2>&1 | cat\r"
-eexpect "CockroachDB node starting"
+eexpect "patchroaddb node starting"
 system "killall cat"
 eexpect ":/# "
 # NB: we can't just grep for the broken pipe output, because it may take
@@ -48,7 +48,7 @@ end_test
 
 start_test "Check that a server started with only in-memory stores and no --log-dir automatically logs to stderr."
 send "$argv start-single-node --insecure --store=type=mem,size=1GiB\r"
-eexpect "CockroachDB node starting"
+eexpect "patchroaddb node starting"
 end_test
 
 # Stop it.
@@ -64,7 +64,7 @@ stop_server $argv
 
 start_test "Check that a server started with --logtostderr logs even info messages to stderr."
 send "$argv start-single-node --max-sql-memory=128MB -s=path=logs/db --insecure --logtostderr\r"
-eexpect "CockroachDB node starting"
+eexpect "patchroaddb node starting"
 end_test
 
 # Stop it.
@@ -75,7 +75,7 @@ system "rm -rf logs/db"
 
 start_test "Check that --logtostderr can override the threshold but no error is printed on startup"
 send "echo marker; $argv start-single-node --max-sql-memory=128MB -s=path=logs/db --insecure --logtostderr=ERROR 2>&1 | grep -v '^\\*'\r"
-eexpect "marker\r\nCockroachDB node starting"
+eexpect "marker\r\npatchroaddb node starting"
 end_test
 
 # Stop it.
@@ -87,7 +87,7 @@ system "rm -rf logs/db"
 
 start_test "Check that panic reports are printed to the log even when --logtostderr is specified"
 send "$argv start-single-node --max-sql-memory=128MB -s=path=logs/db --insecure --logtostderr\r"
-eexpect "CockroachDB node starting"
+eexpect "patchroaddb node starting"
 
 system "($argv sql --insecure -e \"select crdb_internal.force_panic('helloworld')\" || true)&"
 # Check the panic is reported on the server's stderr

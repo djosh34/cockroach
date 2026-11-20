@@ -35,7 +35,9 @@ jobs:
           else
             echo "tag=$(cat pkg/build/version.txt)" >>"$GITHUB_OUTPUT"
           fi
-      - run: build/release.sh "${{ steps.tag.outputs.tag }}" out
+      - run: build/release.sh "$TAG" out
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
       - name: Check the version output
         run: |
           tar -xzf "out/patchroaddb-$TAG.linux-amd64.tgz" -C "$RUNNER_TEMP"

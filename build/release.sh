@@ -9,6 +9,8 @@
 # <tag> must equal pkg/build/version.txt, so the binary, the files and the
 # image all carry the one patchroaddb version.
 #
+# <out dir> must not exist yet.
+#
 # Usage: build/release.sh <tag> <out dir>
 set -euo pipefail
 
@@ -29,7 +31,10 @@ pkg=github.com/cockroachdb/cockroach/pkg/build
 built=$(TZ=UTC git log -1 --format=%cd --date=format-local:'%Y/%m/%d %H:%M:%S')
 ldflags="-X $pkg.typ=release -X $pkg.rev=$(git rev-parse HEAD) -X '$pkg.utcTime=$built'"
 
-rm -rf "$out"
+if [ -e "$out" ]; then
+  echo "$out already exists; give a new directory" >&2
+  exit 1
+fi
 mkdir -p "$out/image"
 for arch in amd64 arm64; do
   name=patchroaddb-$tag.linux-$arch
@@ -39,7 +44,7 @@ for arch in amd64 arm64; do
   cp -r LICENSE NOTICE licenses "$out/$name/"
   tar -czf "$out/$name.tgz" -C "$out" "$name"
   cp "$out/$name/patchroaddb" "$out/image/patchroaddb-$arch"
-  rm -r "${out:?}/$name"
+  rm -r "${out:?}/${name:?}"
 done
 (cd "$out" && sha256sum patchroaddb-*.tgz >SHA256SUMS)
 

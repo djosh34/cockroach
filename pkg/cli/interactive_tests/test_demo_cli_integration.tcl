@@ -13,7 +13,7 @@ eexpect "defaultdb>"
 send "\\demo ls\r"
 eexpect "Application tenant"
 eexpect "(cli)"
-eexpect "cockroach sql"
+eexpect "patchroaddb sql"
 eexpect " -u demo"
 end_test
 

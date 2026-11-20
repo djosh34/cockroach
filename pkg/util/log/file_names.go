@@ -51,9 +51,15 @@ var fullHostName = func() (host string) {
 var fileNameConstants = func() (res fileNameConstantsT) {
 	res.pid = os.Getpid()
 
+	// The log files of the patchroaddb binary keep their upstream names,
+	// such as cockroach.log, so tools that read them keep working.
+	program := filepath.Base(os.Args[0])
+	if program == "patchroaddb" {
+		program = "cockroach"
+	}
 	// We remove hyphens from the program name because we use the hyphen
 	// to separate the program name from the file group name.
-	res.program = normalizeFileName(filepath.Base(os.Args[0]), false /* keepHyphens */)
+	res.program = normalizeFileName(program, false /* keepHyphens */)
 
 	// In contrast to the program name, the host part can contain
 	// hyphens because its delimiter is a period.

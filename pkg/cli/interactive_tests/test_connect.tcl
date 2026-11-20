@@ -87,9 +87,9 @@ eexpect "initial startup completed"
 system "$argv init --certs-dir=certs/n1 --host `cat hostname.txt`"
 
 # Now expect the startup messages on both process outputs.
-eexpect "CockroachDB node starting"
+eexpect "patchroaddb node starting"
 set spawn_id $shell1_spawn_id
-eexpect "CockroachDB node starting"
+eexpect "patchroaddb node starting"
 end_test
 
 start_test "Check we can connect init a SQL client to the newly initialized two nodes"

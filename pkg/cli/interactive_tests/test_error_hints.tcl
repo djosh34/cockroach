@@ -115,7 +115,7 @@ eexpect ":/# "
 # Check that cockroach node drain becomes suitably confused.
 set spawn_id $client_spawn_id
 eexpect "ERROR: server closed the connection."
-eexpect "Is this a CockroachDB node?"
+eexpect "Is this a patchroaddb node?"
 eexpect ":/# "
 set spawn_id $shell_spawn_id
 end_test
@@ -132,13 +132,13 @@ eexpect "insecure\r\n"
 # then kill it
 set spawn_id $shell_spawn_id
 eexpect "connected"
-eexpect "cockroach sql"
+eexpect "patchroaddb sql"
 interrupt
 eexpect ":/# "
 # Check that cockroach sql becomes suitably confused.
 set spawn_id $client_spawn_id
 eexpect "ERROR: server closed the connection."
-eexpect "Is this a CockroachDB node?"
+eexpect "Is this a patchroaddb node?"
 eexpect "EOF"
 eexpect ":/# "
 set spawn_id $shell_spawn_id

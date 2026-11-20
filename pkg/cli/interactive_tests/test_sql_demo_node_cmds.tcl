@@ -14,7 +14,7 @@ eexpect root@
 
 # Ensure the demo command does not work.
 send "\\demo shutdown 2\n"
-eexpect "\\demo can only be run with cockroach demo"
+eexpect "\\demo can only be run with patchroaddb demo"
 
 # Exit the shell.
 send_eof
