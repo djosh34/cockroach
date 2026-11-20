@@ -232,9 +232,9 @@ spec:
             --certs-dir /cockroach/cockroach-certs
             --advertise-host $(hostname -f)
             --http-addr 0.0.0.0
-            # TODO: Replace the placeholder values in --join and --locality with the namespace of the CockroachDB cluster in each region (e.g., us-east-1), and <zone> with the availability zone of the node.
+            # TODO: Replace the placeholder values in --join and --locality with the namespace of the CockroachDB cluster in each region (e.g., us-east-1).
             # --join cockroachdb-0.cockroachdb.<cluster-namespace-1>,cockroachdb-1.cockroachdb.<cluster-namespace-1>,cockroachdb-2.cockroachdb.<cluster-namespace-1>,cockroachdb-0.cockroachdb.<cluster-namespace-2>,cockroachdb-1.cockroachdb.<cluster-namespace-2>,cockroachdb-2.cockroachdb.<cluster-namespace-2>,cockroachdb-0.cockroachdb.<cluster-namespace-3>,cockroachdb-1.cockroachdb.<cluster-namespace-3>,cockroachdb-2.cockroachdb.<cluster-namespace-3>
-            # --locality=region=<cluster-namespace-1>,az=<zone>,dns=$(hostname -f)
+            # --locality=region=<cluster-namespace-1>,dns=$(hostname -f)
             --cache $(expr $MEMORY_LIMIT_MIB / 4)MiB
             --max-sql-memory $(expr $MEMORY_LIMIT_MIB / 4)MiB
       # No pre-stop hook is required, a SIGTERM plus some time is all that's
