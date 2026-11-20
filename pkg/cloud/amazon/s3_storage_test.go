@@ -18,10 +18,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/smithy-go"
 	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/blobs"
 	"github.com/cockroachdb/cockroach/pkg/cloud"
@@ -66,7 +65,7 @@ func TestPutS3(t *testing.T) {
 	// If environment credentials are not present, we want to
 	// skip all S3 tests, including auth-implicit, even though
 	// it is not used in auth-implicit.
-	creds, err := credentials.NewEnvCredentials().Get()
+	creds, err := envCredentials()
 	if err != nil {
 		skip.IgnoreLint(t, "No AWS credentials")
 	}
@@ -110,8 +109,7 @@ func TestPutS3(t *testing.T) {
 				// in the AWS console, then set it up locally.
 				// https://docs.aws.com/cli/latest/userguide/cli-configure-role.html
 				// We only run this test if default role exists.
-				credentialsProvider := credentials.SharedCredentialsProvider{}
-				_, err := credentialsProvider.Retrieve()
+				_, err := config.LoadSharedConfigProfile(context.Background(), config.DefaultSharedConfigProfile)
 				if err != nil {
 					skip.IgnoreLintf(t, "we only run this test if a default role exists, "+
 						"refer to https://docs.aws.com/cli/latest/userguide/cli-configure-role.html: %s", err)
@@ -143,8 +141,7 @@ func TestPutS3(t *testing.T) {
 				// in the AWS console, then set it up locally.
 				// https://docs.aws.com/cli/latest/userguide/cli-configure-role.html
 				// We only run this test if default role exists.
-				credentialsProvider := credentials.SharedCredentialsProvider{}
-				_, err := credentialsProvider.Retrieve()
+				_, err := config.LoadSharedConfigProfile(context.Background(), config.DefaultSharedConfigProfile)
 				if err != nil {
 					skip.IgnoreLintf(t, "we only run this test if a default role exists, "+
 						"refer to https://docs.aws.com/cli/latest/userguide/cli-configure-role.html: %s", err)
@@ -183,8 +180,7 @@ func TestPutS3(t *testing.T) {
 				// in the AWS console, then set it up locally.
 				// https://docs.aws.com/cli/latest/userguide/cli-configure-role.html
 				// We only run this test if default role exists.
-				credentialsProvider := credentials.SharedCredentialsProvider{}
-				_, err := credentialsProvider.Retrieve()
+				_, err := config.LoadSharedConfigProfile(context.Background(), config.DefaultSharedConfigProfile)
 				if err != nil {
 					skip.IgnoreLintf(t, "we only run this test if a default role exists, "+
 						"refer to https://docs.aws.com/cli/latest/userguide/cli-configure-role.html: %s", err)
@@ -220,7 +216,7 @@ func TestPutS3AssumeRole(t *testing.T) {
 	// If environment credentials are not present, we want to
 	// skip all S3 tests, including auth-implicit, even though
 	// it is not used in auth-implicit.
-	creds, err := credentials.NewEnvCredentials().Get()
+	creds, err := envCredentials()
 	if err != nil {
 		skip.IgnoreLint(t, "No AWS credentials")
 	}
@@ -240,8 +236,7 @@ func TestPutS3AssumeRole(t *testing.T) {
 		skip.IgnoreLint(t, "AWS_ASSUME_ROLE env var must be set")
 	}
 	t.Run("auth-implicit", func(t *testing.T) {
-		credentialsProvider := credentials.SharedCredentialsProvider{}
-		_, err := credentialsProvider.Retrieve()
+		_, err := config.LoadSharedConfigProfile(context.Background(), config.DefaultSharedConfigProfile)
 		if err != nil {
 			skip.IgnoreLintf(t, "we only run this test if a default role exists, "+
 				"refer to https://docs.aws.com/cli/latest/userguide/cli-configure-role.html: %s", err)
@@ -415,22 +410,35 @@ func TestS3DisallowImplicitCredentials(t *testing.T) {
 
 type awserror struct {
 	error
-	orig          error
-	code, message string
+	code string
 }
 
-var _ awserr.Error = awserror{}
+var _ smithy.APIError = awserror{}
 
-func (a awserror) Code() string {
+func (a awserror) ErrorCode() string {
 	return a.code
 }
 
-func (a awserror) Message() string {
-	return a.message
+func (a awserror) ErrorMessage() string {
+	return a.Error()
 }
 
-func (a awserror) OrigErr() error {
-	return a.orig
+func (a awserror) ErrorFault() smithy.ErrorFault {
+	return smithy.FaultUnknown
+}
+
+// envCredentials returns the AWS credentials in the environment, which the
+// tests against a real bucket use.
+func envCredentials() (aws.Credentials, error) {
+	creds := aws.Credentials{
+		AccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
+		SecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+		SessionToken:    os.Getenv("AWS_SESSION_TOKEN"),
+	}
+	if creds.AccessKeyID == "" || creds.SecretAccessKey == "" {
+		return aws.Credentials{}, errors.New("no AWS credentials in the environment")
+	}
+	return creds, nil
 }
 
 func TestInterpretAWSCode(t *testing.T) {
@@ -438,12 +446,12 @@ func TestInterpretAWSCode(t *testing.T) {
 		// with code
 		input := awserror{
 			error: errors.New("hello"),
-			code:  s3.ErrCodeBucketAlreadyOwnedByYou,
+			code:  "BucketAlreadyOwnedByYou",
 		}
 		got := interpretAWSError(input)
 		require.NotNil(t, got, "expected tryAWSCode to recognize an awserr.Error type")
 		require.False(t, errors.Is(got, cloud.ErrFileDoesNotExist), "should not include cloud.ErrFileDoesNotExist in the error chain")
-		require.True(t, strings.Contains(got.Error(), s3.ErrCodeBucketAlreadyOwnedByYou), "aws error code should be in the error chain")
+		require.True(t, strings.Contains(got.Error(), "BucketAlreadyOwnedByYou"), "aws error code should be in the error chain")
 	}
 
 	{
@@ -461,32 +469,32 @@ func TestInterpretAWSCode(t *testing.T) {
 		// with particular code
 		input := awserror{
 			error: errors.New("hello"),
-			code:  s3.ErrCodeNoSuchBucket,
+			code:  "NoSuchBucket",
 		}
 		got := interpretAWSError(input)
 		require.NotNil(t, got, "expected tryAWSCode to regognize awserr.Error")
 		require.True(t, errors.Is(got, cloud.ErrFileDoesNotExist), "expected cloud.ErrFileDoesNotExist in the error chain")
-		require.True(t, strings.Contains(got.Error(), s3.ErrCodeNoSuchBucket), "aws error code should be in the error chain")
+		require.True(t, strings.Contains(got.Error(), "NoSuchBucket"), "aws error code should be in the error chain")
 	}
 
 	{
 		// with keywords and code
 		input := awserror{
 			error: errors.New("‹AccessDenied: User: arn:aws:sts::12345:assumed-role/12345 is not authorized to perform: sts:AssumeRole on resource: arn:aws:iam::12345›"),
-			code:  s3.ErrCodeObjectAlreadyInActiveTierError,
+			code:  "ObjectAlreadyInActiveTierError",
 		}
 		got := interpretAWSError(input)
 		require.NotNil(t, got, "expected interpretAWSError to recognize keywords")
 		require.True(t, strings.Contains(got.Error(), "AccessDenied"), "expected to see AccessDenied in error chain")
 		require.True(t, strings.Contains(got.Error(), "AssumeRole"), "expected to see AssumeRole in error chain")
-		require.True(t, strings.Contains(got.Error(), s3.ErrCodeObjectAlreadyInActiveTierError), "aws error code should be in the error chain")
+		require.True(t, strings.Contains(got.Error(), "ObjectAlreadyInActiveTierError"), "aws error code should be in the error chain")
 		require.True(t, strings.Contains(got.Error(), "12345"), "SDK error should appear in the error chain")
 
 		// the keywords and code should come through while the original got redacted
 		redacted := errors.Redact(got)
 		require.True(t, strings.Contains(got.Error(), "AccessDenied"), "expected to see AccessDenied in error chain after redaction")
 		require.True(t, strings.Contains(got.Error(), "AssumeRole"), "expected to see AssumeRole in error chain after redaction")
-		require.True(t, strings.Contains(got.Error(), s3.ErrCodeObjectAlreadyInActiveTierError), "aws error code should be in the error chain after redaction")
+		require.True(t, strings.Contains(got.Error(), "ObjectAlreadyInActiveTierError"), "aws error code should be in the error chain after redaction")
 		require.False(t, strings.Contains(redacted, "12345"), "SDK error should have been redacted")
 	}
 
@@ -515,8 +523,7 @@ func TestS3BucketDoesNotExist(t *testing.T) {
 
 	testSettings := cluster.MakeTestingClusterSettings()
 
-	credentialsProvider := credentials.SharedCredentialsProvider{}
-	_, err := credentialsProvider.Retrieve()
+	_, err := config.LoadSharedConfigProfile(context.Background(), config.DefaultSharedConfigProfile)
 	if err != nil {
 		skip.IgnoreLintf(t, "we only run this test if a default role exists, "+
 			"refer to https://docs.aws.com/cli/latest/userguide/cli-configure-role.html: %s", err)
@@ -568,7 +575,7 @@ func TestAntagonisticS3Read(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 
 	// Check if we can create aws session with implicit credentials.
-	_, err := session.NewSession()
+	_, err := config.LoadDefaultConfig(context.Background())
 	if err != nil {
 		skip.IgnoreLint(t, "No AWS credentials")
 	}
@@ -591,7 +598,7 @@ func TestAntagonisticS3Read(t *testing.T) {
 func TestNewClientErrorsOnBucketRegion(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 
-	_, err := session.NewSession()
+	_, err := config.LoadDefaultConfig(context.Background())
 	if err != nil {
 		skip.IgnoreLint(t, "No AWS credentials")
 	}
@@ -615,7 +622,7 @@ func TestNewClientErrorsOnBucketRegion(t *testing.T) {
 func TestReadFileAtReturnsSize(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 
-	_, err := credentials.NewEnvCredentials().Get()
+	_, err := envCredentials()
 	if err != nil {
 		skip.IgnoreLint(t, "No AWS credentials")
 	}
