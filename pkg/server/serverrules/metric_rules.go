@@ -14,7 +14,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/cockroachdb/cockroach/pkg/kv/kvserver"
 	"github.com/cockroachdb/cockroach/pkg/util/metric"
 	"github.com/gogo/protobuf/proto"
 )
@@ -44,7 +43,7 @@ func createAndRegisterNodeRestartRule(ctx context.Context, ruleRegistry *metric.
 		Value: proto.String("{{ $labels.instance }} for cluster {{ $labels.cluster }} restarted {{ $value }} time(s) in 10m"),
 	}}
 	help := "Alert if a node restarts multiple times in a short span of time."
-	nodeRestartRule, err := metric.NewAlertingRule(
+	nodeRestartRule := metric.NewAlertingRule(
 		nodeRestartRuleName,
 		expr,
 		annotations,
@@ -53,7 +52,7 @@ func createAndRegisterNodeRestartRule(ctx context.Context, ruleRegistry *metric.
 		help,
 		false,
 	)
-	kvserver.MaybeAddRuleToRegistry(ctx, err, nodeRestartRuleName, nodeRestartRule, ruleRegistry)
+	ruleRegistry.AddRule(nodeRestartRule)
 }
 
 func createAndRegisterNodeCACertExpiryRule(ctx context.Context, ruleRegistry *metric.RuleRegistry) {
@@ -67,8 +66,8 @@ func createAndRegisterNodeCACertExpiryRule(ctx context.Context, ruleRegistry *me
 		Name:  proto.String("frequency"),
 		Value: proto.String("daily"),
 	}}
-	nodeCACertExpiryRule, err := metric.NewAlertingRule(nodeCACertExpiryRuleName, expr, annotations, labels, time.Duration(0), help, false)
-	kvserver.MaybeAddRuleToRegistry(ctx, err, nodeCACertExpiryRuleName, nodeCACertExpiryRule, ruleRegistry)
+	nodeCACertExpiryRule := metric.NewAlertingRule(nodeCACertExpiryRuleName, expr, annotations, labels, time.Duration(0), help, false)
+	ruleRegistry.AddRule(nodeCACertExpiryRule)
 }
 
 func createAndRegisterNodeCertExpiryRule(ctx context.Context, ruleRegistry *metric.RuleRegistry) {
@@ -82,6 +81,6 @@ func createAndRegisterNodeCertExpiryRule(ctx context.Context, ruleRegistry *metr
 		Name:  proto.String("frequency"),
 		Value: proto.String("daily"),
 	}}
-	nodeCertExpiryRule, err := metric.NewAlertingRule(nodeCertExpiryRuleName, expr, annotations, labels, time.Duration(0), help, false)
-	kvserver.MaybeAddRuleToRegistry(ctx, err, nodeCertExpiryRuleName, nodeCertExpiryRule, ruleRegistry)
+	nodeCertExpiryRule := metric.NewAlertingRule(nodeCertExpiryRuleName, expr, annotations, labels, time.Duration(0), help, false)
+	ruleRegistry.AddRule(nodeCertExpiryRule)
 }

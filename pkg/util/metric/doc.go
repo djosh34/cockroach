@@ -75,8 +75,6 @@ There are two types of rules:
     about system health.
 
 Both rules use PromQL syntax for specifying the expression for the rule.
-The expression is validated while initializing a new rule using the
-Prometheus library.
 
 To export a new aggregation or alerting rule:
  1. Create a new rule using the NewAlertingRule / NewAggregationRule

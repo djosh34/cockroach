@@ -16,11 +16,10 @@ package docker
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"io"
-	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -31,12 +30,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/redact"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
-	"github.com/docker/go-connections/nat"
 )
 
 // sqlQuery consists of a sql query and the expected result.
@@ -163,15 +156,7 @@ func TestSingleNodeDocker(t *testing.T) {
 		},
 	}
 
-	cl, err := client.NewClientWithOpts(client.FromEnv)
-	cl.NegotiateAPIVersion(ctx)
-
-	if err != nil {
-		t.Fatal(err)
-	}
-	dn := dockerNode{
-		cl: cl,
-	}
+	var dn dockerNode
 
 	if err := removeLocalData(); err != nil {
 		t.Fatal(err)
@@ -279,9 +264,21 @@ const (
 	hostIP              = "127.0.0.1"
 )
 
+// dockerNode runs one container through the docker command line.
 type dockerNode struct {
-	cl     client.APIClient
 	contID string
+}
+
+// docker runs the docker command line with args and returns its stdout.
+func docker(ctx context.Context, args ...string) (string, error) {
+	var stdout, stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return stdout.String(), errors.Wrapf(err, "docker %s: %s", strings.Join(args, " "), stderr.String())
+	}
+	return stdout.String(), nil
 }
 
 // removeLocalData removes existing database saved in cockroach-data.
@@ -295,44 +292,16 @@ func removeLocalData() error {
 
 // showContainerLog outputs the container's logs to the logFile and stderr.
 func (dn *dockerNode) showContainerLog(ctx context.Context, logFileName string) error {
-
 	cmdLog, err := os.Create(logFileName)
 	if err != nil {
 		return errors.Wrap(err, "cannot create log file")
 	}
+	defer cmdLog.Close()
+	cmd := exec.CommandContext(ctx, "docker", "logs", dn.contID)
 	out := io.MultiWriter(cmdLog, os.Stderr)
-
-	rc, err := dn.cl.ContainerLogs(ctx, dn.contID, types.ContainerLogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-	})
-	if err != nil {
-		return errors.Wrap(err, "cannot create docker logs")
-	}
-
-	// The docker log output is not quite plaintext: each line has a
-	// prefix consisting of one byte file descriptor (stdout vs stderr),
-	// three bytes padding, four byte length. We could use this to
-	// disentangle stdout and stderr if we wanted to output them into
-	// separate streams, but we don't really care.
-	for {
-		var header uint64
-		if err := binary.Read(rc, binary.BigEndian, &header); err == io.EOF {
-			break
-		} else if err != nil {
-			return err
-		}
-		size := header & math.MaxUint32
-		if _, err := io.CopyN(out, rc, int64(size)); err != nil {
-			return err
-		}
-	}
-
-	if err := rc.Close(); err != nil {
-		return errors.Wrap(err, "cannot close docker log")
-	}
-
-	return nil
+	cmd.Stdout = out
+	cmd.Stderr = out
+	return errors.Wrap(cmd.Run(), "cannot show docker logs")
 }
 
 // startContainer starts a container with given setting for environment
@@ -340,63 +309,35 @@ func (dn *dockerNode) showContainerLog(ctx context.Context, logFileName string) 
 func (dn *dockerNode) startContainer(
 	ctx context.Context, containerName string, envSetting []string, volSetting []string, cmd []string,
 ) error {
-
-	containerConfig := container.Config{
-		Hostname:     containerName,
-		Image:        imageName,
-		Env:          envSetting,
-		ExposedPorts: nat.PortSet{hostPort: struct{}{}, cockroachPort: struct{}{}},
-		Cmd:          cmd,
+	args := []string{"run", "--detach", "--name", containerName, "--hostname", containerName,
+		"--publish", hostIP + ":" + hostPort + ":" + hostPort,
+		"--publish", hostIP + ":" + cockroachPort + ":" + cockroachPort}
+	for _, env := range envSetting {
+		args = append(args, "--env", env)
 	}
-
-	hostConfig := container.HostConfig{
-		Binds: volSetting,
-		PortBindings: map[nat.Port][]nat.PortBinding{
-			nat.Port(hostPort):      {{HostIP: hostIP, HostPort: hostPort}},
-			nat.Port(cockroachPort): {{HostIP: hostIP, HostPort: cockroachPort}},
-		},
+	for _, vol := range volSetting {
+		args = append(args, "--volume", vol)
 	}
-
-	resp, err := dn.cl.ContainerCreate(
-		ctx,
-		&containerConfig,
-		&hostConfig,
-		nil,
-		nil,
-		containerName,
-	)
+	args = append(args, imageName)
+	args = append(args, cmd...)
+	out, err := docker(ctx, args...)
 	if err != nil {
-		return errors.Wrap(err, "cannot create container")
-	}
-
-	dn.contID = resp.ID
-
-	if err := dn.cl.ContainerStart(ctx, dn.contID,
-		types.ContainerStartOptions{}); err != nil {
 		return errors.Wrap(err, "cannot start container")
 	}
-
+	dn.contID = strings.TrimSpace(out)
 	return nil
 }
 
 // removeAllContainers removes all running containers based on the cockroach-ci
 // docker image by force.
 func (dn *dockerNode) removeAllContainers(ctx context.Context) error {
-	filter := filters.NewArgs(filters.Arg("ancestor", imageName))
-	conts, err := dn.cl.ContainerList(ctx,
-		types.ContainerListOptions{All: true, Filters: filter})
+	out, err := docker(ctx, "ps", "--all", "--quiet", "--filter", "ancestor="+imageName)
 	if err != nil {
-		return errors.Wrapf(
-			err,
-			"cannot list all containers on docker image %s",
-			imageName,
-		)
+		return errors.Wrapf(err, "cannot list all containers on docker image %s", imageName)
 	}
-	for _, cont := range conts {
-		err := dn.cl.ContainerRemove(ctx, cont.ID,
-			types.ContainerRemoveOptions{Force: true})
-		if err != nil {
-			return errors.Wrapf(err, "cannot remove container %s", cont.Names)
+	for _, id := range strings.Fields(out) {
+		if _, err := docker(ctx, "rm", "--force", id); err != nil {
+			return errors.Wrapf(err, "cannot remove container %s", id)
 		}
 	}
 	return nil
@@ -408,110 +349,37 @@ type execResult struct {
 	exitCode int
 }
 
-// InspectExecResp inspects the result of a docker command execution, saves its
-// stdout, stderr message and exit code to an execResult, and returns this
-// execResult and a possible error.
-func (dn *dockerNode) InspectExecResp(ctx context.Context, execID string) (execResult, error) {
-	var execRes execResult
-	resp, err := dn.cl.ContainerExecAttach(ctx, execID, types.ExecStartCheck{})
-	if err != nil {
-		return execResult{}, err
-	}
-	defer resp.Close()
-
-	var outBuf, errBuf bytes.Buffer
-	outputDone := make(chan error)
-
-	go func() {
-		_, err = stdcopy.StdCopy(&outBuf, &errBuf, resp.Reader)
-		outputDone <- err
-	}()
-
-	select {
-	case err := <-outputDone:
-		if err != nil {
-			return execRes, err
-		}
-		break
-
-	case <-ctx.Done():
-		return execRes, ctx.Err()
-	}
-
-	stdout, err := io.ReadAll(&outBuf)
-	if err != nil {
-		return execRes, err
-	}
-	stderr, err := io.ReadAll(&errBuf)
-	if err != nil {
-		return execRes, err
-	}
-
-	res, err := dn.cl.ContainerExecInspect(ctx, execID)
-	if err != nil {
-		return execRes, err
-	}
-
-	execRes.exitCode = res.ExitCode
-	execRes.stdOut = string(stdout)
-	execRes.stdErr = string(stderr)
-	return execRes, nil
-}
-
 // execCommand is to execute command in the current container, and returns the
 // execution result and possible error.
 func (dn *dockerNode) execCommand(
 	ctx context.Context, cmd []string, workingDir string,
 ) (*execResult, error) {
-	execID, err := dn.cl.ContainerExecCreate(ctx, dn.contID, types.ExecConfig{
-		User:         "root",
-		AttachStderr: true,
-		AttachStdout: true,
-		Tty:          true,
-		Cmd:          cmd,
-		WorkingDir:   workingDir,
-	})
-
+	args := append([]string{"exec", "--user", "root", "--workdir", workingDir, dn.contID}, cmd...)
+	var stdout, stderr bytes.Buffer
+	c := exec.CommandContext(ctx, "docker", args...)
+	c.Stdout = &stdout
+	c.Stderr = &stderr
+	err := c.Run()
+	res := &execResult{stdOut: stdout.String(), stdErr: stderr.String()}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		res.exitCode = exitErr.ExitCode()
+		return res, errors.Newf("command \"%s\" exit with code %d:\n %+v",
+			strings.Join(cmd, " "), res.exitCode, res)
+	}
 	if err != nil {
-		return nil, errors.Wrapf(
-			err,
-			"cannot create command \"%s\"",
-			strings.Join(cmd, " "),
-		)
+		return nil, errors.Wrapf(err, "cannot execute command \"%s\"", strings.Join(cmd, " "))
 	}
-
-	res, err := dn.InspectExecResp(ctx, execID.ID)
-	if err != nil {
-		return nil, errors.Wrapf(
-			err,
-			"cannot execute command \"%s\"",
-			strings.Join(cmd, " "),
-		)
-	}
-
-	if res.exitCode != 0 {
-		return &res, errors.Wrapf(
-			errors.Newf("%s", res.stdErr),
-			"command \"%s\" exit with code %d:\n %+v",
-			strings.Join(cmd, " "),
-			res.exitCode,
-			res,
-		)
-	}
-
-	return &res, nil
+	return res, nil
 }
 
 // waitInitFinishes waits till the server finishes all init steps or timeout,
 // whichever earlier. It keeps listening to the initSuccessFile till it is closed and
 // written.
 func (dn *dockerNode) waitInitFinishes(ctx context.Context) error {
-	var res *execResult
-	var err error
-
 	// Run the binary which listens to the /cockroach folder until the
 	// initialization process has finished or timeout.
-	res, err = dn.execCommand(ctx, []string{
+	res, err := dn.execCommand(ctx, []string{
 		"./docker-fsnotify",
 		"/cockroach",
 		initSuccessFile,
@@ -521,7 +389,7 @@ func (dn *dockerNode) waitInitFinishes(ctx context.Context) error {
 		return errors.Wrapf(err, "cannot run fsnotify to listen to %s:\nres:%#v\n", initSuccessFile, res)
 	}
 
-	if strings.Contains(res.stdOut, "finished\r\n") {
+	if strings.Contains(res.stdOut, "finished") {
 		return nil
 	}
 	return errors.Wrap(errors.Newf("%#v", res), "error waiting the initialization to finish")
@@ -546,9 +414,7 @@ func (dn *dockerNode) execSQLQuery(
 
 // rmContainer performs a forced deletion of the current container.
 func (dn *dockerNode) rmContainer(ctx context.Context) error {
-	if err := dn.cl.ContainerRemove(ctx, dn.contID, types.ContainerRemoveOptions{
-		Force: true,
-	}); err != nil {
+	if _, err := docker(ctx, "rm", "--force", dn.contID); err != nil {
 		return errors.Wrapf(err, "cannot remove container %s", dn.contID)
 	}
 	dn.contID = ""
