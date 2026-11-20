@@ -2498,17 +2498,16 @@ var regularBuiltins = map[string]builtinDefinition{
 			Types:      tree.ParamTypes{{Name: "year", Typ: types.Int}, {Name: "month", Typ: types.Int}, {Name: "day", Typ: types.Int}},
 			ReturnType: tree.FixedReturnType(types.Date),
 			Fn: func(_ context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-				year := int(tree.MustBeDInt(args[0]))
-				month := time.Month(int(tree.MustBeDInt(args[1])))
-				day := int(tree.MustBeDInt(args[2]))
-				if year == 0 {
-					return nil, pgerror.New(pgcode.DatetimeFieldOverflow, "year value of 0 is not valid")
+				t, err := makeDateTime(
+					int(tree.MustBeDInt(args[0])), int(tree.MustBeDInt(args[1])), int(tree.MustBeDInt(args[2])),
+					0 /* hour */, 0 /* min */, 0 /* sec */, evalCtx.GetLocation(),
+				)
+				if err != nil {
+					return nil, err
 				}
-				location := evalCtx.GetLocation()
-				return tree.NewDDateFromTime(time.Date(year, month, day, 0, 0, 0, 0, location))
+				return tree.NewDDateFromTime(t)
 			},
-			// For the ISO 8601 standard, the conversion from a negative year to BC changes the year value (ex. -2013 == 2014 BC).
-			// https://en.wikipedia.org/wiki/ISO_8601#Years
+			// As in Postgres, a negative year is a year BC: -2013 is 2013 BC.
 			Info:       "Create date (formatted according to ISO 8601) from year, month, and day fields (negative years signify BC).",
 			Volatility: volatility.Immutable,
 		},
@@ -10888,13 +10887,42 @@ func bitmaskOp(aStr, bStr string, op func(byte, byte) byte) (*tree.DBitArray, er
 	return tree.ParseDBitArray(string(buf))
 }
 
+// makeDateTime returns the time for the fields of make_date, make_timestamp
+// and make_timestamptz. As in Postgres, a negative year is a year BC, so -44
+// is 44 BC, and fields out of range are an error instead of moving into the
+// next month, day or hour.
+func makeDateTime(
+	year, month, day, hour, min int, sec float64, loc *time.Location,
+) (time.Time, error) {
+	if year == 0 {
+		return time.Time{}, pgerror.New(pgcode.DatetimeFieldOverflow, "year value of 0 is not valid")
+	}
+	outOfRange := pgerror.Newf(pgcode.DatetimeFieldOverflow,
+		"date/time field value out of range: %d-%02d-%02d %02d:%02d:%v", year, month, day, hour, min, sec)
+	if year < 0 {
+		// Go counts years astronomically: year 0 is 1 BC.
+		year++
+	}
+	if month < 1 || month > 12 || day < 1 ||
+		day > time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC).Day() {
+		return time.Time{}, outOfRange
+	}
+	// Like Postgres, allow 24:00:00 and a leap second.
+	if hour < 0 || hour > 24 || min < 0 || min > 59 || !(sec >= 0 && sec <= 60) ||
+		(hour == 24 && (min != 0 || sec != 0)) {
+		return time.Time{}, outOfRange
+	}
+	wholeSec := math.Floor(sec)
+	nsec := math.Round((sec - wholeSec) * float64(time.Second))
+	return time.Date(year, time.Month(month), day, hour, min, int(wholeSec), int(nsec), loc), nil
+}
+
 func makeTimestampStatementBuiltinOverload(withOutputTZ bool, withInputTZ bool) tree.Overload {
 	// If we are not creating a timestamp with a timezone, we shouldn't expect an input timezone
 	if !withOutputTZ && withInputTZ {
 		panic("Creating a timestamp without a timezone should not have an input timestamp attached to it.")
 	}
-	// For the ISO 8601 standard, the conversion from a negative year to BC changes the year value (ex. -2013 == 2014 BC).
-	// https://en.wikipedia.org/wiki/ISO_8601#Years
+	// As in Postgres, a negative year is a year BC: -2013 is 2013 BC.
 	info := "Create timestamp (formatted according to ISO 8601) "
 	vol := volatility.Immutable
 	typs := tree.ParamTypes{{Name: "year", Typ: types.Int}, {Name: "month", Typ: types.Int}, {Name: "day", Typ: types.Int},
@@ -10915,9 +10943,6 @@ func makeTimestampStatementBuiltinOverload(withOutputTZ bool, withInputTZ bool) 
 		Types:      typs,
 		ReturnType: tree.FixedReturnType(returnTyp),
 		Fn: func(_ context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
-			year := int(tree.MustBeDInt(args[0]))
-			month := time.Month(int(tree.MustBeDInt(args[1])))
-			day := int(tree.MustBeDInt(args[2]))
 			location := evalCtx.GetLocation()
 			var err error
 			if withInputTZ && withOutputTZ {
@@ -10926,15 +10951,14 @@ func makeTimestampStatementBuiltinOverload(withOutputTZ bool, withInputTZ bool) 
 					return nil, pgerror.WithCandidateCode(err, pgcode.InvalidParameterValue)
 				}
 			}
-			if year == 0 {
-				return nil, pgerror.New(pgcode.DatetimeFieldOverflow, "year value of 0 is not valid")
+			t, err := makeDateTime(
+				int(tree.MustBeDInt(args[0])), int(tree.MustBeDInt(args[1])), int(tree.MustBeDInt(args[2])),
+				int(tree.MustBeDInt(args[3])), int(tree.MustBeDInt(args[4])), float64(tree.MustBeDFloat(args[5])),
+				location,
+			)
+			if err != nil {
+				return nil, err
 			}
-			hour := int(tree.MustBeDInt(args[3]))
-			min := int(tree.MustBeDInt(args[4]))
-			sec := float64(tree.MustBeDFloat(args[5]))
-			truncatedSec := math.Floor(sec)
-			nsec := math.Mod(sec, truncatedSec) * float64(time.Second)
-			t := time.Date(year, month, day, hour, min, int(truncatedSec), int(nsec), location)
 			if withOutputTZ {
 				return tree.MakeDTimestampTZ(t, time.Microsecond)
 			}

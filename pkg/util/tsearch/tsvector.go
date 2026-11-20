@@ -217,10 +217,15 @@ func (t tsTerm) writeString(buf *strings.Builder) {
 
 	buf.WriteByte('\'')
 	for _, r := range t.lexeme {
-		if r == '\'' {
+		switch r {
+		case '\'':
 			// Single quotes are escaped as double single quotes inside of a TSVector.
 			buf.WriteString(`''`)
-		} else {
+		case '\\':
+			// Backslashes are escaped too, or reading the text back would drop
+			// them.
+			buf.WriteString(`\\`)
+		default:
 			buf.WriteRune(r)
 		}
 	}
@@ -254,9 +259,8 @@ func (t tsTerm) stringSize() int {
 	}
 	size := 1 // '\''
 	for _, r := range t.lexeme {
-		if r == '\'' {
-			// Single quotes are escaped as double single quotes inside of a
-			// TSVector.
+		if r == '\'' || r == '\\' {
+			// Single quotes and backslashes are escaped with a second one.
 			size += 2
 		} else {
 			// Compare as uint32 to correctly handle negative runes.

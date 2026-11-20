@@ -48,7 +48,11 @@ bar   `, `'foo' 'bar'`},
 		{`'\:'`, `':'`},
 		{`'\ '`, `' '`},
 		{`\ `, `' '`},
-		{`\\`, `'\'`},
+		{`\\`, `'\\'`},
+		// A doubled quote and an escaped backslash in a quoted word keep
+		// their character, so the text output reads back the same.
+		{`'c''d'`, `'c''d'`},
+		{`'a\\b'`, `'a\\b'`},
 
 		{`blah'blah`, `'blah''blah'`},
 		{`blah'`, `'blah'''`},
@@ -149,7 +153,7 @@ func TestParseTSQuery(t *testing.T) {
 		{`'\:'`, `':'`},
 		{`'\ '`, `' '`},
 		{`\ `, `' '`},
-		{`\\`, `'\'`},
+		{`\\`, `'\\'`},
 
 		{`blah'blah`, `'blah''blah'`},
 		{`blah'`, `'blah'''`},

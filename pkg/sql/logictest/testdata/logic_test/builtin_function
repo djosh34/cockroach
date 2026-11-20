@@ -2648,6 +2648,19 @@ SELECT width_bucket(1, array[]::int[]);
 ----
 0
 
+# hlc_to_timestamp takes the wall time from the integral part of the decimal,
+# whatever its number of fractional digits.
+query TTT
+SELECT hlc_to_timestamp(1710000000123456789.0000000001)::STRING,
+  hlc_to_timestamp(1710000000123456789)::STRING,
+  hlc_to_timestamp(1710000000123456789.5)::STRING
+----
+2024-03-09 16:00:00.123457+00  2024-03-09 16:00:00.123457+00  2024-03-09 16:00:00.123457+00
+
+# A NULL threshold is an error, as in Postgres.
+query error pq: width_bucket\(\): thresholds array must not contain NULLs
+SELECT width_bucket(5, ARRAY[1, NULL, 10])
+
 # Sanity check pg_type_is_visible.
 query BBB
 SELECT pg_type_is_visible('int'::regtype), pg_type_is_visible(NULL), pg_type_is_visible(99999)

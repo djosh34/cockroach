@@ -91,6 +91,7 @@ const (
 // All other characters are treated as literals. Backlashes can be used to
 // escape single quotes, and are otherwise skipped, allowing the following
 // character to be included as a literal (such as the backslash character itself).
+// A doubled single quote is a single quote too.
 //
 // If a word is not single-quote wrapped, the next term will begin if there is
 // whitespace after the word. Whitespace and colons may be entered by escaping
@@ -201,6 +202,13 @@ func (p tsVectorLexer) lex() (TSVector, error) {
 				termBuf = append(termBuf, r)
 				continue
 			case '\'':
+				if p.pos < len(p.input) && p.input[p.pos] == '\'' {
+					// A doubled single quote is a single quote in the word, as
+					// in Postgres and as the text output writes it.
+					p.advance()
+					termBuf = append(termBuf, r)
+					continue
+				}
 				term, err := newLexemeTerm(string(termBuf))
 				if err != nil {
 					return nil, err
