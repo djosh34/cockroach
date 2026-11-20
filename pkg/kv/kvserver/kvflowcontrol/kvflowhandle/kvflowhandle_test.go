@@ -191,7 +191,6 @@ func TestFlowControlMode(t *testing.T) {
 			handle.ConnectStream(ctx, pos(0), stream)
 			handle.DeductTokensFor(ctx, admissionpb.NormalPri, pos(1), kvflowcontrol.Tokens(16<<20 /* 16MiB */))
 
-			mode := tc.mode // copy for the goroutines below
 
 			// Invoke .Admit() for {regular,elastic} work in a separate
 			// goroutines, and test below whether the goroutines are blocked.
@@ -200,7 +199,7 @@ func TestFlowControlMode(t *testing.T) {
 			go func() {
 				admitted, err := handle.Admit(ctx, admissionpb.NormalPri, time.Time{})
 				require.NoError(t, err)
-				if mode == kvflowcontrol.ApplyToElastic {
+				if tc.mode == kvflowcontrol.ApplyToElastic {
 					require.False(t, admitted)
 				} else {
 					require.True(t, admitted)
