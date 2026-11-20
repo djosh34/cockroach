@@ -713,9 +713,9 @@ func (b *Builder) checkPrivilege(name opt.MDDepName, ds cat.DataSource, priv pri
 		if err := b.catalog.CheckViewOwnerPrivilege(b.ctx, b.privilegeView, ds, priv); err != nil {
 			panic(err)
 		}
-		// The check is for the view owner, so don't recheck it for the current
-		// user when dependencies are checked. A change of the owner's privileges
-		// changes the descriptor version, which the dependency still checks.
+		// The check is for the view owner, so it is recorded to be rechecked for
+		// the owner, not for the current user, when dependencies are checked.
+		b.factory.Metadata().AddViewOwnerPrivilege(b.privilegeView, ds, priv)
 		priv = 0
 	default:
 		if err := b.catalog.CheckPrivilege(b.ctx, ds, priv); err != nil {

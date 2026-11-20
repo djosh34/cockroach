@@ -2013,7 +2013,52 @@ RESET ROLE
 
 statement ok
 DROP VIEW v_by_testuser;
-DROP TABLE view_owner_secret;
+REVOKE SELECT ON view_owner_secret FROM testuser;
 DROP USER view_reader
+
+subtest end
+
+# A cached plan for a view is rechecked when its owner leaves the role that
+# gave it access to the table, although no descriptor changes.
+subtest view_owner_loses_role
+
+user root
+
+statement ok
+CREATE ROLE view_secret_readers;
+GRANT SELECT ON view_owner_secret TO view_secret_readers;
+GRANT view_secret_readers TO testuser
+
+user testuser
+
+statement ok
+CREATE VIEW v_through_role AS SELECT a FROM view_owner_secret
+
+query I
+SELECT * FROM v_through_role
+----
+1
+
+query I
+SELECT * FROM v_through_role
+----
+1
+
+user root
+
+statement ok
+REVOKE view_secret_readers FROM testuser
+
+user testuser
+
+query error user testuser does not have SELECT privilege on relation view_owner_secret
+SELECT * FROM v_through_role
+
+user root
+
+statement ok
+DROP VIEW v_through_role;
+DROP TABLE view_owner_secret;
+DROP ROLE view_secret_readers
 
 subtest end
