@@ -15,6 +15,7 @@ import (
 	"encoding/base64"
 	"io"
 	"net/url"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -206,7 +207,16 @@ func makeGCSStorage(
 		return nil, errors.Wrapf(err, "failed to create http client")
 	}
 
-	g, err := gcs.NewClient(ctx, option.WithHTTPClient(httpClient))
+	// Without an emulator, NewClient looks for credentials itself, and with
+	// only an HTTP client that lookup probes the GCE metadata server even when
+	// the operator gave a key or a token, so it gets the same credentials.
+	// With an emulator (STORAGE_EMULATOR_HOST), NewClient turns
+	// authentication off and rejects credential options.
+	clientOpts := []option.ClientOption{option.WithHTTPClient(httpClient)}
+	if os.Getenv("STORAGE_EMULATOR_HOST") == "" {
+		clientOpts = append(clientOpts, opts...)
+	}
+	g, err := gcs.NewClient(ctx, clientOpts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create google cloud client")
 	}

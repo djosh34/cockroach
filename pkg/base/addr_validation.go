@@ -26,8 +26,7 @@ import (
 //   - the host part of Addr and HTTPAddr is resolved to an IP address
 //     if specified (it stays blank if blank to mean "all addresses").
 //   - the host part of AdvertiseAddr is filled in if blank, either
-//     from Addr if non-empty or os.Hostname(). It is also checked
-//     for resolvability.
+//     from Addr if non-empty or os.Hostname().
 //   - non-numeric port numbers are resolved to numeric.
 //
 // The addresses fields must be guaranteed by the caller to either be
@@ -128,14 +127,6 @@ func validateAdvertiseAddr(
 			// No specific listen address, use the canonical host name.
 			var err error
 			advHost, err = os.Hostname()
-			if err != nil {
-				return "", "", err
-			}
-
-			// As a sanity check, verify that the canonical host name
-			// properly resolves. It's not the full story (it could resolve
-			// locally but not elsewhere) but at least it prevents typos.
-			_, err = net.DefaultResolver.LookupIPAddr(ctx, advHost)
 			if err != nil {
 				return "", "", err
 			}
