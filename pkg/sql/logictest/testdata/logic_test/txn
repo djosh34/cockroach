@@ -233,7 +233,7 @@ statement ok
 ROLLBACK
 
 # We can't set isolation level to an unknown one.
-statement error invalid value for parameter "transaction_isolation": "this is made up"\n.*Available values: serializable
+statement error invalid value for parameter "transaction_isolation": "this is made up"\n.*Available values: serializable,snapshot,repeatable read,read committed,read uncommitted
 SET transaction_isolation = 'this is made up'
 
 # User priority.

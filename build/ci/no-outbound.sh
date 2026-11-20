@@ -53,14 +53,23 @@ kill -KILL "$node" 2>/dev/null || true
 wait "$strace_pid" || true
 
 ip_calls='sa_family=AF_INET6?'
-loopback='inet_addr\("127\.|inet_pton\(AF_INET6, "(::1|::ffff:127\.)'
-if ! grep -qE "$ip_calls.*$loopback" "$work/client.trace"; then
+loopback='inet_addr\("127\.[0-9.]+"\)|inet_pton\(AF_INET6, "(::1|::ffff:127\.[0-9.]+)"'
+for f in client.trace node.trace; do
+  if [[ ! -r $work/$f ]]; then
+    echo "strace wrote no $f; the check does not work" >&2
+    exit 1
+  fi
+done
+if ! grep -qE "$ip_calls.*($loopback)" "$work/client.trace"; then
   echo "strace did not record the client's connection; the check does not work" >&2
   exit 1
 fi
-echo "$(grep -cE "$ip_calls" "$work/node.trace" || true) IP connection attempts by the node"
-bad=$(grep -E "$ip_calls" "$work/node.trace" | grep -vE "$loopback" || true)
-dns=$(grep -E 'htons\(53\)' "$work/node.trace" || true)
+# grep exits 1 when nothing matches; any other failure stops the script.
+matches() { grep -E "$@" || [[ $? -eq 1 ]]; }
+calls=$(matches "$ip_calls" "$work/node.trace")
+echo "$(printf '%s' "$calls" | grep -c . || true) IP connection attempts by the node"
+bad=$(printf '%s\n' "$calls" | matches -v "$loopback" | matches .)
+dns=$(matches 'htons\(53\)' "$work/node.trace")
 if [[ -n $bad || -n $dns ]]; then
   echo "the node tried to reach the network:" >&2
   printf '%s\n' "$bad" "$dns" | sort -u >&2

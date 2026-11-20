@@ -165,6 +165,12 @@ func makeDummyBooleanSessionVar(
 
 // varGen is the main definition array for all session variables.
 // Note to maintainers: try to keep this sorted in the source code.
+// isolationLevelNames are the isolation levels a session can ask for. Every
+// one of them runs SERIALIZABLE.
+var isolationLevelNames = []string{
+	"serializable", "snapshot", "repeatable read", "read committed", "read uncommitted",
+}
+
 var varGen = map[string]sessionVar{
 	// Set by clients to improve query logging.
 	// See https://www.postgresql.org/docs/10/static/runtime-config-logging.html#GUC-APPLICATION-NAME
@@ -404,7 +410,7 @@ var varGen = map[string]sessionVar{
 			// stored as SERIALIZABLE.
 			level, ok := tree.IsolationLevelMap[strings.ToLower(s)]
 			if !ok {
-				return newVarValueError(`default_transaction_isolation`, s, "serializable")
+				return newVarValueError(`default_transaction_isolation`, s, isolationLevelNames...)
 			}
 			if level != tree.SerializableIsolation {
 				if f := m.upgradedIsolationLevel; f != nil {
@@ -1492,7 +1498,7 @@ var varGen = map[string]sessionVar{
 		RuntimeSet: func(ctx context.Context, evalCtx *extendedEvalContext, local bool, s string) error {
 			level, ok := tree.IsolationLevelMap[strings.ToLower(s)]
 			if !ok {
-				return newVarValueError(`transaction_isolation`, s, "serializable")
+				return newVarValueError(`transaction_isolation`, s, isolationLevelNames...)
 			}
 			modes := tree.TransactionModes{
 				Isolation: level,
