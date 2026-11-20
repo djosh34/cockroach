@@ -773,6 +773,18 @@ func DecodeDatum(
 
 	// Types with identical text/binary handling.
 	switch typ.Family() {
+	case types.CollatedStringFamily:
+		// A collated string has the OID of its string type, so without this
+		// it would be decoded as a plain string. Written into an index key, a
+		// plain string corrupts the index.
+		if err := validateStringBytes(b); err != nil {
+			return nil, err
+		}
+		sv := string(b)
+		if id == oid.T_bpchar {
+			sv = strings.TrimRight(sv, " ")
+		}
+		return tree.NewDCollatedString(sv, typ.Locale(), &evalCtx.CollationEnv)
 	case types.EnumFamily:
 		if err := validateStringBytes(b); err != nil {
 			return nil, err

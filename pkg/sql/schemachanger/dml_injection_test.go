@@ -563,3 +563,51 @@ func TestAlterTableDMLInjection(t *testing.T) {
 		}))
 	}
 }
+
+// TestPartialIndexBackfillWithUpdatesToOtherFamily checks a partial index
+// that is built while UPDATEs change a column family that neither its columns
+// nor its predicate use. The index ended up with NULLs instead of the values,
+// or with rows that fail its predicate, because the UPDATEs did not fetch the
+// index columns, or skipped the index, while the temporary index of the
+// backfill needs every row they write.
+func TestPartialIndexBackfillWithUpdatesToOtherFamily(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	defer log.Scope(t).Close(t)
+
+	ctx := context.Background()
+	var sqlDB *sqlutils.SQLRunner
+	var inSchemaChange atomic.Bool
+	testCluster := serverutils.StartCluster(t, 1, base.TestClusterArgs{
+		ServerArgs: base.TestServerArgs{
+			Knobs: base.TestingKnobs{
+				SQLDeclarativeSchemaChanger: &scexec.TestingKnobs{
+					BeforeStage: func(p scplan.Plan, stageIdx int) error {
+						if !inSchemaChange.Load() || p.Stages[stageIdx].Phase < scop.PostCommitPhase {
+							return nil
+						}
+						sqlDB.Exec(t, `UPDATE tbl SET val = val + 1`)
+						return nil
+					},
+				},
+			},
+		},
+	})
+	defer testCluster.Stopper().Stop(ctx)
+	sqlDB = sqlutils.MakeSQLRunner(testCluster.ServerConn(0))
+
+	sqlDB.Exec(t, `CREATE TABLE tbl (
+		k INT PRIMARY KEY,
+		a STRING,
+		val INT,
+		FAMILY f0 (k, a),
+		FAMILY f1 (val)
+	)`)
+	sqlDB.Exec(t, `INSERT INTO tbl SELECT i, IF(i % 2 = 0, 'even', 'odd'), 0 FROM generate_series(1, 20) AS g(i)`)
+	inSchemaChange.Store(true)
+	sqlDB.Exec(t, `CREATE INDEX idx ON tbl (a) WHERE a = 'even'`)
+	inSchemaChange.Store(false)
+
+	const query = `SELECT k, a FROM tbl@%s WHERE a = 'even' ORDER BY k`
+	sqlDB.CheckQueryResults(t, fmt.Sprintf(query, "idx"), sqlDB.QueryStr(t, fmt.Sprintf(query, "tbl_pkey")))
+	sqlDB.CheckQueryResults(t, `SELECT count(*) FROM tbl@idx WHERE a = 'even'`, [][]string{{"10"}})
+}

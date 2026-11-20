@@ -31,6 +31,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/desctestutils"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/internal/validate"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/tabledesc"
+	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/cockroach/pkg/testutils/serverutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/sqlutils"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
@@ -644,4 +645,36 @@ func TestSecKeyLatestIndexDescriptorVersion(t *testing.T) {
 	require.Equal(t, descpb.EmptyArraysInInvertedIndexesVersion, newDesc.Indexes[0].Version)
 	// The index mutation should have its version bumped.
 	require.Equal(t, descpb.StrictIndexColumnIDGuaranteesVersion, newDesc.Mutations[0].GetIndex().Version)
+}
+
+// TestInvertedColumnKindOfOldDescriptor checks that the kind of a
+// multi-column inverted index is that of its last column, also for indexes
+// that the declarative schema changer created with a kind for every column.
+func TestInvertedColumnKindOfOldDescriptor(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+
+	desc := tabledesc.NewBuilder(&descpb.TableDescriptor{
+		ID:            100,
+		Name:          "t",
+		ParentID:      1,
+		FormatVersion: descpb.InterleavedFormatVersion,
+		Columns: []descpb.ColumnDescriptor{
+			{ID: 1, Name: "x", Type: types.String},
+			{ID: 2, Name: "y", Type: types.String},
+		},
+		Indexes: []descpb.IndexDescriptor{{
+			ID:                  2,
+			Name:                "t_x_y_idx",
+			Type:                descpb.IndexDescriptor_INVERTED,
+			KeyColumnIDs:        []descpb.ColumnID{1, 2},
+			KeyColumnNames:      []string{"x", "y"},
+			KeyColumnDirections: []catenumpb.IndexColumn_Direction{catenumpb.IndexColumn_ASC, catenumpb.IndexColumn_ASC},
+			InvertedColumnKinds: []catpb.InvertedIndexColumnKind{
+				catpb.InvertedIndexColumnKind_DEFAULT, catpb.InvertedIndexColumnKind_TRIGRAM,
+			},
+		}},
+	}).BuildImmutableTable()
+	idx, err := catalog.MustFindIndexByName(desc, "t_x_y_idx")
+	require.NoError(t, err)
+	require.Equal(t, catpb.InvertedIndexColumnKind_TRIGRAM, idx.InvertedColumnKind())
 }

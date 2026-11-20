@@ -228,9 +228,12 @@ type DatumRowConverter struct {
 	computedIVarContainer     schemaexpr.RowIndexedVarContainer
 	partialIndexIVarContainer schemaexpr.RowIndexedVarContainer
 
-	// FractionFn is used to set the progress header in KVBatches.
+	// CompletedRowFn is used to set LastRow in KVBatches.
 	CompletedRowFn func() int64
-	FractionFn     func() float32
+	// BatchSentFn, if set, is called after a KVBatch was sent.
+	BatchSentFn func()
+	// FractionFn is used to set the progress header in KVBatches.
+	FractionFn func() float32
 
 	db *kv.DB
 }
@@ -593,6 +596,9 @@ func (c *DatumRowConverter) SendBatch(ctx context.Context) error {
 	case c.KvCh <- c.KvBatch:
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+	if c.BatchSentFn != nil {
+		c.BatchSentFn()
 	}
 	c.KvBatch.KVs = make([]roachpb.KeyValue, 0, c.BatchCap)
 	c.KvBatch.MemSize = 0

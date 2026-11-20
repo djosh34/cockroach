@@ -865,3 +865,42 @@ func TestCopyExceedsSQLMemory(t *testing.T) {
 		}
 	}
 }
+
+// TestCopyBinaryCollatedString checks that binary COPY FROM into a collated
+// string key column writes a usable index entry. The value was decoded as a
+// plain string, so a lookup through the collation found nothing.
+func TestCopyBinaryCollatedString(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	defer log.Scope(t).Close(t)
+
+	ctx := context.Background()
+	srv, db, _ := serverutils.StartServer(t, base.TestServerArgs{})
+	defer srv.Stopper().Stop(ctx)
+	s := srv.ApplicationLayer()
+	tdb := sqlutils.MakeSQLRunner(db)
+	tdb.Exec(t, `CREATE TABLE t (k INT PRIMARY KEY, s STRING COLLATE en_u_ks_level2, c CHAR(3) COLLATE en_u_ks_level2, INDEX (s), INDEX (c))`)
+
+	pgURL, cleanup := s.PGUrl(
+		t, serverutils.CertsDirPrefix(t.Name()), serverutils.User(username.RootUser),
+	)
+	defer cleanup()
+	conn, err := pgx.Connect(ctx, pgURL.String())
+	require.NoError(t, err)
+	defer func() { require.NoError(t, conn.Close(ctx)) }()
+
+	for _, fastPath := range []bool{false, true} {
+		tdb.Exec(t, `DELETE FROM t WHERE true`)
+		_, err = conn.Exec(ctx, fmt.Sprintf("SET copy_fast_path_enabled = %t", fastPath))
+		require.NoError(t, err)
+		// pgx sends the rows in the binary format.
+		n, err := conn.CopyFrom(ctx, pgx.Identifier{"t"}, []string{"k", "s", "c"},
+			pgx.CopyFromRows([][]interface{}{{1, "Foo", "Ab "}}))
+		require.NoError(t, err)
+		require.Equal(t, int64(1), n)
+
+		tdb.CheckQueryResults(t, `SELECT k, s FROM t@t_s_idx WHERE s = 'foo' COLLATE en_u_ks_level2`,
+			[][]string{{"1", "Foo"}})
+		tdb.CheckQueryResults(t, `SELECT k FROM t@t_c_idx WHERE c = 'ab' COLLATE en_u_ks_level2`,
+			[][]string{{"1"}})
+	}
+}

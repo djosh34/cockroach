@@ -490,3 +490,17 @@ SELECT count(*) FROM cte AS cte1 JOIN cte AS cte2 ON cte1.col = cte2.col;
 statement ok
 RESET vectorize;
 RESET distsql_workmem;
+
+# A lexeme with a quote or a backslash reads back the same from its text, as
+# after EXPORT and IMPORT.
+query TB
+SELECT ($$'a\\b' 'c''d'$$::TSVECTOR)::TEXT,
+  ($$'a\\b' 'c''d'$$::TSVECTOR)::TEXT::TSVECTOR = $$'a\\b' 'c''d'$$::TSVECTOR
+----
+'a\\b' 'c''d'  true
+
+query TB
+SELECT ($$'a\\b' & 'c''d'$$::TSQUERY)::TEXT,
+  ($$'a\\b' & 'c''d'$$::TSQUERY)::TEXT::TSQUERY = $$'a\\b' & 'c''d'$$::TSQUERY
+----
+'a\\b' & 'c''d'  true

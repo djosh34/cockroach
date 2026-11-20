@@ -434,3 +434,32 @@ ORDER BY t2.id ASC NULLS LAST
 1     1
 2     2
 NULL  NULL
+
+# A DISTINCT ON that runs in two stages keeps the first row of each group in
+# its ordering, also when the first stage spills to disk.
+statement ok
+CREATE TABLE t_distinct_spill (k INT PRIMARY KEY, a INT, b INT, c STRING);
+INSERT INTO t_distinct_spill
+SELECT i, i % 37, (i * 7919) % 1000, repeat('x', i % 50) FROM generate_series(1, 5000) AS g(i)
+
+statement ok
+ALTER TABLE t_distinct_spill SPLIT AT SELECT i * 500 FROM generate_series(1, 9) AS g(i)
+
+onlyif config fakedist
+statement ok
+ALTER TABLE t_distinct_spill EXPERIMENTAL_RELOCATE
+SELECT ARRAY[i % 3 + 1], i * 500 FROM generate_series(0, 9) AS g(i)
+
+statement ok
+SET distsql_workmem = '2KiB'
+
+query I
+SELECT count(*)
+FROM (SELECT DISTINCT ON (a, c) a, c, b FROM t_distinct_spill ORDER BY a, c, b) AS x
+JOIN (SELECT a, c, min(b) AS m FROM t_distinct_spill GROUP BY a, c) AS y ON x.a = y.a AND x.c = y.c
+WHERE x.b != y.m
+----
+0
+
+statement ok
+RESET distsql_workmem

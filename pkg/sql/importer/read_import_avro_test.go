@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"testing"
@@ -33,6 +34,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/testutils/serverutils"
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
+	"github.com/cockroachdb/errors"
 	"github.com/linkedin/goavro/v2"
 	"github.com/stretchr/testify/require"
 )
@@ -622,4 +624,69 @@ func benchmarkAvroImport(b *testing.B, avroOpts roachpb.AvroOptions, testData st
 	require.NoError(
 		b, runParallelImport(ctx, avro.importContext, &importFileContext{}, limitStream, consumer))
 	close(kvCh)
+}
+
+// failingReader returns the bytes of r up to n and then an error.
+type failingReader struct {
+	r *bytes.Reader
+	n int
+}
+
+func (f *failingReader) Read(p []byte) (int, error) {
+	if f.n <= 0 {
+		return 0, errors.New("injected read error")
+	}
+	if len(p) > f.n {
+		p = p[:f.n]
+	}
+	n, err := f.r.Read(p)
+	f.n -= n
+	return n, err
+}
+
+// TestOCFStreamReadError checks that a read error in the middle of an Avro
+// object container file is an error, not the end of the input (TA-161317).
+func TestOCFStreamReadError(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	defer log.Scope(t).Close(t)
+
+	var buf bytes.Buffer
+	w, err := goavro.NewOCFWriter(goavro.OCFConfig{W: &buf, Schema: `"long"`})
+	require.NoError(t, err)
+	// Many small blocks, so the input breaks off after a complete block.
+	for i := 0; i < 100; i++ {
+		require.NoError(t, w.Append([]interface{}{int64(i)}))
+	}
+
+	for _, tc := range []struct {
+		name  string
+		input io.Reader
+		rows  int
+		err   string
+	}{
+		{name: "whole file", input: bytes.NewReader(buf.Bytes()), rows: 100},
+		{
+			name:  "read error",
+			input: &failingReader{r: bytes.NewReader(buf.Bytes()), n: buf.Len() / 2},
+			err:   "injected read error",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ocf, err := goavro.NewOCFReader(tc.input)
+			require.NoError(t, err)
+			stream := &ocfStream{ocf: ocf}
+			rows := 0
+			for stream.Scan() {
+				_, err := stream.Row()
+				require.NoError(t, err)
+				rows++
+			}
+			if tc.err == "" {
+				require.NoError(t, stream.Err())
+				require.Equal(t, tc.rows, rows)
+			} else {
+				require.ErrorContains(t, stream.Err(), tc.err)
+			}
+		})
+	}
 }

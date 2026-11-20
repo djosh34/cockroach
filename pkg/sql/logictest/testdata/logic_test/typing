@@ -289,15 +289,13 @@ WHERE t102110_1.t NOT BETWEEN t102110_1.t AND
   (CASE WHEN NULL THEN t102110_2.c ELSE t102110_1.t END);
 ----
 
-# IF is typed differently (Postgres does not support IF).
+# IF is typed like CASE (Postgres does not support IF).
 query T
 SELECT t102110_1.t FROM t102110_1, t102110_2
 WHERE t102110_1.t NOT BETWEEN t102110_1.t AND
   IF(NULL, t102110_2.c, t102110_1.t);
 ----
-tt
 
-# TODO(#108360): implicit casts from STRING to CHAR should use bpchar.
 statement ok
 CREATE TABLE t108360_1 (t TEXT);
 INSERT INTO t108360_1 VALUES ('tt');
@@ -306,10 +304,81 @@ statement ok
 CREATE TABLE t108360_2 (c CHAR);
 INSERT INTO t108360_2 VALUES ('c');
 
-# This returns one row with 'tt' in Postgres. The results are different because
-# Postgres casts t108360_1.t to bpchar rather than char.
+# The CASE has type BPCHAR, without a width, as in Postgres. It returns 'tt'.
 query T
 SELECT (CASE WHEN t108360_1.t > t108360_2.c THEN t108360_1.t ELSE t108360_2.c END)
 FROM t108360_1, t108360_2
 WHERE t108360_1.t = (CASE WHEN t108360_1.t > t108360_2.c THEN t108360_1.t ELSE t108360_2.c END);
 ----
+tt
+
+# Trailing spaces of an untyped string are not significant when it is compared
+# with CHAR.
+query BBBB
+SELECT 'f'::CHAR = 'f ', 'f '::CHAR(2) = 'f  ', 'f  ' = 'f'::CHAR, 'f'::CHAR(1) < 'f '
+----
+true  true  true  false
+
+# BETWEEN compares its bounds with each other too, which types them a second
+# time.
+query BBB
+SELECT 'f'::CHAR BETWEEN 'f ' AND 'f ', 'f'::CHAR BETWEEN SYMMETRIC 'g ' AND 'f ',
+  'f'::CHAR NOT BETWEEN 'f ' AND 'f '
+----
+true  true  false
+
+statement ok
+CREATE TABLE char_between (c CHAR PRIMARY KEY);
+INSERT INTO char_between VALUES ('f')
+
+query T
+SELECT c FROM char_between WHERE c BETWEEN 'f ' AND 'f '
+----
+f
+
+# Patterns keep their trailing spaces, as in Postgres.
+query BB
+SELECT 'f'::CHAR LIKE 'f ', 'f'::CHAR ~ 'f '
+----
+false  false
+
+# The result of CASE, COALESCE and IF keeps a type width only if every branch
+# has it, so no branch is truncated to the width of another.
+query TTTTTT
+SELECT
+  CASE WHEN false THEN 'a'::CHAR ELSE 'bbb' END,
+  CASE WHEN false THEN 'a'::VARCHAR(1) ELSE 'abcd' END,
+  COALESCE(NULL::CHAR, 'abcd'),
+  COALESCE(NULL::CHAR(2), 'abcd'::CHAR(4)),
+  IF(false, 'a'::CHAR, 'abcd'),
+  IF(false, 'a'::VARCHAR(1), 'abcd')
+----
+bbb  abcd  abcd  abcd  abcd  abcd
+
+query TT
+SELECT
+  CASE WHEN true THEN 'a'::CHAR ELSE 'bbb'::CHAR(3) END,
+  COALESCE(NULL, 'ab'::CHAR(2), 'abcd')
+----
+a  ab
+
+# BPCHAR has no width limit, also after a round trip through SQL text.
+statement ok
+CREATE TABLE t_bpchar (b BPCHAR, c CHAR, FAMILY (b, c));
+CREATE VIEW v_bpchar AS SELECT 'abc'::BPCHAR AS b
+
+query T
+SELECT b FROM v_bpchar
+----
+abc
+
+query T
+SELECT create_statement FROM [SHOW CREATE TABLE t_bpchar]
+----
+CREATE TABLE public.t_bpchar (
+  b BPCHAR NULL,
+  c CHAR NULL,
+  rowid INT8 NOT VISIBLE NOT NULL DEFAULT unique_rowid(),
+  CONSTRAINT t_bpchar_pkey PRIMARY KEY (rowid ASC),
+  FAMILY fam_0_b_c_rowid (b, c, rowid)
+)

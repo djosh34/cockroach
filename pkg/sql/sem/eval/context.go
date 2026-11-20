@@ -581,18 +581,20 @@ func DecimalToInexactDTimestampTZ(d *tree.DDecimal) (*tree.DTimestampTZ, error) 
 }
 
 func decimalToHLC(d *tree.DDecimal) (hlc.Timestamp, error) {
-	var coef apd.BigInt
-	coef.Set(&d.Decimal.Coeff)
-	// The physical portion of the HLC is stored shifted up by 10^10, so shift
-	// it down and clear out the logical component.
-	coef.Div(&coef, big10E10)
-	if !coef.IsInt64() {
+	// The integral part is the physical portion of the HLC; the fractional
+	// part holds the logical component, which is dropped. The decimal may
+	// have any exponent: 1710000000123456789 and 1710000000123456789.5 are
+	// valid HLC decimals too.
+	var integral, fractional apd.Decimal
+	d.Decimal.Modf(&integral, &fractional)
+	wallTime, err := integral.Int64()
+	if err != nil {
 		return hlc.Timestamp{}, pgerror.Newf(
 			pgcode.DatetimeFieldOverflow,
 			"timestamp value out of range: %s", d.String(),
 		)
 	}
-	return hlc.Timestamp{WallTime: coef.Int64()}, nil
+	return hlc.Timestamp{WallTime: wallTime}, nil
 }
 
 // DecimalToInexactDTimestamp is the inverse of TimestampToDecimal. It converts

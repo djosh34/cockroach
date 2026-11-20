@@ -2069,10 +2069,12 @@ func fillSkippedResponses(
 	// batch -- they'll all come back without any response since they never
 	// execute.
 	var scratchBA kvpb.BatchRequest
+	skipped := make([]bool, len(br.Responses))
 	for i := range br.Responses {
 		if br.Responses[i] != (kvpb.ResponseUnion{}) {
 			continue
 		}
+		skipped[i] = true
 		req := ba.Requests[i].GetInner()
 		// We need to summon an empty response. The most convenient (but not
 		// most efficient) way is to use (*BatchRequest).CreateReply.
@@ -2090,7 +2092,16 @@ func fillSkippedResponses(
 	for i, resp := range br.Responses {
 		req := ba.Requests[i].GetInner()
 		hdr := resp.GetInner().Header()
-		maybeSetResumeSpan(req, &hdr, nextKey, isReverse)
+		if skipped[i] && !kvpb.IsRange(req) {
+			// The request was never sent, so all of it is left to do. This
+			// matters for every point request, not only reads: a skipped
+			// ResolveIntent without a ResumeSpan looks resolved, and the intent
+			// resolver would then remove the transaction record while the intent
+			// is still there. A later reader would take the intent for aborted.
+			hdr.ResumeSpan = &roachpb.Span{Key: req.Header().Key}
+		} else {
+			maybeSetResumeSpan(req, &hdr, nextKey, isReverse)
+		}
 		if hdr.ResumeSpan != nil {
 			hdr.ResumeReason = resumeReason
 		}

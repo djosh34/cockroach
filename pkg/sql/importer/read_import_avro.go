@@ -291,7 +291,13 @@ func (o *ocfStream) Scan() bool {
 
 // Err implements importRowProducer interface.
 func (o *ocfStream) Err() error {
-	return o.err
+	if o.err != nil {
+		return o.err
+	}
+	// Scan returns false on a read error as well as at the end of the input.
+	// Only the reader's error tells them apart; without it, a failed read
+	// ended the import early with rows missing and no error.
+	return o.ocf.Err()
 }
 
 // Row implements importRowProducer interface.

@@ -358,3 +358,41 @@ FROM
             AS tab (col1_1, col1_2) ON
             (tab2.col1) = (tab.col1_1)
             AND (tab2.col2) = (tab.col1_2);
+
+# With a similarity threshold of 0 every string is similar, so an inverted
+# index scan cannot find all matches.
+statement ok
+CREATE TABLE t_trgm_zero (k INT PRIMARY KEY, s STRING, INVERTED INDEX (s gin_trgm_ops));
+INSERT INTO t_trgm_zero VALUES (1, 'abc'), (2, 'xyz')
+
+statement ok
+SET pg_trgm.similarity_threshold = 0
+
+query IT rowsort
+SELECT * FROM t_trgm_zero WHERE s % 'abc'
+----
+1  abc
+2  xyz
+
+statement ok
+RESET pg_trgm.similarity_threshold
+
+# A multi-column trigram index created with CREATE INDEX keeps its operator
+# class, so SHOW CREATE TABLE can be run again.
+statement ok
+CREATE TABLE t_trgm_multi (id INT PRIMARY KEY, x STRING, y STRING, FAMILY (id, x, y))
+
+statement ok
+CREATE INDEX t_trgm_multi_idx ON t_trgm_multi USING GIN (x, y gin_trgm_ops)
+
+query T
+SELECT create_statement FROM [SHOW CREATE TABLE t_trgm_multi]
+----
+CREATE TABLE public.t_trgm_multi (
+  id INT8 NOT NULL,
+  x STRING NULL,
+  y STRING NULL,
+  CONSTRAINT t_trgm_multi_pkey PRIMARY KEY (id ASC),
+  INVERTED INDEX t_trgm_multi_idx (x ASC, y gin_trgm_ops),
+  FAMILY fam_0_id_x_y (id, x, y)
+)

@@ -19,6 +19,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
+	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catprivilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/decodeusername"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
@@ -538,7 +539,59 @@ func accumulateDependentDefaultPrivileges(
 		for object, defaultPrivs := range defaultPrivilegesForRole.DefaultPrivilegesPerObject {
 			addDependentPrivileges(object, defaultPrivs, role, userNames, dbName, schemaName)
 		}
+		if !role.ForAllRoles &&
+			defaultPrivilegeDescriptor.GetDefaultPrivilegeDescriptorType() == catpb.DefaultPrivilegeDescriptor_DATABASE {
+			addChangedOwnDefaultPrivileges(&defaultPrivilegesForRole, role.Role, userNames, dbName)
+		}
 		return nil
+	})
+}
+
+// addChangedOwnDefaultPrivileges reports a role that changed the default
+// privileges on its own new objects, for example with ALTER DEFAULT
+// PRIVILEGES FOR ROLE r REVOKE ALL ON TABLES FROM r. Such default privileges
+// grant nothing to any user, so addDependentPrivileges does not see them.
+// Dropping the role would leave them behind, and a new role with the same
+// name would get them.
+func addChangedOwnDefaultPrivileges(
+	defaultPrivilegesForRole *catpb.DefaultPrivilegesForRole,
+	role username.SQLUsername,
+	userNames map[username.SQLUsername][]objectAndType,
+	dbName string,
+) {
+	if _, ok := userNames[role]; !ok {
+		return
+	}
+	var fixes []string
+	for _, object := range catprivilege.RoleTargetObjects {
+		if !catprivilege.GetRoleHasAllPrivilegesOnTargetObject(defaultPrivilegesForRole, object) {
+			name := strings.ToUpper(object.String())
+			if object == privilege.Routines {
+				// The syntax of ALTER DEFAULT PRIVILEGES names them FUNCTIONS.
+				name = "FUNCTIONS"
+			}
+			fixes = append(fixes, fmt.Sprintf("GRANT ALL ON %s TO %s", name, role.SQLIdentifier()))
+		}
+	}
+	if !catprivilege.GetPublicHasUsageOnTypes(defaultPrivilegesForRole) {
+		fixes = append(fixes, "GRANT USAGE ON TYPES TO public")
+	}
+	if !catprivilege.GetPublicHasExecuteOnFunctions(defaultPrivilegesForRole) {
+		fixes = append(fixes, "GRANT EXECUTE ON FUNCTIONS TO public")
+	}
+	if len(fixes) == 0 {
+		return
+	}
+	hint := fmt.Sprintf("USE %s;", dbName)
+	for _, fix := range fixes {
+		hint += fmt.Sprintf(" ALTER DEFAULT PRIVILEGES FOR ROLE %s %s;", role.SQLIdentifier(), fix)
+	}
+	userNames[role] = append(userNames[role], objectAndType{
+		IsDefaultPrivilege: true,
+		ErrorMessage: errors.WithHint(
+			errors.Newf("owner of changed default privileges on its own new objects in database %s", dbName),
+			hint,
+		),
 	})
 }
 

@@ -684,3 +684,28 @@ statement error pgcode 42803 sum\(\): aggregate functions are not allowed in ORD
 UPDATE t108166 SET a = 1 ORDER BY COALESCE(sum(a), 1) LIMIT 1;
 
 subtest end
+
+# An update of a primary key column that is alone in a family other than the
+# first, and whose family existed before the column joined the primary key,
+# updates the stored value when it goes from composite (1.0) to non-composite
+# (1).
+subtest pk_column_own_family
+
+statement ok
+CREATE TABLE t_pk_fam (k INT NOT NULL, c DECIMAL NOT NULL, v INT, PRIMARY KEY (k), FAMILY f0 (k, v), FAMILY f1 (c))
+
+statement ok
+ALTER TABLE t_pk_fam ALTER PRIMARY KEY USING COLUMNS (k, c)
+
+statement ok
+INSERT INTO t_pk_fam VALUES (1, 1.0, 1)
+
+statement ok
+UPDATE t_pk_fam SET c = 1 WHERE k = 1
+
+query T
+SELECT c::STRING FROM t_pk_fam@t_pk_fam_pkey
+----
+1
+
+subtest end

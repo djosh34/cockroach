@@ -180,6 +180,24 @@ func GC(
 			"GC request can remove point and range keys or clear range, but it is unsafe for it to do both")
 	}
 
+	// The GC queue plans a request against the range descriptor it saw, and
+	// the range can split before the request runs. A clear range or a range
+	// key outside the current range would then delete data of the right-hand
+	// range, whose writes the latches of this range do not hold back. Such a
+	// request is rejected; the next GC run plans again for each range.
+	desc := cArgs.EvalCtx.Desc()
+	if cr := args.ClearRange; cr != nil &&
+		!desc.ContainsKeyRange(roachpb.RKey(cr.StartKey), roachpb.RKey(cr.EndKey)) {
+		return result.Result{}, errors.Errorf(
+			"gc clear range %s is not inside range %s", roachpb.Span{Key: cr.StartKey, EndKey: cr.EndKey}, desc.RSpan())
+	}
+	for _, rk := range args.RangeKeys {
+		if !desc.ContainsKeyRange(roachpb.RKey(rk.StartKey), roachpb.RKey(rk.EndKey)) {
+			return result.Result{}, errors.Errorf(
+				"gc range key %s is not inside range %s", roachpb.Span{Key: rk.StartKey, EndKey: rk.EndKey}, desc.RSpan())
+		}
+	}
+
 	// All keys must be inside the current replica range. Keys outside
 	// of this range in the GC request are dropped silently, which is
 	// safe because they can simply be re-collected later on the correct
@@ -207,8 +225,6 @@ func GC(
 			return result.Result{}, err
 		}
 	}
-
-	desc := cArgs.EvalCtx.Desc()
 
 	if cr := args.ClearRange; cr != nil {
 		// Check if we are performing a fast path operation to try to remove all user

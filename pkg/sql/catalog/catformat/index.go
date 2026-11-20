@@ -232,7 +232,9 @@ func FormatIndexElements(
 		}
 		if index.Type == descpb.IndexDescriptor_INVERTED &&
 			col.GetID() == index.InvertedColumnID() && len(index.InvertedColumnKinds) > 0 {
-			switch index.InvertedColumnKinds[0] {
+			// The kind of the inverted column is the last one; see
+			// InvertedColumnKind.
+			switch index.InvertedColumnKinds[len(index.InvertedColumnKinds)-1] {
 			case catpb.InvertedIndexColumnKind_TRIGRAM:
 				f.WriteString(" gin_trgm_ops")
 			}

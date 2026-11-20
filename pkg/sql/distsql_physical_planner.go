@@ -4088,7 +4088,18 @@ func (dsp *DistSQLPlanner) addDistinctProcessors(
 	}
 
 	// Add distinct processors local to each existing current result processor.
-	plan.AddNoGroupingStage(distinctSpec, execinfrapb.PostProcessSpec{}, plan.GetResultTypes(), plan.MergeOrdering)
+	// If a second stage follows, it merges their outputs by the merge ordering
+	// and keeps the first row of each group, which DISTINCT ON relies on. So
+	// their output must keep that ordering. A distinct that spills to disk
+	// sorts its output only by OutputOrdering, so that is set to the merge
+	// ordering here.
+	localSpec := distinctSpec
+	if plan.IsLastStageDistributed() && len(plan.MergeOrdering.Columns) > 0 {
+		s := *spec
+		s.OutputOrdering = plan.MergeOrdering
+		localSpec = execinfrapb.ProcessorCoreUnion{Distinct: &s}
+	}
+	plan.AddNoGroupingStage(localSpec, execinfrapb.PostProcessSpec{}, plan.GetResultTypes(), plan.MergeOrdering)
 	if !plan.IsLastStageDistributed() {
 		return
 	}

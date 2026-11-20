@@ -865,6 +865,10 @@ func (b *Builder) buildPlaceholderScan(scan *memo.PlaceholderScanExpr) (execPlan
 			if err != nil {
 				return execPlan{}, err
 			}
+			if val == tree.DNull {
+				// An equality with NULL is never true, so no row matches.
+				return b.constructValues(nil /* rows */, scan.Cols.ToList())
+			}
 			values[i] = val
 		} else {
 			values[i] = memo.ExtractConstDatum(expr)

@@ -1332,3 +1332,23 @@ query B
 SELECT ROW() IS NOT NULL;
 ----
 true
+
+# The labels of a tuple are kept when another branch is a tuple without labels.
+statement ok
+CREATE TABLE t_labels (id INT PRIMARY KEY, v VARCHAR(10))
+
+statement ok
+INSERT INTO t_labels VALUES (1, 'x')
+
+query TT
+SELECT
+  to_jsonb(CASE WHEN t_labels.v IS NULL THEN t_labels.* ELSE (2, 'b') END),
+  to_jsonb(COALESCE(NULL, (3, 'c'), t_labels.*))
+FROM t_labels
+----
+{"id": 2, "v": "b"}  {"id": 3, "v": "c"}
+
+query T
+SELECT to_jsonb(CASE WHEN t_labels.v IS NULL THEN NULL ELSE t_labels.* END) FROM t_labels
+----
+{"id": 1, "v": "x"}

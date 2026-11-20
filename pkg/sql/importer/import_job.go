@@ -130,6 +130,12 @@ func (r *importResumer) Resume(ctx context.Context, execCtx interface{}) error {
 	}
 
 	details := r.job.Details().(jobspb.ImportDetails)
+	if details.TablesPublished {
+		// The import finished and its tables are online, but the job was not
+		// marked as succeeded. Importing again would write into tables that
+		// take writes again, and a failure would roll them back.
+		return nil
+	}
 	files := details.URIs
 	format := details.Format
 
@@ -1454,6 +1460,16 @@ func (r *importResumer) OnFailOrCancel(
 	logutil.LogJobCompletion(ctx, importJobRecoveryEventType, r.job.ID(), false, jobErr, r.res.Rows)
 
 	addToFileFormatTelemetry(details.Format.Format.String(), "failed")
+
+	if details.TablesPublished {
+		// The tables are online with the imported data and may have taken new
+		// writes since. Reverting them would delete both, and dropping new
+		// tables would drop them. The import itself completed, so nothing is
+		// rolled back.
+		log.Infof(ctx, "import job %d failed after its tables were published; leaving them as they are", r.job.ID())
+		emitImportJobEvent(ctx, p, jobs.StatusFailed, r.job)
+		return nil
+	}
 
 	// If the import completed preparation and started writing, verify it has
 	// stopped writing before proceeding to revert it.

@@ -11,6 +11,7 @@
 package norm
 
 import (
+	"math"
 	"sort"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
@@ -132,6 +133,16 @@ func (c *CustomFuncs) UnifyComparison(
 	}
 
 	if !isMonotonicConversion(originalType, desiredType) {
+		return nil, false
+	}
+
+	// INTs of magnitude 2^53 or more do not all convert to distinct FLOATs,
+	// and an INT is compared with a FLOAT as a FLOAT. So the comparison with
+	// the constant converted to INT can give another result:
+	// 9007199254740993 = 9007199254740992::FLOAT is true, but
+	// 9007199254740993 = 9007199254740992 is false.
+	if f, ok := cnst.Value.(*tree.DFloat); ok && desiredType.Family() == types.IntFamily &&
+		math.Abs(float64(*f)) >= 1<<53 {
 		return nil, false
 	}
 

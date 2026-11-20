@@ -159,8 +159,11 @@ DROP SCHEMA s2
 
 user root
 
+# The REASSIGN above also gave testuser2 the database and its public schema,
+# which root owned.
 statement ok
-ALTER DATABASE test OWNER TO root
+ALTER DATABASE test OWNER TO root;
+ALTER SCHEMA public OWNER TO root
 
 # Ensure testuser no longer owns anything.
 statement ok
@@ -399,3 +402,23 @@ RESUME JOB (SELECT job_id FROM crdb_internal.jobs WHERE description LIKE 'REASSI
 # Next allow the post commit phase of the declarative schema changer to resume.
 statement ok
 RESUME JOB (SELECT job_id FROM crdb_internal.jobs WHERE description LIKE  'DROP DATABASE%' AND status='paused' FETCH FIRST 1 ROWS ONLY);
+
+# REASSIGN OWNED BY also reassigns the public schema.
+statement ok
+CREATE ROLE reassign_public_old;
+CREATE ROLE reassign_public_new;
+CREATE DATABASE reassign_public_db;
+ALTER DATABASE reassign_public_db OWNER TO reassign_public_old;
+USE reassign_public_db;
+ALTER SCHEMA public OWNER TO reassign_public_old;
+REASSIGN OWNED BY reassign_public_old TO reassign_public_new
+
+query TT rowsort
+SELECT schema_name, owner FROM [SHOW SCHEMAS] WHERE schema_name = 'public'
+UNION ALL SELECT 'database', owner FROM [SHOW DATABASES] WHERE database_name = 'reassign_public_db'
+----
+public    reassign_public_new
+database  reassign_public_new
+
+statement ok
+USE test

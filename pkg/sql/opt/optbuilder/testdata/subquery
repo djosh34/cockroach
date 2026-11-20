@@ -327,7 +327,7 @@ project
            │              │         └── 2 [as=b:2]
            │              └── projections
            │                   └── (a:1, b:2) [as=column3:3]
-           └── ((1, 2),)
+           └── (((1, 2) AS a, b),)
 
 # Postgres cannot handle this query, even though it seems sensical:
 #   ERROR:  subquery has too many columns

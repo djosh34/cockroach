@@ -980,9 +980,23 @@ func (c *CustomFuncs) findConstantFilterCols(
 			}
 
 			datum := span.StartKey().Value(0)
+			if !sameOidType(datum, colTyp) {
+				continue
+			}
 			constFilterCols[colID] = c.f.ConstructConstVal(datum, colTyp)
 		}
 	}
+}
+
+// sameOidType returns false if datum is an OID value of another type than
+// colTyp, for example a REGCLASS constant compared with an OID column. Such a
+// constant cannot stand in for the column in a computed column expression: a
+// REGCLASS converts to STRING as a name, an OID as a number.
+func sameOidType(datum tree.Datum, colTyp *types.T) bool {
+	if d, ok := datum.(*tree.DOid); ok {
+		return d.ResolvedType().Identical(colTyp)
+	}
+	return true
 }
 
 // tryFoldComputedCol tries to reduce the computed column with the given column
@@ -1169,6 +1183,10 @@ func buildConjunctionAndConstColsMapFromConstraint(
 	for i := 0; i < cons.Columns.Count(); i++ {
 		colID := cons.Columns.Get(i).ID()
 		datum := span.StartKey().Value(i)
+		if !sameOidType(datum, f.Metadata().ColumnMeta(colID).Type) {
+			ok = false
+			break
+		}
 		colTyp := datum.ResolvedType()
 		originalConstVal := f.ConstructConstVal(datum, colTyp)
 		// Mark the value in the map for use by `tryFoldComputedCol`.

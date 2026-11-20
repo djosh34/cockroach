@@ -659,8 +659,8 @@ var (
 	// "blank padded". It is not exported to avoid confusion with QChar, as well
 	// as confusion over CHAR's default width of 1.
 	//
-	// It is reported as CHAR in SHOW CREATE and "character" in introspection for
-	// compatibility with PostgreSQL.
+	// It is reported as BPCHAR in SHOW CREATE and "character" in introspection
+	// for compatibility with PostgreSQL.
 	typeBpChar = &T{InternalType: InternalType{
 		Family: StringFamily, Oid: oid.T_bpchar, Locale: &emptyLocale}}
 
@@ -1282,7 +1282,7 @@ func (t *T) WithoutTypeModifiers() *T {
 		if !changed {
 			return t
 		}
-		return MakeTuple(newContents)
+		return MakeLabeledTuple(newContents, t.TupleLabels())
 	case EnumFamily:
 		// Enums have no type modifiers.
 		return t
@@ -2759,6 +2759,11 @@ func (t *T) stringTypeSQL() string {
 		typName = "VARCHAR"
 	case oid.T_bpchar:
 		typName = "CHAR"
+		if t.Width() == 0 {
+			// CHAR alone means CHAR(1), so a CHAR without a width limit is
+			// written BPCHAR.
+			typName = "BPCHAR"
+		}
 	case oid.T_char:
 		// Yes, that's the name. The ways of PostgreSQL are inscrutable.
 		typName = `"char"`

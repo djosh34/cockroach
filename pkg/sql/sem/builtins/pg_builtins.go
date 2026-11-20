@@ -548,12 +548,18 @@ func makeCreateRegDef(typ *types.T) builtinDefinition {
 }
 
 func makeToRegOverload(typ *types.T, helpText string) builtinDefinition {
-	return makeBuiltin(tree.FunctionProperties{Category: builtinconstants.CategorySystemInfo},
+	// The lookup needs the planner of the session, which other nodes of a
+	// distributed query do not have. There it would fail, and the function
+	// would return NULL.
+	return makeBuiltin(tree.FunctionProperties{
+		Category:         builtinconstants.CategorySystemInfo,
+		DistsqlBlocklist: true,
+	},
 		tree.Overload{
 			Types: tree.ParamTypes{
 				{Name: "text", Typ: types.String},
 			},
-			ReturnType: tree.FixedReturnType(types.RegType),
+			ReturnType: tree.FixedReturnType(typ),
 			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
 				typName := tree.MustBeDString(args[0])
 				int, _ := strconv.Atoi(strings.TrimSpace(string(typName)))

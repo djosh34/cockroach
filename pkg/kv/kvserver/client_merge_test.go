@@ -5401,3 +5401,47 @@ func TestStoreMergeGCHint(t *testing.T) {
 		})
 	}
 }
+
+// TestStoreRangeMergeKeepsHigherGCThreshold checks that a merged range keeps
+// the GC threshold of the RHS when it is higher than that of the LHS. With
+// the lower LHS threshold, historical reads of former RHS keys would see
+// garbage collected history and return wrong results.
+func TestStoreRangeMergeKeepsHigherGCThreshold(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	defer log.Scope(t).Close(t)
+	ctx := context.Background()
+
+	tc := testcluster.StartTestCluster(t, 1, base.TestClusterArgs{
+		ReplicationMode: base.ReplicationManual,
+	})
+	defer tc.Stopper().Stop(ctx)
+	scratch := tc.ScratchRange(t)
+	store := tc.GetFirstStoreFromServer(t, 0)
+
+	lhsDesc, rhsDesc, err := createSplitRanges(ctx, scratch, store)
+	require.NoError(t, err)
+	key := testutils.MakeKey(scratch, roachpb.Key("c")) // in the RHS
+	require.NoError(t, store.DB().Put(ctx, key, "v"))
+
+	// Raise the GC threshold of the RHS only.
+	threshold := store.Clock().Now()
+	gcReq := &kvpb.GCRequest{
+		RequestHeader: kvpb.RequestHeader{Key: rhsDesc.StartKey.AsRawKey(), EndKey: rhsDesc.EndKey.AsRawKey()},
+		Threshold:     threshold,
+	}
+	_, pErr := kv.SendWrappedWith(ctx, store.TestSender(), kvpb.Header{RangeID: rhsDesc.RangeID}, gcReq)
+	require.NoError(t, pErr.GoError())
+
+	readBelowThreshold := func() error {
+		get := &kvpb.GetRequest{RequestHeader: kvpb.RequestHeader{Key: key}}
+		_, pErr := kv.SendWrappedWith(ctx, store.TestSender(), kvpb.Header{Timestamp: threshold.Prev()}, get)
+		return pErr.GoError()
+	}
+	var gcErr *kvpb.BatchTimestampBeforeGCError
+	require.ErrorAs(t, readBelowThreshold(), &gcErr)
+
+	_, pErr = kv.SendWrapped(ctx, store.TestSender(), adminMergeArgs(lhsDesc.StartKey.AsRawKey()))
+	require.NoError(t, pErr.GoError())
+
+	require.ErrorAs(t, readBelowThreshold(), &gcErr)
+}

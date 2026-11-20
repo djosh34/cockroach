@@ -142,6 +142,13 @@ func prepareInsertOrUpdateBatch(
 			// Skip any values with a default ID not stored in the primary index,
 			// which can happen if we are adding new columns.
 			if skip := helper.SkipColumnNotInPrimaryIndexValue(family.DefaultColumnID, values[idx]); skip {
+				// A primary key column is stored in its family only while its
+				// value is composite, like the DECIMAL 1.0. If an update makes it
+				// non-composite, like 1, the old stored value must go, or reads
+				// would still return it.
+				if overwrite && helper.isPrimaryKeyColumn(family.DefaultColumnID) {
+					insertDelFn(ctx, batch, kvKey, traceKV)
+				}
 				continue
 			}
 			typ := fetchedCols[idx].GetType()

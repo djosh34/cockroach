@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"sync/atomic"
 	"testing"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
@@ -825,6 +826,7 @@ func TestCSVImportMarksFilesFullyProcessed(t *testing.T) {
 
 	var jobID jobspb.JobID = -1
 	var importSummary roachpb.RowCount
+	var afterImportCalls atomic.Int32
 
 	registry.TestingWrapResumerConstructor(jobspb.TypeImport,
 		// Arrange for our special job resumer to be
@@ -834,6 +836,7 @@ func TestCSVImportMarksFilesFullyProcessed(t *testing.T) {
 			resumer.testingKnobs.alwaysFlushJobProgress = true
 			resumer.testingKnobs.afterImport = func(summary roachpb.RowCount) error {
 				importSummary = summary
+				afterImportCalls.Add(1)
 				return nil
 			}
 			if jobID == -1 {
@@ -883,14 +886,20 @@ func TestCSVImportMarksFilesFullyProcessed(t *testing.T) {
 	// Send cancellation and unblock import.
 	proceedImport()
 
+	// The first run finished the import and published the table. The resumed
+	// run does not import again, so it reports no summary.
+	importSummary = roachpb.RowCount{}
+
 	// Unpause the job and wait for it to complete.
 	if err := registry.Unpause(ctx, nil, jobID); err != nil {
 		t.Fatal(err)
 	}
 	js = queryJobUntil(t, sqlDB.DB, jobID, func(js jobState) bool { return jobs.StatusSucceeded == js.status })
 
-	// Verify that after resume we have not processed any additional rows.
+	// Verify that after resume we have not processed any additional rows, and
+	// that the resumed run did not import at all.
 	assert.Zero(t, importSummary.Rows)
+	assert.Equal(t, int32(1), afterImportCalls.Load())
 }
 
 func (ses *generatedStorage) externalStorageFactory() cloud.ExternalStorageFactory {

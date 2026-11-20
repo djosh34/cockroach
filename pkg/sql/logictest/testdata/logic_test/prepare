@@ -1710,3 +1710,55 @@ statement error pgcode 42601 syntax error
 PREPARE bar AS CALL foo($1);
 
 subtest end
+
+# A NULL placeholder in an equality with a UNIQUE column matches no row.
+subtest null_placeholder_unique
+
+statement ok
+CREATE TABLE t_null_unique (k INT PRIMARY KEY, u INT UNIQUE);
+INSERT INTO t_null_unique VALUES (1, NULL), (2, 2)
+
+statement ok
+PREPARE p_null_unique AS SELECT * FROM t_null_unique WHERE u = $1
+
+query II
+EXECUTE p_null_unique(NULL)
+----
+
+query II
+EXECUTE p_null_unique(2)
+----
+2  2
+
+subtest end
+
+# A prepared statement that compares a TIMESTAMPTZ column with a TIMESTAMP
+# constant is planned again when the session time zone changes.
+subtest prepared_timestamptz_time_zone
+
+statement ok
+CREATE TABLE t_ptz (k INT PRIMARY KEY, t TIMESTAMPTZ, INDEX (t));
+INSERT INTO t_ptz VALUES (1, '2024-01-01 12:00:00+00')
+
+statement ok
+SET TIME ZONE 'UTC'
+
+statement ok
+PREPARE p_ptz AS SELECT k FROM t_ptz WHERE t = '2024-01-01 12:00:00'::TIMESTAMP
+
+query I
+EXECUTE p_ptz
+----
+1
+
+statement ok
+SET TIME ZONE 'America/New_York'
+
+query I
+EXECUTE p_ptz
+----
+
+statement ok
+RESET TIME ZONE
+
+subtest end

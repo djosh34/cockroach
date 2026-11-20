@@ -66,7 +66,11 @@ bar   `, `'bar' 'foo'`},
 		{`'\:'`, `':'`},
 		{`'\ '`, `' '`},
 		{`\ `, `' '`},
-		{`\\`, `'\'`},
+		{`\\`, `'\\'`},
+		// A doubled quote and an escaped backslash in a quoted word keep
+		// their character, so the text output reads back the same.
+		{`'c''d'`, `'c''d'`},
+		{`'a\\b'`, `'a\\b'`},
 		{`:3`, `':3'`},
 		{`::3`, `':':3`},
 		{`:3:3`, `':3':3`},

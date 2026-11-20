@@ -7399,3 +7399,41 @@ CREATE TABLE t (
 		})
 	})
 }
+
+// TestImportRollbackAfterPublishKeepsTables checks that rolling back an
+// IMPORT INTO whose tables were already published, for example after a
+// cancel that lands between publishing and marking the job as succeeded,
+// leaves the table alone. It used to delete every key written since the
+// import started, including writes made after the table came back online.
+func TestImportRollbackAfterPublishKeepsTables(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	defer log.Scope(t).Close(t)
+
+	ctx := context.Background()
+	srv, db, _ := serverutils.StartServer(t, base.TestServerArgs{
+		ExternalIODir: datapathutils.TestDataPath(t, "avro"),
+	})
+	defer srv.Stopper().Stop(ctx)
+	sqlDB := sqlutils.MakeSQLRunner(db)
+
+	sqlDB.Exec(t, `CREATE TABLE simple (i INT8 PRIMARY KEY, s text, b bytea)`)
+	sqlDB.Exec(t, `INSERT INTO simple VALUES (-1, 'before import', NULL)`)
+	var jobID jobspb.JobID
+	var unused interface{}
+	sqlDB.QueryRow(t, `IMPORT INTO simple AVRO DATA ('nodelocal://1/simple.ocf')`).Scan(
+		&jobID, &unused, &unused, &unused, &unused, &unused)
+	sqlDB.Exec(t, `INSERT INTO simple VALUES (-2, 'after import', NULL)`)
+	var rows int
+	sqlDB.QueryRow(t, `SELECT count(*) FROM simple`).Scan(&rows)
+	require.Greater(t, rows, 2)
+
+	execCfg := srv.ApplicationLayer().ExecutorConfig().(sql.ExecutorConfig)
+	job, err := execCfg.JobRegistry.LoadJob(ctx, jobID)
+	require.NoError(t, err)
+	execCtx, cleanup := sql.MakeJobExecContext(ctx, "test", username.RootUserName(), &sql.MemoryMetrics{}, &execCfg)
+	defer cleanup()
+	r := &importResumer{job: job, settings: execCfg.Settings}
+	require.NoError(t, r.OnFailOrCancel(ctx, execCtx, errors.New("injected failure")))
+
+	sqlDB.CheckQueryResults(t, `SELECT count(*) FROM simple`, [][]string{{fmt.Sprint(rows)}})
+}

@@ -223,7 +223,10 @@ func (w index) InvertedColumnKind() catpb.InvertedIndexColumnKind {
 		// to version 22.2.
 		return catpb.InvertedIndexColumnKind_DEFAULT
 	}
-	return w.desc.InvertedColumnKinds[0]
+	// The kind of the inverted column is the last one. Multi-column inverted
+	// indexes created by the declarative schema changer before a fix also hold
+	// the kinds of the columns before it.
+	return w.desc.InvertedColumnKinds[len(w.desc.InvertedColumnKinds)-1]
 }
 
 // CollectKeyColumnIDs creates a new set containing the column IDs in the key

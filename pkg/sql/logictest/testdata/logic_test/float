@@ -199,3 +199,25 @@ INSERT INTO t89961 VALUES ('NaN')
 
 # We use st_makepointm because it is sensitive to different NaN encodings. The
 # following two queries should have the same result.
+
+# An INT column is compared with a FLOAT constant as a FLOAT, also when the
+# constant is 2^53 or larger and several INTs convert to the same FLOAT.
+statement ok
+CREATE TABLE t_int_float (i INT PRIMARY KEY, j INT);
+INSERT INTO t_int_float VALUES (9007199254740992, 9007199254740992), (9007199254740993, 9007199254740993)
+
+query II rowsort
+SELECT i, j FROM t_int_float WHERE i = 9007199254740992::FLOAT
+----
+9007199254740992  9007199254740992
+9007199254740993  9007199254740993
+
+query II rowsort
+SELECT i, j FROM t_int_float WHERE j = 9007199254740992::FLOAT
+----
+9007199254740992  9007199254740992
+9007199254740993  9007199254740993
+
+query II rowsort
+SELECT i, j FROM t_int_float WHERE i > 9007199254740992::FLOAT
+----

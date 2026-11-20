@@ -609,6 +609,11 @@ var mathBuiltins = map[string]builtinDefinition{
 				if !operand.ResolvedType().Equivalent(thresholds.ParamTyp) {
 					return tree.NewDInt(0), errors.New("operand and thresholds must be of the same type")
 				}
+				// A NULL threshold compares as smaller than any value, so it would
+				// give a wrong bucket. Postgres rejects it.
+				if thresholds.HasNulls {
+					return nil, pgerror.New(pgcode.NullValueNotAllowed, "thresholds array must not contain NULLs")
+				}
 
 				for i, v := range thresholds.Array {
 					if cmp, err := operand.CompareError(evalCtx, v); err != nil {

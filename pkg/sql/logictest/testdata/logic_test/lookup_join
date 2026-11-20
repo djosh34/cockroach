@@ -1576,3 +1576,98 @@ query I
 SELECT count(v) FROM l_101823 LEFT LOOKUP JOIN r_101823 ON a = u AND b = v;
 ----
 1
+
+# A constant that does not fit the type of the index column is not projected
+# as a lookup key, because the projection would change its value.
+statement ok
+CREATE TABLE l_width (
+  k INT PRIMARY KEY,
+  c CHAR(3),
+  d DECIMAL(10, 2),
+  v VARCHAR(2),
+  INDEX (c, k),
+  INDEX (d, k),
+  INDEX (v, k)
+);
+CREATE TABLE r_width (x INT);
+INSERT INTO l_width VALUES (1, 'abc', 1.23, 'ab');
+INSERT INTO r_width VALUES (1)
+
+query II
+SELECT x, k FROM r_width INNER LOOKUP JOIN l_width@l_width_c_k_idx ON k = x AND c = 'abcd'
+----
+
+query II
+SELECT x, k FROM r_width INNER LOOKUP JOIN l_width@l_width_d_k_idx ON k = x AND d = 1.234
+----
+
+query II
+SELECT x, k FROM r_width INNER LOOKUP JOIN l_width@l_width_v_k_idx ON k = x AND v = 'abc'
+----
+
+query II
+SELECT x, k FROM r_width INNER LOOKUP JOIN l_width@l_width_c_k_idx ON k = x AND c = 'abc'
+----
+1  1
+
+# A computed index column is not derived from an equality between columns of
+# types that are only equivalent, such as OID and REGCLASS, or through an
+# expression that is composite-sensitive, such as a DECIMAL cast to STRING.
+# The statistics make a lookup join into the large tables the cheapest plan.
+statement ok
+CREATE TABLE r_oid (o OID NOT NULL, s STRING NOT NULL AS (o::STRING) STORED, INDEX (s, o));
+INSERT INTO r_oid VALUES ('r_width'::REGCLASS::OID)
+
+statement ok
+ALTER TABLE r_oid INJECT STATISTICS '[{"columns": ["o"], "created_at": "2018-01-01 1:00:00.00000+00:00", "row_count": 100000, "distinct_count": 100000}]'
+
+query B
+SELECT r_oid.s::INT > 0
+FROM (VALUES ('r_width'::REGCLASS), ('r_oid'::REGCLASS)) AS l(r)
+INNER JOIN r_oid@r_oid_s_o_idx ON l.r = r_oid.o
+----
+true
+
+# The same holds for a constant: the computed column is not derived from it.
+query B
+SELECT s::INT > 0 FROM r_oid@r_oid_s_o_idx WHERE o = 'r_width'::REGCLASS
+----
+true
+
+statement ok
+CREATE TABLE l_dec (x DECIMAL);
+CREATE TABLE r_dec (d DECIMAL NOT NULL, s STRING NOT NULL AS (d::STRING) STORED, INDEX (s, d));
+INSERT INTO l_dec VALUES (2.0);
+INSERT INTO r_dec VALUES (2.00)
+
+statement ok
+ALTER TABLE l_dec INJECT STATISTICS '[{"columns": ["x"], "created_at": "2018-01-01 1:00:00.00000+00:00", "row_count": 1, "distinct_count": 1}]'
+
+statement ok
+ALTER TABLE r_dec INJECT STATISTICS '[{"columns": ["d"], "created_at": "2018-01-01 1:00:00.00000+00:00", "row_count": 100000, "distinct_count": 100000}]'
+
+query T
+SELECT r_dec.s FROM l_dec INNER JOIN r_dec@r_dec_s_d_idx ON l_dec.x = r_dec.d
+----
+2.00
+
+# A range lookup join keeps the tighter of two redundant inequalities on the
+# lookup column.
+statement ok
+CREATE TABLE l_redundant (a INT, k INT, PRIMARY KEY (a, k));
+CREATE TABLE r_redundant (x INT, y INT);
+INSERT INTO l_redundant VALUES (1, 0), (1, 1), (1, 2), (1, 3);
+INSERT INTO r_redundant VALUES (1, 2)
+
+statement ok
+SET variable_inequality_lookup_join_enabled = true
+
+query III rowsort
+SELECT a, k, y FROM r_redundant INNER LOOKUP JOIN l_redundant
+ON a = x AND k >= 1 AND k >= 0 AND k <= y
+----
+1  1  2
+1  2  2
+
+statement ok
+RESET variable_inequality_lookup_join_enabled

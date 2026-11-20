@@ -28,6 +28,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil/pgdate"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/redact"
+	"github.com/lib/pq/oid"
 	"golang.org/x/text/language"
 )
 
@@ -2578,6 +2579,26 @@ func typeCheckComparisonOp(
 	}
 	typedSubExprs := s.typedExprs
 
+	// An untyped string compared with a CHAR value is a CHAR value too, so its
+	// trailing spaces are not significant: 'f'::CHAR = 'f ' is true, as in
+	// Postgres. This applies only to plain comparisons; patterns such as
+	// those of LIKE and regular expressions keep their spaces.
+	switch foldedOp.Symbol {
+	case treecmp.EQ, treecmp.NE, treecmp.LT, treecmp.LE, treecmp.GT, treecmp.GE,
+		treecmp.IsDistinctFrom, treecmp.IsNotDistinctFrom:
+		for i := range typedSubExprs {
+			str, isStr := s.exprs[i].(*StrVal)
+			if isStr && typedSubExprs[i].ResolvedType().Family() == types.StringFamily &&
+				typedSubExprs[1-i].ResolvedType().Oid() == oid.T_bpchar {
+				typed, err := str.ResolveAsType(ctx, semaCtx, types.MakeChar(0))
+				if err != nil {
+					return nil, nil, nil, false, err
+				}
+				typedSubExprs[i] = typed
+			}
+		}
+	}
+
 	leftExpr, rightExpr := typedSubExprs[0], typedSubExprs[1]
 	if switched {
 		leftExpr, rightExpr = rightExpr, leftExpr
@@ -2797,6 +2818,16 @@ func typeCheckSameTypedExprs(
 		if !placeholderIdxs.Empty() {
 			if _, err := typeCheckSameTypedPlaceholders(s, candidateType); err != nil {
 				return nil, nil, err
+			}
+		}
+		// As in Postgres, the common type keeps type modifiers, such as the
+		// width of CHAR(N), only if every expression has exactly that type.
+		// Otherwise the values of the other expressions may not fit, as in
+		// CASE WHEN false THEN 'a'::CHAR ELSE 'abcd' END.
+		for _, e := range typedExprs {
+			if typ := e.ResolvedType(); typ.Family() != types.UnknownFamily && !typ.Identical(candidateType) {
+				candidateType = candidateType.WithoutTypeModifiers()
+				break
 			}
 		}
 		// Now we check that each expression can be implicit cast to the
@@ -3054,19 +3085,40 @@ func typeCheckSameTypedTupleExprs(
 	// TODO(nvanbenschoten): Look into reducing allocations here.
 	typedExprs := make([]TypedExpr, len(exprs))
 	for tupleIdx, expr := range exprs {
+		if _, isTuple := expr.(*Tuple); isTuple {
+			continue
+		}
+		typedExpr, err := expr.TypeCheck(ctx, semaCtx, resTypes)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !typedExpr.ResolvedType().EquivalentOrNull(resTypes, true /* allowNullTupleEquivalence */) {
+			return nil, nil, unexpectedTypeError(expr, resTypes, typedExpr.ResolvedType())
+		}
+		typedExprs[tupleIdx] = typedExpr
+	}
+	// The labels come from the first tuple that has them. Without this, in
+	// CASE WHEN c THEN t.* ELSE (1, 2) END the labels of t.* would be lost,
+	// and to_jsonb of the result would use the keys f1 and f2.
+	if len(first.Labels) == 0 {
+		for i, expr := range exprs {
+			var labels []string
+			if t, isTuple := expr.(*Tuple); isTuple {
+				labels = t.Labels
+			} else if typ := typedExprs[i].ResolvedType(); typ.Family() == types.TupleFamily {
+				labels = typ.TupleLabels()
+			}
+			if len(labels) == firstLen {
+				resTypes = types.MakeLabeledTuple(resTypes.TupleContents(), labels)
+				break
+			}
+		}
+	}
+	for tupleIdx, expr := range exprs {
 		if t, isTuple := expr.(*Tuple); isTuple {
 			// For Tuple exprs we can update the type with what we've inferred.
 			t.typ = resTypes
 			typedExprs[tupleIdx] = t
-		} else {
-			typedExpr, err := expr.TypeCheck(ctx, semaCtx, resTypes)
-			if err != nil {
-				return nil, nil, err
-			}
-			if !typedExpr.ResolvedType().EquivalentOrNull(resTypes, true /* allowNullTupleEquivalence */) {
-				return nil, nil, unexpectedTypeError(expr, resTypes, typedExpr.ResolvedType())
-			}
-			typedExprs[tupleIdx] = typedExpr
 		}
 	}
 	return typedExprs, resTypes, nil

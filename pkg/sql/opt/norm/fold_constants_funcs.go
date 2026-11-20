@@ -374,7 +374,9 @@ func (c *CustomFuncs) foldOIDFamilyCast(
 			}
 
 			c.mem.Metadata().AddDependency(opt.DepByName(&resName), ds, privilege.SELECT)
-			dOid = tree.NewDOidWithName(oid.Oid(ds.PostgresDescriptorID()), types.RegClass, string(tn.ObjectName))
+			// Format the name as the cast at runtime does, quoted where needed,
+			// so the result reads back as the same table.
+			dOid = tree.NewDOidWithName(oid.Oid(ds.PostgresDescriptorID()), types.RegClass, tn.ObjectName.String())
 
 		default:
 			return nil, false, nil

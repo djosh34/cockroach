@@ -715,8 +715,12 @@ func (p *parallelImporter) importWorker(
 	timestamp := timestampAfterEpoch(importCtx.walltime)
 
 	conv.CompletedRowFn = func() int64 {
-		m := emittedRowLowWatermark(workerID, rowNum, minEmitted)
-		return m
+		return emittedRowLowWatermark(workerID, rowNum, minEmitted)
+	}
+	// Other workers may count the rows of this worker as emitted only once its
+	// batch is in the channel; see emittedRowLowWatermark.
+	conv.BatchSentFn = func() {
+		atomic.StoreInt64(&minEmitted[workerID], rowNum)
 	}
 
 	for batch := range p.recordCh {
@@ -743,11 +747,15 @@ func (p *parallelImporter) importWorker(
 	return conv.SendBatch(ctx)
 }
 
-// Updates emitted row for the specified worker and returns
-// low watermark for the emitted rows across all workers.
+// emittedRowLowWatermark returns the low watermark of the rows emitted by
+// all workers, for a batch of the specified worker that holds rows up to
+// emittedRow. minEmitted holds the last row of each worker whose batch is
+// already in the channel. A worker publishes its row there only after it sent
+// its batch: published earlier, another worker could send a batch whose
+// LastRow counts rows still on their way, the ingestion could flush and record
+// that LastRow as the resume position, and a resumed IMPORT would skip rows
+// that were never ingested.
 func emittedRowLowWatermark(workerID int, emittedRow int64, minEmitted []int64) int64 {
-	atomic.StoreInt64(&minEmitted[workerID], emittedRow)
-
 	for i := 0; i < len(minEmitted); i++ {
 		if i != workerID {
 			w := atomic.LoadInt64(&minEmitted[i])

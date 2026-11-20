@@ -189,6 +189,11 @@ func declareKeysEndTxn(
 				latchSpans.AddNonMVCC(spanset.SpanReadWrite, roachpb.Span{
 					Key: keys.RangeGCHintKey(mt.LeftDesc.RangeID),
 				})
+				// Merge raises the GC threshold of the LHS to that of the RHS if it
+				// is higher.
+				latchSpans.AddNonMVCC(spanset.SpanReadWrite, roachpb.Span{
+					Key: keys.RangeGCThresholdKey(mt.LeftDesc.RangeID),
+				})
 
 				// Merges need to adjust MVCC stats for merged MVCC range tombstones
 				// that straddle the ranges, by peeking to the left and right of the RHS
@@ -1339,16 +1344,32 @@ func mergeTrigger(
 		MergeTrigger: *merge,
 	}
 
+	lhsLoader := MakeStateLoader(rec)
+	rhsLoader := stateloader.Make(merge.RightDesc.RangeID)
+
+	// The merged range keeps the higher of the two GC thresholds. The RHS may
+	// have garbage collected to a later timestamp than the LHS; with the LHS
+	// threshold, reads of former RHS keys between the two thresholds would see
+	// collected history and return wrong results.
+	rhsThreshold, err := rhsLoader.LoadGCThreshold(ctx, batch)
+	if err != nil {
+		return result.Result{}, err
+	}
+	if lhsThreshold := rec.GetGCThreshold(); lhsThreshold.Less(*rhsThreshold) {
+		if err := lhsLoader.SetGCThreshold(ctx, batch, ms, rhsThreshold); err != nil {
+			return result.Result{}, err
+		}
+		pd.Replicated.State = &kvserverpb.ReplicaState{GCThreshold: rhsThreshold}
+	}
+
 	{
 		// If we have GC hints populated that means we are trying to perform
 		// optimized garbage removal in future.
 		// We will try to merge both hints if possible and set new hint on LHS.
-		lhsLoader := MakeStateLoader(rec)
 		lhsHint, err := lhsLoader.LoadGCHint(ctx, batch)
 		if err != nil {
 			return result.Result{}, err
 		}
-		rhsLoader := stateloader.Make(merge.RightDesc.RangeID)
 		rhsHint, err := rhsLoader.LoadGCHint(ctx, batch)
 		if err != nil {
 			return result.Result{}, err
@@ -1357,9 +1378,10 @@ func mergeTrigger(
 			if err := lhsLoader.SetGCHint(ctx, batch, ms, lhsHint); err != nil {
 				return result.Result{}, err
 			}
-			pd.Replicated.State = &kvserverpb.ReplicaState{
-				GCHint: lhsHint,
+			if pd.Replicated.State == nil {
+				pd.Replicated.State = &kvserverpb.ReplicaState{}
 			}
+			pd.Replicated.State.GCHint = lhsHint
 		}
 	}
 	return pd, nil

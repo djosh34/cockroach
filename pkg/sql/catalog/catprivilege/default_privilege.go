@@ -123,6 +123,11 @@ func (d *Mutable) GrantDefaultPrivileges(
 			return err
 		}
 	}
+	// A role that grants itself privileges it already has, such as
+	// ALTER DEFAULT PRIVILEGES FOR ROLE r GRANT INSERT ON TABLES TO r, ends in
+	// the default state. Keeping the entry would leave a reference to the role
+	// behind when it is dropped.
+	d.removeIfDefault(role, defaultPrivilegesForRole)
 	return nil
 }
 
@@ -141,31 +146,51 @@ func (d *Mutable) RevokeDefaultPrivileges(
 		}
 	}
 
-	defaultPrivilegesPerObject := defaultPrivilegesForRole.DefaultPrivilegesPerObject
+	d.removeIfDefault(role, defaultPrivilegesForRole)
+	return nil
+}
+
+// RoleTargetObjects are the target objects on which the role of database
+// default privileges has all privileges in the default state.
+var RoleTargetObjects = []privilege.TargetObjectType{
+	privilege.Tables, privilege.Sequences, privilege.Types, privilege.Schemas, privilege.Routines,
+}
+
+// hasDefaultFlags returns true if the flags of the database default
+// privileges of an explicit role are in the default state.
+func hasDefaultFlags(defaultPrivilegesForRole *catpb.DefaultPrivilegesForRole) bool {
+	for _, object := range RoleTargetObjects {
+		if !GetRoleHasAllPrivilegesOnTargetObject(defaultPrivilegesForRole, object) {
+			return false
+		}
+	}
+	return GetPublicHasUsageOnTypes(defaultPrivilegesForRole) &&
+		GetPublicHasExecuteOnFunctions(defaultPrivilegesForRole)
+}
+
+// removeIfDefault removes the default privileges of role if they grant
+// nothing beyond the default state.
+func (d *Mutable) removeIfDefault(
+	role catpb.DefaultPrivilegesRole, defaultPrivilegesForRole *catpb.DefaultPrivilegesForRole,
+) {
 	// Check if there are any default privileges remaining on the descriptor.
 	// If there are no privileges left remaining and the descriptor is in the
 	// default state, we can remove it.
-	for _, defaultPrivs := range defaultPrivilegesPerObject {
+	for _, defaultPrivs := range defaultPrivilegesForRole.DefaultPrivilegesPerObject {
 		if len(defaultPrivs.Users) != 0 {
-			return nil
+			return
 		}
 	}
 
 	// If the DefaultPrivilegeDescriptor is defined on a schema, the flags are
 	// not used and have no meaning.
 	if defaultPrivilegesForRole.IsExplicitRole() && d.IsDatabaseDefaultPrivilege() &&
-		(!GetRoleHasAllPrivilegesOnTargetObject(defaultPrivilegesForRole, privilege.Tables) ||
-			!GetRoleHasAllPrivilegesOnTargetObject(defaultPrivilegesForRole, privilege.Sequences) ||
-			!GetRoleHasAllPrivilegesOnTargetObject(defaultPrivilegesForRole, privilege.Types) ||
-			!GetRoleHasAllPrivilegesOnTargetObject(defaultPrivilegesForRole, privilege.Schemas) ||
-			!GetPublicHasUsageOnTypes(defaultPrivilegesForRole) ||
-			!GetPublicHasExecuteOnFunctions(defaultPrivilegesForRole)) {
-		return nil
+		!hasDefaultFlags(defaultPrivilegesForRole) {
+		return
 	}
 
 	// There no entries remaining, remove the entry for the role.
 	d.defaultPrivilegeDescriptor.RemoveUser(role)
-	return nil
 }
 
 // CreatePrivilegesFromDefaultPrivileges creates privileges for a

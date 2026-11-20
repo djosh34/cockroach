@@ -2458,11 +2458,10 @@ func addPgProcBuiltinRow(name string, addRow func(...tree.Datum) error) error {
 		}
 
 		var retType tree.Datum
-		isRetSet := false
+		isRetSet := builtin.IsGenerator()
 		if fixedRetType := builtin.FixedReturnType(); fixedRetType != nil {
 			var retOid oid.Oid
-			if fixedRetType.Family() == types.TupleFamily && builtin.IsGenerator() {
-				isRetSet = true
+			if fixedRetType.Family() == types.TupleFamily && isRetSet {
 				// Functions returning tables with zero, or more than one
 				// columns are marked to return "anyelement"
 				// (e.g. `unnest`)

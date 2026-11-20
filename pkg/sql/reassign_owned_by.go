@@ -24,7 +24,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/decodeusername"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqltelemetry"
 	"github.com/cockroachdb/errors"
@@ -141,12 +140,6 @@ func (n *reassignOwnedByNode) startExec(params runParams) error {
 				return err
 			}
 			if isOwner {
-				// Don't reassign public schema.
-				// TODO(richardjcai): revisit this in 22.2, in 22.1 we do not allow
-				// modifying the public schema.
-				if lCtx.schemaDescs[schemaID].GetName() == catconstants.PublicSchemaName {
-					continue
-				}
 				if err := n.reassignSchemaOwner(lCtx.schemaDescs[schemaID], currentDbDesc, params); err != nil {
 					return err
 				}
