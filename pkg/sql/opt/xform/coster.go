@@ -865,11 +865,11 @@ func (c *coster) computeInvertedJoinCost(
 	// Take into account that the "internal" row count is higher, according to
 	// the selectivities of the conditions. In particular, we need to ignore
 	// the conditions that don't affect the number of rows processed.
-	// A contrived example, where gid is a SERIAL PK:
-	//   nyc_census_blocks c JOIN nyc_neighborhoods n ON
-	//   ST_Intersects(c.geom, n.geom) AND c.gid < n.gid
-	// which can become a lookup join with left-over condition c.gid <
-	// n.gid.
+	// A contrived example, where id is a SERIAL PK and j a JSONB column:
+	//   docs a JOIN docs b ON
+	//   a.j @> b.j AND a.id < b.id
+	// which can become a lookup join with left-over condition a.id <
+	// b.id.
 	rowsProcessed, ok := c.mem.RowsProcessed(join)
 	if !ok {
 		// We shouldn't ever get here. Since we don't allow the memo

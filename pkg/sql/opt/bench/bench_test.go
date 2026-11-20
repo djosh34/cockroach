@@ -1358,7 +1358,7 @@ var slowSchemas = []string{
 		CREATE TABLE table64793_1 (
 			col1_0 CHAR NOT NULL, col1_1 BOOL NOT NULL, col1_2 REGPROC NOT NULL,
 			col1_3 REGPROCEDURE NOT NULL, col1_4 TIMETZ NOT NULL, col1_5 FLOAT8 NULL,
-			col1_6 INT2 NOT NULL, col1_7 BOOL, col1_8 BOX2D NOT NULL,
+			col1_6 INT2 NOT NULL, col1_7 BOOL, col1_8 BYTES NOT NULL,
 			col1_9 REGNAMESPACE NOT NULL,
 			PRIMARY KEY (
 				col1_8 DESC, col1_9 DESC, col1_4 DESC, col1_1, col1_2 ASC, col1_3 DESC,
@@ -1403,7 +1403,7 @@ var slowSchemas = []string{
 			col1_0 "char" NOT NULL, col1_1 OID NOT NULL, col1_2 BIT(38) NOT NULL,
 			col1_3 BIT(18) NOT NULL, col1_4 BYTES NOT NULL, col1_5 INT8 NOT NULL,
 			col1_6 INTERVAL NOT NULL, col1_7 BIT(33) NOT NULL, col1_8 INTERVAL NULL,
-			col1_9 GEOMETRY NOT NULL, col1_10 BOOL NOT NULL, col1_11 INT2,
+			col1_9 STRING NOT NULL, col1_10 BOOL NOT NULL, col1_11 INT2,
 			PRIMARY KEY (
 				col1_4 ASC, col1_7 DESC, col1_1 ASC, col1_2 ASC, col1_10 ASC, col1_5,
 				col1_0 ASC, col1_3, col1_6
@@ -1432,7 +1432,7 @@ var slowSchemas = []string{
 	`
 		CREATE TABLE table64793_4 (
 			col2_0 NAME NOT NULL, col2_1 TIMETZ NOT NULL, col3_2 REGPROC NOT NULL,
-			col3_3 "char", col3_4 BOX2D, col3_5 INT8 NULL, col3_6 TIMESTAMP NOT NULL,
+			col3_3 "char", col3_4 BYTES, col3_5 INT8 NULL, col3_6 TIMESTAMP NOT NULL,
 			col3_7 FLOAT8, col3_8 INT4 NULL, col3_9 INET NULL, col3_10 UUID NOT NULL,
 			col3_11 UUID NULL, col3_12 INT2 NOT NULL, col3_13 BIT(34),
 			col3_14 REGPROCEDURE NULL, col3_15 FLOAT8 NULL,

@@ -612,6 +612,23 @@ func TestValidateTypeDesc(t *testing.T) {
 			},
 		},
 		{
+			`element "g" has type geometry: spatial types are unsupported`,
+			descpb.TypeDescriptor{
+				Name:           "t",
+				ID:             typeDescID,
+				ParentID:       dbID,
+				ParentSchemaID: keys.PublicSchemaID,
+				Kind:           descpb.TypeDescriptor_COMPOSITE,
+				Privileges:     defaultPrivileges,
+				Composite: &descpb.TypeDescriptor_Composite{
+					Elements: []descpb.TypeDescriptor_Composite_CompositeElement{{
+						ElementType:  &types.T{InternalType: types.InternalType{Family: types.GeometryFamily}},
+						ElementLabel: "g",
+					}},
+				},
+			},
+		},
+		{
 			`referenced database ID 500: referenced descriptor not found`,
 			descpb.TypeDescriptor{
 				Name:           "t",

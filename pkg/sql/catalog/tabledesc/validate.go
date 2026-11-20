@@ -689,17 +689,11 @@ func validateMutation(m *descpb.DescriptorMutation) error {
 	return nil
 }
 
-// ValidateSelf validates that the table descriptor is well formed. Checks
-// include validating the table, column and index names, verifying that column
-// names and index names are unique and verifying that column IDs and index IDs
-// are consistent. Use Validate to validate that cross-table references are
-// correct.
-// If version is supplied, the descriptor is checked for version incompatibilities.
 // validateNoSpatial returns an error if a column or an index of the table uses
 // the removed spatial types. Only tables from upstream CockroachDB can.
 func (desc *wrapper) validateNoSpatial() error {
 	for _, col := range desc.AllColumns() {
-		if typ := col.GetType(); typ != nil && isSpatialType(typ) {
+		if typ := col.GetType(); typ != nil && typ.ContainsRemovedSpatialType() {
 			return errors.Newf("column %q has type %s: spatial types are unsupported",
 				col.GetName(), typ.Family().Name())
 		}
@@ -713,19 +707,12 @@ func (desc *wrapper) validateNoSpatial() error {
 	return nil
 }
 
-// isSpatialType returns whether typ, or the element type of an array typ, is
-// one of the removed spatial types.
-func isSpatialType(typ *types.T) bool {
-	for typ.Family() == types.ArrayFamily {
-		typ = typ.ArrayContents()
-	}
-	switch typ.Family() {
-	case types.GeometryFamily, types.GeographyFamily, types.Box2DFamily:
-		return true
-	}
-	return false
-}
-
+// ValidateSelf validates that the table descriptor is well formed. Checks
+// include validating the table, column and index names, verifying that column
+// names and index names are unique and verifying that column IDs and index IDs
+// are consistent. Use Validate to validate that cross-table references are
+// correct.
+// If version is supplied, the descriptor is checked for version incompatibilities.
 func (desc *wrapper) ValidateSelf(vea catalog.ValidationErrorAccumulator) {
 	// Validate local properties of the descriptor.
 	vea.Report(catalog.ValidateName(desc))

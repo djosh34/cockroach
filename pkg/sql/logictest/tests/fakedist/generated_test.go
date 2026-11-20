@@ -589,6 +589,20 @@ func TestLogic_distsql_automatic_stats(
 	runLogicTest(t, "distsql_automatic_stats")
 }
 
+func TestLogic_distsql_builtin(
+	t *testing.T,
+) {
+	defer leaktest.AfterTest(t)()
+	runLogicTest(t, "distsql_builtin")
+}
+
+func TestLogic_distsql_datetime(
+	t *testing.T,
+) {
+	defer leaktest.AfterTest(t)()
+	runLogicTest(t, "distsql_datetime")
+}
+
 func TestLogic_distsql_event_log(
 	t *testing.T,
 ) {
@@ -615,6 +629,13 @@ func TestLogic_distsql_srfs(
 ) {
 	defer leaktest.AfterTest(t)()
 	runLogicTest(t, "distsql_srfs")
+}
+
+func TestLogic_distsql_subquery(
+	t *testing.T,
+) {
+	defer leaktest.AfterTest(t)()
+	runLogicTest(t, "distsql_subquery")
 }
 
 func TestLogic_drop_database(
@@ -904,6 +925,13 @@ func TestLogic_hash_join(
 	runLogicTest(t, "hash_join")
 }
 
+func TestLogic_hash_join_dist(
+	t *testing.T,
+) {
+	defer leaktest.AfterTest(t)()
+	runLogicTest(t, "hash_join_dist")
+}
+
 func TestLogic_hash_sharded_index(
 	t *testing.T,
 ) {
@@ -1126,6 +1154,13 @@ func TestLogic_merge_join(
 ) {
 	defer leaktest.AfterTest(t)()
 	runLogicTest(t, "merge_join")
+}
+
+func TestLogic_merge_join_dist(
+	t *testing.T,
+) {
+	defer leaktest.AfterTest(t)()
+	runLogicTest(t, "merge_join_dist")
 }
 
 func TestLogic_multi_statement(

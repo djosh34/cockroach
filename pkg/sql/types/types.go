@@ -1413,6 +1413,25 @@ var familyNames = map[Family]redact.SafeString{
 	GeometryFamily:  "geometry",
 }
 
+// ContainsRemovedSpatialType returns whether t is one of the removed spatial
+// types or contains one, as the element type of an array or a field of a
+// tuple. Only descriptors from upstream CockroachDB can hold such a type.
+func (t *T) ContainsRemovedSpatialType() bool {
+	switch t.Family() {
+	case GeometryFamily, GeographyFamily, Box2DFamily:
+		return true
+	case ArrayFamily:
+		return t.ArrayContents().ContainsRemovedSpatialType()
+	case TupleFamily:
+		for _, c := range t.TupleContents() {
+			if c.ContainsRemovedSpatialType() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Name returns a user-friendly word indicating the family type.
 //
 // TODO(radu): investigate whether anything breaks if we use

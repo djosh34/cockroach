@@ -396,15 +396,15 @@ func (c *CustomFuncs) GenerateInvertedIndexScans(
 		//
 		// Consider the example:
 		//
-		//   CREATE TABLE t (a INT, b INT, g GEOMETRY, INVERTED INDEX (b, g))
+		//   CREATE TABLE t (a INT, b INT, j JSONB, INVERTED INDEX (b, j))
 		//
-		//   SELECT * FROM t WHERE a = 1 AND b = 2 AND ST_Intersects(.., g)
+		//   SELECT * FROM t WHERE a = 1 AND b = 2 AND j @> '{"x": 1}'
 		//
 		// The constraint would constrain b to [/2 - /2], guaranteeing that
 		// the inverted index scan would only produce rows where (b = 2).
 		// Reapplying the (b = 2) filter after the scan would be
 		// unnecessary, so the remainingFilters in this case would be
-		// (a = 1 AND ST_Intersects(.., g)).
+		// (a = 1 AND j @> '{"x": 1}').
 		filters = remainingFilters
 
 		// Construct new ScanOpDef with the new index and constraint.

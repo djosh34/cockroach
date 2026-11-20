@@ -4,6 +4,11 @@ go 1.27
 
 toolchain go1.27.4
 
+// Tests seed math/rand with randutil.SeedForTests, so that the logged seed
+// reproduces a failure. Since Go 1.24, rand.Seed does nothing unless
+// randseednop is 0.
+godebug randseednop=0
+
 require (
 	cloud.google.com/go/kms v1.10.1
 	cloud.google.com/go/storage v1.28.1

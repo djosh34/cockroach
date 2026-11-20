@@ -580,6 +580,23 @@ func TestValidateTableDesc(t *testing.T) {
 				},
 				NextColumnID: 2,
 			}},
+		{err: `column "place" has type tuple: spatial types are unsupported`,
+			desc: descpb.TableDescriptor{
+				ID:            2,
+				ParentID:      1,
+				Name:          "foo",
+				FormatVersion: descpb.InterleavedFormatVersion,
+				Columns: []descpb.ColumnDescriptor{
+					{ID: 1, Name: "place", Type: &types.T{InternalType: types.InternalType{
+						Family: types.TupleFamily,
+						TupleContents: []*types.T{
+							types.Int,
+							{InternalType: types.InternalType{Family: types.GeometryFamily}},
+						},
+					}}},
+				},
+				NextColumnID: 2,
+			}},
 		{err: `index "primary" is a spatial index: spatial indexes are unsupported`,
 			desc: descpb.TableDescriptor{
 				ID:            2,

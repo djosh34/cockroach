@@ -72,16 +72,21 @@ func ParseURI(s string) (*url.URL, error) {
 	if len(hosts) < 2 {
 		return nil, err
 	}
-	for _, h := range hosts {
-		if _, hostErr := url.Parse(scheme + "://" + h); hostErr != nil {
+	// Host holds the hosts as url.Parse decodes them, so that String escapes
+	// them once.
+	decoded := make([]string, len(hosts))
+	for i, h := range hosts {
+		hu, hostErr := url.Parse(scheme + "://" + h)
+		if hostErr != nil {
 			return nil, err
 		}
+		decoded[i] = hu.Host
 	}
 	u, firstErr := url.Parse(scheme + "://" + userinfo + hosts[0] + tail)
 	if firstErr != nil {
 		return nil, err
 	}
-	u.Host = authority
+	u.Host = strings.Join(decoded, ",")
 	return u, nil
 }
 

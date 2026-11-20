@@ -70,6 +70,9 @@ func TestParseURI(t *testing.T) {
 		{uri: "https://a:1:2/p", err: "invalid port"},
 		{uri: "https://a:1,b:2:3/p", err: "invalid port"},
 		{uri: "nodelocal://1,2/p", host: "1,2", path: "/p"},
+		// A zone ID is escaped as %25 in the URI and decoded in Host.
+		{uri: "https://[fe80::1%25eth0]:1,[fe80::2%25eth0]:2/p",
+			host: "[fe80::1%eth0]:1,[fe80::2%eth0]:2", path: "/p"},
 	} {
 		t.Run(tc.uri, func(t *testing.T) {
 			u, err := cloud.ParseURI(tc.uri)
@@ -81,6 +84,10 @@ func TestParseURI(t *testing.T) {
 			require.Equal(t, tc.host, u.Host)
 			require.Equal(t, tc.path, u.Path)
 			require.Equal(t, tc.uri, u.String())
+			// Parsing the serialized URI gives the same URI again.
+			again, err := cloud.ParseURI(u.String())
+			require.NoError(t, err)
+			require.Equal(t, tc.uri, again.String())
 		})
 	}
 }
