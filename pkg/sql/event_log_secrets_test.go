@@ -52,6 +52,12 @@ func TestEventLogKeepsSecrets(t *testing.T) {
 		}
 		return nil
 	})
+	// Only the values are hidden; the names stay.
+	for _, row := range r.QueryStr(t, `SELECT info::JSONB->>'Statement' FROM system.eventlog
+		WHERE "eventType" IN ('set_cluster_setting', 'create_role')
+		AND (info LIKE '%event_role%' OR info LIKE '%custom_ca%')`) {
+		assert.Regexp(t, "event_role|cloudstorage.http.custom_ca", row[0])
+	}
 	rows := r.QueryStr(t, `SELECT info FROM system.eventlog`)
 	for _, row := range rows {
 		for _, secret := range []string{"SECRETCA", "SECRETPW", "secretident"} {
