@@ -191,7 +191,6 @@ func TestFlowControlMode(t *testing.T) {
 			handle.ConnectStream(ctx, pos(0), stream)
 			handle.DeductTokensFor(ctx, admissionpb.NormalPri, pos(1), kvflowcontrol.Tokens(16<<20 /* 16MiB */))
 
-
 			// Invoke .Admit() for {regular,elastic} work in a separate
 			// goroutines, and test below whether the goroutines are blocked.
 			regularAdmitCh := make(chan struct{})
