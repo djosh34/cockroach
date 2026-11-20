@@ -63,7 +63,7 @@ func TestEveryIsolationLevelRunsSerializable(t *testing.T) {
 			t.Run(level+"/"+name, func(t *testing.T) {
 				conn, err := db.Conn(ctx)
 				require.NoError(t, err)
-				defer conn.Close()
+				defer func() { require.NoError(t, conn.Close()) }()
 				for _, stmt := range way(level) {
 					_, err := conn.ExecContext(ctx, stmt)
 					require.NoError(t, err)
