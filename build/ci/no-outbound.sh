@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Starts a node with default addresses in a network namespace that has only
 # loopback, uses it for a minute, and fails if the node or the SQL client
-# tried to connect anywhere but loopback or tried a DNS lookup. strace records every connect, sendto and sendmsg call,
-# so a blocked attempt is seen too.
+# tried to connect anywhere but loopback or tried a DNS lookup. strace
+# records every connect, sendto and sendmsg call, so a blocked attempt is
+# seen too.
 #
 # Usage: build/ci/no-outbound.sh <cockroach binary>
 # Needs root, unshare, ip, strace and curl.

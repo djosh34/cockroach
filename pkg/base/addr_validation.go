@@ -26,8 +26,7 @@ import (
 //   - the host part of Addr and HTTPAddr is resolved to an IP address
 //     if specified (it stays blank if blank to mean "all addresses").
 //   - the host part of AdvertiseAddr is filled in if blank, either
-//     from Addr if non-empty or os.Hostname(). It is also checked
-//     for resolvability.
+//     from Addr if non-empty or os.Hostname().
 //   - non-numeric port numbers are resolved to numeric.
 //
 // The addresses fields must be guaranteed by the caller to either be
@@ -125,10 +124,7 @@ func validateAdvertiseAddr(
 			// "listen on all addresses"), use that.
 			advHost = listenHost
 		} else {
-			// No specific listen address, use the canonical host name. It is
-			// not looked up here: a node makes no DNS query the operator did
-			// not ask for, and the name comes from the machine, so it has no
-			// typo to catch.
+			// No specific listen address, use the canonical host name.
 			var err error
 			advHost, err = os.Hostname()
 			if err != nil {
