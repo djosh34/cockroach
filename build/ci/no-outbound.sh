@@ -6,7 +6,7 @@
 # seen too.
 #
 # Usage: build/ci/no-outbound.sh <cockroach binary>
-# Needs root, unshare, ip, strace and curl.
+# Needs root, unshare, ip, hostname, strace and curl.
 set -euo pipefail
 
 bin=$(realpath "${1:?usage: build/ci/no-outbound.sh <cockroach binary>}")
