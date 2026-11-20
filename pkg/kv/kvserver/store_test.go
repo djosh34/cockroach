@@ -4178,4 +4178,9 @@ func TestSplitPreApplyKeepsHardStateOfNewerRHS(t *testing.T) {
 	hs, err := sl.LoadHardState(ctx, tc.engine)
 	require.NoError(t, err)
 	require.Equal(t, uint64(6), hs.Term)
+	// The truncated state the split staged for the RHS is removed; the newer
+	// replica is not initialized and has none.
+	ts, err := sl.LoadRaftTruncatedState(ctx, tc.engine)
+	require.NoError(t, err)
+	require.Equal(t, kvserverpb.RaftTruncatedState{}, ts)
 }

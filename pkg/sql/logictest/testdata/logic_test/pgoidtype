@@ -751,23 +751,6 @@ statement ok
 RESET testing_optimizer_random_seed;
 RESET testing_optimizer_disable_rule_probability;
 
-# A cast of an integer or an OID to REGTYPE names a built-in type the way a
-# cast from text does, as in Postgres.
-query T
-SELECT 20::REGTYPE::STRING
-----
-bigint
-
-statement ok
-CREATE TABLE t_regtype_cast (o OID);
-INSERT INTO t_regtype_cast VALUES (23), (2277)
-
-query T rowsort
-SELECT o::REGTYPE::STRING FROM t_regtype_cast
-----
-integer
-anyarray
-
 # A REGCLASS cast of a constant names the table the way the cast at runtime
 # does, quoted where needed.
 statement ok

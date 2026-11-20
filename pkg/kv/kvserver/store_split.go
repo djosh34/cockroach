@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/cockroachdb/cockroach/pkg/keys"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/kvstorage"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/load"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/stateloader"
@@ -69,9 +70,10 @@ func splitPreApply(
 		// the LHS due to the split and additionally clear all of the range ID local
 		// replicated state that the split trigger writes into the RHS.
 		//
-		// The unreplicated range ID local state, such as the HardState and the
-		// RaftReplicaID, belongs to the newer replica (or the tombstone of a
-		// removed one) and is left alone: the split batch writes none of it.
+		// Of the unreplicated range ID local state, the split batch writes only
+		// the initial RaftTruncatedState of the RHS, which is removed below. The
+		// rest, such as the HardState and the RaftReplicaID, belongs to the newer
+		// replica (or is the tombstone of a removed one) and is left alone.
 		// Clearing it and writing back the HardState read here could roll back
 		// the HardState of the newer replica, which may vote or learn a higher
 		// term after raftMu is released and before this batch is applied.
@@ -94,6 +96,13 @@ func splitPreApply(
 			ClearReplicatedByRangeID: true,
 		}); err != nil {
 			log.Fatalf(ctx, "failed to clear range data for removed rhs: %v", err)
+		}
+		// The newer replica is not initialized, so this truncated state is the
+		// one the split staged, not its own.
+		if err := readWriter.ClearUnversioned(
+			keys.RaftTruncatedStateKey(split.RightDesc.RangeID), storage.ClearOptions{},
+		); err != nil {
+			log.Fatalf(ctx, "failed to clear raft truncated state for removed rhs: %v", err)
 		}
 		return
 	}

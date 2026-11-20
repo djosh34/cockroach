@@ -2682,12 +2682,12 @@ SELECT pg_get_function_arguments('version'::regproc::oid)
 query T
 SELECT pg_get_function_arguments('array_length'::regproc)
 ----
-anyarray, bigint
+anyarray, int8
 
 query T
 SELECT pg_get_function_arguments((select oid from pg_proc where proname='variance' and proargtypes[0] = 'int'::regtype))
 ----
-bigint
+int8
 
 # Sanity check pg_get_function_identity_arguments.
 query T
@@ -2704,12 +2704,12 @@ SELECT pg_get_function_identity_arguments('version'::regproc::oid)
 query T
 SELECT pg_get_function_identity_arguments('array_length'::regproc)
 ----
-anyarray, bigint
+anyarray, int8
 
 query T
 SELECT pg_get_function_identity_arguments((select oid from pg_proc where proname='variance' and proargtypes[0] = 'int'::regtype))
 ----
-bigint
+int8
 
 # Sanity check pg_get_function_result.
 

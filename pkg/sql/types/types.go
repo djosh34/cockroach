@@ -1599,10 +1599,6 @@ func (t *T) SQLStandardNameWithTypmod(haveTypmod bool, typmod int) string {
 		case oid.T_int2vector:
 			return "int2vector"
 		}
-		if t.ArrayContents().Family() == AnyFamily {
-			// The name Postgres gives the type.
-			return "anyarray"
-		}
 		// If we have a typemod specified then pass it down when
 		// formatting the array type.
 		if !haveTypmod {
