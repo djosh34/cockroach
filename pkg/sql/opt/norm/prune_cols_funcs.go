@@ -183,7 +183,12 @@ func (c *CustomFuncs) NeededMutationFetchCols(
 				predFilters := *pred.(*memo.FiltersExpr)
 				indexAndPredCols.UnionWith(predFilters.OuterCols())
 			}
-			if !indexAndPredCols.Intersects(updateCols) {
+			// An index that is being added or dropped, such as the temporary
+			// index of a backfill, gets every row an UPDATE writes, whether or
+			// not its columns change. So its columns are always needed;
+			// without them it would get NULLs.
+			isMutationIndex := i >= tabMeta.Table.IndexCount()
+			if !indexAndPredCols.Intersects(updateCols) && !isMutationIndex {
 				continue
 			}
 

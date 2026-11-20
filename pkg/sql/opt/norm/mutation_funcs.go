@@ -105,10 +105,14 @@ func (c *CustomFuncs) SimplifiablePartialIndexProjectCols(
 		// columns have been mapped to their source columns. Virtual columns
 		// are never part of the updated columns. Updates to source columns
 		// trigger index changes.
+		//
+		// An index that is being added or dropped, such as the temporary index
+		// of a backfill, gets every row an UPDATE writes, so its PUT and DEL
+		// columns are never simplified either.
 		predFilters := *pred.(*memo.FiltersExpr)
 		indexAndPredCols := tabMeta.IndexColumnsMapInverted(i)
 		indexAndPredCols.UnionWith(predFilters.OuterCols())
-		if indexAndPredCols.Intersects(updateCols) {
+		if indexAndPredCols.Intersects(updateCols) || i >= tabMeta.Table.IndexCount() {
 			continue
 		}
 
