@@ -563,12 +563,14 @@ func addChangedOwnDefaultPrivileges(
 		return
 	}
 	var fixes []string
-	for _, object := range []privilege.TargetObjectType{
-		privilege.Tables, privilege.Sequences, privilege.Types, privilege.Schemas,
-	} {
+	for _, object := range catprivilege.RoleTargetObjects {
 		if !catprivilege.GetRoleHasAllPrivilegesOnTargetObject(defaultPrivilegesForRole, object) {
-			fixes = append(fixes, fmt.Sprintf("GRANT ALL ON %s TO %s",
-				strings.ToUpper(object.String()), role.SQLIdentifier()))
+			name := strings.ToUpper(object.String())
+			if object == privilege.Routines {
+				// The syntax of ALTER DEFAULT PRIVILEGES names them FUNCTIONS.
+				name = "FUNCTIONS"
+			}
+			fixes = append(fixes, fmt.Sprintf("GRANT ALL ON %s TO %s", name, role.SQLIdentifier()))
 		}
 	}
 	if !catprivilege.GetPublicHasUsageOnTypes(defaultPrivilegesForRole) {

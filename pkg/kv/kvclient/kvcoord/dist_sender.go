@@ -2131,8 +2131,11 @@ func maybeSetResumeSpan(
 		key := req.Header().Key
 		rKey, err := keys.Addr(key)
 		if err != nil {
-			// The batch was routed by this key, so it is addressable.
-			rKey = roachpb.RKey(key)
+			// The batch was routed by this key, so this does not happen. If it
+			// did, we could not tell whether the request ran, so it is resumed:
+			// running a point request again is safe, skipping it is not.
+			hdr.ResumeSpan = &roachpb.Span{Key: key}
+			return
 		}
 		if isReverse {
 			if !nextKey.Less(rKey) {

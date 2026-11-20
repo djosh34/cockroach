@@ -319,6 +319,12 @@ SELECT 'f'::CHAR = 'f ', 'f '::CHAR(2) = 'f  ', 'f  ' = 'f'::CHAR, 'f'::CHAR(1) 
 ----
 true  true  true  false
 
+# Patterns keep their trailing spaces, as in Postgres.
+query BB
+SELECT 'f'::CHAR LIKE 'f ', 'f'::CHAR ~ 'f '
+----
+false  false
+
 # The result of CASE, COALESCE and IF keeps a type width only if every branch
 # has it, so no branch is truncated to the width of another.
 query TTTTTT

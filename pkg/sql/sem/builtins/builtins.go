@@ -10897,24 +10897,32 @@ func makeDateTime(
 	if year == 0 {
 		return time.Time{}, pgerror.New(pgcode.DatetimeFieldOverflow, "year value of 0 is not valid")
 	}
-	outOfRange := pgerror.Newf(pgcode.DatetimeFieldOverflow,
-		"date/time field value out of range: %d-%02d-%02d %02d:%02d:%v", year, month, day, hour, min, sec)
+	inputYear := year
+	outOfRange := func() error {
+		return pgerror.Newf(pgcode.DatetimeFieldOverflow,
+			"date/time field value out of range: %d-%02d-%02d %02d:%02d:%v", inputYear, month, day, hour, min, sec)
+	}
 	if year < 0 {
 		// Go counts years astronomically: year 0 is 1 BC.
 		year++
 	}
 	if month < 1 || month > 12 || day < 1 ||
 		day > time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC).Day() {
-		return time.Time{}, outOfRange
+		return time.Time{}, outOfRange()
 	}
 	// Like Postgres, allow 24:00:00 and a leap second.
 	if hour < 0 || hour > 24 || min < 0 || min > 59 || !(sec >= 0 && sec <= 60) ||
 		(hour == 24 && (min != 0 || sec != 0)) {
-		return time.Time{}, outOfRange
+		return time.Time{}, outOfRange()
 	}
 	wholeSec := math.Floor(sec)
 	nsec := math.Round((sec - wholeSec) * float64(time.Second))
-	return time.Date(year, time.Month(month), day, hour, min, int(wholeSec), int(nsec), loc), nil
+	t := time.Date(year, time.Month(month), day, hour, min, int(wholeSec), int(nsec), loc)
+	// A year too large for time.Date wraps around instead of failing.
+	if t.Year() != year && !(hour == 24 && t.Year() == year+1) {
+		return time.Time{}, outOfRange()
+	}
+	return t, nil
 }
 
 func makeTimestampStatementBuiltinOverload(withOutputTZ bool, withInputTZ bool) tree.Overload {

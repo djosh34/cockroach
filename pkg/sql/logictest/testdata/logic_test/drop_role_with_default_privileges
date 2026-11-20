@@ -176,6 +176,24 @@ REVOKE own_defaults FROM root
 statement ok
 DROP ROLE own_defaults
 
+# The same holds for functions.
+statement ok
+CREATE ROLE own_function_defaults;
+GRANT own_function_defaults TO root;
+ALTER DEFAULT PRIVILEGES FOR ROLE own_function_defaults REVOKE ALL ON FUNCTIONS FROM own_function_defaults;
+REVOKE own_function_defaults FROM root
+
+statement error pq: role own_function_defaults cannot be dropped because some objects depend on it\nowner of changed default privileges on its own new objects in database testdb2
+DROP ROLE own_function_defaults
+
+statement ok
+GRANT own_function_defaults TO root;
+ALTER DEFAULT PRIVILEGES FOR ROLE own_function_defaults GRANT ALL ON FUNCTIONS TO own_function_defaults;
+REVOKE own_function_defaults FROM root
+
+statement ok
+DROP ROLE own_function_defaults
+
 # A role that grants itself default privileges it already has leaves no
 # default privileges behind, so nothing refers to it after DROP ROLE.
 statement ok

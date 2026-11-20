@@ -2581,16 +2581,21 @@ func typeCheckComparisonOp(
 
 	// An untyped string compared with a CHAR value is a CHAR value too, so its
 	// trailing spaces are not significant: 'f'::CHAR = 'f ' is true, as in
-	// Postgres.
-	for i := range typedSubExprs {
-		str, isStr := s.exprs[i].(*StrVal)
-		if isStr && typedSubExprs[i].ResolvedType().Family() == types.StringFamily &&
-			typedSubExprs[1-i].ResolvedType().Oid() == oid.T_bpchar {
-			typed, err := str.ResolveAsType(ctx, semaCtx, types.MakeChar(0))
-			if err != nil {
-				return nil, nil, nil, false, err
+	// Postgres. This applies only to plain comparisons; patterns such as
+	// those of LIKE and regular expressions keep their spaces.
+	switch foldedOp.Symbol {
+	case treecmp.EQ, treecmp.NE, treecmp.LT, treecmp.LE, treecmp.GT, treecmp.GE,
+		treecmp.IsDistinctFrom, treecmp.IsNotDistinctFrom:
+		for i := range typedSubExprs {
+			str, isStr := s.exprs[i].(*StrVal)
+			if isStr && typedSubExprs[i].ResolvedType().Family() == types.StringFamily &&
+				typedSubExprs[1-i].ResolvedType().Oid() == oid.T_bpchar {
+				typed, err := str.ResolveAsType(ctx, semaCtx, types.MakeChar(0))
+				if err != nil {
+					return nil, nil, nil, false, err
+				}
+				typedSubExprs[i] = typed
 			}
-			typedSubExprs[i] = typed
 		}
 	}
 

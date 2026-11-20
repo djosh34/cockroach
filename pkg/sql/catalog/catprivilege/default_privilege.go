@@ -127,9 +127,7 @@ func (d *Mutable) GrantDefaultPrivileges(
 	// ALTER DEFAULT PRIVILEGES FOR ROLE r GRANT INSERT ON TABLES TO r, ends in
 	// the default state. Keeping the entry would leave a reference to the role
 	// behind when it is dropped.
-	if !role.ForAllRoles {
-		d.removeIfDefault(role, defaultPrivilegesForRole)
-	}
+	d.removeIfDefault(role, defaultPrivilegesForRole)
 	return nil
 }
 
@@ -152,6 +150,24 @@ func (d *Mutable) RevokeDefaultPrivileges(
 	return nil
 }
 
+// RoleTargetObjects are the target objects on which the role of database
+// default privileges has all privileges in the default state.
+var RoleTargetObjects = []privilege.TargetObjectType{
+	privilege.Tables, privilege.Sequences, privilege.Types, privilege.Schemas, privilege.Routines,
+}
+
+// hasDefaultFlags returns true if the flags of the database default
+// privileges of an explicit role are in the default state.
+func hasDefaultFlags(defaultPrivilegesForRole *catpb.DefaultPrivilegesForRole) bool {
+	for _, object := range RoleTargetObjects {
+		if !GetRoleHasAllPrivilegesOnTargetObject(defaultPrivilegesForRole, object) {
+			return false
+		}
+	}
+	return GetPublicHasUsageOnTypes(defaultPrivilegesForRole) &&
+		GetPublicHasExecuteOnFunctions(defaultPrivilegesForRole)
+}
+
 // removeIfDefault removes the default privileges of role if they grant
 // nothing beyond the default state.
 func (d *Mutable) removeIfDefault(
@@ -169,12 +185,7 @@ func (d *Mutable) removeIfDefault(
 	// If the DefaultPrivilegeDescriptor is defined on a schema, the flags are
 	// not used and have no meaning.
 	if defaultPrivilegesForRole.IsExplicitRole() && d.IsDatabaseDefaultPrivilege() &&
-		(!GetRoleHasAllPrivilegesOnTargetObject(defaultPrivilegesForRole, privilege.Tables) ||
-			!GetRoleHasAllPrivilegesOnTargetObject(defaultPrivilegesForRole, privilege.Sequences) ||
-			!GetRoleHasAllPrivilegesOnTargetObject(defaultPrivilegesForRole, privilege.Types) ||
-			!GetRoleHasAllPrivilegesOnTargetObject(defaultPrivilegesForRole, privilege.Schemas) ||
-			!GetPublicHasUsageOnTypes(defaultPrivilegesForRole) ||
-			!GetPublicHasExecuteOnFunctions(defaultPrivilegesForRole)) {
+		!hasDefaultFlags(defaultPrivilegesForRole) {
 		return
 	}
 

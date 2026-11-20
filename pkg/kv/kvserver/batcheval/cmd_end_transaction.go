@@ -189,6 +189,11 @@ func declareKeysEndTxn(
 				latchSpans.AddNonMVCC(spanset.SpanReadWrite, roachpb.Span{
 					Key: keys.RangeGCHintKey(mt.LeftDesc.RangeID),
 				})
+				// Merge raises the GC threshold of the LHS to that of the RHS if it
+				// is higher.
+				latchSpans.AddNonMVCC(spanset.SpanReadWrite, roachpb.Span{
+					Key: keys.RangeGCThresholdKey(mt.LeftDesc.RangeID),
+				})
 
 				// Merges need to adjust MVCC stats for merged MVCC range tombstones
 				// that straddle the ranges, by peeking to the left and right of the RHS

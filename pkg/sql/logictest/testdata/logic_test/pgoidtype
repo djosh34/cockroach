@@ -767,3 +767,15 @@ SELECT o::REGTYPE::STRING FROM t_regtype_cast
 ----
 integer
 anyarray
+
+# A REGCLASS cast of a constant names the table the way the cast at runtime
+# does, quoted where needed.
+statement ok
+CREATE TABLE "Case T" (a INT);
+CREATE TABLE t_regclass_names (n STRING);
+INSERT INTO t_regclass_names VALUES ('"Case T"')
+
+query TT
+SELECT '"Case T"'::REGCLASS::TEXT, (SELECT n::REGCLASS::TEXT FROM t_regclass_names)
+----
+'"Case T"'  '"Case T"'

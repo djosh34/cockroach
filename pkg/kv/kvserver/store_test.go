@@ -4128,3 +4128,54 @@ func BenchmarkStoreGetReplica(b *testing.B) {
 		}
 	})
 }
+
+// TestSplitPreApplyKeepsHardStateOfNewerRHS checks that applying a split
+// whose RHS replica on this store is newer than the split leaves the raft
+// state of that replica alone. The split used to write back the HardState it
+// read, so a vote of the newer replica between staging and applying the split
+// batch was rolled back.
+func TestSplitPreApplyKeepsHardStateOfNewerRHS(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	defer log.Scope(t).Close(t)
+
+	ctx := context.Background()
+	stopper := stop.NewStopper()
+	defer stopper.Stop(ctx)
+	tc := testContext{}
+	tc.Start(ctx, t, stopper)
+
+	// The RHS replica on this store has replica ID 7, newer than the replica
+	// ID 2 the split gives it.
+	const rhsRangeID = 42
+	rightRepl, _, err := tc.store.getOrCreateReplica(ctx, rhsRangeID, 7, &roachpb.ReplicaDescriptor{
+		NodeID: tc.store.NodeID(), StoreID: tc.store.StoreID(), ReplicaID: 7,
+	})
+	require.NoError(t, err)
+	// getOrCreateReplica returns the replica with raftMu held.
+	rightRepl.raftMu.Unlock()
+	sl := stateloader.Make(rhsRangeID)
+	require.NoError(t, sl.SetHardState(ctx, tc.engine, raftpb.HardState{Term: 5, Vote: 7}))
+
+	leftDesc := *tc.repl.Desc()
+	leftDesc.EndKey = roachpb.RKey("m")
+	rightDesc := roachpb.RangeDescriptor{
+		RangeID:  rhsRangeID,
+		StartKey: roachpb.RKey("m"),
+		EndKey:   roachpb.RKeyMax,
+		InternalReplicas: []roachpb.ReplicaDescriptor{{
+			NodeID: tc.store.NodeID(), StoreID: tc.store.StoreID(), ReplicaID: 2,
+		}},
+		NextReplicaID: 3,
+	}
+	batch := tc.engine.NewBatch()
+	defer batch.Close()
+	splitPreApply(ctx, tc.repl, batch, roachpb.SplitTrigger{LeftDesc: leftDesc, RightDesc: rightDesc}, nil /* initClosedTS */)
+
+	// The newer replica votes in a higher term before the split batch applies.
+	require.NoError(t, sl.SetHardState(ctx, tc.engine, raftpb.HardState{Term: 6, Vote: 7}))
+	require.NoError(t, batch.Commit(false /* sync */))
+
+	hs, err := sl.LoadHardState(ctx, tc.engine)
+	require.NoError(t, err)
+	require.Equal(t, uint64(6), hs.Term)
+}
