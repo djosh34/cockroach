@@ -104,11 +104,6 @@ func (f *wrap) ExpectedInitialRangeCount() (int, error) {
 	return f.fwStorageLayerInterface("ExpectedInitialRangeCount").ExpectedInitialRangeCount()
 }
 
-// UpdateChecker is part of the interface StorageLayerInterface.
-func (f *wrap) UpdateChecker() interface{} {
-	return f.fwStorageLayerInterface("UpdateChecker").UpdateChecker()
-}
-
 // ScratchRange is part of the interface StorageLayerInterface.
 func (f *wrap) ScratchRange() (roachpb.Key, error) {
 	return f.fwStorageLayerInterface("ScratchRange").ScratchRange()

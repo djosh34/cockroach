@@ -957,7 +957,7 @@ func (c *stmtEnvCollector) PrintClusterSettings(w io.Writer, all bool) error {
 			// Ignore some settings that might differ from their default values
 			// but aren't useful in stmt bundles.
 			switch *setting {
-			case "cluster.secret", "diagnostics.reporting.enabled", "version":
+			case "cluster.secret", "version":
 				skip = true
 			}
 			if buildutil.CrdbTestBuild {

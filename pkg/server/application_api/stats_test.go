@@ -18,15 +18,14 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
-	"github.com/cockroachdb/cockroach/pkg/server"
 	"github.com/cockroachdb/cockroach/pkg/server/diagnostics"
 	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
+	"github.com/cockroachdb/cockroach/pkg/server/telemetry"
 	"github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/appstatspb"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlstats"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlstats/persistedsqlstats"
 	"github.com/cockroachdb/cockroach/pkg/testutils"
-	"github.com/cockroachdb/cockroach/pkg/testutils/diagutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/serverutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/sqlutils"
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
@@ -42,16 +41,6 @@ func TestTelemetrySQLStatsIndependence(t *testing.T) {
 	ctx := context.Background()
 	var params base.TestServerArgs
 	params.Knobs.SQLStatsKnobs = sqlstats.CreateTestingKnobs()
-
-	r := diagutils.NewServer()
-	defer r.Close()
-
-	url := r.URL()
-	params.Knobs.Server = &server.TestingKnobs{
-		DiagnosticsTestingKnobs: diagnostics.TestingKnobs{
-			OverrideReportingURL: &url,
-		},
-	}
 
 	srv, sqlDB, _ := serverutils.StartServer(t, params)
 	defer srv.Stopper().Stop(ctx)
@@ -75,11 +64,11 @@ CREATE TABLE t.test (x INT PRIMARY KEY);
 	if _, err := sqlDB.Exec(`INSERT INTO t.test VALUES ($1)`, 1); err != nil {
 		t.Fatal(err)
 	}
-	s.DiagnosticsReporter().(*diagnostics.Reporter).ReportDiagnostics(ctx)
+	s.DiagnosticsReporter().(*diagnostics.Reporter).CreateReport(ctx, telemetry.ResetCounts)
 	if _, err := sqlDB.Exec(`INSERT INTO t.test VALUES ($1)`, 2); err != nil {
 		t.Fatal(err)
 	}
-	s.DiagnosticsReporter().(*diagnostics.Reporter).ReportDiagnostics(ctx)
+	s.DiagnosticsReporter().(*diagnostics.Reporter).CreateReport(ctx, telemetry.ResetCounts)
 
 	// Ensure that our SQL statement data was not affected by the telemetry report.
 	stats, err := sqlServer.GetScrubbedStmtStats(ctx)

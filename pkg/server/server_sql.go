@@ -1329,23 +1329,15 @@ func newSQLServer(ctx context.Context, cfg sqlServerArgs) (*SQLServer, error) {
 	)
 
 	reporter := &diagnostics.Reporter{
-		StartTime:        timeutil.Now(),
-		AmbientCtx:       &cfg.AmbientCtx,
-		Config:           cfg.BaseConfig.Config,
-		Settings:         cfg.Settings,
-		StorageClusterID: cfg.rpcContext.StorageClusterID.Get,
-		LogicalClusterID: clusterIDForSQL.Get,
-		TenantID:         cfg.rpcContext.TenantID,
-		SQLInstanceID:    cfg.nodeIDContainer.SQLInstanceID,
-		SQLServer:        pgServer.SQLServer,
-		InternalExec:     cfg.circularInternalExecutor,
-		DB:               cfg.db,
-		Recorder:         cfg.recorder,
-		Locality:         cfg.Locality,
-	}
-
-	if cfg.TestingKnobs.Server != nil {
-		reporter.TestingKnobs = &cfg.TestingKnobs.Server.(*TestingKnobs).DiagnosticsTestingKnobs
+		StartTime:     timeutil.Now(),
+		Settings:      cfg.Settings,
+		TenantID:      cfg.rpcContext.TenantID,
+		SQLInstanceID: cfg.nodeIDContainer.SQLInstanceID,
+		SQLServer:     pgServer.SQLServer,
+		InternalExec:  cfg.circularInternalExecutor,
+		DB:            cfg.db,
+		Recorder:      cfg.recorder,
+		Locality:      cfg.Locality,
 	}
 
 	startedWithExplicitVModule := log.GetVModule() != ""
@@ -1874,13 +1866,6 @@ func checkServerModeMatchesEntry(
 // reused once an instance is stopped.
 func (s *SQLServer) SQLInstanceID() base.SQLInstanceID {
 	return s.sqlIDContainer.SQLInstanceID()
-}
-
-// StartDiagnostics starts periodic diagnostics reporting.
-// NOTE: This is not called in preStart so that it's disabled by default for
-// testing.
-func (s *SQLServer) StartDiagnostics(ctx context.Context) {
-	s.diagnosticsReporter.PeriodicallyReportDiagnostics(ctx, s.stopper)
 }
 
 // AnnotateCtx annotates the given context with the server tracer and tags.

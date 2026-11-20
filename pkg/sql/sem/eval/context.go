@@ -22,7 +22,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/keys"
 	"github.com/cockroachdb/cockroach/pkg/kv"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvpb"
-	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/concurrency/isolation"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/kvserverbase"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
@@ -80,8 +79,6 @@ type Context struct {
 	// TxnIsSingleStmt specifies the current implicit transaction consists of only
 	// a single statement.
 	TxnIsSingleStmt bool
-	// TxnIsoLevel is the isolation level of the current transaction.
-	TxnIsoLevel isolation.Level
 
 	Settings *cluster.Settings
 	// ClusterID is the logical cluster ID for this tenant.
@@ -522,14 +519,6 @@ func (ec *Context) GetStmtTimestamp() time.Time {
 func (ec *Context) GetClusterTimestamp() (*tree.DDecimal, error) {
 	if ec.Txn == nil {
 		return nil, ErrNilTxnInClusterContext
-	}
-
-	// CommitTimestamp panics for isolation levels that can operate across
-	// multiple timestamps. Prevent this with a gate at the SQL level and return
-	// a pgerror until we decide how this will officially behave. See #103245.
-	if ec.TxnIsoLevel.ToleratesWriteSkew() {
-		treeIso := tree.IsolationLevelFromKVTxnIsolationLevel(ec.TxnIsoLevel)
-		return nil, pgerror.Newf(pgcode.FeatureNotSupported, "unsupported in %s isolation", treeIso.String())
 	}
 
 	ts, err := ec.Txn.CommitTimestamp()

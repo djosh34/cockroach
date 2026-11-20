@@ -1,9 +1,6 @@
 # LogicTest: local
 
 statement ok
-SET CLUSTER SETTING sql.txn.read_committed_isolation.enabled = true
-
-statement ok
 CREATE TABLE kv (k INT PRIMARY KEY, v INT, FAMILY (k, v))
 
 query T
@@ -69,7 +66,8 @@ quality of service: regular
   table: kv@kv_pkey
   spans: [/2 - ]
 
-# Test that non-default isolation level, priority, and QoS are correct.
+# Test that non-default priority and QoS are correct. Every transaction runs
+# SERIALIZABLE, so the requested READ COMMITTED shows as serializable.
 
 statement ok
 SET default_transaction_quality_of_service = background
@@ -84,12 +82,12 @@ planning time: 10µs
 execution time: 100µs
 distribution: <hidden>
 vectorized: <hidden>
-plan type: generic, re-optimized
+plan type: generic, reused
 rows decoded from KV: 3 (24 B, 6 KVs, 3 gRPC calls)
 maximum memory usage: <hidden>
 network usage: <hidden>
 regions: <hidden>
-isolation level: read committed
+isolation level: serializable
 priority: low
 quality of service: background
 ·

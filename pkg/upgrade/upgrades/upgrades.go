@@ -28,8 +28,7 @@ import (
 // an explicit value for a setting, effectively changing the "default value"
 // from what was defined in code.
 var SettingsDefaultOverrides = map[settings.InternalKey]string{
-	"diagnostics.reporting.enabled": "true",
-	"cluster.secret":                "<random>",
+	"cluster.secret": "<random>",
 }
 
 // GetUpgrade returns the upgrade corresponding to this version if
@@ -61,10 +60,12 @@ var upgrades = []upgradebase.Upgrade{
 		// startupmigrations, out of which "make root a member..." is the last one.
 		"make root a member of the admin role",
 	),
+	// Diagnostics reporting is removed. This upgrade used to turn it on; it
+	// stays, doing nothing, so the sequence of upgrades does not change.
 	upgrade.NewPermanentTenantUpgrade(
 		"enable diagnostics reporting",
 		toCV(clusterversion.VPrimordial2),
-		optInToDiagnosticsStatReporting,
+		NoTenantUpgradeFunc,
 		"enable diagnostics reporting", // v22_2StartupMigrationName
 	),
 	upgrade.NewPermanentSystemUpgrade(

@@ -12,7 +12,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -82,7 +81,6 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/logtags"
 	"github.com/cockroachdb/redact"
-	sentry "github.com/getsentry/sentry-go"
 )
 
 // SQLServerWrapper is a utility struct that encapsulates
@@ -690,18 +688,6 @@ func (s *SQLServerWrapper) PreStart(ctx context.Context) error {
 	// Signal server readiness to the caller.
 	onSuccessfulReturnFn()
 
-	// Configure the Sentry reporter to add some additional context to reports.
-	//
-	// NB: In (*Server).PreStart(), we can also configure the cluster ID
-	// and node ID in Sentry reports as early as this point.
-	// However, for a secondary tenant we must wait on sqlServer.preStart()
-	// to add this information. See below.
-	sentry.ConfigureScope(func(scope *sentry.Scope) {
-		scope.SetTags(map[string]string{
-			"engine_type": s.sqlServer.cfg.StorageEngine.String(),
-		})
-	})
-
 	// Init a log metrics registry.
 	logRegistry := logmetrics.NewRegistry()
 	if logRegistry == nil {
@@ -845,10 +831,6 @@ func (s *SQLServerWrapper) PreStart(ctx context.Context) error {
 		return err
 	}
 
-	// If enabled, start reporting diagnostics.
-	if s.sqlServer.cfg.StartDiagnosticsReporting && !cluster.TelemetryOptOut {
-		s.startDiagnostics(workersCtx)
-	}
 	// Enable the Obs Server.
 	// There is more logic here than in (*Server).PreStart() because
 	// we care about the SQL instance ID too.
@@ -868,15 +850,6 @@ func (s *SQLServerWrapper) PreStart(ctx context.Context) error {
 	if err := s.eventsExporter.Start(ctx, s.stopper); err != nil {
 		return errors.Wrap(err, "failed to start the event exporter")
 	}
-
-	// Add more context to the Sentry reporter.
-	sentry.ConfigureScope(func(scope *sentry.Scope) {
-		scope.SetTags(map[string]string{
-			"cluster":   clusterID.String(),
-			"instance":  instanceID.String(),
-			"server_id": fmt.Sprintf("%s-%s", clusterID.Short(), instanceID.String()),
-		})
-	})
 
 	// externalUsageFn measures the CPU time, for use by tenant
 	// resource usage accounting in costController.Start below.
@@ -1042,12 +1015,6 @@ func (s *SQLServerWrapper) PGServer() *pgwire.Server {
 // Used in cli/mt_start_sql.go.
 func (s *SQLServerWrapper) LogicalClusterID() uuid.UUID {
 	return s.sqlServer.LogicalClusterID()
-}
-
-// startDiagnostics begins the diagnostic loop of this tenant server.
-// Used in cli/mt_start_sql.go.
-func (s *SQLServerWrapper) startDiagnostics(ctx context.Context) {
-	s.sqlServer.StartDiagnostics(ctx)
 }
 
 // InitialStart implements cli.serverStartupInterface. For SQL-only servers,

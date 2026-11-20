@@ -22,26 +22,25 @@ import (
 	"text/tabwriter"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
-	"github.com/cockroachdb/cockroach/pkg/server"
 	"github.com/cockroachdb/cockroach/pkg/server/diagnostics"
+	"github.com/cockroachdb/cockroach/pkg/server/diagnostics/diagnosticspb"
+	"github.com/cockroachdb/cockroach/pkg/server/telemetry"
 	"github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/appstatspb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlstats/persistedsqlstats"
 	"github.com/cockroachdb/cockroach/pkg/testutils"
-	"github.com/cockroachdb/cockroach/pkg/testutils/diagutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/serverutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/skip"
 	"github.com/cockroachdb/cockroach/pkg/testutils/sqlutils"
-	"github.com/cockroachdb/cockroach/pkg/util/cloudinfo"
 	"github.com/cockroachdb/cockroach/pkg/util/treeprinter"
 	"github.com/cockroachdb/datadriven"
 	"github.com/cockroachdb/errors"
 )
 
 // TelemetryTest runs the datadriven telemetry tests. The test sets up a
-// database and a testing diagnostics reporting server. The test implements the
+// database and reads the local diagnostics report. The test implements the
 // following data-driven commands:
 //
 //   - exec
@@ -60,13 +59,13 @@ import (
 //   - feature-usage, feature-counters
 //
 //     Executes SQL statements and then outputs the feature counters from the
-//     feature-list that have been reported to the diagnostic server. The first
+//     feature-list that are in the diagnostics report. The first
 //     variant outputs only the names of the counters that changed; the second
 //     variant outputs the counts as well. It is necessary to use
 //     feature-list before these commands to avoid test flakes (e.g. because
 //     of counters that are changed by looking up descriptors).
 //     TODO(yuzefovich): counters currently don't really work because they are
-//     reset before executing every statement by reporter.ReportDiagnostics.
+//     reset before executing every statement by the report.
 //
 //   - schema
 //
@@ -86,9 +85,6 @@ func TelemetryTest(t *testing.T, serverArgs []base.TestServerArgs, testTenant bo
 	// Note: these tests cannot be run in parallel (with each other or with other
 	// tests) because telemetry counters are global.
 	datadriven.Walk(t, "testdata/telemetry", func(t *testing.T, path string) {
-		// Disable cloud info reporting (it would make these tests really slow).
-		defer cloudinfo.Disable()()
-
 		var test telemetryTest
 		test.Start(t, serverArgs)
 		defer test.Close()
@@ -102,7 +98,7 @@ func TelemetryTest(t *testing.T, serverArgs []base.TestServerArgs, testTenant bo
 			datadriven.RunTest(t, path, func(t *testing.T, td *datadriven.TestData) string {
 				reporter := test.server.DiagnosticsReporter().(*diagnostics.Reporter)
 				statsController := test.server.SQLServer().(*sql.Server).GetSQLStatsController()
-				return test.RunTest(td, test.serverDB, reporter.ReportDiagnostics, statsController)
+				return test.RunTest(td, test.serverDB, reporter, statsController)
 			})
 		})
 
@@ -112,7 +108,7 @@ func TelemetryTest(t *testing.T, serverArgs []base.TestServerArgs, testTenant bo
 				datadriven.RunTest(t, path, func(t *testing.T, td *datadriven.TestData) string {
 					reporter := test.tenant.DiagnosticsReporter().(*diagnostics.Reporter)
 					statsController := test.tenant.SQLServer().(*sql.Server).GetSQLStatsController()
-					return test.RunTest(td, test.tenantDB, reporter.ReportDiagnostics, statsController)
+					return test.RunTest(td, test.tenantDB, reporter, statsController)
 				})
 			})
 		}
@@ -121,7 +117,6 @@ func TelemetryTest(t *testing.T, serverArgs []base.TestServerArgs, testTenant bo
 
 type telemetryTest struct {
 	t              *testing.T
-	diagSrv        *diagutils.Server
 	cluster        serverutils.TestClusterInterface
 	server         serverutils.TestServerInterface
 	serverDB       *gosql.DB
@@ -141,19 +136,12 @@ type rewrite struct {
 
 func (tt *telemetryTest) Start(t *testing.T, serverArgs []base.TestServerArgs) {
 	tt.t = t
-	tt.diagSrv = diagutils.NewServer()
 
 	var tempExternalIODir string
 	tempExternalIODir, tt.tempDirCleanup = testutils.TempDir(tt.t)
 
-	diagSrvURL := tt.diagSrv.URL()
 	mapServerArgs := make(map[int]base.TestServerArgs, len(serverArgs))
 	for i, v := range serverArgs {
-		v.Knobs.Server = &server.TestingKnobs{
-			DiagnosticsTestingKnobs: diagnostics.TestingKnobs{
-				OverrideReportingURL: &diagSrvURL,
-			},
-		}
 		v.ExternalIODir = tempExternalIODir
 		mapServerArgs[i] = v
 	}
@@ -180,14 +168,13 @@ func (tt *telemetryTest) Start(t *testing.T, serverArgs []base.TestServerArgs) {
 
 func (tt *telemetryTest) Close() {
 	tt.cluster.Stopper().Stop(context.Background())
-	tt.diagSrv.Close()
 	tt.tempDirCleanup()
 }
 
 func (tt *telemetryTest) RunTest(
 	td *datadriven.TestData,
 	db *gosql.DB,
-	reportDiags func(ctx context.Context),
+	reporter *diagnostics.Reporter,
 	statsController *persistedsqlstats.Controller,
 ) (out string) {
 	defer func() {
@@ -201,6 +188,13 @@ func (tt *telemetryTest) RunTest(
 		}
 	}()
 	ctx := context.Background()
+	// report builds a report, then resets the counters and the reported SQL
+	// stats, so the next report holds only what happened in between.
+	report := func() *diagnosticspb.DiagnosticReport {
+		r := reporter.CreateReport(ctx, telemetry.ResetCounts)
+		reporter.SQLServer.GetReportedSQLStatsController().ResetLocalSQLStats(ctx)
+		return r
+	}
 	switch td.Cmd {
 	case "exec":
 		_, err := db.Exec(td.Input)
@@ -213,8 +207,7 @@ func (tt *telemetryTest) RunTest(
 		return ""
 
 	case "schema":
-		reportDiags(ctx)
-		last := tt.diagSrv.LastRequestData()
+		last := report()
 		var buf bytes.Buffer
 		for i := range last.Schema {
 			buf.WriteString(formatTableDescriptor(&last.Schema[i]))
@@ -231,15 +224,13 @@ func (tt *telemetryTest) RunTest(
 
 	case "feature-usage", "feature-counters":
 		// Report diagnostics once to reset the counters.
-		reportDiags(ctx)
+		report()
 		_, err := db.Exec(td.Input)
 		var buf bytes.Buffer
 		if err != nil {
 			fmt.Fprintf(&buf, "error: %v\n", err)
 		}
-		reportDiags(ctx)
-		last := tt.diagSrv.LastRequestData()
-		usage := last.FeatureUsage
+		usage := report().FeatureUsage
 		keys := make([]string, 0, len(usage))
 		for k, v := range usage {
 			if v == 0 {
@@ -266,9 +257,9 @@ func (tt *telemetryTest) RunTest(
 		return buf.String()
 
 	case "sql-stats":
-		// Report diagnostics once to reset the stats.
+		// Reset the stats first.
 		statsController.ResetLocalSQLStats(ctx)
-		reportDiags(ctx)
+		report()
 
 		_, err := db.Exec(td.Input)
 		var buf bytes.Buffer
@@ -276,9 +267,7 @@ func (tt *telemetryTest) RunTest(
 			fmt.Fprintf(&buf, "error: %v\n", err)
 		}
 		statsController.ResetLocalSQLStats(ctx)
-		reportDiags(ctx)
-		last := tt.diagSrv.LastRequestData()
-		buf.WriteString(formatSQLStats(last.SqlStats))
+		buf.WriteString(formatSQLStats(report().SqlStats))
 		return buf.String()
 
 	case "rewrite":
@@ -304,9 +293,6 @@ func (tt *telemetryTest) RunTest(
 
 func (tt *telemetryTest) prepareCluster(db *gosql.DB) {
 	runner := sqlutils.MakeSQLRunner(db)
-	// Disable automatic reporting so it doesn't interfere with the test.
-	runner.Exec(tt.t, "SET CLUSTER SETTING diagnostics.reporting.enabled = false")
-	runner.Exec(tt.t, "SET CLUSTER SETTING diagnostics.reporting.send_crash_reports.enabled = false")
 	// Disable plan caching to get accurate counts if the same statement is
 	// issued multiple times.
 	runner.Exec(tt.t, "SET CLUSTER SETTING sql.query_cache.enabled = false")

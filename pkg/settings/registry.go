@@ -245,6 +245,13 @@ var retiredSettings = map[InternalKey]struct{}{
 	// removed with the spatial types and the UI.
 	"sql.spatial.experimental_box2d_comparison_operators.enabled": {},
 	"ui.display_timezone": {},
+
+	// removed with READ COMMITTED and SNAPSHOT isolation and the calls home.
+	"sql.txn.read_committed_isolation.enabled": {},
+	"sql.txn.snapshot_isolation.enabled":       {},
+	"diagnostics.reporting.enabled":            {},
+	"diagnostics.reporting.interval":           {},
+	"diagnostics.reporting.send_crash_reports": {},
 }
 
 // sqlDefaultSettings is the list of "grandfathered" existing sql.defaults

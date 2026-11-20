@@ -79,7 +79,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/iterutil"
 	"github.com/cockroachdb/cockroach/pkg/util/limit"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
-	"github.com/cockroachdb/cockroach/pkg/util/log/logcrash"
 	"github.com/cockroachdb/cockroach/pkg/util/metric"
 	"github.com/cockroachdb/cockroach/pkg/util/mon"
 	"github.com/cockroachdb/cockroach/pkg/util/quotapool"
@@ -3406,12 +3405,11 @@ func (s *Store) ComputeMetricsPeriodically(
 		// will not contain the log prefix.
 		log.Infof(ctx, "\n%s", m.Metrics)
 	}
-	// Periodically emit a store stats structured event to the TELEMETRY channel,
-	// if reporting is enabled. These events are intended to be emitted at low
-	// frequency. Trigger on every (N-1)-th tick to avoid spamming the telemetry
-	// channel if crash-looping.
-	if logcrash.DiagnosticsReportingEnabled.Get(&s.ClusterSettings().SV) &&
-		tick%logStoreTelemetryTicks == logStoreTelemetryTicks-1 {
+	// Periodically emit a store stats structured event to the TELEMETRY
+	// channel. These events are intended to be emitted at low frequency.
+	// Trigger on every (N-1)-th tick to avoid spamming the telemetry channel if
+	// crash-looping. An interval of zero or less turns the events off.
+	if logStoreTelemetryTicks > 0 && tick%logStoreTelemetryTicks == logStoreTelemetryTicks-1 {
 		// The stats event is populated from a subset of the Metrics.
 		e := m.AsStoreStatsEvent()
 		e.NodeId = int32(s.NodeID())

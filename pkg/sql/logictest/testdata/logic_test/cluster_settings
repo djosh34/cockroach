@@ -62,7 +62,7 @@ SHOW CLUSTER SETTING sql.defaults.default_int_size
 # Users with MODIFYCLUSTERSETTING should be able to see non sql.defaults settings.
 
 query B
-SHOW CLUSTER SETTING diagnostics.reporting.enabled
+SHOW CLUSTER SETTING sql.metrics.statement_details.enabled
 ----
 true
 
@@ -130,14 +130,14 @@ user testuser
 statement ok
 SHOW CLUSTER SETTINGS
 
-statement error pq: only users with MODIFYCLUSTERSETTING or VIEWCLUSTERSETTING privileges are allowed to show cluster setting 'diagnostics.reporting.enabled'
-SHOW CLUSTER SETTING diagnostics.reporting.enabled
+statement error pq: only users with MODIFYCLUSTERSETTING or VIEWCLUSTERSETTING privileges are allowed to show cluster setting 'sql.metrics.statement_details.enabled'
+SHOW CLUSTER SETTING sql.metrics.statement_details.enabled
 
 statement ok
 SET CLUSTER SETTING sql.defaults.default_int_size = 4
 
-statement error pq: only users with the MODIFYCLUSTERSETTING privilege are allowed to set cluster setting 'diagnostics.reporting.enabled'
-SET CLUSTER SETTING diagnostics.reporting.enabled = false
+statement error pq: only users with the MODIFYCLUSTERSETTING privilege are allowed to set cluster setting 'sql.metrics.statement_details.enabled'
+SET CLUSTER SETTING sql.metrics.statement_details.enabled = false
 
 user root
 
@@ -151,11 +151,11 @@ user testuser
 
 # Users with VIEWCLUSTERSETTING should be able to see non sql.defaults settings but not modify regardless if they have sql modify.
 
-statement error pq: only users with the MODIFYCLUSTERSETTING privilege are allowed to set cluster setting 'diagnostics.reporting.enabled'
-SET CLUSTER SETTING diagnostics.reporting.enabled = false
+statement error pq: only users with the MODIFYCLUSTERSETTING privilege are allowed to set cluster setting 'sql.metrics.statement_details.enabled'
+SET CLUSTER SETTING sql.metrics.statement_details.enabled = false
 
 query B
-SHOW CLUSTER SETTING diagnostics.reporting.enabled
+SHOW CLUSTER SETTING sql.metrics.statement_details.enabled
 ----
 true
 
@@ -167,7 +167,7 @@ REVOKE SYSTEM MODIFYSQLCLUSTERSETTING FROM testuser
 user testuser
 
 query B
-SHOW CLUSTER SETTING diagnostics.reporting.enabled
+SHOW CLUSTER SETTING sql.metrics.statement_details.enabled
 ----
 true
 

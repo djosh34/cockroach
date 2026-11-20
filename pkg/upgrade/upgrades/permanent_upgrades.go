@@ -19,7 +19,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/kv"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
-	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catalogkeys"
 	"github.com/cockroachdb/cockroach/pkg/sql/isql"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
@@ -83,19 +82,6 @@ func addRootToAdminRole(ctx context.Context, txn isql.Txn) error {
 		}
 	}
 	_, err := txn.Exec(ctx, "addRootToAdminRole", txn.KV(), upsertStmt, upsertVals...)
-	return err
-}
-
-func optInToDiagnosticsStatReporting(
-	ctx context.Context, _ clusterversion.ClusterVersion, deps upgrade.TenantDeps,
-) error {
-	// We're opting-out of the automatic opt-in. See discussion in updates.go.
-	if cluster.TelemetryOptOut {
-		return nil
-	}
-	_, err := deps.InternalExecutor.Exec(
-		ctx, "optInToDiagnosticsStatReporting", nil, /* txn */
-		`SET CLUSTER SETTING diagnostics.reporting.enabled = true`)
 	return err
 }
 

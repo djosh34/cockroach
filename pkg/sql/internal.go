@@ -19,7 +19,6 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/kv"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvpb"
-	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/concurrency/isolation"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/settings"
@@ -416,7 +415,6 @@ func (ie *InternalExecutor) newConnExecutorWithTxn(
 		txn,
 		ex.transitionCtx,
 		ex.QualityOfService(),
-		isolation.Serializable,
 	)
 
 	// Modify the Collection to match the parent executor's Collection.

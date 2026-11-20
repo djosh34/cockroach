@@ -163,6 +163,12 @@ func makeDummyBooleanSessionVar(
 	}
 }
 
+// isolationLevelNames are the isolation levels a session can ask for. Every
+// one of them runs SERIALIZABLE.
+var isolationLevelNames = []string{
+	"serializable", "snapshot", "repeatable read", "read committed", "read uncommitted",
+}
+
 // varGen is the main definition array for all session variables.
 // Note to maintainers: try to keep this sorted in the source code.
 var varGen = map[string]sessionVar{
@@ -400,50 +406,19 @@ var varGen = map[string]sessionVar{
 	// See https://www.postgresql.org/docs/10/static/runtime-config-client.html#GUC-DEFAULT-TRANSACTION-ISOLATION
 	`default_transaction_isolation`: {
 		Set: func(ctx context.Context, m sessionDataMutator, s string) error {
-			allowReadCommitted := allowReadCommittedIsolation.Get(&m.settings.SV)
-			allowSnapshot := allowSnapshotIsolation.Get(&m.settings.SV)
-			var allowedValues = []string{"serializable"}
-			if allowSnapshot {
-				allowedValues = append(allowedValues, "snapshot")
-			}
-			if allowReadCommitted {
-				allowedValues = append(allowedValues, "read committed")
-			}
+			// Every transaction runs SERIALIZABLE, so any level is accepted and
+			// stored as SERIALIZABLE.
 			level, ok := tree.IsolationLevelMap[strings.ToLower(s)]
-			originalLevel := level
-			upgraded := false
 			if !ok {
-				return newVarValueError(`default_transaction_isolation`, s, allowedValues...)
+				return newVarValueError(`default_transaction_isolation`, s, isolationLevelNames...)
 			}
-			switch level {
-			case tree.ReadUncommittedIsolation:
-				upgraded = true
-				fallthrough
-			case tree.ReadCommittedIsolation:
-				level = tree.SerializableIsolation
-				if allowReadCommitted {
-					level = tree.ReadCommittedIsolation
-				} else {
-					upgraded = true
-				}
-			case tree.RepeatableReadIsolation:
-				upgraded = true
-				fallthrough
-			case tree.SnapshotIsolation:
-				level = tree.SerializableIsolation
-				if allowSnapshot {
-					level = tree.SnapshotIsolation
-				} else {
-					upgraded = true
-				}
-			}
-			if upgraded {
+			if level != tree.SerializableIsolation {
 				if f := m.upgradedIsolationLevel; f != nil {
 					f()
 				}
-				telemetry.Inc(sqltelemetry.IsolationLevelUpgradedCounter(ctx, originalLevel))
+				telemetry.Inc(sqltelemetry.IsolationLevelUpgradedCounter(ctx, level))
 			}
-			m.SetDefaultTransactionIsolationLevel(level)
+			m.SetDefaultTransactionIsolationLevel(tree.SerializableIsolation)
 			return nil
 		},
 		Get: func(evalCtx *extendedEvalContext, _ *kv.Txn) (string, error) {
@@ -1518,20 +1493,12 @@ var varGen = map[string]sessionVar{
 	// See https://github.com/postgres/postgres/blob/REL_10_STABLE/src/backend/utils/misc/guc.c#L3401-L3409
 	`transaction_isolation`: {
 		Get: func(evalCtx *extendedEvalContext, _ *kv.Txn) (string, error) {
-			level := tree.IsolationLevelFromKVTxnIsolationLevel(evalCtx.Txn.IsoLevel())
-			return strings.ToLower(level.String()), nil
+			return strings.ToLower(tree.SerializableIsolation.String()), nil
 		},
 		RuntimeSet: func(ctx context.Context, evalCtx *extendedEvalContext, local bool, s string) error {
 			level, ok := tree.IsolationLevelMap[strings.ToLower(s)]
 			if !ok {
-				var allowedValues = []string{"serializable"}
-				if allowSnapshotIsolation.Get(&evalCtx.ExecCfg.Settings.SV) {
-					allowedValues = append(allowedValues, "snapshot")
-				}
-				if allowReadCommittedIsolation.Get(&evalCtx.ExecCfg.Settings.SV) {
-					allowedValues = append(allowedValues, "read committed")
-				}
-				return newVarValueError(`transaction_isolation`, s, allowedValues...)
+				return newVarValueError(`transaction_isolation`, s, isolationLevelNames...)
 			}
 			modes := tree.TransactionModes{
 				Isolation: level,
@@ -1982,36 +1949,6 @@ var varGen = map[string]sessionVar{
 			return formatBoolAsPostgresSetting(evalCtx.SessionData().InjectRetryErrorsOnCommitEnabled), nil
 		},
 		GlobalDefault: globalFalse,
-	},
-
-	// CockroachDB extension. Configures the maximum number of automatic retries
-	// to perform for statements in explicit READ COMMITTED transactions that
-	// see a transaction retry error.
-	`max_retries_for_read_committed`: {
-		GetStringVal: makeIntGetStringValFn(`max_retries_for_read_committed`),
-		Set: func(_ context.Context, m sessionDataMutator, s string) error {
-			b, err := strconv.ParseInt(s, 10, 64)
-			if err != nil {
-				return err
-			}
-			if b < 0 {
-				return pgerror.Newf(pgcode.InvalidParameterValue,
-					"cannot set max_retries_for_read_committed to a negative value: %d", b)
-			}
-			if b > math.MaxInt32 {
-				return pgerror.Newf(pgcode.InvalidParameterValue,
-					"cannot set max_retries_for_read_committed to a value greater than %d: %d", math.MaxInt32, b)
-			}
-
-			m.SetMaxRetriesForReadCommitted(int32(b))
-			return nil
-		},
-		Get: func(evalCtx *extendedEvalContext, _ *kv.Txn) (string, error) {
-			return strconv.FormatInt(int64(evalCtx.SessionData().MaxRetriesForReadCommitted), 10), nil
-		},
-		GlobalDefault: func(sv *settings.Values) string {
-			return "10"
-		},
 	},
 
 	// CockroachDB extension.

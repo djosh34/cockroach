@@ -430,10 +430,7 @@ message LocalOnlySessionData {
   // Weaker isolation levels always acquire shared locks for SELECT FOR SHARE
   // and SELECT FOR KEY SHARE statements, regardless of this session setting.
   bool shared_locking_for_serializable = 112;
-  // MaxRetriesForReadCommitted indicates the maximum number of
-  // automatic retries to perform for statements in explicit READ COMMITTED
-  // transactions that see a transaction retry error.
-  int32 max_retries_for_read_committed = 110;
+  reserved 110;
   // StrictDDLAtomicity causes errors when the client attempts DDL
   // operations inside an explicit txn and CockroachDB cannot
   // guarantee the DDL to be performed atomically.

@@ -9,11 +9,9 @@
 // licenses/APL.txt.
 
 /*
-Package telemetry contains helpers for capturing diagnostics information.
-
-Telemetry is captured and shared with cockroach labs if enabled to help the team
-prioritize new and existing features or configurations. The docs include more
-information about this telemetry, what it includes and how to configure it.
+Package telemetry contains helpers for capturing diagnostics information. The
+counts stay on the node: they appear in the local diagnostics report and in
+crdb_internal.feature_usage, and are never sent anywhere.
 
 When trying to measure the usage of a given feature, the existing reporting of
 "scrubbed" queries -- showing the structure but not the values -- can serve as a
@@ -23,8 +21,8 @@ either because they are cannot be reliably inferred from a scrubbed query or
 are simply not involved in a SQL statement execution at all.
 
 For such features we also have light-weight `telemetry.Count("some.feature")` to
-track their usage. These increment in-memory counts that are then included with
-existing diagnostics reporting if enabled. Some notes on using these:
+track their usage. These increment in-memory counts that are then included in
+the local diagnostics report. Some notes on using these:
   - "some.feature" should always be a literal string constant -- it must not
     include any user-submitted data.
   - Contention-sensitive, high-volume callers should use an initial `GetCounter`

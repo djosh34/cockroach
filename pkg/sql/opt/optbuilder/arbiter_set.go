@@ -114,8 +114,6 @@ func (a *arbiterSet) ForEach(
 		conflictOrds intsets.Fast,
 		pred tree.Expr,
 		canaryOrd int,
-		uniqueWithoutIndex bool,
-		uniqueOrd int,
 	),
 ) {
 	// Call the callback for each index arbiter.
@@ -130,7 +128,7 @@ func (a *arbiterSet) ForEach(
 			pred = a.mb.parsePartialIndexPredicateExpr(i)
 		}
 
-		f(string(index.Name()), conflictOrds, pred, canaryOrd, false, -1)
+		f(string(index.Name()), conflictOrds, pred, canaryOrd)
 	})
 
 	// Call the callback for each unique constraint arbiter.
@@ -145,7 +143,7 @@ func (a *arbiterSet) ForEach(
 			pred = a.mb.parseUniqueConstraintPredicateExpr(i)
 		}
 
-		f(uniqueConstraint.Name(), conflictOrds, pred, canaryOrd, uniqueConstraint.WithoutIndex(), i)
+		f(uniqueConstraint.Name(), conflictOrds, pred, canaryOrd)
 	})
 }
 

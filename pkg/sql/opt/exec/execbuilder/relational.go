@@ -17,7 +17,6 @@ import (
 	"math"
 
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
-	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/concurrency/isolation"
 	"github.com/cockroachdb/cockroach/pkg/server/telemetry"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/colinfo"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
@@ -43,7 +42,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/buildutil"
 	"github.com/cockroachdb/cockroach/pkg/util/encoding"
 	"github.com/cockroachdb/cockroach/pkg/util/errorutil"
-	"github.com/cockroachdb/cockroach/pkg/util/errorutil/unimplemented"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/errors"
@@ -2356,11 +2354,6 @@ func (b *Builder) buildLocking(locking opt.Locking) (opt.Locking, error) {
 				"cannot execute SELECT %s in a read-only transaction", locking.Strength.String(),
 			)
 		}
-		if locking.Form == tree.LockPredicate {
-			return opt.Locking{}, unimplemented.NewWithIssuef(
-				110873, "explicit unique checks are not yet supported under read committed isolation",
-			)
-		}
 		// Check if we can actually use shared locks here, or we need to use
 		// non-locking reads instead.
 		if locking.Strength == tree.ForShare || locking.Strength == tree.ForKeyShare {
@@ -2369,8 +2362,7 @@ func (b *Builder) buildLocking(locking opt.Locking) (opt.Locking, error) {
 			if !b.evalCtx.Settings.Version.IsActive(b.ctx, clusterversion.V23_2) ||
 				// And in >= v23.2, their locking behavior for serializable transactions
 				// is dictated by session setting.
-				(b.evalCtx.TxnIsoLevel == isolation.Serializable &&
-					!b.evalCtx.SessionData().SharedLockingForSerializable) {
+				!b.evalCtx.SessionData().SharedLockingForSerializable {
 				// Reset locking information as we've determined we're going to be
 				// performing a non-locking read.
 				return opt.Locking{}, nil // early return; do not set PlanFlagContainsLocking

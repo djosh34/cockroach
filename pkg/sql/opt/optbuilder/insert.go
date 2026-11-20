@@ -711,16 +711,16 @@ func (mb *mutationBuilder) buildInputForDoNothing(
 
 	// Create an anti-join for each arbiter.
 	mb.arbiters.ForEach(func(
-		name string, conflictOrds intsets.Fast, pred tree.Expr, canaryOrd int, uniqueWithoutIndex bool, uniqueOrd int,
+		name string, conflictOrds intsets.Fast, pred tree.Expr, canaryOrd int,
 	) {
-		mb.buildAntiJoinForDoNothingArbiter(inScope, texpr, conflictOrds, pred, uniqueWithoutIndex, uniqueOrd)
+		mb.buildAntiJoinForDoNothingArbiter(inScope, texpr, conflictOrds, pred)
 	})
 
 	// Create an UpsertDistinctOn for each arbiter. This must happen after all
 	// conflicting rows are removed with the anti-joins created above, to avoid
 	// removing valid rows (see #59125).
 	mb.arbiters.ForEach(func(
-		name string, conflictOrds intsets.Fast, pred tree.Expr, canaryOrd int, uniqueWithoutIndex bool, uniqueOrd int,
+		name string, conflictOrds intsets.Fast, pred tree.Expr, canaryOrd int,
 	) {
 		// If the arbiter has a partial predicate, project a new column that
 		// allows the UpsertDistinctOn to only de-duplicate insert rows that
@@ -768,7 +768,7 @@ func (mb *mutationBuilder) buildInputForUpsert(
 	// Create an UpsertDistinctOn and a left-join for the single arbiter.
 	var canaryCol *scopeColumn
 	mb.arbiters.ForEach(func(
-		name string, conflictOrds intsets.Fast, pred tree.Expr, canaryOrd int, uniqueWithoutIndex bool, uniqueOrd int,
+		name string, conflictOrds intsets.Fast, pred tree.Expr, canaryOrd int,
 	) {
 		// If the arbiter has a partial predicate, project a new column that
 		// allows the UpsertDistinctOn to only de-duplicate insert rows that
@@ -799,7 +799,7 @@ func (mb *mutationBuilder) buildInputForUpsert(
 
 		// Create a left-join for the arbiter.
 		mb.buildLeftJoinForUpsertArbiter(
-			inScope, texpr, conflictOrds, pred, uniqueWithoutIndex, uniqueOrd,
+			inScope, texpr, conflictOrds, pred,
 		)
 
 		// Record a not-null "canary" column. After the left-join, this will be

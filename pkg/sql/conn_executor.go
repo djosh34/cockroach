@@ -22,10 +22,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/cockroachdb/cockroach/pkg/clusterversion"
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
 	"github.com/cockroachdb/cockroach/pkg/kv"
-	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/concurrency/isolation"
 	"github.com/cockroachdb/cockroach/pkg/multitenant"
 	"github.com/cockroachdb/cockroach/pkg/multitenant/multitenantcpu"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
@@ -80,7 +78,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/log/severity"
 	"github.com/cockroachdb/cockroach/pkg/util/metric"
 	"github.com/cockroachdb/cockroach/pkg/util/mon"
-	"github.com/cockroachdb/cockroach/pkg/util/sentryutil"
 	"github.com/cockroachdb/cockroach/pkg/util/stop"
 	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
@@ -1434,10 +1431,6 @@ type connExecutor struct {
 		// transaction has been executed.
 		firstStmtExecuted bool
 
-		// upgradedToSerializable indicates that the transaction has been implicitly
-		// upgraded to the SERIALIZABLE isolation level.
-		upgradedToSerializable bool
-
 		// numDDL keeps track of how many DDL statements have been
 		// executed so far.
 		numDDL int
@@ -2005,7 +1998,6 @@ func (ns *prepStmtNamespace) resetTo(
 func (ex *connExecutor) resetExtraTxnState(ctx context.Context, ev txnEvent, payloadErr error) {
 	ex.extraTxnState.numDDL = 0
 	ex.extraTxnState.firstStmtExecuted = false
-	ex.extraTxnState.upgradedToSerializable = false
 	ex.extraTxnState.hasAdminRoleCache = HasAdminRoleCache{}
 	ex.extraTxnState.createdSequences = nil
 
@@ -2315,8 +2307,7 @@ func (ex *connExecutor) execCmd() (retErr error) {
 				}
 				copyRes := ex.clientComm.CreateCopyOutResult(copyCmd, pos)
 				res = copyRes
-				stmtCtx := withStatement(ctx, copyTo)
-				ev, payload = ex.execCopyOut(stmtCtx, copyCmd, copyRes)
+				ev, payload = ex.execCopyOut(ctx, copyCmd, copyRes)
 				return nil
 			}
 
@@ -2384,8 +2375,7 @@ func (ex *connExecutor) execCmd() (retErr error) {
 	case PrepareStmt:
 		ex.curStmtAST = tcmd.AST
 		res = ex.clientComm.CreatePrepareResult(pos)
-		stmtCtx := withStatement(ctx, ex.curStmtAST)
-		ev, payload = ex.execPrepare(stmtCtx, tcmd)
+		ev, payload = ex.execPrepare(ctx, tcmd)
 	case DescribeStmt:
 		descRes := ex.clientComm.CreateDescribeResult(pos)
 		res = descRes
@@ -2434,8 +2424,7 @@ func (ex *connExecutor) execCmd() (retErr error) {
 
 		copyRes := ex.clientComm.CreateCopyInResult(tcmd, pos)
 		res = copyRes
-		stmtCtx := withStatement(ctx, tcmd.Stmt)
-		ev, payload = ex.execCopyIn(stmtCtx, tcmd, copyRes)
+		ev, payload = ex.execCopyIn(ctx, tcmd, copyRes)
 
 		// Note: we write to ex.statsCollector.phaseTimes, instead of ex.phaseTimes,
 		// because:
@@ -2450,8 +2439,7 @@ func (ex *connExecutor) execCmd() (retErr error) {
 		ex.phaseTimes.SetSessionPhaseTime(sessionphase.SessionEndParse, tcmd.ParseEnd)
 		copyRes := ex.clientComm.CreateCopyOutResult(tcmd, pos)
 		res = copyRes
-		stmtCtx := withStatement(ctx, tcmd.Stmt)
-		ev, payload = ex.execCopyOut(stmtCtx, tcmd, copyRes)
+		ev, payload = ex.execCopyOut(ctx, tcmd, copyRes)
 
 		// Note: we write to ex.statsCollector.phaseTimes, instead of ex.phaseTimes,
 		// because:
@@ -3401,12 +3389,7 @@ func (ex *connExecutor) setTransactionModes(
 			return err
 		}
 	}
-	if modes.Isolation != tree.UnspecifiedIsolation {
-		level := ex.txnIsolationLevelToKV(ctx, modes.Isolation)
-		if err := ex.state.setIsolationLevel(level); err != nil {
-			return pgerror.WithCandidateCode(err, pgcode.ActiveSQLTransaction)
-		}
-	}
+	ex.upgradeIsolationLevel(ctx, modes.Isolation)
 	rwMode := modes.ReadWriteMode
 	if modes.AsOf.Expr != nil && asOfTs.IsEmpty() {
 		return errors.AssertionFailedf("expected an evaluated AS OF timestamp")
@@ -3425,78 +3408,15 @@ func (ex *connExecutor) setTransactionModes(
 	return ex.state.setReadOnlyMode(rwMode)
 }
 
-var allowReadCommittedIsolation = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.txn.read_committed_isolation.enabled",
-	"set to true to allow transactions to use the READ COMMITTED isolation "+
-		"level if specified by BEGIN/SET commands",
-	false,
-	settings.WithPublic,
-)
-
-var allowSnapshotIsolation = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"sql.txn.snapshot_isolation.enabled",
-	"set to true to allow transactions to use the SNAPSHOT isolation level. At "+
-		"the time of writing, this setting is intended only for usage by "+
-		"CockroachDB developers.",
-	false,
-)
-
-func (ex *connExecutor) txnIsolationLevelToKV(
-	ctx context.Context, level tree.IsolationLevel,
-) isolation.Level {
-	if level == tree.UnspecifiedIsolation {
-		level = tree.IsolationLevel(ex.sessionData().DefaultTxnIsolationLevel)
+// upgradeIsolationLevel records a request for an isolation level. Every
+// transaction runs SERIALIZABLE, so a request for any other level is accepted
+// and upgraded to SERIALIZABLE.
+func (ex *connExecutor) upgradeIsolationLevel(ctx context.Context, level tree.IsolationLevel) {
+	if level == tree.UnspecifiedIsolation || level == tree.SerializableIsolation {
+		return
 	}
-	upgraded := false
-	allowLevelCustomization := ex.server.cfg.Settings.Version.IsActive(ctx, clusterversion.V23_2)
-	ret := isolation.Serializable
-	if allowLevelCustomization {
-		switch level {
-		case tree.ReadUncommittedIsolation:
-			// READ UNCOMMITTED is mapped to READ COMMITTED. PostgreSQL also does
-			// this: https://www.postgresql.org/docs/current/transaction-iso.html.
-			upgraded = true
-			fallthrough
-		case tree.ReadCommittedIsolation:
-			// READ COMMITTED is only allowed if the cluster setting is enabled.
-			// Otherwise  it is mapped to SERIALIZABLE.
-			allowReadCommitted := allowReadCommittedIsolation.Get(&ex.server.cfg.Settings.SV)
-			if allowReadCommitted {
-				ret = isolation.ReadCommitted
-			} else {
-				upgraded = true
-				ret = isolation.Serializable
-			}
-		case tree.RepeatableReadIsolation:
-			// REPEATABLE READ is mapped to SNAPSHOT.
-			upgraded = true
-			fallthrough
-		case tree.SnapshotIsolation:
-			// SNAPSHOT is only allowed if the cluster setting is enabled. Otherwise
-			// it is mapped to SERIALIZABLE.
-			allowSnapshot := allowSnapshotIsolation.Get(&ex.server.cfg.Settings.SV)
-			if allowSnapshot {
-				ret = isolation.Snapshot
-			} else {
-				upgraded = true
-				ret = isolation.Serializable
-			}
-		case tree.SerializableIsolation:
-			ret = isolation.Serializable
-		default:
-			log.Fatalf(context.Background(), "unknown isolation level: %s", level)
-		}
-	}
-	if upgraded {
-		ex.metrics.ExecutedStatementCounters.TxnUpgradedCount.Inc(1)
-		telemetry.Inc(sqltelemetry.IsolationLevelUpgradedCounter(ctx, level))
-	}
-	if ret != isolation.Serializable {
-		telemetry.Inc(sqltelemetry.IsolationLevelCounter(ctx, ret))
-	}
-	return ret
+	ex.metrics.ExecutedStatementCounters.TxnUpgradedCount.Inc(1)
+	telemetry.Inc(sqltelemetry.IsolationLevelUpgradedCounter(ctx, level))
 }
 
 func txnPriorityToProto(mode tree.UserPriority) roachpb.UserPriority {
@@ -3633,11 +3553,6 @@ func (ex *connExecutor) resetEvalCtx(evalCtx *extendedEvalContext, txn *kv.Txn, 
 	evalCtx.TxnReadOnly = ex.state.readOnly.Load()
 	evalCtx.TxnImplicit = ex.implicitTxn()
 	evalCtx.TxnIsSingleStmt = false
-	func() {
-		ex.state.mu.Lock()
-		defer ex.state.mu.Unlock()
-		evalCtx.TxnIsoLevel = ex.state.mu.isolationLevel
-	}()
 	if newTxn || !ex.implicitTxn() {
 		// Only update the stmt timestamp if in a new txn or an explicit txn. This is because this gets
 		// called multiple times during an extended protocol implicit txn, but we
@@ -3724,7 +3639,7 @@ func (ex *connExecutor) txnStateTransitionsApplyWrapper(
 	err := func() error {
 		ex.mu.Lock()
 		defer ex.mu.Unlock()
-		return ex.machine.ApplyWithPayload(withStatement(ex.Ctx(), ex.curStmtAST), ev, payload)
+		return ex.machine.ApplyWithPayload(ex.Ctx(), ev, payload)
 	}()
 	if err != nil {
 		if errors.HasType(err, (*fsm.TransitionNotFoundError)(nil)) {
@@ -3796,7 +3711,6 @@ func (ex *connExecutor) txnStateTransitionsApplyWrapper(
 				errors.Safe(advInfo.txnEvent.eventType.String()),
 				res.Err())
 			log.Errorf(ex.Ctx(), "%v", err)
-			sentryutil.SendReport(ex.Ctx(), &ex.server.cfg.Settings.SV, err)
 			return advanceInfo{}, err
 		}
 
@@ -4037,7 +3951,7 @@ func (ex *connExecutor) serialize() serverpb.Session {
 			Priority:            ex.state.mu.priority.String(),
 			QualityOfService:    sessiondatapb.ToQoSLevelString(txn.AdmissionHeader().Priority),
 			LastAutoRetryReason: autoRetryReasonStr,
-			IsolationLevel:      tree.IsolationLevelFromKVTxnIsolationLevel(ex.state.mu.isolationLevel).String(),
+			IsolationLevel:      tree.SerializableIsolation.String(),
 		}
 	}
 
@@ -4471,57 +4385,4 @@ func (ps connExPrepStmtsAccessor) DeleteAll(ctx context.Context) {
 	ps.ex.extraTxnState.prepStmtsNamespace.resetToEmpty(
 		ctx, &ps.ex.extraTxnState.prepStmtsNamespaceMemAcc,
 	)
-}
-
-// contextStatementKey is an empty type for the handle associated with the
-// statement value (see context.Value).
-type contextStatementKey struct{}
-
-// withStatement adds a SQL statement to the provided context. The statement
-// will then be included in crash reports which use that context.
-func withStatement(ctx context.Context, stmt tree.Statement) context.Context {
-	return context.WithValue(ctx, contextStatementKey{}, stmt)
-}
-
-// statementFromCtx returns the statement value from a context, or nil if unset.
-func statementFromCtx(ctx context.Context) tree.Statement {
-	stmt := ctx.Value(contextStatementKey{})
-	if stmt == nil {
-		return nil
-	}
-	return stmt.(tree.Statement)
-}
-
-// contextGistKey is an empty type for the handle associated with the
-// gist value (see context.Value).
-type contextPlanGistKey struct{}
-
-func withPlanGist(ctx context.Context, gist string) context.Context {
-	if gist == "" {
-		return ctx
-	}
-	return context.WithValue(ctx, contextPlanGistKey{}, gist)
-}
-
-func planGistFromCtx(ctx context.Context) string {
-	val := ctx.Value(contextPlanGistKey{})
-	if val != nil {
-		return val.(string)
-	}
-	return ""
-}
-
-func init() {
-	// Register a function to include the anonymized statement in crash reports.
-	logcrash.RegisterTagFn("statement", func(ctx context.Context) string {
-		stmt := statementFromCtx(ctx)
-		if stmt == nil {
-			return ""
-		}
-		// Anonymize the statement for reporting.
-		return anonymizeStmtAndConstants(stmt, nil /* VirtualTabler */, nil /* ClientNoticeSender */)
-	})
-	logcrash.RegisterTagFn("gist", func(ctx context.Context) string {
-		return planGistFromCtx(ctx)
-	})
 }

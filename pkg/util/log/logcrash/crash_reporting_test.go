@@ -18,15 +18,11 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/util"
-	"github.com/cockroachdb/cockroach/pkg/util/envutil"
-	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/redact"
 	"github.com/pmezard/go-difflib/difflib"
-	"github.com/stretchr/testify/require"
 )
 
 // Renumber lines so they're stable no matter what changes above. (We
@@ -83,7 +79,7 @@ Error types: (1) *runtime.TypeAssertionError`,
 			expErr: `some visible detail: interface conversion: interface {} is nil, not int
 (1) attached stack trace
   -- stack trace:
-  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func2
+  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func1
   | 	...crash_reporting_test.go:NN
   | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init
   | 	...crash_reporting_test.go:NN
@@ -105,7 +101,7 @@ Error types: (1) *withstack.withStack (2) *errutil.withPrefix (3) *runtime.TypeA
 			expErr: `interface conversion: interface {} is nil, not int
 (1) attached stack trace
   -- stack trace:
-  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func2
+  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func1
   | 	...crash_reporting_test.go:NN
   | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init
   | 	...crash_reporting_test.go:NN
@@ -137,7 +133,7 @@ Error types: (1) *safedetails.withSafeDetails (2) *runtime.TypeAssertionError`,
 			expErr: `I like A and my pin code is ` + rm + ` or 9999
 (1) attached stack trace
   -- stack trace:
-  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func2
+  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func1
   | 	...crash_reporting_test.go:NN
   | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init
   | 	...crash_reporting_test.go:NN
@@ -157,7 +153,7 @@ Error types: (1) *withstack.withStack (2) *errutil.leafError`,
 			expErr: `this is preserved: 6: context canceled
 (1) attached stack trace
   -- stack trace:
-  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func2
+  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func1
   | 	...crash_reporting_test.go:NN
   | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init
   | 	...crash_reporting_test.go:NN
@@ -193,7 +189,7 @@ Error types: (1) *os.LinkError (2) *safedetails.withSafeDetails (3) logcrash.lea
 			expErr: `this is reportable as well: this is reportable too: this is reportable: ` + rm + `
 (1) attached stack trace
   -- stack trace:
-  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func2
+  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func1
   | 	...crash_reporting_test.go:NN
   | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init
   | 	...crash_reporting_test.go:NN
@@ -206,7 +202,7 @@ Error types: (1) *os.LinkError (2) *safedetails.withSafeDetails (3) logcrash.lea
 Wraps: (2) this is reportable as well
 Wraps: (3) attached stack trace
   -- stack trace:
-  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func2
+  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func1
   | 	...crash_reporting_test.go:NN
   | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init
   | 	...crash_reporting_test.go:NN
@@ -219,13 +215,13 @@ Wraps: (3) attached stack trace
 Wraps: (4) this is reportable too
 Wraps: (5) attached stack trace
   -- stack trace:
-  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func2
+  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func1
   | 	...crash_reporting_test.go:NN
   | [...repeated from below...]
 Wraps: (6) this is reportable
 Wraps: (7) attached stack trace
   -- stack trace:
-  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func2
+  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func1
   | 	...crash_reporting_test.go:NN
   | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init
   | 	...crash_reporting_test.go:NN
@@ -258,7 +254,7 @@ Error types: (1) *net.OpError (2) logcrash.leafErr`,
 			expErr: `this embed an error: this is reportable too: this is reportable: ` + rm + `
 (1) attached stack trace
   -- stack trace:
-  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func2
+  | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func1
   | 	...crash_reporting_test.go:NN
   | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init
   | 	...crash_reporting_test.go:NN
@@ -274,7 +270,7 @@ Wraps: (2) secondary error attachment
   | this is reportable too: this is reportable: ` + rm + `
   | (1) attached stack trace
   |   -- stack trace:
-  |   | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func2
+  |   | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func1
   |   | 	...crash_reporting_test.go:NN
   |   | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init
   |   | 	...crash_reporting_test.go:NN
@@ -287,13 +283,13 @@ Wraps: (2) secondary error attachment
   | Wraps: (2) this is reportable too
   | Wraps: (3) attached stack trace
   |   -- stack trace:
-  |   | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func2
+  |   | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func1
   |   | 	...crash_reporting_test.go:NN
   |   | [...repeated from below...]
   | Wraps: (4) this is reportable
   | Wraps: (5) attached stack trace
   |   -- stack trace:
-  |   | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func2
+  |   | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init.func1
   |   | 	...crash_reporting_test.go:NN
   |   | github.com/cockroachdb/cockroach/pkg/util/log/logcrash.init
   |   | 	...crash_reporting_test.go:NN
@@ -341,64 +337,6 @@ func TestCrashReportingSafeError(t *testing.T) {
 type leafErr struct{}
 
 func (leafErr) Error() string { return "error" }
-
-func TestingSetCrashReportingURL(url string) func() {
-	oldCrashReportURL := crashReportURL
-	crashReportURL = url
-	return func() { crashReportURL = oldCrashReportURL }
-}
-
-func TestUptimeTag(t *testing.T) {
-	startTime = timeutil.Unix(0, 0)
-	testCases := []struct {
-		crashTime time.Time
-		expected  string
-	}{
-		{timeutil.Unix(0, 0), "<1s"},
-		{timeutil.Unix(0, 0), "<1s"},
-		{timeutil.Unix(1, 0), "<10s"},
-		{timeutil.Unix(9, 0), "<10s"},
-		{timeutil.Unix(10, 0), "<1m"},
-		{timeutil.Unix(59, 0), "<1m"},
-		{timeutil.Unix(60, 0), "<10m"},
-		{timeutil.Unix(9*60, 0), "<10m"},
-		{timeutil.Unix(10*60, 0), "<1h"},
-		{timeutil.Unix(59*60, 0), "<1h"},
-		{timeutil.Unix(60*60, 0), "<10h"},
-		{timeutil.Unix(9*60*60, 0), "<10h"},
-		{timeutil.Unix(10*60*60, 0), "<1d"},
-		{timeutil.Unix(23*60*60, 0), "<1d"},
-		{timeutil.Unix(24*60*60, 0), "<2d"},
-		{timeutil.Unix(47*60*60, 0), "<2d"},
-		{timeutil.Unix(119*60*60, 0), "<5d"},
-		{timeutil.Unix(10*24*60*60, 0), "<11d"},
-		{timeutil.Unix(365*24*60*60, 0), "<366d"},
-	}
-	for _, tc := range testCases {
-		if a, e := uptimeTag(tc.crashTime), tc.expected; a != e {
-			t.Errorf("uptimeTag(%v) got %v, want %v)", tc.crashTime, a, e)
-		}
-	}
-}
-
-func TestGetTagsFromEnvironment(t *testing.T) {
-	testCases := []struct {
-		envTags      string
-		expectedTags map[string]string
-	}{
-		{"", map[string]string{}},
-		{"a=b", map[string]string{"a": "b"}},
-		{"a=123", map[string]string{"a": "123"}},
-		{"a=123;b=FOOBAR", map[string]string{"a": "123", "b": "FOOBAR"}},
-		{"a=123;b=FOOBAR;", map[string]string{"a": "123", "b": "FOOBAR"}},
-	}
-	for _, tc := range testCases {
-		func() {
-			defer envutil.TestSetEnv(t, "COCKROACH_CRASH_REPORT_TAGS", tc.envTags)()
-			require.Equal(t, tc.expectedTags, getTagsFromEnvironment())
-		}()
-	}
-}
 
 // makeTypeAssertionErr returns a runtime.Error with the message:
 //

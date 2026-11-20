@@ -283,8 +283,6 @@ SELECT '%[1]s';
 			"--set=errexit=false",
 			"--format=tsv",
 		)
-		// Disable telemetry.
-		cmd.Env = []string{"COCKROACH_SKIP_ENABLING_DIAGNOSTIC_REPORTING", "true"}
 		if !strings.HasSuffix(sql, ";") {
 			sql += ";"
 		}

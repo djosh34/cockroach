@@ -25,37 +25,12 @@ import (
 func (p *planner) SetSessionCharacteristics(
 	ctx context.Context, n *tree.SetSessionCharacteristics,
 ) (planNode, error) {
-	originalLevel := n.Modes.Isolation
-	upgradedLevel := false
 	if err := p.sessionDataMutatorIterator.applyOnEachMutatorError(func(m sessionDataMutator) error {
 		// Note: We also support SET DEFAULT_TRANSACTION_ISOLATION TO ' .... '.
-		switch n.Modes.Isolation {
-		case tree.UnspecifiedIsolation:
-		// Nothing to do.
-		case tree.ReadUncommittedIsolation:
-			upgradedLevel = true
-			fallthrough
-		case tree.ReadCommittedIsolation:
-			level := tree.SerializableIsolation
-			if allowReadCommittedIsolation.Get(&p.execCfg.Settings.SV) {
-				level = tree.ReadCommittedIsolation
-			} else {
-				upgradedLevel = true
-			}
-			m.SetDefaultTransactionIsolationLevel(level)
-		case tree.RepeatableReadIsolation:
-			upgradedLevel = true
-			fallthrough
-		case tree.SnapshotIsolation:
-			level := tree.SerializableIsolation
-			if allowSnapshotIsolation.Get(&p.execCfg.Settings.SV) {
-				level = tree.SnapshotIsolation
-			} else {
-				upgradedLevel = true
-			}
-			m.SetDefaultTransactionIsolationLevel(level)
-		default:
-			m.SetDefaultTransactionIsolationLevel(n.Modes.Isolation)
+		// Every transaction runs SERIALIZABLE, so any level is accepted and
+		// stored as SERIALIZABLE.
+		if n.Modes.Isolation != tree.UnspecifiedIsolation {
+			m.SetDefaultTransactionIsolationLevel(tree.SerializableIsolation)
 		}
 
 		// Note: We also support SET DEFAULT_TRANSACTION_PRIORITY TO ' .... '.
@@ -108,11 +83,11 @@ func (p *planner) SetSessionCharacteristics(
 			"unsupported default deferrable mode: %s", n.Modes.Deferrable)
 	}
 
-	if upgradedLevel {
+	if level := n.Modes.Isolation; level != tree.UnspecifiedIsolation && level != tree.SerializableIsolation {
 		if f := p.sessionDataMutatorIterator.upgradedIsolationLevel; f != nil {
 			f()
 		}
-		telemetry.Inc(sqltelemetry.IsolationLevelUpgradedCounter(ctx, originalLevel))
+		telemetry.Inc(sqltelemetry.IsolationLevelUpgradedCounter(ctx, level))
 	}
 
 	return newZeroNode(nil /* columns */), nil

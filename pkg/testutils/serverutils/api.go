@@ -204,8 +204,8 @@ type ApplicationLayerInterface interface {
 	PGPreServer() interface{}
 
 	// DiagnosticsReporter returns the server's *diagnostics.Reporter as an
-	// interface{}. The DiagnosticsReporter periodically phones home to report
-	// diagnostics and usage.
+	// interface{}. The DiagnosticsReporter builds the local diagnostics
+	// report.
 	DiagnosticsReporter() interface{}
 
 	// StatusServer returns the server's *server.SQLStatusServer as an
@@ -593,11 +593,6 @@ type StorageLayerInterface interface {
 	// assuming no additional information is added outside of the normal bootstrap
 	// process.
 	ExpectedInitialRangeCount() (int, error)
-
-	// UpdateChecker returns the server's *diagnostics.UpdateChecker as an
-	// interface{}. The UpdateChecker periodically phones home to check for new
-	// updates that are available.
-	UpdateChecker() interface{}
 
 	// ScratchRange splits off a range suitable to be used as KV scratch space.
 	// (it doesn't overlap system spans or SQL tables).

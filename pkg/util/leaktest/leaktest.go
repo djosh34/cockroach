@@ -54,8 +54,6 @@ func interestingGoroutines() map[int64]string {
 			// Ignore HTTP keep alives
 			strings.Contains(stack, ").readLoop(") ||
 			strings.Contains(stack, ").writeLoop(") ||
-			// Ignore the Sentry client, which is created lazily on first use.
-			strings.Contains(stack, "sentry-go.(*HTTPTransport).worker") ||
 			// Ignore the opensensus worker, which is created by the event exporter.
 			strings.Contains(stack, "go.opencensus.io/stats/view.(*worker).start") ||
 			// Ignore pgconn which creates a goroutine to do an async cleanup.

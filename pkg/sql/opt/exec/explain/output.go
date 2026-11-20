@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/concurrency/isolation"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/appstatspb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/colinfo"
@@ -427,11 +426,11 @@ func (ob *OutputBuilder) AddRegionsStats(regions []string) {
 }
 
 // AddTxnInfo adds top-level fields for information about the query's
-// transaction.
+// transaction. Every transaction runs SERIALIZABLE.
 func (ob *OutputBuilder) AddTxnInfo(
-	txnIsoLevel isolation.Level, txnPriority roachpb.UserPriority, txnQoSLevel sessiondatapb.QoSLevel,
+	txnPriority roachpb.UserPriority, txnQoSLevel sessiondatapb.QoSLevel,
 ) {
-	ob.AddTopLevelField("isolation level", txnIsoLevel.StringLower())
+	ob.AddTopLevelField("isolation level", "serializable")
 	ob.AddTopLevelField("priority", txnPriority.String())
 	ob.AddTopLevelField("quality of service", txnQoSLevel.String())
 }

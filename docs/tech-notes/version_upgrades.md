@@ -201,7 +201,6 @@ https://github.com/cockroachdb/cockroach/issues/73813 ).
 
 Here are the remaining uses:
 
-- set the setting `diagnostics.reporting.enabled` to true unless the env var `COCKROACH_SKIP_ENABLING_DIAGNOSTIC_REPORTING` is set to false.
 - write an initial value to the `version` row in `system.settings`.
 - add a row for the `root` user in `system.users`.
 - add the `admin` role to `system.users` and make `root` a member of it in `system.role_members`.

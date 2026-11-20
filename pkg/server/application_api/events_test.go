@@ -65,10 +65,10 @@ func TestAdminAPIEvents(t *testing.T) {
 		{"create_database", false, 0, false, 3},
 		{"drop_table", false, 0, false, 2},
 		{"create_table", false, 0, false, 3},
-		{"set_cluster_setting", false, 0, false, 2},
+		{"set_cluster_setting", false, 0, false, 1},
 		// We use limit=true with no limit here because otherwise the
 		// expCount will mess up the expected total count below.
-		{"set_cluster_setting", true, 0, true, 2},
+		{"set_cluster_setting", true, 0, true, 1},
 		{"create_table", true, 0, false, 3},
 		{"create_table", true, -1, false, 3},
 		{"create_table", true, 2, false, 2},
