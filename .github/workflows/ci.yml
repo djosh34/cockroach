@@ -52,7 +52,7 @@ jobs:
       matrix:
         # The whole-tree tools each need several GB of memory, so every part
         # gets its own runner. See build/ci/lint.sh.
-        part: [vet, roachvet, staticcheck, returncheck, rest]
+        part: [vet, roachvet-0-2, roachvet-1-2, staticcheck-0-2, staticcheck-1-2, returncheck, rest]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-go

@@ -1814,7 +1814,14 @@ func TestLint(t *testing.T) {
 
 		// Determine the list of files to exclude."
 
-		cmd, stderr, filter, err := dirCmd(crdbDir, staticcheck, pkgScope)
+		// STATICCHECK_PKGS, if set, lists the packages to check instead. CI
+		// splits the packages over several jobs, because staticcheck keeps
+		// all the packages it checks in memory.
+		args := []string{pkgScope}
+		if pkgs := os.Getenv("STATICCHECK_PKGS"); pkgs != "" {
+			args = strings.Fields(pkgs)
+		}
+		cmd, stderr, filter, err := dirCmd(crdbDir, staticcheck, args...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2418,10 +2425,28 @@ func TestLint(t *testing.T) {
 					regexp.MustCompile(strings.TrimPrefix(re, "cockroach/")))
 			}
 		}
-		vetJSONCmd(t, crdbDir,
-			[]string{"-vettool", vetToolPath, "-all", "-printf.funcs", printfuncs,
-				"-errcheck.exclude", excludesPath, pkgScope},
-			excludes, filters)
+		// With ROACHVET_PART set, roachvet runs only some of its analyzers and
+		// defines only their flags, so pass just the flags it knows.
+		flagsOut, err := exec.Command(vetToolPath, "-flags").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var vetFlags []struct{ Name string }
+		if err := json.Unmarshal(flagsOut, &vetFlags); err != nil {
+			t.Fatal(err)
+		}
+		known := map[string]bool{}
+		for _, f := range vetFlags {
+			known[f.Name] = true
+		}
+		args := []string{"-vettool", vetToolPath, "-all"}
+		if known["printf.funcs"] {
+			args = append(args, "-printf.funcs", printfuncs)
+		}
+		if known["errcheck.exclude"] {
+			args = append(args, "-errcheck.exclude", excludesPath)
+		}
+		vetJSONCmd(t, crdbDir, append(args, pkgScope), excludes, filters)
 
 	})
 }

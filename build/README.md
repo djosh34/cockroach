@@ -40,7 +40,9 @@ go test -tags crdb_test ./pkg/sql/logictest/tests/local -run 'TestLogic_select$'
 
 The lint tests need the lint tools on the `PATH`. `build/ci/lint.sh` builds
 them and runs one part of the checks: `vet`, `roachvet` (go vet with the
-repository's analyzers and errcheck), `staticcheck`, `returncheck` or `rest`.
+repository's analyzers and errcheck; `roachvet-K-N` runs part K of N of the
+analyzers), `staticcheck` (`staticcheck-K-N` checks part K of N of the
+packages), `returncheck` or `rest`.
 
 ## CI
 
@@ -48,7 +50,7 @@ repository's analyzers and errcheck), `staticcheck`, `returncheck` or `rest`.
 
 - `build`: `go build ./...` without cgo for linux/amd64 and linux/arm64.
 - `generate`: `build/generate.sh`, failing on any change.
-- `lint`: `go vet` and the lint tests, in five parallel parts, because the
+- `lint`: `go vet` and the lint tests, in seven parallel parts, because the
   whole-tree tools each need several GB of memory.
 - `test` and `logic`: the tests and the logic tests, in shards. `build/ci/test.sh`
   picks the tests of a shard. It balances the shards by the times in
