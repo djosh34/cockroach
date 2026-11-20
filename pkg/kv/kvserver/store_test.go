@@ -4155,6 +4155,10 @@ func TestSplitPreApplyKeepsHardStateOfNewerRHS(t *testing.T) {
 	rightRepl.raftMu.Unlock()
 	sl := stateloader.Make(rhsRangeID)
 	require.NoError(t, sl.SetHardState(ctx, tc.engine, raftpb.HardState{Term: 5, Vote: 7}))
+	// An earlier replica of the range was removed from this store.
+	tombstoneKey := keys.RangeTombstoneKey(rhsRangeID)
+	require.NoError(t, storage.MVCCPutProto(ctx, tc.engine, tombstoneKey, hlc.Timestamp{},
+		&kvserverpb.RangeTombstone{NextReplicaID: 7}, storage.MVCCWriteOptions{}))
 
 	leftDesc := *tc.repl.Desc()
 	leftDesc.EndKey = roachpb.RKey("m")
@@ -4169,6 +4173,9 @@ func TestSplitPreApplyKeepsHardStateOfNewerRHS(t *testing.T) {
 	}
 	batch := tc.engine.NewBatch()
 	defer batch.Close()
+	// The split trigger stages the initial truncated state of the RHS in the
+	// batch, as it does when it writes the initial RHS state.
+	require.NoError(t, sl.SetRaftTruncatedState(ctx, batch, &kvserverpb.RaftTruncatedState{Index: 10, Term: 5}))
 	splitPreApply(ctx, tc.repl, batch, roachpb.SplitTrigger{LeftDesc: leftDesc, RightDesc: rightDesc}, nil /* initClosedTS */)
 
 	// The newer replica votes in a higher term before the split batch applies.
@@ -4183,4 +4190,10 @@ func TestSplitPreApplyKeepsHardStateOfNewerRHS(t *testing.T) {
 	ts, err := sl.LoadRaftTruncatedState(ctx, tc.engine)
 	require.NoError(t, err)
 	require.Equal(t, kvserverpb.RaftTruncatedState{}, ts)
+	// The tombstone is kept.
+	var tombstone kvserverpb.RangeTombstone
+	found, err := storage.MVCCGetProto(ctx, tc.engine, tombstoneKey, hlc.Timestamp{}, &tombstone, storage.MVCCGetOptions{})
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, roachpb.ReplicaID(7), tombstone.NextReplicaID)
 }
