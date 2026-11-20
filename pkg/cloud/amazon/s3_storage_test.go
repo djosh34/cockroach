@@ -109,7 +109,7 @@ func TestPutS3(t *testing.T) {
 				// in the AWS console, then set it up locally.
 				// https://docs.aws.com/cli/latest/userguide/cli-configure-role.html
 				// We only run this test if default role exists.
-				_, err := config.LoadSharedConfigProfile(context.Background(), config.DefaultSharedConfigProfile)
+				err := sharedCredentials(context.Background())
 				if err != nil {
 					skip.IgnoreLintf(t, "we only run this test if a default role exists, "+
 						"refer to https://docs.aws.com/cli/latest/userguide/cli-configure-role.html: %s", err)
@@ -141,7 +141,7 @@ func TestPutS3(t *testing.T) {
 				// in the AWS console, then set it up locally.
 				// https://docs.aws.com/cli/latest/userguide/cli-configure-role.html
 				// We only run this test if default role exists.
-				_, err := config.LoadSharedConfigProfile(context.Background(), config.DefaultSharedConfigProfile)
+				err := sharedCredentials(context.Background())
 				if err != nil {
 					skip.IgnoreLintf(t, "we only run this test if a default role exists, "+
 						"refer to https://docs.aws.com/cli/latest/userguide/cli-configure-role.html: %s", err)
@@ -180,7 +180,7 @@ func TestPutS3(t *testing.T) {
 				// in the AWS console, then set it up locally.
 				// https://docs.aws.com/cli/latest/userguide/cli-configure-role.html
 				// We only run this test if default role exists.
-				_, err := config.LoadSharedConfigProfile(context.Background(), config.DefaultSharedConfigProfile)
+				err := sharedCredentials(context.Background())
 				if err != nil {
 					skip.IgnoreLintf(t, "we only run this test if a default role exists, "+
 						"refer to https://docs.aws.com/cli/latest/userguide/cli-configure-role.html: %s", err)
@@ -236,7 +236,7 @@ func TestPutS3AssumeRole(t *testing.T) {
 		skip.IgnoreLint(t, "AWS_ASSUME_ROLE env var must be set")
 	}
 	t.Run("auth-implicit", func(t *testing.T) {
-		_, err := config.LoadSharedConfigProfile(context.Background(), config.DefaultSharedConfigProfile)
+		err := sharedCredentials(context.Background())
 		if err != nil {
 			skip.IgnoreLintf(t, "we only run this test if a default role exists, "+
 				"refer to https://docs.aws.com/cli/latest/userguide/cli-configure-role.html: %s", err)
@@ -427,6 +427,19 @@ func (a awserror) ErrorFault() smithy.ErrorFault {
 	return smithy.FaultUnknown
 }
 
+// sharedCredentials returns an error unless the default profile of the AWS
+// files holds static credentials, which the tests with implicit auth use.
+func sharedCredentials(ctx context.Context) error {
+	profile, err := config.LoadSharedConfigProfile(ctx, config.DefaultSharedConfigProfile)
+	if err != nil {
+		return err
+	}
+	if !profile.Credentials.HasKeys() {
+		return errors.New("the default AWS profile has no static credentials")
+	}
+	return nil
+}
+
 // envCredentials returns the AWS credentials in the environment, which the
 // tests against a real bucket use.
 func envCredentials() (aws.Credentials, error) {
@@ -523,7 +536,7 @@ func TestS3BucketDoesNotExist(t *testing.T) {
 
 	testSettings := cluster.MakeTestingClusterSettings()
 
-	_, err := config.LoadSharedConfigProfile(context.Background(), config.DefaultSharedConfigProfile)
+	err := sharedCredentials(context.Background())
 	if err != nil {
 		skip.IgnoreLintf(t, "we only run this test if a default role exists, "+
 			"refer to https://docs.aws.com/cli/latest/userguide/cli-configure-role.html: %s", err)

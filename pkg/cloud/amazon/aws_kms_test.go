@@ -22,7 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/cloud"
 	"github.com/cockroachdb/cockroach/pkg/cloud/cloudtestutils"
@@ -101,7 +100,7 @@ func TestEncryptDecryptAWS(t *testing.T) {
 		// in the AWS console, then set it up locally.
 		// https://docs.aws.com/cli/latest/userguide/cli-configure-role.html
 		// We only run this test if default role exists.
-		_, err := config.LoadSharedConfigProfile(context.Background(), config.DefaultSharedConfigProfile)
+		err := sharedCredentials(context.Background())
 		if err != nil {
 			skip.IgnoreLint(t, err)
 		}
@@ -177,7 +176,7 @@ func TestEncryptDecryptAWSAssumeRole(t *testing.T) {
 		// in the AWS console, then set it up locally.
 		// https://docs.aws.com/cli/latest/userguide/cli-configure-role.html
 		// We only run this test if default role exists.
-		_, err := config.LoadSharedConfigProfile(context.Background(), config.DefaultSharedConfigProfile)
+		err := sharedCredentials(context.Background())
 		if err != nil {
 			skip.IgnoreLint(t, err)
 		}
