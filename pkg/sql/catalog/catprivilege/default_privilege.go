@@ -123,6 +123,13 @@ func (d *Mutable) GrantDefaultPrivileges(
 			return err
 		}
 	}
+	// A role that grants itself privileges it already has, such as
+	// ALTER DEFAULT PRIVILEGES FOR ROLE r GRANT INSERT ON TABLES TO r, ends in
+	// the default state. Keeping the entry would leave a reference to the role
+	// behind when it is dropped.
+	if !role.ForAllRoles {
+		d.removeIfDefault(role, defaultPrivilegesForRole)
+	}
 	return nil
 }
 
@@ -141,13 +148,21 @@ func (d *Mutable) RevokeDefaultPrivileges(
 		}
 	}
 
-	defaultPrivilegesPerObject := defaultPrivilegesForRole.DefaultPrivilegesPerObject
+	d.removeIfDefault(role, defaultPrivilegesForRole)
+	return nil
+}
+
+// removeIfDefault removes the default privileges of role if they grant
+// nothing beyond the default state.
+func (d *Mutable) removeIfDefault(
+	role catpb.DefaultPrivilegesRole, defaultPrivilegesForRole *catpb.DefaultPrivilegesForRole,
+) {
 	// Check if there are any default privileges remaining on the descriptor.
 	// If there are no privileges left remaining and the descriptor is in the
 	// default state, we can remove it.
-	for _, defaultPrivs := range defaultPrivilegesPerObject {
+	for _, defaultPrivs := range defaultPrivilegesForRole.DefaultPrivilegesPerObject {
 		if len(defaultPrivs.Users) != 0 {
-			return nil
+			return
 		}
 	}
 
@@ -160,12 +175,11 @@ func (d *Mutable) RevokeDefaultPrivileges(
 			!GetRoleHasAllPrivilegesOnTargetObject(defaultPrivilegesForRole, privilege.Schemas) ||
 			!GetPublicHasUsageOnTypes(defaultPrivilegesForRole) ||
 			!GetPublicHasExecuteOnFunctions(defaultPrivilegesForRole)) {
-		return nil
+		return
 	}
 
 	// There no entries remaining, remove the entry for the role.
 	d.defaultPrivilegeDescriptor.RemoveUser(role)
-	return nil
 }
 
 // CreatePrivilegesFromDefaultPrivileges creates privileges for a

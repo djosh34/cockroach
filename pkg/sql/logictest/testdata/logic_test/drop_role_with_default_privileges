@@ -175,3 +175,20 @@ REVOKE own_defaults FROM root
 
 statement ok
 DROP ROLE own_defaults
+
+# A role that grants itself default privileges it already has leaves no
+# default privileges behind, so nothing refers to it after DROP ROLE.
+statement ok
+CREATE ROLE self_grant;
+GRANT self_grant TO root;
+ALTER DEFAULT PRIVILEGES FOR ROLE self_grant GRANT INSERT ON TABLES TO self_grant;
+REVOKE self_grant FROM root
+
+query B
+SELECT crdb_internal.pb_to_json('cockroach.sql.sqlbase.Descriptor', descriptor)::STRING LIKE '%self_grant%'
+FROM system.descriptor WHERE id = (SELECT id FROM system.namespace WHERE name = 'testdb2' AND "parentID" = 0)
+----
+false
+
+statement ok
+DROP ROLE self_grant
