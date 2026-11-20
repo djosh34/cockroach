@@ -149,10 +149,8 @@ func (m *Metadata) GetUnit() Unit {
 // in pkg/util/metric/metric.proto.
 func (m *Metadata) GetLabels() []*prometheusgo.LabelPair {
 	lps := make([]*prometheusgo.LabelPair, len(m.Labels))
-	// x satisfies the field XXX_unrecognized in prometheusgo.LabelPair.
-	var x []byte
 	for i, v := range m.Labels {
-		lps[i] = &prometheusgo.LabelPair{Name: v.Name, Value: v.Value, XXX_unrecognized: x}
+		lps[i] = &prometheusgo.LabelPair{Name: v.Name, Value: v.Value}
 	}
 	return lps
 }
@@ -687,7 +685,7 @@ func (mwh *ManualWindowHistogram) WindowedSnapshot() HistogramSnapshot {
 	mwh.mu.RLock()
 	defer mwh.mu.RUnlock()
 	// Take a copy of the mwh.mu.cur.
-	cur := deepCopy(*mwh.mu.cur)
+	cur := deepCopy(mwh.mu.cur)
 	if mwh.mu.prev != nil {
 		MergeWindowedHistogram(cur, mwh.mu.prev)
 	}
@@ -699,7 +697,7 @@ func (mwh *ManualWindowHistogram) WindowedSnapshot() HistogramSnapshot {
 //
 // NB: It only copies sample count, sample sum, and buckets (cumulative count,
 // upper bounds) since those are the only things we care about in this package.
-func deepCopy(source prometheusgo.Histogram) *prometheusgo.Histogram {
+func deepCopy(source *prometheusgo.Histogram) *prometheusgo.Histogram {
 	count := source.GetSampleCount()
 	sum := source.GetSampleSum()
 	bucket := make([]*prometheusgo.Bucket, len(source.Bucket))

@@ -35,7 +35,10 @@ func TestHistogramPrometheus(t *testing.T) {
 	h.RecordValue(5)
 	h.RecordValue(5)
 	h.RecordValue(10)
-	act, err := json.MarshalIndent(*h.ToPrometheusMetric().Histogram, "", "  ")
+	hist := h.ToPrometheusMetric().Histogram
+	// The creation time differs on every run.
+	hist.CreatedTimestamp = nil
+	act, err := json.MarshalIndent(hist, "", "  ")
 	require.NoError(t, err)
 	echotest.Require(t, string(act), datapathutils.TestDataPath(t, "histogram.txt"))
 }
