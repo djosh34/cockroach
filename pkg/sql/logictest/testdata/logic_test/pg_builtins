@@ -521,7 +521,7 @@ ORDER BY t.oid
 ----
 text     25    -1
 float8   701   -1
-bpchar   1042  5
+bpchar   1042  -1
 varchar  1043  68
 bit      1560  1
 varbit   1562  16
@@ -539,7 +539,7 @@ ORDER BY t.oid
 ----
 text     NULL
 float8   NULL
-bpchar   1
+bpchar   NULL
 varchar  64
 bit      1
 varbit   16
@@ -558,7 +558,7 @@ ORDER BY t.oid
 ----
 text     NULL
 float8   NULL
-bpchar   1
+bpchar   NULL
 varchar  64
 bit      1
 varbit   16
@@ -803,6 +803,25 @@ query T
 SELECT to_regtype('integer')
 ----
 bigint
+
+# Each to_regfoo function returns its own type, also when the query runs
+# distributed and the value is sent between nodes with its declared type.
+query TTTTTT
+SELECT pg_typeof(to_regclass('t1')), pg_typeof(to_regnamespace('public')),
+  pg_typeof(to_regproc('version')), pg_typeof(to_regprocedure('version()')),
+  pg_typeof(to_regrole('admin')), pg_typeof(to_regtype('interval'))
+----
+regclass  regnamespace  regproc  regprocedure  regrole  regtype
+
+statement ok
+CREATE TABLE t_toreg (k INT PRIMARY KEY, n STRING);
+INSERT INTO t_toreg VALUES (1, 't1'), (2, 'pg_roles')
+
+query T rowsort
+SELECT to_regclass(n)::STRING FROM t_toreg
+----
+t1
+pg_roles
 
 query T
 SELECT to_regtype('int_4')

@@ -1467,10 +1467,11 @@ INSERT INTO upd_assn_cast(id) VALUES (1)
 statement ok
 UPDATE upd_assn_cast SET id = 2
 
+# BPCHAR has no width limit, so the default keeps all of 'foo'.
 query IITT
 SELECT * from def_assn_cast
 ----
-1  1  true  f
+1  1  true  foo
 
 query ITFT
 SELECT * from upd_assn_cast

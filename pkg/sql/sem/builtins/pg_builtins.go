@@ -553,7 +553,7 @@ func makeToRegOverload(typ *types.T, helpText string) builtinDefinition {
 			Types: tree.ParamTypes{
 				{Name: "text", Typ: types.String},
 			},
-			ReturnType: tree.FixedReturnType(types.RegType),
+			ReturnType: tree.FixedReturnType(typ),
 			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
 				typName := tree.MustBeDString(args[0])
 				int, _ := strconv.Atoi(strings.TrimSpace(string(typName)))

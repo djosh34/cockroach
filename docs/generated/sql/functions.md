@@ -1714,15 +1714,15 @@ may increase either contention or retry errors, or both.</p>
 </span></td><td>Stable</td></tr>
 <tr><td><a name="session_user"></a><code>session_user() &rarr; <a href="string.html">string</a></code></td><td><span class="funcdesc"><p>Returns the session user. This function is provided for compatibility with PostgreSQL.</p>
 </span></td><td>Stable</td></tr>
-<tr><td><a name="to_regclass"></a><code>to_regclass(text: <a href="string.html">string</a>) &rarr; regtype</code></td><td><span class="funcdesc"><p>Translates a textual relation name to its OID</p>
+<tr><td><a name="to_regclass"></a><code>to_regclass(text: <a href="string.html">string</a>) &rarr; regclass</code></td><td><span class="funcdesc"><p>Translates a textual relation name to its OID</p>
 </span></td><td>Stable</td></tr>
-<tr><td><a name="to_regnamespace"></a><code>to_regnamespace(text: <a href="string.html">string</a>) &rarr; regtype</code></td><td><span class="funcdesc"><p>Translates a textual schema name to its OID</p>
+<tr><td><a name="to_regnamespace"></a><code>to_regnamespace(text: <a href="string.html">string</a>) &rarr; regnamespace</code></td><td><span class="funcdesc"><p>Translates a textual schema name to its OID</p>
 </span></td><td>Stable</td></tr>
-<tr><td><a name="to_regproc"></a><code>to_regproc(text: <a href="string.html">string</a>) &rarr; regtype</code></td><td><span class="funcdesc"><p>Translates a textual function or procedure name to its OID</p>
+<tr><td><a name="to_regproc"></a><code>to_regproc(text: <a href="string.html">string</a>) &rarr; regproc</code></td><td><span class="funcdesc"><p>Translates a textual function or procedure name to its OID</p>
 </span></td><td>Stable</td></tr>
-<tr><td><a name="to_regprocedure"></a><code>to_regprocedure(text: <a href="string.html">string</a>) &rarr; regtype</code></td><td><span class="funcdesc"><p>Translates a textual function or procedure name(with argument types) to its OID</p>
+<tr><td><a name="to_regprocedure"></a><code>to_regprocedure(text: <a href="string.html">string</a>) &rarr; regprocedure</code></td><td><span class="funcdesc"><p>Translates a textual function or procedure name(with argument types) to its OID</p>
 </span></td><td>Stable</td></tr>
-<tr><td><a name="to_regrole"></a><code>to_regrole(text: <a href="string.html">string</a>) &rarr; regtype</code></td><td><span class="funcdesc"><p>Translates a textual role name to its OID</p>
+<tr><td><a name="to_regrole"></a><code>to_regrole(text: <a href="string.html">string</a>) &rarr; regrole</code></td><td><span class="funcdesc"><p>Translates a textual role name to its OID</p>
 </span></td><td>Stable</td></tr>
 <tr><td><a name="to_regtype"></a><code>to_regtype(text: <a href="string.html">string</a>) &rarr; regtype</code></td><td><span class="funcdesc"><p>Translates a textual type name to its OID</p>
 </span></td><td>Stable</td></tr>

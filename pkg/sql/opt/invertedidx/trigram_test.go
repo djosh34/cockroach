@@ -28,6 +28,8 @@ func TestTryFilterTrigram(t *testing.T) {
 	semaCtx := tree.MakeSemaContext()
 	st := cluster.MakeTestingClusterSettings()
 	evalCtx := eval.NewTestingEvalContext(st)
+	// The session default. At 0, similarity filters cannot use the index.
+	evalCtx.SessionData().TrigramSimilarityThreshold = 0.3
 
 	tc := testcat.New()
 	if _, err := tc.ExecuteDDL(

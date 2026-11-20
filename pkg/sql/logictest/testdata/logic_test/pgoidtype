@@ -750,3 +750,15 @@ SELECT col1 FROM t123548_1 JOIN t123548_2 ON col1 = col2;
 statement ok
 RESET testing_optimizer_random_seed;
 RESET testing_optimizer_disable_rule_probability;
+
+# Two constants with the same OID but different names are different values.
+# Without this, each REGTYPE below took the name of the other.
+query TT
+SELECT 20::REGTYPE::STRING, 'int8'::REGTYPE::STRING
+----
+int8  bigint
+
+query TT
+SELECT 'int8'::REGTYPE::STRING, 20::REGTYPE::STRING
+----
+bigint  int8

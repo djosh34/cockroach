@@ -381,6 +381,12 @@ func (h *hasher) HashDatum(val tree.Datum) {
 	case *tree.DCollatedString:
 		h.HashString(t.Locale)
 		h.HashString(t.Contents)
+	case *tree.DOid:
+		// The name is part of the value: 20::REGTYPE is int8, while
+		// 'bigint'::REGTYPE has the same OID but is named bigint.
+		h.HashUint64(uint64(t.Oid))
+		h.HashString(t.Name())
+		h.HashType(t.ResolvedType())
 	default:
 		h.bytes = encodeDatum(h.bytes[:0], val)
 		h.HashBytes(h.bytes)
@@ -854,6 +860,10 @@ func (h *hasher) IsDatumEqual(l, r tree.Datum) bool {
 	case *tree.DCollatedString:
 		rt := r.(*tree.DCollatedString)
 		return lt.Locale == rt.Locale && h.IsStringEqual(lt.Contents, rt.Contents)
+	case *tree.DOid:
+		rt := r.(*tree.DOid)
+		return lt.Oid == rt.Oid && lt.Name() == rt.Name() &&
+			h.IsTypeEqual(lt.ResolvedType(), rt.ResolvedType())
 	case *tree.DBytes:
 		rt := r.(*tree.DBytes)
 		return bytes.Equal(lt.UnsafeBytes(), rt.UnsafeBytes())
