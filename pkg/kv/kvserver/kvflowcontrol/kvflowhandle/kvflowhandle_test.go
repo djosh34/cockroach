@@ -191,6 +191,8 @@ func TestFlowControlMode(t *testing.T) {
 			handle.ConnectStream(ctx, pos(0), stream)
 			handle.DeductTokensFor(ctx, admissionpb.NormalPri, pos(1), kvflowcontrol.Tokens(16<<20 /* 16MiB */))
 
+			mode := tc.mode // the loopvarcapture lint rejects using tc in a goroutine
+
 			// Invoke .Admit() for {regular,elastic} work in a separate
 			// goroutines, and test below whether the goroutines are blocked.
 			regularAdmitCh := make(chan struct{})
@@ -198,7 +200,7 @@ func TestFlowControlMode(t *testing.T) {
 			go func() {
 				admitted, err := handle.Admit(ctx, admissionpb.NormalPri, time.Time{})
 				require.NoError(t, err)
-				if tc.mode == kvflowcontrol.ApplyToElastic {
+				if mode == kvflowcontrol.ApplyToElastic {
 					require.False(t, admitted)
 				} else {
 					require.True(t, admitted)
