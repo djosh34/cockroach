@@ -763,7 +763,6 @@ AND name != 'kv.range_merge.queue_enabled'
 ORDER BY name
 ----
 cluster.secret
-diagnostics.reporting.enabled
 sql.crdb_internal.table_row_statistics.as_of_time
 version
 
@@ -783,7 +782,6 @@ AND name NOT LIKE 'sql.stats%'
 AND name NOT IN ('version', 'cluster.secret', 'kv.range_merge.queue_enabled')
 ORDER BY name
 ----
-diagnostics.reporting.enabled                      true
 somesetting                                        somevalue
 sql.crdb_internal.table_row_statistics.as_of_time  -1µs
 

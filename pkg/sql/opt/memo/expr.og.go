@@ -1693,8 +1693,8 @@ func (g *lockGroup) bestProps() *bestProps {
 }
 
 // LockPrivate contains the state describing a lock operation. For example,
-// consider the following SELECT FOR UPDATE statement under read committed
-// isolation:
+// consider the following SELECT FOR UPDATE statement with
+// optimizer_use_lock_op_for_serializable on:
 //
 //   CREATE TABLE ab (a INT NOT NULL PRIMARY KEY, b INT);
 //
