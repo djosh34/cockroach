@@ -236,12 +236,32 @@ func TestUnredactedZipKeepsSecrets(t *testing.T) {
 		VALUES (now(), 'set_cluster_setting', 0, 1,
 			'{"Statement": "SET CLUSTER SETTING cloudstorage.http.custom_ca = ''SECRETOLD''", "SettingName": "cloudstorage.http.custom_ca", "Value": "SECRETOLD"}'),
 		(now(), 'create_role', 0, 1, '{"Statement": "CREATE ROLE r WITH PASSWORD $1", "PlaceholderValues": ["''SECRETPH''"]}')`)
+	// The payloads of schema change jobs hold no URIs and stay in the zip.
+	sqlDB.Exec(t, `CREATE TABLE import_target (a INT8)`)
+	sqlDB.Exec(t, `ALTER TABLE import_target ADD COLUMN b INT8`)
+	query, err := zipInternalTablesPerCluster.QueryForTable("crdb_internal.system_jobs", false /* redact */)
+	require.NoError(t, err)
+	var kept int
+	sqlDB.QueryRow(t, `SELECT count(*) FROM (`+query+`) WHERE hex_payload != '<redacted>'`).Scan(&kept)
+	require.NotZero(t, kept)
+	// The job fails, but its record keeps the URI with the password.
+	_, err = sqlDB.DB.ExecContext(context.Background(),
+		`IMPORT INTO import_target CSV DATA ('http://u:SECRETJOB@127.0.0.1:1/x.csv')`)
+	require.Error(t, err)
+	// Statements stored with bundles before they left out secrets.
+	sqlDB.Exec(t, `INSERT INTO system.statement_diagnostics (statement_fingerprint, statement, collected_at)
+		VALUES ('CREATE ROLE _ WITH PASSWORD _', 'CREATE ROLE r WITH PASSWORD ''SECRETDIAG''', now())`)
 
 	for _, table := range []string{
 		"crdb_internal.cluster_settings",
 		"system.settings",
 		"system.eventlog",
 		"system.external_connections",
+		"crdb_internal.jobs",
+		"crdb_internal.system_jobs",
+		"system.jobs",
+		"system.job_info",
+		"system.statement_diagnostics",
 	} {
 		reg := zipSystemTables
 		if strings.HasPrefix(table, "crdb_internal.") {
@@ -250,8 +270,14 @@ func TestUnredactedZipKeepsSecrets(t *testing.T) {
 		query, err := reg.QueryForTable(table, false /* redact */)
 		require.NoError(t, err)
 		for _, row := range sqlDB.QueryStr(t, query) {
-			for _, secret := range []string{"SECRETCA", "SECRETPATH", "SECRETOLD", "SECRETPH"} {
-				assert.NotContains(t, strings.Join(row, " "), secret, "table %s", table)
+			for _, secret := range []string{
+				"SECRETCA", "SECRETPATH", "SECRETOLD", "SECRETPH", "SECRETJOB", "SECRETDIAG",
+			} {
+				// Byte columns are also exported in hex.
+				for _, s := range []string{secret, fmt.Sprintf("%x", secret)} {
+					assert.NotContains(t, strings.ToLower(strings.Join(row, " ")), strings.ToLower(s),
+						"table %s", table)
+				}
 			}
 		}
 	}

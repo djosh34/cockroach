@@ -120,6 +120,16 @@ func (r DebugZipTableRegistry) GetTables() []string {
 	return tables
 }
 
+// jobPayloadHasNoURIs returns a SQL condition that is true when the job payload
+// in the column col is of a job type that holds no URIs, and so no
+// credentials. Unredacted zips keep only those payloads, which debug doctor
+// reads; the others, such as IMPORT, are left out.
+func jobPayloadHasNoURIs(col string) string {
+	return `crdb_internal.pb_to_json('cockroach.sql.jobs.jobspb.Payload', ` + col + `) ?| ARRAY[
+		'schemaChange', 'schemaChangeGC', 'typeSchemaChange', 'newSchemaChange', 'createStats',
+		'migration', 'autoSpanConfigReconciliation', 'autoSQLStatsCompaction']`
+}
+
 var zipInternalTablesPerCluster = DebugZipTableRegistry{
 	"crdb_internal.cluster_contention_events": {
 		// `key` column contains the contended key, which may contain sensitive
@@ -387,11 +397,22 @@ var zipInternalTablesPerCluster = DebugZipTableRegistry{
 	"crdb_internal.system_jobs": {
 		// `payload` column may contain customer info, such as URI params
 		// containing access keys, encryption salts, etc.
-		customQueryUnredacted: `SELECT *, 
-			to_hex(payload) AS hex_payload, 
-			to_hex(progress) AS hex_progress 
+		customQueryUnredacted: `SELECT
+			"id",
+			"status",
+			"created",
+			CASE WHEN ` + jobPayloadHasNoURIs("payload") + ` THEN payload ELSE '<redacted>' END AS "payload",
+			"progress",
+			"created_by_type",
+			"created_by_id",
+			"claim_session_id",
+			"claim_instance_id",
+			"num_runs",
+			"last_run",
+			CASE WHEN ` + jobPayloadHasNoURIs("payload") + ` THEN to_hex(payload) ELSE '<redacted>' END AS "hex_payload",
+			to_hex(progress) AS "hex_progress"
 			FROM crdb_internal.system_jobs`,
-		customQueryRedacted: `SELECT 
+		customQueryRedacted: `SELECT
 			"id",
 			"status",
 			"created",
@@ -402,8 +423,8 @@ var zipInternalTablesPerCluster = DebugZipTableRegistry{
 			"claim_session_id",
 			"claim_instance_id",
 			"num_runs",
-			"last_run", 
-			'<redacted>' AS "hex_payload", 
+			"last_run",
+			'<redacted>' AS "hex_payload",
 			to_hex(progress) AS "hex_progress"
 			FROM crdb_internal.system_jobs`,
 	},
@@ -1046,9 +1067,19 @@ var zipSystemTables = DebugZipTableRegistry{
 	"system.jobs": {
 		// NB: `payload` column may contain customer info, such as URI params
 		// containing access keys, encryption salts, etc.
-		customQueryUnredacted: `SELECT *, 
-			to_hex(payload) AS hex_payload, 
-			to_hex(progress) AS hex_progress 
+		customQueryUnredacted: `SELECT id,
+			status,
+			created,
+			CASE WHEN ` + jobPayloadHasNoURIs("payload") + ` THEN payload ELSE '<redacted>' END AS payload,
+			progress,
+			created_by_type,
+			created_by_id,
+			claim_session_id,
+			claim_instance_id,
+			num_runs,
+			last_run,
+			CASE WHEN ` + jobPayloadHasNoURIs("payload") + ` THEN to_hex(payload) ELSE '<redacted>' END AS hex_payload,
+			to_hex(progress) AS hex_progress
 			FROM system.jobs`,
 		customQueryRedacted: `SELECT id,
 			status,
@@ -1068,8 +1099,13 @@ var zipSystemTables = DebugZipTableRegistry{
 	"system.job_info": {
 		// `value` column may contain customer info, such as URI params
 		// containing access keys, encryption salts, etc.
-		customQueryUnredacted: `SELECT *,
-			to_hex(value) AS hex_value
+		customQueryUnredacted: `SELECT job_id,
+			info_key,
+			written,
+			CASE WHEN info_key != 'legacy_payload' OR ` + jobPayloadHasNoURIs("value") + `
+				THEN value ELSE '<redacted>' END AS value,
+			CASE WHEN info_key != 'legacy_payload' OR ` + jobPayloadHasNoURIs("value") + `
+				THEN to_hex(value) ELSE '<redacted>' END AS hex_value
 			FROM system.job_info`,
 		customQueryRedacted: `SELECT job_id,
 			info_key,
@@ -1272,14 +1308,17 @@ var zipSystemTables = DebugZipTableRegistry{
 	"system.statement_diagnostics": {
 		// `bundle_chunks` column contains diagnostic bundle bytes, which
 		// contain unredacted information such as SQL arguments and
-		// unredacted trace logs.
+		// unredacted trace logs. `statement` may hold a password or a
+		// credential URI in rows written before such statements were stored
+		// in redacted form, so only the fingerprint is exported.
 		nonSensitiveCols: NonSensitiveColumns{
 			"id",
 			"statement_fingerprint",
 			"collected_at",
-			"statement",
 			"error",
 		},
+		customQueryUnredacted: `SELECT id, statement_fingerprint, collected_at, bundle_chunks, error
+			FROM system.statement_diagnostics`,
 	},
 	"system.statement_diagnostics_requests": {
 		nonSensitiveCols: NonSensitiveColumns{

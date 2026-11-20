@@ -187,13 +187,18 @@ func (bundle *diagnosticsBundle) insert(
 	diagRequestID stmtdiagnostics.RequestID,
 	req stmtdiagnostics.Request,
 ) {
+	// A statement that may carry a secret is stored without its constants.
+	stmt := tree.AsString(ast)
+	if statementMayCarrySecret(ast) {
+		stmt = tree.AsStringWithFlags(ast, tree.FmtHideConstants)
+	}
 	var err error
 	bundle.diagID, err = stmtDiagRecorder.InsertStatementDiagnostics(
 		ctx,
 		diagRequestID,
 		req,
 		fingerprint,
-		tree.AsString(ast),
+		stmt,
 		bundle.zip,
 		bundle.collectionErr,
 	)

@@ -521,6 +521,10 @@ func fromZipDir(
 			md.ID = jobspb.JobID(id)
 
 			// N.B. The "created" column takes 2 positions in our fields array.
+			// Skip payloads that the zip left out.
+			if fields[4] == "<redacted>" {
+				return nil
+			}
 			payloadBytes, ok := interpretString(fields[4])
 			if !ok {
 				return errors.Newf("job %d: failed to decode hex payload", id)
@@ -567,8 +571,8 @@ func fromZipDir(
 				return nil, nil, nil, errors.Wrapf(err, "failed to decode job ID %v", job)
 			}
 			row.ID = jobspb.JobID(id)
-			// Skip NULL job payloads.
-			if job.Payload == "NULL" {
+			// Skip NULL job payloads and payloads that the zip left out.
+			if job.Payload == "NULL" || job.Payload == "<redacted>" {
 				continue
 			}
 			payloadBytes, err := hx.DecodeString(job.Payload)
