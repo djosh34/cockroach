@@ -11,6 +11,7 @@
 package build
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -80,5 +81,18 @@ func TestComputeBinaryVersion(t *testing.T) {
 				require.Equal(t, tc.expectedVersion, actualVersion)
 			}
 		})
+	}
+}
+
+// TestVersionNamesOnlyPatchroaddb checks that the version strings that
+// version(), crdb_internal.node_build_info and 'patchroaddb version' show
+// name patchroaddb and its version.txt version, and no CockroachDB version.
+func TestVersionNamesOnlyPatchroaddb(t *testing.T) {
+	info := GetInfo()
+	require.True(t, strings.HasPrefix(info.Tag, strings.TrimSpace(cockroachVersion)), info.Tag)
+	require.True(t, strings.HasPrefix(info.Short(), "patchroaddb "+info.Tag+" ("), info.Short())
+	for _, s := range []string{info.Short(), info.Long()} {
+		require.NotContains(t, s, "CockroachDB")
+		require.NotContains(t, s, "23.2")
 	}
 }

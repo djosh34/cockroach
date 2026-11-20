@@ -1963,7 +1963,7 @@ func (c *transientCluster) printURLs(
 	if opt := sqlURL.GetOption("options"); strings.HasPrefix(opt, "-ccluster=") {
 		db = "cluster:" + opt[10:] + "/" + db
 	}
-	fmt.Fprintln(w, "   (cli)     ", "cockroach sql"+secArgs+portArg+" -d "+db)
+	fmt.Fprintln(w, "   (cli)     ", "patchroaddb sql"+secArgs+portArg+" -d "+db)
 
 	fmt.Fprintln(w, "   (sql)     ", sqlURL.ToPQ())
 	if verbose {

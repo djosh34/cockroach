@@ -10,20 +10,14 @@
 
 package docs
 
-import (
-	"fmt"
+// URLBase is the root URL of the CockroachDB v23.2 docs. patchroaddb is a
+// fork of CockroachDB v23.2, so those docs describe it, except for the
+// features patchroaddb removed.
+const URLBase = "https://www.cockroachlabs.com/docs/v23.2"
 
-	"github.com/cockroachdb/cockroach/pkg/build"
-)
-
-// URLBase is the root URL for the version of the docs associated with this
-// binary.
-var URLBase = "https://www.cockroachlabs.com/docs/" + build.BinaryVersionPrefix()
-
-// URLReleaseNotesBase is the root URL for the release notes for the .0 patch
-// release associated with this binary.
-var URLReleaseNotesBase = fmt.Sprintf("https://www.cockroachlabs.com/docs/releases/%s.0.html",
-	build.BinaryVersionPrefix())
+// URLReleaseNotesBase is the root URL of the CockroachDB v23.2.0 release
+// notes.
+const URLReleaseNotesBase = "https://www.cockroachlabs.com/docs/releases/v23.2.0.html"
 
 // URL generates the URL to pageName in the version of the docs associated
 // with this binary.

@@ -53,7 +53,7 @@ func ServerErrorf(ctx context.Context, format string, args ...interface{}) error
 }
 
 // ErrAPIInternalErrorString is the string printed out in the UI when an internal error was encountered.
-var ErrAPIInternalErrorString = "An internal server error has occurred. Please check your CockroachDB logs for more details."
+var ErrAPIInternalErrorString = "An internal server error has occurred. Please check your patchroaddb logs for more details."
 
 // ErrAPIInternalError is the gRPC status error returned when an internal error was encountered.
 var ErrAPIInternalError = grpcstatus.Errorf(

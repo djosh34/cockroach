@@ -8,7 +8,7 @@
 // ANY KIND, either express or implied. See the License for the specific language
 // governing permissions and limitations under the License.
 
-// cockroach-oss is the entry point for the CockroachDB binary.
+// patchroaddb is the entry point for the patchroaddb binary.
 package main
 
 import "github.com/cockroachdb/cockroach/pkg/cli"

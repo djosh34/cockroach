@@ -41,7 +41,7 @@ import (
 var debugStatementBundleCmd = &cobra.Command{
 	Use:     "statement-bundle [command]",
 	Aliases: []string{"sb"},
-	Short:   "run a cockroach debug statement-bundle tool command",
+	Short:   "run a patchroaddb debug statement-bundle tool command",
 	Long: `
 debug statement-bundle is a suite of tools for debugging and manipulating statement
 bundles created with EXPLAIN ANALYZE (DEBUG).

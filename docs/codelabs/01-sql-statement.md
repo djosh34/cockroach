@@ -151,7 +151,7 @@ return unimplemented(sqllex, "frobnicate all")
 Next step is to compile the project:
 
 ```text
-~/go/src/github.com/cockroachdb/cockroach$ go build -o cockroach ./pkg/cmd/cockroach-oss
+~/go/src/github.com/cockroachdb/cockroach$ go build -o cockroach ./pkg/cmd/patchroaddb
 ...
 github.com/cockroachdb/cockroach
 ```
@@ -287,7 +287,7 @@ There are a few other `$` symbols that you can use with yacc.  One of the more
 useful forms refers to node values of sub-productions (for instance, in these
 three statements `$1` would be the token `FROBNICATE`).
 
-`go build -o cockroach ./pkg/cmd/cockroach-oss` this project again (don't forget to regenerate the parser). Now
+`go build -o cockroach ./pkg/cmd/patchroaddb` this project again (don't forget to regenerate the parser). Now
 try out the statement again:
 
 ```text
@@ -335,7 +335,7 @@ func (p *planner) Frobnicate(ctx context.Context, stmt *tree.Frobnicate) (planNo
 }
 ```
 
-Run `go build -o cockroach ./pkg/cmd/cockroach-oss` again and give it another go:
+Run `go build -o cockroach ./pkg/cmd/patchroaddb` again and give it another go:
 
 ```text
 $ cockroach sql --insecure -e "frobnicate cluster"

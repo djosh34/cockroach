@@ -50,7 +50,7 @@ func init() {
 // connectInitCmd triggers a TLS initialization handshake and writes
 // certificates in the specified certs-dir for use with start.
 var connectInitCmd = &cobra.Command{
-	Use:   "init --certs-dir=<path to cockroach certs dir> --init-token=<shared secret> --join=<host 1>,<host 2>,...,<host N>",
+	Use:   "init --certs-dir=<path to patchroaddb certs dir> --init-token=<shared secret> --join=<host 1>,<host 2>,...,<host N>",
 	Short: "auto-build TLS certificates for use with the start command",
 	Long: `
 Connects to other nodes and negotiates an initialization bundle for use with

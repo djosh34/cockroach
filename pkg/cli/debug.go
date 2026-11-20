@@ -600,7 +600,7 @@ timestamp or user keys used in range descriptors, range keys etc.
 Key encoding type could be changed using encoding flag.
 For example:
 
-	$ cockroach debug decode-key BB89F902ADB43000151C2D1ED07DE6C009
+	$ patchroaddb debug decode-key BB89F902ADB43000151C2D1ED07DE6C009
 	/Table/51/1/44938288/1521140384.514565824,0
 `,
 	Args: cobra.ArbitraryArgs,
@@ -699,7 +699,7 @@ decoded and, if that's unsuccessful, is echoed as is.
 The default value for --schema is 'cockroach.sql.sqlbase.Descriptor'.
 For example:
 
-$ cat debug/system.descriptor.txt | cockroach debug decode-proto
+$ cat debug/system.descriptor.txt | patchroaddb debug decode-proto
 id	descriptor	hex_descriptor
 1	\022!\012\006system\020\001\032\025\012\011\012\005admin\0200\012\010\012\004root\0200	{"database": {"id": 1, "modificationTime": {}, "name": "system", "privileges": {"users": [{"privileges": 48, "user": "admin"}, {"privileges": 48, "user": "root"}]}}}
 ...
@@ -709,7 +709,7 @@ Tools from HTTP network requests ("Copy as cURL"). Chrome captures these as
 UTF8-encoded raw bytes, which are then rendered as C-escaped strings. The UTF8
 encoding breaks the proto encoding, so the curl command doesn't work as Chrome
 presents it. To rectify that, take the string argument passed to "curl --data" and pass it to
-"cockroach decode-proto --single --binary --out=<file>". Then, to replay the HTTP
+"patchroaddb decode-proto --single --binary --out=<file>". Then, to replay the HTTP
 request, do something like:
 $ curl -X POST  'http://localhost:8080/ts/query' \
   -H 'Accept: application/json' \

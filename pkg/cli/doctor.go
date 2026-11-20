@@ -49,9 +49,9 @@ import (
 
 var debugDoctorCmd = &cobra.Command{
 	Use:   "doctor [command]",
-	Short: "run a cockroach doctor tool command",
+	Short: "run a patchroaddb doctor tool command",
 	Long: `
-Run the doctor tool to recreate or examine cockroach system table contents.
+Run the doctor tool to recreate or examine patchroaddb system table contents.
 System tables are queried either from a live cluster or from an unzipped
 debug.zip.
 `,
@@ -115,7 +115,7 @@ that may not exist on downlevel versions.
 func makeClusterCommand(fn doctorFn) *cobra.Command {
 	return &cobra.Command{
 		Use:   "cluster --url=<cluster connection string>",
-		Short: "run doctor tool on live cockroach cluster",
+		Short: "run doctor tool on live patchroaddb cluster",
 		Long: `
 Run the doctor tool system data from a live cluster specified by --url.
 `,

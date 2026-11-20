@@ -29,12 +29,12 @@ func TestServerError(t *testing.T) {
 	ctx := context.Background()
 	pgError := pgerror.New(pgcode.OutOfMemory, "TestServerError.OutOfMemory")
 	err := srverrors.ServerError(ctx, pgError)
-	require.Equal(t, "rpc error: code = Internal desc = An internal server error has occurred. Please check your CockroachDB logs for more details. Error Code: 53200", err.Error())
+	require.Equal(t, "rpc error: code = Internal desc = An internal server error has occurred. Please check your patchroaddb logs for more details. Error Code: 53200", err.Error())
 
 	err = srverrors.ServerError(ctx, err)
-	require.Equal(t, "rpc error: code = Internal desc = An internal server error has occurred. Please check your CockroachDB logs for more details. Error Code: 53200", err.Error())
+	require.Equal(t, "rpc error: code = Internal desc = An internal server error has occurred. Please check your patchroaddb logs for more details. Error Code: 53200", err.Error())
 
 	err = fmt.Errorf("random error that is not pgerror or grpcstatus")
 	err = srverrors.ServerError(ctx, err)
-	require.Equal(t, "rpc error: code = Internal desc = An internal server error has occurred. Please check your CockroachDB logs for more details.", err.Error())
+	require.Equal(t, "rpc error: code = Internal desc = An internal server error has occurred. Please check your patchroaddb logs for more details.", err.Error())
 }

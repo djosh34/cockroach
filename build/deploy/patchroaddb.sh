@@ -15,7 +15,7 @@
 # set -m: enable job control.
 set -eum
 
-cockroach_entrypoint=${COCKROACH:-"/cockroach/cockroach"}
+cockroach_entrypoint=${COCKROACH:-"/cockroach/patchroaddb"}
 
 certs_dir="certs"
 url=
@@ -146,14 +146,14 @@ start_init_node() {
   timeout 3000 cat server_fifo>server.url
   exit_status=$?
   if [[ $exit_status -eq 124 ]]; then
-    echo >&2 "error: timeout for cockroach init process"
+    echo >&2 "error: timeout for patchroaddb init process"
     exit 1
   fi
   echo >&2 "init node successfully started"
 }
 
 # setup_db is to create a default database, create a default user (with password
-# if applicable), and grant privileges to this user by running `cockroach sql`
+# if applicable), and grant privileges to this user by running `patchroaddb sql`
 # queries.
 setup_db() {
   create_defaultdb
@@ -279,7 +279,7 @@ run_single_node() {
 
 _main() {
   # If there's no argument passed in, return an error.
-  mode=${1:?"error: mode unset, can be shell, bash, or cockroach command \
+  mode=${1:?"error: mode unset, can be shell, bash, or patchroaddb command \
   (start-single-node, sql, etc.)"}
   shift
   case $mode in

@@ -24,8 +24,8 @@ import (
 
 var genExamplesCmd = &cobra.Command{
 	Use:   "example-data",
-	Short: "generate example SQL code suitable for use with CockroachDB",
-	Long: `This command generates example SQL code that shows various CockroachDB features and
+	Short: "generate example SQL code suitable for use with patchroaddb",
+	Long: `This command generates example SQL code that shows various patchroaddb features and
 is suitable to populate an example database for demonstration and education purposes.
 `,
 }
@@ -72,5 +72,5 @@ func runGenExamplesCmd(gen workload.Generator) {
 const footerComment = `--
 --
 -- If you can see this message, you probably want to redirect the output of
--- 'cockroach gen example-data' to a file, or pipe it as input to 'cockroach sql'.
+-- 'patchroaddb gen example-data' to a file, or pipe it as input to 'patchroaddb sql'.
 `

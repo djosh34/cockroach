@@ -28,7 +28,7 @@ var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "initialize a cluster",
 	Long: `
-Perform one-time-only initialization of a CockroachDB cluster.
+Perform one-time-only initialization of a patchroaddb cluster.
 
 After starting one or more nodes with --join flags, run the init
 command on one node (passing the same --host and certificate flags

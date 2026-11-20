@@ -51,7 +51,7 @@ const (
 	// Refer to README.md to understand the general design guidelines for
 	// help texts.
 
-	helpMessageFmt = `You are using 'cockroach sql', CockroachDB's lightweight SQL client.
+	helpMessageFmt = `You are using 'patchroaddb sql', patchroaddb's lightweight SQL client.
 General
   \q, quit, exit    exit the shell (Ctrl+C/Ctrl+D also supported).
 
@@ -681,7 +681,7 @@ func isEndOfStatement(lastTok int) bool {
 func (c *cliState) handleDemo(cmd []string, nextState, errState cliStateEnum) cliStateEnum {
 	// A demo cluster signifies the presence of `cockroach demo`.
 	if c.sqlCtx.DemoCluster == nil {
-		return c.cliError(errState, errors.New(`\demo can only be run with cockroach demo`))
+		return c.cliError(errState, errors.New(`\demo can only be run with patchroaddb demo`))
 	}
 
 	// The \demo command has one of three patterns:

@@ -1,0 +1,105 @@
+# Builds a patchroaddb release. On a pushed v* tag it publishes the binary
+# tarballs and SHA256SUMS on a GitHub release, and the multi-arch image
+# ghcr.io/djosh34/patchroaddb tagged with the tag and latest. Started by hand,
+# it builds and checks everything and publishes nothing.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/djosh34/patchroaddb
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+      # A pushed tag must equal pkg/build/version.txt; build/release.sh checks
+      # that. A run started by hand builds the version.txt version.
+      - id: tag
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            echo "tag=$GITHUB_REF_NAME" >>"$GITHUB_OUTPUT"
+          else
+            echo "tag=$(cat pkg/build/version.txt)" >>"$GITHUB_OUTPUT"
+          fi
+      - run: build/release.sh "${{ steps.tag.outputs.tag }}" out
+      - name: Check the version output
+        run: |
+          tar -xzf "out/patchroaddb-$TAG.linux-amd64.tgz" -C "$RUNNER_TEMP"
+          bin="$RUNNER_TEMP/patchroaddb-$TAG.linux-amd64/patchroaddb"
+          "$bin" version
+          test "$("$bin" version --build-tag)" = "$TAG"
+          if "$bin" version | grep -q CockroachDB; then
+            echo "version output names CockroachDB" >&2
+            exit 1
+          fi
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the image
+        run: |
+          docker buildx build out/image \
+            --platform linux/amd64,linux/arm64 --provenance=false \
+            --label org.opencontainers.image.source=https://github.com/djosh34/patchroaddb \
+            --label org.opencontainers.image.version="$TAG" \
+            --label org.opencontainers.image.licenses=Apache-2.0 \
+            --output type=oci,dest=out/image.tar
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+      # The publish job pushes this archive with skopeo; check that skopeo
+      # reads it and finds both platforms.
+      - name: Check the image archive
+        run: |
+          platforms=$(skopeo inspect --raw oci-archive:out/image.tar |
+            jq -r '[.manifests[].platform | select(.os == "linux") | .architecture] | sort | join(" ")')
+          echo "platforms: $platforms"
+          test "$platforms" = "amd64 arm64"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: |
+            out/*.tgz
+            out/SHA256SUMS
+            out/image.tar
+          if-no-files-found: error
+
+  # The only job with write permissions. It runs only for a pushed tag.
+  publish:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      packages: write
+    env:
+      TAG: ${{ needs.build.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: out
+      - name: Create the GitHub release
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "patchroaddb $TAG" --notes "patchroaddb $TAG" \
+            out/patchroaddb-*.tgz out/SHA256SUMS
+      - name: Push the image
+        run: |
+          echo "$GH_TOKEN" | skopeo login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          for t in "$TAG" latest; do
+            skopeo copy --all oci-archive:out/image.tar "docker://$IMAGE:$t"
+          done

@@ -36,7 +36,7 @@ var (
 		"server.clock.persist_upper_bound_interval",
 		"the interval between persisting the wall time upper bound of the clock. The clock "+
 			"does not generate a wall time greater than the persisted timestamp and will panic if "+
-			"it sees a wall time greater than this value. When cockroach starts, it waits for the "+
+			"it sees a wall time greater than this value. When patchroaddb starts, it waits for the "+
 			"wall time to catch-up till this persisted timestamp. This guarantees monotonic wall "+
 			"time across server restarts. Not setting this or setting a value of 0 disables this "+
 			"feature.",

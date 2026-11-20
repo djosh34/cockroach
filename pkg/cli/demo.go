@@ -36,14 +36,14 @@ var demoCmd = &cobra.Command{
 	Use:   "demo",
 	Short: "open a demo sql shell",
 	Long: `
-Start an in-memory, standalone, single-node CockroachDB instance, and open an
+Start an in-memory, standalone, single-node patchroaddb instance, and open an
 interactive SQL prompt to it. Various datasets are available to be preloaded as
-subcommands: e.g. "cockroach demo startrek". See --help for a full list.
+subcommands: e.g. "patchroaddb demo startrek". See --help for a full list.
 
 By default, the 'movr' dataset is pre-loaded. You can also use --no-example-database
 to avoid pre-loading a dataset.
 `,
-	Example: `  cockroach demo`,
+	Example: `  patchroaddb demo`,
 	Args:    cobra.NoArgs,
 	// Note: RunE is set in the init() function below to avoid an
 	// initialization cycle.
@@ -190,9 +190,9 @@ func runDemoInternal(
 
 	if cliCtx.IsInteractive {
 		cliCtx.PrintfUnlessEmbedded(`#
-# Welcome to the CockroachDB demo database!
+# Welcome to the patchroaddb demo database!
 #
-# You are connected to a temporary, in-memory CockroachDB cluster of %d node%s.
+# You are connected to a temporary, in-memory patchroaddb cluster of %d node%s.
 `, demoCtx.NumNodes, util.Pluralize(int64(demoCtx.NumNodes)))
 
 		if demoCtx.Multitenant {

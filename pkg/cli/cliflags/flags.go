@@ -245,7 +245,7 @@ can also be specified (e.g. .25).`,
 		Name:   "host",
 		EnvVar: "COCKROACH_HOST",
 		Description: `
-CockroachDB node to connect to.
+patchroaddb node to connect to.
 This can be specified either as an address/hostname, or
 together with a port number as in -s myhost:26257.
 If the port number is left unspecified, it defaults to 26257.
@@ -334,7 +334,7 @@ Reveal the SQL statements sent implicitly by the command-line utility.`,
 	CliDebugMode = FlagInfo{
 		Name: "debug-sql-cli",
 		Description: `
-Simplify the SQL CLI to ease troubleshooting of CockroachDB
+Simplify the SQL CLI to ease troubleshooting of patchroaddb
 issues. This echoes sent SQL, removes the database name and txn status
 from the prompt, and forces behavior to become independent on current
 transaction state. Equivalent to --echo-sql, \unset check_syntax and
@@ -431,14 +431,14 @@ The addresses for connecting a node to a cluster.
 
 </PRE>
 When starting a multi-node cluster for the first time, set this flag
-to the addresses of 3-5 of the initial nodes. Then run the cockroach
+to the addresses of 3-5 of the initial nodes. Then run the patchroaddb
 init command against one of the nodes to complete cluster startup.
 <PRE>
 
 </PRE>
 When starting a singe-node cluster, leave this flag out. This will
 cause the node to initialize a new single-node cluster without
-needing to run the cockroach init command.
+needing to run the patchroaddb init command.
 <PRE>
 
 </PRE>
@@ -519,7 +519,7 @@ feature.
 	AdvertiseAddr = FlagInfo{
 		Name: "advertise-addr",
 		Description: `
-The address/hostname and port to advertise to other CockroachDB nodes
+The address/hostname and port to advertise to other patchroaddb nodes
 for intra-cluster communication. It must resolve and be routable from
 other nodes in the cluster.
 <PRE>
@@ -669,7 +669,7 @@ apply. This flag is experimental.
 	LocalityAdvertiseAddr = FlagInfo{
 		Name: "locality-advertise-addr",
 		Description: `
-List of ports to advertise to other CockroachDB nodes for intra-cluster
+List of ports to advertise to other patchroaddb nodes for intra-cluster
 communication for some locality. This should be specified as a comma
 separated list of locality@address. Addresses can also include ports.
 For example:
@@ -692,14 +692,14 @@ For example:
 	ListeningURLFile = FlagInfo{
 		Name: "listening-url-file",
 		Description: `
-After the CockroachDB node has started up successfully, it will
+After the patchroaddb node has started up successfully, it will
 write its connection URL to the specified file.`,
 	}
 
 	PIDFile = FlagInfo{
 		Name: "pid-file",
 		Description: `
-After the CockroachDB node has started up successfully, it will
+After the patchroaddb node has started up successfully, it will
 write its process ID to the specified file.`,
 	}
 
@@ -1011,7 +1011,7 @@ which use 'cockroach-data-tenant-X' for tenant 'X')
 	StorageEngine = FlagInfo{
 		Name: "storage-engine",
 		Description: `
-Storage engine to use for all stores on this cockroach node. The only option is pebble. Deprecated;
+Storage engine to use for all stores on this patchroaddb node. The only option is pebble. Deprecated;
 only present for backward compatibility.
 `,
 	}
@@ -1043,7 +1043,7 @@ The size can be given in various ways:
 		Name: "experimental-shared-storage",
 		Description: fmt.Sprintf(`
 Shared storage URL (with a cloud scheme, eg. s3://, gcs://) to use for all stores
-on this cockroach node. Cockroach can take advantage of this storage for faster
+on this patchroaddb node. patchroaddb can take advantage of this storage for faster
 replication from node to node, as well as to grow beyond locally-available disk
 space. The format of this URL is the same as that specified for bulk operations,
 for more on that see:
@@ -1397,7 +1397,7 @@ can also be specified (e.g. .25).`,
 		Description: `
 Locality information for each demo node. The input is a colon separated
 list of localities for each node. The i'th locality in the colon separated
-list sets the locality for the i'th demo cockroach node. For example:
+list sets the locality for the i'th demo patchroaddb node. For example:
 <PRE>
 
 --demo-locality=region=us-east1,az=1:region=us-east1,az=2:region=us-east1,az=3
@@ -1412,7 +1412,7 @@ availability zone to 3.
 	DemoMultitenant = FlagInfo{
 		Name: "multitenant",
 		Description: `
-If set, cockroach demo will start separate in-memory KV and SQL servers in multi-tenancy mode.
+If set, patchroaddb demo will start separate in-memory KV and SQL servers in multi-tenancy mode.
 The SQL shell will be connected to the first tenant, and can be switched between tenants
 and the system tenant using the \connect command.`,
 	}
@@ -1440,7 +1440,7 @@ If set to false, overrides the default demo behavior of enabling rangefeeds.`,
 		EnvVar: "COCKROACH_NO_EXAMPLE_DATABASE",
 		Description: `
 Disable the creation of a default dataset in the demo shell.
-This makes 'cockroach demo' faster to start.`,
+This makes 'patchroaddb demo' faster to start.`,
 	}
 
 	ConfigProfile = FlagInfo{
@@ -1628,7 +1628,7 @@ Setting this flag will be interpreted in the same way as setting the
 		Description: `
 Redact anything that may contain confidential data or PII from retrieved
 debug data. An exception is made for range key data, as this data is
-necessary to support CockroachDB.
+necessary to support patchroaddb.
 `,
 	}
 
@@ -1744,7 +1744,7 @@ For example, you can change the default logging directory with:
 See the documentation for more options and details.
 
 To preview how the log configuration is applied, or preview the
-default configuration, you can use the 'cockroach debug check-log-config' sub-command.
+default configuration, you can use the 'patchroaddb debug check-log-config' sub-command.
 `,
 	}
 

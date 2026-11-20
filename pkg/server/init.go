@@ -225,7 +225,7 @@ func (s *initServer) ServeAndWait(
 	}
 
 	log.Info(ctx, "no stores initialized")
-	log.Info(ctx, "awaiting `cockroach init` or join with an already initialized node")
+	log.Info(ctx, "awaiting `patchroaddb init` or join with an already initialized node")
 
 	// If we end up joining a bootstrapped cluster, the resulting init state
 	// will be passed through this channel.

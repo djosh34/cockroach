@@ -107,7 +107,7 @@ func MaybeDecorateError(
 			// Avoid errors.Wrapf here so that we have more control over the
 			// formatting of the message with error text.
 			const format = "server closed the connection.\n" +
-				"Is this a CockroachDB node?\n%v"
+				"Is this a patchroaddb node?\n%v"
 			return errors.Errorf(format, err)
 		}
 

@@ -86,15 +86,6 @@ func BinaryVersion() string {
 	return binaryVersion
 }
 
-// BinaryVersionPrefix returns the version prefix of the current build.
-func BinaryVersionPrefix() string {
-	v, err := version.Parse(binaryVersion)
-	if err != nil {
-		return "dev"
-	}
-	return fmt.Sprintf("v%d.%d", v.Major(), v.Minor())
-}
-
 func init() {
 	// Allow tests to override the version.txt contents.
 	if versionOverride := envutil.EnvOrDefaultString(
@@ -109,8 +100,8 @@ func (b Info) Short() string {
 	if b.CgoTargetTriple != "" {
 		plat = b.CgoTargetTriple
 	}
-	return fmt.Sprintf("CockroachDB %s %s (%s, built %s, %s)",
-		b.Distribution, b.Tag, plat, b.Time, b.GoVersion)
+	return fmt.Sprintf("patchroaddb %s (%s, built %s, %s)",
+		b.Tag, plat, b.Time, b.GoVersion)
 }
 
 // Long returns a pretty printed build summary
@@ -119,7 +110,6 @@ func (b Info) Long() string {
 	tw := tabwriter.NewWriter(&buf, 2, 1, 2, ' ', 0)
 	fmt.Fprintf(tw, "Build Tag:        %s\n", b.Tag)
 	fmt.Fprintf(tw, "Build Time:       %s\n", b.Time)
-	fmt.Fprintf(tw, "Distribution:     %s\n", b.Distribution)
 	fmt.Fprintf(tw, "Platform:         %s", b.Platform)
 	if b.CgoTargetTriple != "" {
 		fmt.Fprintf(tw, " (%s)", b.CgoTargetTriple)
@@ -173,14 +163,15 @@ func GetInfo() Info {
 }
 
 // TestingOverrideVersion allows tests to override the binary version
-// reported by cockroach.
+// reported by patchroaddb.
 func TestingOverrideVersion(v string) func() {
 	prevBinaryVersion := binaryVersion
 	binaryVersion = v
 	return func() { binaryVersion = prevBinaryVersion }
 }
 
-// MakeIssueURL produces a URL to a CockroachDB issue.
+// MakeIssueURL produces a URL to a CockroachDB issue. patchroaddb is a fork of
+// CockroachDB v23.2, so the link names that version.
 func MakeIssueURL(issue int) string {
-	return fmt.Sprintf("https://go.crdb.dev/issue-v/%d/%s", issue, BinaryVersionPrefix())
+	return fmt.Sprintf("https://go.crdb.dev/issue-v/%d/v23.2", issue)
 }

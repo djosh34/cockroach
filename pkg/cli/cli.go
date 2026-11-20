@@ -195,10 +195,10 @@ func fullVersionString() string {
 }
 
 var cockroachCmd = &cobra.Command{
-	Use:   "cockroach [command] (flags)",
-	Short: "CockroachDB command-line interface and server",
+	Use:   "patchroaddb [command] (flags)",
+	Short: "patchroaddb command-line interface and server",
 	// TODO(cdo): Add a pointer to the docs in Long.
-	Long: `CockroachDB command-line interface and server.`,
+	Long: `patchroaddb command-line interface and server.`,
 	// Disable automatic printing of usage information whenever an error
 	// occurs. Many errors are not the result of a bad command invocation,
 	// e.g. attempting to start a node on an in-use port, and printing the

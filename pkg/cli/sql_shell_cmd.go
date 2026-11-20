@@ -27,7 +27,7 @@ var sqlShellCmd = &cobra.Command{
 	Use:   "sql [options]",
 	Short: "open a sql shell",
 	Long: `
-Open a sql shell running against a cockroach database.
+Open a sql shell running against a patchroaddb database.
 `,
 	Args: cobra.NoArgs,
 	RunE: clierrorplus.MaybeDecorateError(runTerm),
@@ -45,7 +45,7 @@ func runTerm(cmd *cobra.Command, args []string) (resErr error) {
 		// Refer to README.md to understand the general design guidelines for
 		// help texts.
 		const welcomeMessage = `#
-# Welcome to the CockroachDB SQL shell.
+# Welcome to the patchroaddb SQL shell.
 # All statements must be terminated by a semicolon.
 # To exit, type: \q.
 #

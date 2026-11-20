@@ -1,34 +1,25 @@
+# The patchroaddb release image. The release workflow builds it for linux/amd64
+# and linux/arm64 from a context that holds patchroaddb-amd64,
+# patchroaddb-arm64, patchroaddb.sh, LICENSE, NOTICE and the licenses folder.
 FROM registry.access.redhat.com/ubi9/ubi-minimal
-ARG fips_enabled
+ARG TARGETARCH
 
-# For deployment, we need the following additionally installed:
 # tzdata - for time zone functions; reinstalled to replace the missing
 #          files in /usr/share/zoneinfo/
-# hostname - used in cockroach k8s manifests
+# hostname - used by Kubernetes manifests
 # tar - used by kubectl cp
 RUN microdnf update -y \
     && rpm --erase --nodeps tzdata \
     && microdnf install tzdata hostname tar gzip xz -y \
+    && microdnf clean all \
     && rm -rf /var/cache/yum
-# FIPS mode requires the `openssl` package installed. Also we need to temporarily
-# install the `crypto-policies-scripts` packege to tweak some configs. Because
-# `microdnf` doesn't support `autoremove`, we need to record the list of
-# packages before and after, and remove the installed ones afterward.
-RUN if [ "$fips_enabled" == "1" ]; then \
-    microdnf install -y openssl && \
-    rpm -qa | sort > /before.txt && \
-    microdnf install -y crypto-policies-scripts && \
-    fips-mode-setup --enable --no-bootcfg && \
-    rpm -qa | sort > /after.txt && \
-    microdnf remove -y $(comm -13 /before.txt /after.txt) && \
-    microdnf clean all && \
-    rm -rf /var/cache/yum /before.txt /after.txt; \
-    fi
 
-
+# The working directory keeps its upstream name, so the data directory stays
+# /cockroach/cockroach-data, as in upstream images.
 RUN mkdir /cockroach /licenses /docker-entrypoint-initdb.d
-COPY cockroach.sh cockroach /cockroach/
-COPY licenses/* /licenses/
+COPY patchroaddb.sh /cockroach/
+COPY patchroaddb-${TARGETARCH} /cockroach/patchroaddb
+COPY LICENSE NOTICE licenses/ /licenses/
 
 # Set working directory so that relative paths
 # are resolved appropriately when passed as args.
@@ -38,7 +29,5 @@ WORKDIR /cockroach/
 # commands via Docker
 ENV PATH=/cockroach:$PATH
 
-ENV COCKROACH_CHANNEL=official-docker
-
 EXPOSE 26257 8080
-ENTRYPOINT ["/cockroach/cockroach.sh"]
+ENTRYPOINT ["/cockroach/patchroaddb.sh"]
