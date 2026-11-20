@@ -800,9 +800,9 @@ SET ROLE root
 subtest end
 
 
-# The owner of a schema may drop a routine in it, but only the owner of the
-# routine may replace or alter it: the new body would run with the privileges
-# of whoever calls the routine.
+# Only the owner of a routine may replace or alter it, not the owner of its
+# schema: the new body would run with the privileges of whoever calls the
+# routine.
 subtest schema_owner_cannot_change_routine
 
 statement ok
@@ -822,12 +822,10 @@ ALTER FUNCTION sc_owned_by_testuser.f_owned_by_root() IMMUTABLE
 statement error must be owner of function f_owned_by_root
 ALTER FUNCTION sc_owned_by_testuser.f_owned_by_root() RENAME TO g
 
-statement ok
-DROP FUNCTION sc_owned_by_testuser.f_owned_by_root
-
 user root
 
 statement ok
+DROP FUNCTION sc_owned_by_testuser.f_owned_by_root;
 DROP SCHEMA sc_owned_by_testuser
 
 subtest end

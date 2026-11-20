@@ -3557,7 +3557,8 @@ statement ok
 CREATE TABLE sc_owned_by_testuser.t_owned_by_root (a INT PRIMARY KEY)
 
 statement ok
-CREATE TABLE t_seq_owner_root (a INT PRIMARY KEY)
+CREATE TABLE t_seq_owner_root (a INT PRIMARY KEY);
+GRANT CREATE ON DATABASE test TO testuser
 
 user testuser
 
@@ -3586,6 +3587,7 @@ user root
 
 statement ok
 DROP SCHEMA sc_owned_by_testuser;
-DROP TABLE t_seq_owner_root
+DROP TABLE t_seq_owner_root;
+REVOKE CREATE ON DATABASE test FROM testuser
 
 subtest end

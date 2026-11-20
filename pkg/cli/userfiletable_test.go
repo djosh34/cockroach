@@ -921,17 +921,20 @@ func TestUserfileGetStaysInDestination(t *testing.T) {
 	dir := t.TempDir()
 	localFilePath := filepath.Join(dir, "test.csv")
 	require.NoError(t, os.WriteFile(localFilePath, []byte("a"), 0666))
-	for _, file := range []string{"a/one.csv", "a/two.csv"} {
+	// The server reads "/../escaped.csv" as "/escaped.csv", so that file must
+	// exist for the planted name to download.
+	for _, file := range []string{"a/one.csv", "a/two.csv", "escaped.csv"} {
 		_, err := c.RunWithCapture(fmt.Sprintf("userfile upload %s %s", localFilePath, file))
 		require.NoError(t, err)
 	}
-	_, err := c.RunWithCaptureArgs([]string{"sql", "-e",
-		`UPDATE defaultdb.public.userfiles_root_upload_files SET filename = '../escaped.csv' WHERE filename = 'a/two.csv'`})
+	out, err := c.RunWithCaptureArgs([]string{"sql", "-e",
+		`UPDATE defaultdb.public.userfiles_root_upload_files SET filename = '/../escaped.csv' WHERE filename LIKE '%two.csv' RETURNING filename`})
 	require.NoError(t, err)
+	require.Contains(t, out, "../escaped.csv")
 
-	out, err := c.RunWithCaptureArgs([]string{"userfile", "get", "/", filepath.Join(dir, "dest")})
+	out, err = c.RunWithCaptureArgs([]string{"userfile", "get", "/", filepath.Join(dir, "dest")})
 	require.NoError(t, err)
-	require.Contains(t, out, "leaves the destination directory")
 	_, err = os.Stat(filepath.Join(dir, "escaped.csv"))
 	require.True(t, errors.Is(err, os.ErrNotExist), "file written outside the destination: %v", err)
+	require.Contains(t, out, "leaves the destination directory")
 }
