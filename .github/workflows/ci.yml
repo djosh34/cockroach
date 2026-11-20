@@ -82,9 +82,21 @@ jobs:
       - uses: ./.github/actions/setup-go
       - run: build/ci/test.sh logic ${{ matrix.shard }} 4
 
+  # Starts a node with no network but loopback and fails on any attempt to
+  # connect elsewhere. See build/ci/no-outbound.sh.
+  no-outbound:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+      - run: sudo apt-get update && sudo apt-get install -y strace
+      - run: go build -o bin/cockroach ./pkg/cmd/cockroach-oss
+      - run: sudo build/ci/no-outbound.sh bin/cockroach
+
   ci-ok:
     if: always()
-    needs: [build, generate, lint, test, logic]
+    needs: [build, generate, lint, test, logic, no-outbound]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
