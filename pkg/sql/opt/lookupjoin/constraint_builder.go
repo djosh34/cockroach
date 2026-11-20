@@ -656,46 +656,60 @@ func (b *ConstraintBuilder) findJoinConstantRangeFilter(
 			if !canUseFilter {
 				continue
 			}
-			if (!needStart || !needEnd) && !span.StartKey().IsEmpty() && !span.EndKey().IsEmpty() &&
-				!span.StartKey().IsNull() && !span.EndKey().IsNull() {
-				// The filter supplies both start and end bounds, but we only need one
-				// of them. Construct a new filter to be used in the lookup, and another
-				// filter with the unused bound to be included in the ON condition. The
-				// original filter should still be removed from the ON condition.
-				//
-				// We've already filtered cases where the column isn't constrained by a
-				// single span, so we only need to consider start and end bounds.
-				var startFilter, endFilter memo.FiltersItem
-				startOp, endOp := opt.GtOp, opt.LtOp
-				if span.StartBoundary() == constraint.IncludeBoundary {
-					startOp = opt.GeOp
-				}
-				if span.EndBoundary() == constraint.IncludeBoundary {
-					endOp = opt.LeOp
-				}
-				startDatum, endDatum := span.StartKey().Value(0), span.EndKey().Value(0)
-				b.f.DisableOptimizationsTemporarily(func() {
-					// Disable normalization rules when constructing the lookup expression
-					// so that it does not get normalized into a non-canonical expression.
-					indexVariable := b.f.ConstructVariable(col)
+			// A single comparison is one bound and is used as it is. A
+			// conjunction is built again from the span: the lookup joiner uses
+			// at most one lower and one upper bound, so (k >= 1) AND (k >= 0),
+			// whose span is [/1 - ], would lose its tighter bound. A bound that
+			// is not needed goes back to the ON condition. The original filter is
+			// removed from the ON condition either way.
+			switch filters[i].Condition.(type) {
+			case *memo.GeExpr, *memo.GtExpr, *memo.LeExpr, *memo.LtExpr:
+				return &filters[i], nil, i
+			}
+			hasStart := !span.StartKey().IsEmpty() && !span.StartKey().IsNull()
+			hasEnd := !span.EndKey().IsEmpty() && !span.EndKey().IsNull()
+			var startFilter, endFilter, bothFilter memo.FiltersItem
+			startOp, endOp := opt.GtOp, opt.LtOp
+			if span.StartBoundary() == constraint.IncludeBoundary {
+				startOp = opt.GeOp
+			}
+			if span.EndBoundary() == constraint.IncludeBoundary {
+				endOp = opt.LeOp
+			}
+			b.f.DisableOptimizationsTemporarily(func() {
+				// Disable normalization rules when constructing the lookup expression
+				// so that it does not get normalized into a non-canonical expression.
+				indexVariable := b.f.ConstructVariable(col)
+				var start, end opt.ScalarExpr
+				if hasStart {
+					startDatum := span.StartKey().Value(0)
 					startBound := b.f.ConstructConstVal(startDatum, startDatum.ResolvedType())
-					endBound := b.f.ConstructConstVal(endDatum, endDatum.ResolvedType())
-					startFilter = b.f.ConstructFiltersItem(
-						b.f.DynamicConstruct(startOp, indexVariable, startBound).(opt.ScalarExpr),
-					)
-					endFilter = b.f.ConstructFiltersItem(
-						b.f.DynamicConstruct(endOp, indexVariable, endBound).(opt.ScalarExpr),
-					)
-				})
-				if !needStart {
-					rangeFilter, remaining = &endFilter, &startFilter
-				} else if !needEnd {
-					rangeFilter, remaining = &startFilter, &endFilter
+					start = b.f.DynamicConstruct(startOp, indexVariable, startBound).(opt.ScalarExpr)
+					startFilter = b.f.ConstructFiltersItem(start)
 				}
-			} else {
-				// The filter can be used as-is in the lookup expression. No remaining
-				// filter needs to be added to the ON condition.
-				rangeFilter = &filters[i]
+				if hasEnd {
+					endDatum := span.EndKey().Value(0)
+					endBound := b.f.ConstructConstVal(endDatum, endDatum.ResolvedType())
+					end = b.f.DynamicConstruct(endOp, indexVariable, endBound).(opt.ScalarExpr)
+					endFilter = b.f.ConstructFiltersItem(end)
+				}
+				if hasStart && hasEnd {
+					bothFilter = b.f.ConstructFiltersItem(b.f.ConstructAnd(start, end))
+				}
+			})
+			switch {
+			case needStart && needEnd && hasStart && hasEnd:
+				rangeFilter = &bothFilter
+			case needStart && hasStart:
+				rangeFilter = &startFilter
+				if hasEnd {
+					remaining = &endFilter
+				}
+			default:
+				rangeFilter = &endFilter
+				if hasStart {
+					remaining = &startFilter
+				}
 			}
 			return rangeFilter, remaining, i
 		}

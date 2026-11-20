@@ -158,6 +158,7 @@ type Memo struct {
 	preferLookupJoinsForFKs                    bool
 	saveTablesPrefix                           string
 	dateStyle                                  pgdate.DateStyle
+	timeZone                                   string
 	intervalStyle                              duration.IntervalStyle
 	propagateInputOrdering                     bool
 	disallowFullTableScans                     bool
@@ -233,6 +234,7 @@ func (m *Memo) Init(ctx context.Context, evalCtx *eval.Context) {
 		preferLookupJoinsForFKs:                    evalCtx.SessionData().PreferLookupJoinsForFKs,
 		saveTablesPrefix:                           evalCtx.SessionData().SaveTablesPrefix,
 		dateStyle:                                  evalCtx.SessionData().GetDateStyle(),
+		timeZone:                                   evalCtx.SessionData().GetLocation().String(),
 		intervalStyle:                              evalCtx.SessionData().GetIntervalStyle(),
 		propagateInputOrdering:                     evalCtx.SessionData().PropagateInputOrdering,
 		disallowFullTableScans:                     evalCtx.SessionData().DisallowFullTableScans,
@@ -390,6 +392,7 @@ func (m *Memo) IsStale(
 		m.preferLookupJoinsForFKs != evalCtx.SessionData().PreferLookupJoinsForFKs ||
 		m.saveTablesPrefix != evalCtx.SessionData().SaveTablesPrefix ||
 		m.dateStyle != evalCtx.SessionData().GetDateStyle() ||
+		m.timeZone != evalCtx.SessionData().GetLocation().String() ||
 		m.intervalStyle != evalCtx.SessionData().GetIntervalStyle() ||
 		m.propagateInputOrdering != evalCtx.SessionData().PropagateInputOrdering ||
 		m.disallowFullTableScans != evalCtx.SessionData().DisallowFullTableScans ||

@@ -14,6 +14,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/memo"
@@ -244,6 +245,13 @@ func TestMemoIsStale(t *testing.T) {
 	evalCtx.SessionData().DataConversionConfig.DateStyle = pgdate.DateStyle{Order: pgdate.Order_YMD}
 	stale()
 	evalCtx.SessionData().DataConversionConfig.DateStyle = pgdate.DefaultDateStyle()
+	notStale()
+
+	// Stale time zone.
+	oldLocation := evalCtx.SessionData().Location
+	evalCtx.SessionData().Location = time.FixedZone("UTC-5", -5*60*60)
+	stale()
+	evalCtx.SessionData().Location = oldLocation
 	notStale()
 
 	// Stale IntervalStyle.
