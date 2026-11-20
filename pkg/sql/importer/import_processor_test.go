@@ -883,6 +883,10 @@ func TestCSVImportMarksFilesFullyProcessed(t *testing.T) {
 	// Send cancellation and unblock import.
 	proceedImport()
 
+	// The first run finished the import and published the table. The resumed
+	// run does not import again, so it may not report a summary at all.
+	importSummary = roachpb.RowCount{}
+
 	// Unpause the job and wait for it to complete.
 	if err := registry.Unpause(ctx, nil, jobID); err != nil {
 		t.Fatal(err)
