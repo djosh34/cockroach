@@ -91,6 +91,7 @@ func TestVersionNamesOnlyPatchroaddb(t *testing.T) {
 	info := GetInfo()
 	require.True(t, strings.HasPrefix(info.Tag, strings.TrimSpace(cockroachVersion)), info.Tag)
 	require.True(t, strings.HasPrefix(info.Short(), "patchroaddb "+info.Tag+" ("), info.Short())
+	require.True(t, strings.HasPrefix(info.Long(), "patchroaddb "+info.Tag+"\n"), info.Long())
 	for _, s := range []string{info.Short(), info.Long()} {
 		require.NotContains(t, s, "CockroachDB")
 		require.NotContains(t, s, "23.2")

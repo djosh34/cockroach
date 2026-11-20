@@ -31,11 +31,10 @@ const TimeFormat = "2006/01/02 15:04:05"
 var (
 	// These variables are initialized via the linker -X flag when compiling
 	// release binaries.
-	utcTime          string // Build time in UTC (year/month/day hour:min:sec)
-	rev              string // SHA-1 of this build (git rev-parse)
-	buildTagOverride string
-	cgoTargetTriple  string
-	platform         = fmt.Sprintf("%s %s", runtime.GOOS, runtime.GOARCH)
+	utcTime         string // Build time in UTC (year/month/day hour:min:sec)
+	rev             string // SHA-1 of this build (git rev-parse)
+	cgoTargetTriple string
+	platform        = fmt.Sprintf("%s %s", runtime.GOOS, runtime.GOARCH)
 	// Distribution is always "OSS".
 	Distribution      = "OSS"
 	typ               string // Type of this build: <empty>, "development", or "release"
@@ -64,9 +63,6 @@ func SeemsOfficial() bool {
 }
 
 func computeBinaryVersion(versionTxt, revision string) string {
-	if buildTagOverride != "" {
-		return buildTagOverride
-	}
 	txt := strings.TrimSuffix(versionTxt, "\n")
 	v, err := version.Parse(txt)
 	if err != nil {
@@ -112,6 +108,7 @@ func (b Info) Short() string {
 func (b Info) Long() string {
 	var buf bytes.Buffer
 	tw := tabwriter.NewWriter(&buf, 2, 1, 2, ' ', 0)
+	fmt.Fprintf(tw, "patchroaddb %s\n", b.Tag)
 	fmt.Fprintf(tw, "Build Tag:        %s\n", b.Tag)
 	fmt.Fprintf(tw, "Build Time:       %s\n", b.Time)
 	fmt.Fprintf(tw, "Platform:         %s", b.Platform)

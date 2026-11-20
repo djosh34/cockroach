@@ -1643,8 +1643,8 @@ on large clusters with large numbers of ranges, these files can be omitted if an
 issue being investigated is already known to be in another layer of the system (for example,
 an error message about an unsupported feature or incompatible value in a SQL schema change or
 statement). Note however many higher-level issues are ultimately related to the underlying KV
-storage layer described by these files so only set this to false if directed to do so by Cockroach
-Labs support.
+storage layer described by these files so only set this to false when sure that the issue lies
+elsewhere.
 `,
 	}
 
