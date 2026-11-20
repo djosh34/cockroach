@@ -6141,7 +6141,6 @@ ClusterResponse contains metadata for the cluster.
 | Field | Type | Label | Description | Support status |
 | ----- | ---- | ----- | ----------- | -------------- |
 | cluster_id | [string](#cockroach.server.serverpb.ClusterResponse-string) |  | The unique ID used to identify this cluster. | [reserved](#support-status) |
-| reporting_enabled | [bool](#cockroach.server.serverpb.ClusterResponse-bool) |  | True if diagnostics reporting is enabled for the cluster. | [reserved](#support-status) |
 | enterprise_enabled | [bool](#cockroach.server.serverpb.ClusterResponse-bool) |  | True if enterprise features are enabled for the cluster. | [reserved](#support-status) |
 
 

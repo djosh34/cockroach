@@ -14,8 +14,6 @@ cluster.preserve_downgrade_option	string		disable (automatic or manual) cluster 
 diagnostics.active_query_dumps.enabled	boolean	true	experimental: enable dumping of anonymized active queries to disk when node is under memory pressure	system-visible
 diagnostics.forced_sql_stat_reset.interval	duration	2h0m0s	interval after which the reported SQL Stats are reset even if not collected by telemetry reporter. It has a max value of 24H.	application
 diagnostics.memory_monitoring_dumps.enabled	boolean	true	enable dumping of memory monitoring state at the same time as heap profiles are taken	system-visible
-diagnostics.reporting.enabled	boolean	true	enable reporting diagnostic metrics to cockroach labs	application
-diagnostics.reporting.interval	duration	1h0m0s	interval at which diagnostics data should be reported	application
 external.graphite.endpoint	string		if nonempty, push server metrics to the Graphite or Carbon server at the specified host:port	application
 external.graphite.interval	duration	10s	the interval at which metrics are pushed to Graphite (if enabled)	application
 feature.export.enabled	boolean	true	set to true to enable exports, false to disable; default is true	application
@@ -260,7 +258,6 @@ sql.ttl.default_delete_rate_limit	integer	100	default delete rate limit (rows pe
 sql.ttl.default_select_batch_size	integer	500	default amount of rows to select in a single query during a TTL job	application
 sql.ttl.default_select_rate_limit	integer	0	default select rate limit (rows per second) per node for each TTL job. Use 0 to signify no rate limit.	application
 sql.ttl.job.enabled	boolean	true	whether the TTL job is enabled	application
-sql.txn.read_committed_isolation.enabled	boolean	false	set to true to allow transactions to use the READ COMMITTED isolation level if specified by BEGIN/SET commands	application
 sql.txn_fingerprint_id_cache.capacity	integer	100	the maximum number of txn fingerprint IDs stored	application
 storage.max_sync_duration	duration	20s	maximum duration for disk operations; any operations that take longer than this setting trigger a warning log entry or process crash	system-visible
 storage.max_sync_duration.fatal.enabled	boolean	true	if true, fatal the process when a disk operation exceeds storage.max_sync_duration	application

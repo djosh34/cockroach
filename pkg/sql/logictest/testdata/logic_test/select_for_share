@@ -114,4 +114,3 @@ SET enable_shared_locking_for_serializable = true
 statement error usage of shared locks in conjunction with skip locked wait policy is currently unsupported
 SELECT * FROM t FOR SHARE SKIP LOCKED
 
-
