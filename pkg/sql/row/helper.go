@@ -215,11 +215,7 @@ func (rh *RowHelper) encodeSecondaryIndexes(
 func (rh *RowHelper) SkipColumnNotInPrimaryIndexValue(
 	colID descpb.ColumnID, value tree.Datum,
 ) bool {
-	if rh.primaryIndexKeyCols.Empty() {
-		rh.primaryIndexKeyCols = rh.TableDesc.GetPrimaryIndex().CollectKeyColumnIDs()
-		rh.primaryIndexValueCols = rh.TableDesc.GetPrimaryIndex().CollectPrimaryStoredColumnIDs()
-	}
-	if !rh.primaryIndexKeyCols.Contains(colID) {
+	if !rh.isPrimaryKeyColumn(colID) {
 		return !rh.primaryIndexValueCols.Contains(colID)
 	}
 	if cdatum, ok := value.(tree.CompositeDatum); ok {
@@ -230,6 +226,16 @@ func (rh *RowHelper) SkipColumnNotInPrimaryIndexValue(
 	// each family. Family 0 is guaranteed to exist and acts as a
 	// sentinel.
 	return true
+}
+
+// isPrimaryKeyColumn returns true if colID is a key column of the primary
+// index.
+func (rh *RowHelper) isPrimaryKeyColumn(colID descpb.ColumnID) bool {
+	if rh.primaryIndexKeyCols.Empty() {
+		rh.primaryIndexKeyCols = rh.TableDesc.GetPrimaryIndex().CollectKeyColumnIDs()
+		rh.primaryIndexValueCols = rh.TableDesc.GetPrimaryIndex().CollectPrimaryStoredColumnIDs()
+	}
+	return rh.primaryIndexKeyCols.Contains(colID)
 }
 
 func (rh *RowHelper) SortedColumnFamily(famID descpb.FamilyID) ([]descpb.ColumnID, bool) {
