@@ -1710,3 +1710,24 @@ statement error pgcode 42601 syntax error
 PREPARE bar AS CALL foo($1);
 
 subtest end
+
+# A NULL placeholder in an equality with a UNIQUE column matches no row.
+subtest null_placeholder_unique
+
+statement ok
+CREATE TABLE t_null_unique (k INT PRIMARY KEY, u INT UNIQUE);
+INSERT INTO t_null_unique VALUES (1, NULL), (2, 2)
+
+statement ok
+PREPARE p_null_unique AS SELECT * FROM t_null_unique WHERE u = $1
+
+query II
+EXECUTE p_null_unique(NULL)
+----
+
+query II
+EXECUTE p_null_unique(2)
+----
+2  2
+
+subtest end

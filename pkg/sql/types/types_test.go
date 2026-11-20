@@ -1026,6 +1026,8 @@ func TestWithoutTypeModifiers(t *testing.T) {
 		{MakeArray(MakeDecimal(5, 1)), DecimalArray},
 		{MakeTuple([]*T{MakeString(2), Time, MakeDecimal(5, 1)}),
 			MakeTuple([]*T{String, Time, Decimal})},
+		{MakeLabeledTuple([]*T{MakeString(2), Int}, []string{"a", "b"}),
+			MakeLabeledTuple([]*T{String, Int}, []string{"a", "b"})},
 
 		// Types without modifiers.
 		{Bool, Bool},

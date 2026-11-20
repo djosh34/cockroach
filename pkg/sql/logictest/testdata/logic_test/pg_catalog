@@ -2494,6 +2494,18 @@ substring  true         false      i            NULL
 substring  true         false      i            NULL
 substring  true         false      i            NULL
 
+# Every set-returning builtin has proretset set, whatever its return type.
+query TB colnames,rowsort
+SELECT DISTINCT proname, proretset
+FROM pg_catalog.pg_proc
+WHERE proname IN ('generate_series', 'unnest', 'json_array_elements', 'abs')
+----
+proname              proretset
+abs                  false
+generate_series      true
+json_array_elements  true
+unnest               true
+
 query TIIOTTTT colnames
 SELECT proname, pronargs, pronargdefaults, prorettype, proargtypes, proallargtypes, proargmodes, proargdefaults
 FROM pg_catalog.pg_proc

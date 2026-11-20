@@ -72,6 +72,12 @@ func (t *trigramFilterPlanner) extractInvertedFilterConditionFromLeaf(
 		if evalCtx.SessionData().OptimizerUseTrigramSimilarityOptimization {
 			return inverted.NonInvertedColExpression{}, expr
 		}
+		// With a threshold of 0 every string is similar, including strings
+		// that share no trigram with the constant, so the index cannot find
+		// all matches.
+		if evalCtx.SessionData().TrigramSimilarityThreshold == 0 {
+			return inverted.NonInvertedColExpression{}, expr
+		}
 		// If we're doing a % expression (similarity threshold), we need to
 		// construct an OR out of the spans: we need to find results that match any
 		// of the trigrams in the constant datum, and we'll filter the results

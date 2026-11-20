@@ -20,6 +20,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/norm"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/props"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
+	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/cockroach/pkg/util/intsets"
 	"github.com/cockroachdb/errors"
@@ -165,7 +166,17 @@ func (b *ConstraintBuilder) Build(
 	// Extract the equality columns from the ON and derived FK filters.
 	leftEq, rightEq, eqFilterOrds :=
 		memo.ExtractJoinEqualityColumnsWithFilterOrds(b.leftCols, b.rightCols, b.allFilters)
-	rightEqSet := rightEq.ToSet()
+
+	// Computed column expressions are remapped from right to left columns
+	// below. Only equalities whose sides have identical types allow that:
+	// equal values of types that are only equivalent, such as OID and
+	// REGCLASS, can give different results in the same expression.
+	var identicalEqSet opt.ColSet
+	for i := range rightEq {
+		if b.md.ColumnMeta(leftEq[i]).Type.Identical(b.md.ColumnMeta(rightEq[i]).Type) {
+			identicalEqSet.Add(rightEq[i])
+		}
+	}
 
 	// Retrieve the inequality columns from the ON and derived FK filters.
 	var rightCmp opt.ColList
@@ -190,7 +201,7 @@ func (b *ConstraintBuilder) Build(
 	// columns, but it avoids unnecessary work in most cases.
 	firstIdxCol := b.table.IndexColumnID(index, 0)
 	if _, ok := rightEq.Find(firstIdxCol); !ok {
-		if _, ok := b.findComputedColJoinEquality(b.table, firstIdxCol, rightEqSet); !ok {
+		if _, ok := b.findComputedColJoinEquality(b.table, firstIdxCol, identicalEqSet); !ok {
 			if !HasJoinFilterConstants(b.allFilters, firstIdxCol, b.evalCtx) {
 				if _, ok := rightCmp.Find(firstIdxCol); !ok {
 					return Constraint{}, false
@@ -286,14 +297,16 @@ func (b *ConstraintBuilder) Build(
 		// and construct a Project expression that wraps the join's input
 		// below. See findComputedColJoinEquality for the requirements to
 		// synthesize a computed column equality constraint.
-		if expr, ok := b.findComputedColJoinEquality(b.table, idxCol, rightEqSet); ok {
+		if expr, ok := b.findComputedColJoinEquality(b.table, idxCol, identicalEqSet); ok {
 			colMeta := b.md.ColumnMeta(idxCol)
 			compEqCol := b.md.AddColumn(fmt.Sprintf("%s_eq", colMeta.Alias), colMeta.Type)
 
 			// Lazily initialize eqColMap.
 			if b.eqColMap.Empty() {
 				for i := range rightEq {
-					b.eqColMap.Set(int(rightEq[i]), int(leftEq[i]))
+					if identicalEqSet.Contains(rightEq[i]) {
+						b.eqColMap.Set(int(rightEq[i]), int(leftEq[i]))
+					}
 				}
 			}
 
@@ -316,9 +329,12 @@ func (b *ConstraintBuilder) Build(
 		foundVals, allIdx, ok := FindJoinFilterConstants(b.allFilters, idxCol, b.evalCtx)
 
 		// If a single constant value was found, project it in the input
-		// and use it as an equality column.
-		if ok && len(foundVals) == 1 {
-			idxColType := b.md.ColumnMeta(idxCol).Type
+		// and use it as an equality column. The projected column has the type
+		// of the index column, so this only works if the value keeps its
+		// value in that type. Otherwise the value is used in a lookup
+		// expression below.
+		idxColType := b.md.ColumnMeta(idxCol).Type
+		if ok && len(foundVals) == 1 && b.fitsType(foundVals[0], idxColType) {
 			constColID := b.md.AddColumn(
 				fmt.Sprintf("lookup_join_const_col_@%d", idxCol),
 				idxColType,
@@ -445,8 +461,10 @@ func (b *ConstraintBuilder) Build(
 //
 //  1. col is non-nullable.
 //  2. col is a computed column.
-//  3. Columns referenced in the computed expression are a subset of columns
-//     that already have equality constraints.
+//  3. Columns referenced in the computed expression are a subset of eqCols,
+//     the columns that already have equality constraints with columns of
+//     identical type.
+//  4. The computed expression is not composite-sensitive.
 //
 // For example, consider the table and query:
 //
@@ -503,12 +521,30 @@ func (b *ConstraintBuilder) findComputedColJoinEquality(
 	if !ok {
 		return nil, false
 	}
+	// Equal values of composite types, such as 2.0 and 2.00, can give
+	// different results in a composite-sensitive expression, such as a cast
+	// to STRING.
+	if memo.CanBeCompositeSensitive(b.md, expr) {
+		return nil, false
+	}
 	var sharedProps props.Shared
 	memo.BuildSharedProps(expr, &sharedProps, b.evalCtx)
 	if !sharedProps.OuterCols.SubsetOf(eqCols) {
 		return nil, false
 	}
 	return expr, true
+}
+
+// fitsType returns true if val keeps its value when it is converted to typ.
+// For example, 'abcd' does not fit CHAR(3) and 1.234 does not fit
+// DECIMAL(10, 2).
+func (b *ConstraintBuilder) fitsType(val tree.Datum, typ *types.T) bool {
+	adjusted, err := tree.AdjustValueToType(typ, val)
+	if err != nil {
+		return false
+	}
+	cmp, err := adjusted.CompareError(b.evalCtx, val)
+	return err == nil && cmp == 0
 }
 
 // findJoinVariableRangeFilters attempts to find inequality constraints for the

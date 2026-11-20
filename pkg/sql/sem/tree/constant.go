@@ -631,6 +631,12 @@ func (expr *StrVal) ResolveAsType(
 			expr.resString = DString(expr.s)
 			return NewDNameFromDString(&expr.resString), nil
 		}
+		if typ.Oid() == oid.T_bpchar {
+			// Trailing spaces are not significant in CHAR values, and CHAR
+			// values never keep them. Without this, 'f'::CHAR = 'f ' is false.
+			expr.resString = DString(strings.TrimRight(expr.s, " "))
+			return &expr.resString, nil
+		}
 		expr.resString = DString(expr.s)
 		return &expr.resString, nil
 

@@ -358,3 +358,21 @@ FROM
             AS tab (col1_1, col1_2) ON
             (tab2.col1) = (tab.col1_1)
             AND (tab2.col2) = (tab.col1_2);
+
+# With a similarity threshold of 0 every string is similar, so an inverted
+# index scan cannot find all matches.
+statement ok
+CREATE TABLE t_trgm_zero (k INT PRIMARY KEY, s STRING, INVERTED INDEX (s gin_trgm_ops));
+INSERT INTO t_trgm_zero VALUES (1, 'abc'), (2, 'xyz')
+
+statement ok
+SET pg_trgm.similarity_threshold = 0
+
+query IT rowsort
+SELECT * FROM t_trgm_zero WHERE s % 'abc'
+----
+1  abc
+2  xyz
+
+statement ok
+RESET pg_trgm.similarity_threshold

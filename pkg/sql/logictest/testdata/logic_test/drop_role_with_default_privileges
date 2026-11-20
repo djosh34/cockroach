@@ -155,3 +155,23 @@ ALTER DEFAULT PRIVILEGES FOR ALL ROLES IN SCHEMA public REVOKE ALL ON SEQUENCES 
 
 statement ok
 DROP ROLE testuser4;
+
+# A role that changed the default privileges on its own new objects owns them,
+# even when they grant nothing to any user. Dropping it would leave them behind
+# for a new role with the same name.
+statement ok
+CREATE ROLE own_defaults;
+GRANT own_defaults TO root;
+ALTER DEFAULT PRIVILEGES FOR ROLE own_defaults REVOKE ALL ON TABLES FROM own_defaults;
+REVOKE own_defaults FROM root
+
+statement error pq: role own_defaults cannot be dropped because some objects depend on it\nowner of changed default privileges on its own new objects in database testdb2
+DROP ROLE own_defaults
+
+statement ok
+GRANT own_defaults TO root;
+ALTER DEFAULT PRIVILEGES FOR ROLE own_defaults GRANT ALL ON TABLES TO own_defaults;
+REVOKE own_defaults FROM root
+
+statement ok
+DROP ROLE own_defaults

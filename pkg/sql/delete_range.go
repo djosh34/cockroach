@@ -51,6 +51,11 @@ type deleteRangeNode struct {
 
 	// rowCount will be set to the count of rows deleted.
 	rowCount int
+
+	// prevRowPrefix is the key prefix of the last row counted in rowCount. It
+	// carries over between batches, because a batch limit can split the
+	// column families of one row over two batches.
+	prevRowPrefix []byte
 }
 
 var _ planNode = &deleteRangeNode{}
@@ -188,10 +193,9 @@ func (d *deleteRangeNode) processResults(
 	results []kv.Result, resumeSpans []roachpb.Span,
 ) (roachpb.Spans, error) {
 	for _, r := range results {
-		var prev []byte
 		for _, keyBytes := range r.Keys {
 			// If prefix is same, don't bother decoding key.
-			if len(prev) > 0 && bytes.HasPrefix(keyBytes, prev) {
+			if len(d.prevRowPrefix) > 0 && bytes.HasPrefix(keyBytes, d.prevRowPrefix) {
 				continue
 			}
 
@@ -200,8 +204,8 @@ func (d *deleteRangeNode) processResults(
 				return nil, err
 			}
 			k := keyBytes[:len(keyBytes)-len(after)]
-			if !bytes.Equal(k, prev) {
-				prev = k
+			if !bytes.Equal(k, d.prevRowPrefix) {
+				d.prevRowPrefix = k
 				d.rowCount++
 			}
 		}

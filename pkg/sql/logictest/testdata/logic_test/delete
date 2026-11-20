@@ -588,3 +588,22 @@ statement error pgcode 42803 sum\(\): aggregate functions are not allowed in ORD
 DELETE FROM t108166 ORDER BY COALESCE(sum(a), 1) LIMIT 1;
 
 subtest end
+
+# A batch limit can split the column families of a row over two batches. The
+# row is counted once.
+subtest delete_range_families
+
+statement ok
+CREATE TABLE t_del_fam (k INT PRIMARY KEY, a INT, b INT, FAMILY (k), FAMILY (a), FAMILY (b));
+INSERT INTO t_del_fam SELECT i, i, IF(i = 1, NULL, i) FROM generate_series(1, 1000) AS g(i)
+
+statement ok
+BEGIN
+
+statement count 1000
+DELETE FROM t_del_fam WHERE k > 0
+
+statement ok
+COMMIT
+
+subtest end
