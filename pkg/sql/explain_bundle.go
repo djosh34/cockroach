@@ -236,6 +236,11 @@ func makeStmtBundleBuilder(
 	placeholders *tree.PlaceholderInfo,
 	sv *settings.Values,
 ) (stmtBundleBuilder, error) {
+	// A statement that may carry a secret is always collected in redacted
+	// form, whoever asks for the bundle.
+	if plan.stmt != nil && plan.stmt.AST != nil && statementMayCarrySecret(plan.stmt.AST) {
+		flags.RedactValues = true
+	}
 	b := stmtBundleBuilder{
 		flags: flags, db: db, p: p, ie: ie, plan: plan, trace: trace, placeholders: placeholders, sv: sv,
 	}
@@ -942,7 +947,7 @@ func (c *stmtEnvCollector) PrintClusterSettings(w io.Writer, all bool) error {
 		"stmtEnvCollector",
 		nil, /* txn */
 		sessiondata.NoSessionDataOverride,
-		fmt.Sprintf(`SELECT variable, value, default_value FROM crdb_internal.cluster_settings%s`, suffix),
+		fmt.Sprintf(`SELECT variable, value, default_value, key FROM crdb_internal.cluster_settings%s`, suffix),
 	)
 	if err != nil {
 		return err
@@ -952,12 +957,20 @@ func (c *stmtEnvCollector) PrintClusterSettings(w io.Writer, all bool) error {
 		setting, ok1 := r[0].(*tree.DString)
 		value, ok2 := r[1].(*tree.DString)
 		def, ok3 := r[2].(*tree.DString)
-		if ok1 && ok2 && ok3 {
+		key, ok4 := r[3].(*tree.DString)
+		if ok1 && ok2 && ok3 && ok4 {
+			// The value of a sensitive setting stays out of the bundle.
+			if settings.IsSensitive(settings.InternalKey(*key)) {
+				if *value != *def {
+					fmt.Fprintf(w, "-- %s differs from its default; its value is sensitive\n", *setting)
+				}
+				continue
+			}
 			var skip bool
 			// Ignore some settings that might differ from their default values
 			// but aren't useful in stmt bundles.
 			switch *setting {
-			case "cluster.secret", "version":
+			case "version":
 				skip = true
 			}
 			if buildutil.CrdbTestBuild {

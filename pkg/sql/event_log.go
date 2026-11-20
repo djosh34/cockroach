@@ -185,11 +185,29 @@ var defaultRedactionOptions = redactionOptions{
 	omitSQLNameRedaction: false,
 }
 
+// statementMayCarrySecret reports whether stmt can hold a password, a
+// credential in a URI or the value of a sensitive setting. Event logs and
+// statement bundles leave out the constants and placeholder values of such
+// statements.
+func statementMayCarrySecret(stmt tree.Statement) bool {
+	switch stmt.(type) {
+	case *tree.CreateRole, *tree.AlterRole, *tree.Import, *tree.Export,
+		*tree.CreateExternalConnection, *tree.SetClusterSetting, *tree.AlterTenantSetClusterSetting:
+		return true
+	}
+	return false
+}
+
 func (p *planner) getCommonSQLEventDetails(opt redactionOptions) eventpb.CommonSQLEventDetails {
 	redactableStmt := formatStmtKeyAsRedactableString(
 		p.extendedEvalCtx.VirtualSchemas, p.stmt.AST,
 		p.extendedEvalCtx.Context.Annotations, opt.toFlags(), p,
 	)
+	mayCarrySecret := statementMayCarrySecret(p.stmt.AST)
+	if mayCarrySecret {
+		// The constants are marked as unsafe; replace them.
+		redactableStmt = redactableStmt.Redact()
+	}
 	commonSQLEventDetails := eventpb.CommonSQLEventDetails{
 		Statement:       redactableStmt,
 		Tag:             p.stmt.AST.StatementTag(),
@@ -199,7 +217,11 @@ func (p *planner) getCommonSQLEventDetails(opt redactionOptions) eventpb.CommonS
 	if pls := p.extendedEvalCtx.Context.Placeholders.Values; len(pls) > 0 {
 		commonSQLEventDetails.PlaceholderValues = make([]string, len(pls))
 		for idx, val := range pls {
-			commonSQLEventDetails.PlaceholderValues[idx] = val.String()
+			if mayCarrySecret {
+				commonSQLEventDetails.PlaceholderValues[idx] = "*****"
+			} else {
+				commonSQLEventDetails.PlaceholderValues[idx] = val.String()
+			}
 		}
 	}
 	return commonSQLEventDetails

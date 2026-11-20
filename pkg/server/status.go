@@ -3879,6 +3879,10 @@ func (s *statusServer) JobStatus(
 	// See https://github.com/cockroachdb/cockroach/issues/46049.
 	*res.Payload = j.Payload()
 	*res.Progress = j.Progress()
+	// The details can hold external storage URIs with credentials, so they are
+	// not returned. The description, status, times, errors and fraction stay.
+	res.Payload.Details = nil
+	res.Progress.Details = nil
 
 	return &serverpb.JobStatusResponse{Job: res}, nil
 }

@@ -15,8 +15,24 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cockroachdb/cockroach/pkg/settings"
+	"github.com/cockroachdb/cockroach/pkg/sql/lexbase"
 	"github.com/cockroachdb/errors"
 )
+
+// sensitiveSettingKeys and sensitiveSettingNames are SQL lists of the keys and
+// names of the sensitive settings, whose values debug zip never includes.
+var sensitiveSettingKeys, sensitiveSettingNames = func() (string, string) {
+	keys := []string{"''"}
+	names := []string{"''"}
+	for _, key := range settings.SensitiveKeys() {
+		keys = append(keys, lexbase.EscapeSQLString(string(key)))
+		if s, ok := settings.LookupForLocalAccessByKey(key, settings.ForSystemTenant); ok {
+			names = append(names, lexbase.EscapeSQLString(string(s.Name())))
+		}
+	}
+	return strings.Join(keys, ", "), strings.Join(names, ", ")
+}()
 
 // NonSensitiveColumns is a string list used to define table columns that do
 // not contain sensitive data.
@@ -158,7 +174,13 @@ var zipInternalTablesPerCluster = DebugZipTableRegistry{
 		},
 	},
 	"crdb_internal.cluster_queries": {
-		// `client_address` contains unredacted client IP addresses.
+		// `client_address` contains unredacted client IP addresses. Constants
+		// in the SQL text are hidden even without redaction: they can hold
+		// passwords or setting values.
+		customQueryUnredacted: `SELECT query_id, txn_id, node_id, session_id, user_name, start,
+			crdb_internal.hide_sql_constants(query) AS query, client_address, application_name,
+			distributed, phase, full_scan, plan_gist, database
+			FROM crdb_internal.cluster_queries`,
 		nonSensitiveCols: NonSensitiveColumns{
 			"query_id",
 			"txn_id",
@@ -174,7 +196,15 @@ var zipInternalTablesPerCluster = DebugZipTableRegistry{
 		},
 	},
 	"crdb_internal.cluster_sessions": {
-		// `client_address` contains unredacted client IP addresses.
+		// `client_address` contains unredacted client IP addresses. Constants
+		// in the SQL text are hidden even without redaction: they can hold
+		// passwords or setting values.
+		customQueryUnredacted: `SELECT node_id, session_id, user_name, client_address, application_name,
+			crdb_internal.hide_sql_constants(active_queries) AS active_queries,
+			crdb_internal.hide_sql_constants(last_active_query) AS last_active_query,
+			num_txns_executed, session_start, active_query_start, kv_txn, alloc_bytes,
+			max_alloc_bytes, status, session_end
+			FROM crdb_internal.cluster_sessions`,
 		nonSensitiveCols: NonSensitiveColumns{
 			"node_id",
 			"session_id",
@@ -193,6 +223,12 @@ var zipInternalTablesPerCluster = DebugZipTableRegistry{
 		},
 	},
 	"crdb_internal.cluster_settings": {
+		// Sensitive settings hold secrets, so their values are left out even
+		// without redaction.
+		customQueryUnredacted: fmt.Sprintf(`SELECT variable,
+			CASE WHEN key IN (%[1]s) THEN '<redacted>' ELSE value END AS value,
+			type, public, description, default_value, origin, key
+			FROM crdb_internal.cluster_settings`, sensitiveSettingKeys),
 		customQueryRedacted: `SELECT
 			variable,
 			CASE WHEN type = 's' AND value != default_value THEN '<redacted>' ELSE value END value,
@@ -685,7 +721,13 @@ var zipInternalTablesPerNode = DebugZipTableRegistry{
 		},
 	},
 	"crdb_internal.node_queries": {
-		// `client_address` contains unredacted client IP addresses.
+		// `client_address` contains unredacted client IP addresses. Constants
+		// in the SQL text are hidden even without redaction: they can hold
+		// passwords or setting values.
+		customQueryUnredacted: `SELECT query_id, txn_id, node_id, session_id, user_name, start,
+			crdb_internal.hide_sql_constants(query) AS query, client_address, application_name,
+			distributed, phase, full_scan, plan_gist, database
+			FROM crdb_internal.node_queries`,
 		nonSensitiveCols: NonSensitiveColumns{
 			"query_id",
 			"txn_id",
@@ -709,7 +751,15 @@ var zipInternalTablesPerNode = DebugZipTableRegistry{
 		},
 	},
 	"crdb_internal.node_sessions": {
-		// `client_address` contains unredacted client IP addresses.
+		// `client_address` contains unredacted client IP addresses. Constants
+		// in the SQL text are hidden even without redaction: they can hold
+		// passwords or setting values.
+		customQueryUnredacted: `SELECT node_id, session_id, user_name, client_address, application_name,
+			crdb_internal.hide_sql_constants(active_queries) AS active_queries,
+			crdb_internal.hide_sql_constants(last_active_query) AS last_active_query,
+			num_txns_executed, session_start, active_query_start, kv_txn, alloc_bytes,
+			max_alloc_bytes, status, session_end
+			FROM crdb_internal.node_sessions`,
 		nonSensitiveCols: NonSensitiveColumns{
 			"node_id",
 			"session_id",
@@ -962,6 +1012,16 @@ var zipSystemTables = DebugZipTableRegistry{
 			FROM system.descriptor`,
 	},
 	"system.eventlog": {
+		// Placeholder values and the values of sensitive settings can hold
+		// secrets, so they are left out even without redaction.
+		customQueryUnredacted: fmt.Sprintf(`SELECT timestamp, "eventType", "targetID", "reportingID",
+			(CASE WHEN "eventType" IN ('set_cluster_setting', 'set_tenant_cluster_setting')
+				AND info::JSONB->>'SettingName' IN (%[1]s)
+				THEN jsonb_set(jsonb_set(info::JSONB, ARRAY['Value'], '"<redacted>"'),
+					ARRAY['Statement'], '"<redacted>"')
+				ELSE info::JSONB END - 'PlaceholderValues')::STRING AS info,
+			"uniqueID"
+			FROM system.eventlog`, sensitiveSettingNames),
 		nonSensitiveCols: NonSensitiveColumns{
 			"timestamp",
 			`"eventType"`,
@@ -972,7 +1032,10 @@ var zipSystemTables = DebugZipTableRegistry{
 	},
 	"system.external_connections": {
 		// `connection_details` column may contain customer infra IP addresses,
-		// URI params containing access keys, etc.
+		// URI params containing access keys, etc. It is left out even without
+		// redaction.
+		customQueryUnredacted: `SELECT connection_name, created, updated, connection_type, owner
+			FROM system.external_connections`,
 		nonSensitiveCols: NonSensitiveColumns{
 			"connection_name",
 			"created",
@@ -1146,8 +1209,12 @@ var zipSystemTables = DebugZipTableRegistry{
 		},
 	},
 	"system.scheduled_jobs": {
-		// `execution_args` column contains BACKUP statements which can contain
-		// sensitive URI params, such as AWS keys.
+		// `execution_args` column contains statements which can contain
+		// sensitive URI params, such as AWS keys. It is left out even without
+		// redaction.
+		customQueryUnredacted: `SELECT schedule_id, schedule_name, created, owner, next_run,
+			schedule_state, schedule_expr, schedule_details, executor_type
+			FROM system.scheduled_jobs`,
 		nonSensitiveCols: NonSensitiveColumns{
 			"schedule_id",
 			"schedule_name",
@@ -1161,7 +1228,13 @@ var zipSystemTables = DebugZipTableRegistry{
 		},
 	},
 	"system.settings": {
-		customQueryUnredacted: `SELECT *, to_hex(value) as hex_value FROM system.settings`,
+		// Sensitive settings hold secrets, so their values are left out even
+		// without redaction.
+		customQueryUnredacted: fmt.Sprintf(`SELECT name,
+			CASE WHEN name IN (%[1]s) THEN '<redacted>' ELSE value END AS value,
+			"lastUpdated", "valueType",
+			to_hex(CASE WHEN name IN (%[1]s) THEN '<redacted>' ELSE value END) AS hex_value
+			FROM system.settings`, sensitiveSettingKeys),
 		customQueryRedacted: `SELECT * FROM (
     		SELECT *, to_hex(value) as hex_value
     		FROM system.settings
@@ -1334,6 +1407,12 @@ limit 5000;`,
 		},
 	},
 	"system.tenant_settings": {
+		// Sensitive settings hold secrets, so their values are left out even
+		// without redaction.
+		customQueryUnredacted: fmt.Sprintf(`SELECT tenant_id, name,
+			CASE WHEN name IN (%[1]s) THEN '<redacted>' ELSE value END AS value,
+			last_updated, value_type, reason
+			FROM system.tenant_settings`, sensitiveSettingKeys),
 		customQueryRedacted: `SELECT * FROM (
 			SELECT *
 			FROM system.tenant_settings

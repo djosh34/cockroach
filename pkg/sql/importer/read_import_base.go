@@ -295,11 +295,11 @@ func readInputFiles(
 				})
 
 				if err := grp.Wait(); err != nil {
-					return errors.Wrapf(err, "%s", dataFile)
+					return errors.Wrapf(err, "%s", sanitizedURI(dataFile))
 				}
 			} else {
 				if err := fileFunc(ctx, src, dataFileIndex, resumePos[dataFileIndex], nil /* rejected */); err != nil {
-					return errors.Wrapf(err, "%s", dataFile)
+					return errors.Wrapf(err, "%s", sanitizedURI(dataFile))
 				}
 			}
 			return nil

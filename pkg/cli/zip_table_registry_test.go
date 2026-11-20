@@ -212,3 +212,47 @@ func TestNonSensitiveColumns(t *testing.T) {
 	executeSelectOnNonSensitiveColumns(t, sqlDB, zipInternalTablesPerNode)
 	executeSelectOnNonSensitiveColumns(t, sqlDB, zipSystemTables)
 }
+
+// TestUnredactedZipKeepsSecrets checks that the table dumps of a debug zip
+// collected without --redact leave out the values of sensitive settings,
+// placeholder values, external connection details and statement constants.
+func TestUnredactedZipKeepsSecrets(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	defer log.Scope(t).Close(t)
+
+	cluster := serverutils.StartCluster(t, 1 /* numNodes */, base.TestClusterArgs{
+		ServerArgs: base.TestServerArgs{
+			DefaultTestTenant: base.TestIsSpecificToStorageLayerAndNeedsASystemTenant,
+			ExternalIODir:     t.TempDir(),
+		},
+	})
+	defer cluster.Stopper().Stop(context.Background())
+	sqlDB := sqlutils.MakeSQLRunner(cluster.ServerConn(0 /* idx */))
+
+	sqlDB.Exec(t, `SET CLUSTER SETTING cloudstorage.http.custom_ca = 'SECRETCA'`)
+	sqlDB.Exec(t, `CREATE EXTERNAL CONNECTION conn AS 'nodelocal://1/SECRETPATH'`)
+	// Events written before sensitive values were left out of the event log.
+	sqlDB.Exec(t, `INSERT INTO system.eventlog (timestamp, "eventType", "targetID", "reportingID", info)
+		VALUES (now(), 'set_cluster_setting', 0, 1,
+			'{"Statement": "SET CLUSTER SETTING cloudstorage.http.custom_ca = ''SECRETOLD''", "SettingName": "cloudstorage.http.custom_ca", "Value": "SECRETOLD"}'),
+		(now(), 'create_role', 0, 1, '{"Statement": "CREATE ROLE r WITH PASSWORD $1", "PlaceholderValues": ["''SECRETPH''"]}')`)
+
+	for _, table := range []string{
+		"crdb_internal.cluster_settings",
+		"system.settings",
+		"system.eventlog",
+		"system.external_connections",
+	} {
+		reg := zipSystemTables
+		if strings.HasPrefix(table, "crdb_internal.") {
+			reg = zipInternalTablesPerCluster
+		}
+		query, err := reg.QueryForTable(table, false /* redact */)
+		require.NoError(t, err)
+		for _, row := range sqlDB.QueryStr(t, query) {
+			for _, secret := range []string{"SECRETCA", "SECRETPATH", "SECRETOLD", "SECRETPH"} {
+				assert.NotContains(t, strings.Join(row, " "), secret, "table %s", table)
+			}
+		}
+	}
+}

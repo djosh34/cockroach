@@ -1682,6 +1682,8 @@ func redactStatement(info string) string {
 	if _, ok := s["Statement"]; ok {
 		s["Statement"] = "<hidden>"
 	}
+	// Placeholder values can hold passwords or setting values.
+	delete(s, "PlaceholderValues")
 	ret, err := json.Marshal(s)
 	if err != nil {
 		return ""

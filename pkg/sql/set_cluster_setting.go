@@ -461,6 +461,11 @@ func writeSettingInternal(
 			}
 		}
 
+		// The value of a sensitive setting stays out of the event log.
+		if value != nil && settings.IsSensitive(setting.InternalKey()) {
+			reportedValue = "<redacted>"
+		}
+
 		if setting.IsUnsafe() {
 			// Also mention the change in the non-structured DEV log.
 			log.Warningf(ctx, "unsafe setting changed: %q -> %v", name, reportedValue)

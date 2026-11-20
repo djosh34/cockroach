@@ -127,6 +127,10 @@ func (n *alterTenantSetClusterSettingNode) startExec(params runParams) error {
 		}
 	} else {
 		reportedValue = tree.AsStringWithFlags(n.value, tree.FmtBareStrings)
+		// The value of a sensitive setting stays out of the event log.
+		if settings.IsSensitive(n.setting.InternalKey()) {
+			reportedValue = "<redacted>"
+		}
 		value, err := eval.Expr(params.ctx, params.p.EvalContext(), n.value)
 		if err != nil {
 			return err
