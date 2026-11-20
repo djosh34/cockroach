@@ -248,7 +248,7 @@ func createAuthOptionFromServiceAccountKey(encodedKey string) (option.ClientOpti
 	if err := checkServiceAccountKey(credentialsJSON); err != nil {
 		return nil, err
 	}
-	return option.WithCredentialsJSON(credentialsJSON), nil
+	return option.WithAuthCredentialsJSON(option.ServiceAccount, credentialsJSON), nil
 }
 
 // googleTokenURIs are the token endpoints that Google writes into service

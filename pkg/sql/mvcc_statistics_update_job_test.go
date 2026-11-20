@@ -133,7 +133,7 @@ func TestTenantGlobalAggregatedLivebytes(t *testing.T) {
 		var in bytes.Buffer
 		err := ex.ScrapeAndPrintAsText(
 			&in,
-			expfmt.FmtText,
+			expfmt.NewFormat(expfmt.TypeTextPlain),
 			func(ex *metric.PrometheusExporter) {
 				ex.ScrapeRegistry(r, true /* includeChildMetrics */)
 			},

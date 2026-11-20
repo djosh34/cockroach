@@ -39,7 +39,7 @@ func TestDeserializeSessionCannotSetSuperuser(t *testing.T) {
 	// One connection, so that the session that deserializes is the one asked.
 	conn, err := srv.ApplicationLayer().SQLConn(t, serverutils.User("testuser")).Conn(ctx)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { require.NoError(t, conn.Close()) }()
 	user := sqlutils.MakeSQLRunner(conn)
 
 	var state []byte

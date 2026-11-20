@@ -150,7 +150,7 @@ func TestPrometheusExporter(t *testing.T) {
 	// Test ScrapeAndPrintAsText
 	var buf bytes.Buffer
 	pe = MakePrometheusExporter()
-	err = pe.ScrapeAndPrintAsText(&buf, expfmt.FmtText, func(exporter *PrometheusExporter) {
+	err = pe.ScrapeAndPrintAsText(&buf, expfmt.NewFormat(expfmt.TypeTextPlain), func(exporter *PrometheusExporter) {
 		exporter.ScrapeRegistry(r1, true)
 	})
 	require.NoError(t, err)
@@ -162,7 +162,7 @@ func TestPrometheusExporter(t *testing.T) {
 
 	buf.Reset()
 	r1.RemoveMetric(g1Dup)
-	err = pe.ScrapeAndPrintAsText(&buf, expfmt.FmtText, func(exporter *PrometheusExporter) {
+	err = pe.ScrapeAndPrintAsText(&buf, expfmt.NewFormat(expfmt.TypeTextPlain), func(exporter *PrometheusExporter) {
 		exporter.ScrapeRegistry(r1, true)
 	})
 	require.NoError(t, err)
@@ -198,7 +198,7 @@ func TestPrometheusExporterNativeHistogram(t *testing.T) {
 	pe := MakePrometheusExporter()
 	// Print metrics as proto text, since native histograms aren't yet supported.
 	// in the prometheus text exposition format.
-	err := pe.ScrapeAndPrintAsText(&buf, expfmt.FmtProtoText, func(exporter *PrometheusExporter) {
+	err := pe.ScrapeAndPrintAsText(&buf, expfmt.NewFormat(expfmt.TypeProtoText), func(exporter *PrometheusExporter) {
 		exporter.ScrapeRegistry(r, false)
 	})
 	require.NoError(t, err)
@@ -208,7 +208,7 @@ func TestPrometheusExporterNativeHistogram(t *testing.T) {
 
 	buf.Reset()
 	r.RemoveMetric(histogram)
-	err = pe.ScrapeAndPrintAsText(&buf, expfmt.FmtProtoText, func(exporter *PrometheusExporter) {
+	err = pe.ScrapeAndPrintAsText(&buf, expfmt.NewFormat(expfmt.TypeProtoText), func(exporter *PrometheusExporter) {
 		exporter.ScrapeRegistry(r, false)
 	})
 	require.NoError(t, err)
