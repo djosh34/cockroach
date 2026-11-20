@@ -12,6 +12,7 @@ package sql_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
@@ -22,6 +23,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestEventLogKeepsSecrets checks that the event log records neither the value
@@ -52,6 +54,34 @@ func TestEventLogKeepsSecrets(t *testing.T) {
 	for _, row := range rows {
 		for _, secret := range []string{"SECRETCA", "SECRETPW"} {
 			assert.NotContains(t, row[0], secret)
+		}
+	}
+}
+
+// TestStatementStatisticsKeepSecrets checks that SQL statistics hold neither a
+// password nor the credentials in a URI.
+func TestStatementStatisticsKeepSecrets(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	defer log.Scope(t).Close(t)
+
+	srv, db, _ := serverutils.StartServer(t, base.TestServerArgs{ExternalIODir: t.TempDir()})
+	defer srv.Stopper().Stop(context.Background())
+	r := sqlutils.MakeSQLRunner(db)
+
+	r.Exec(t, `CREATE ROLE stats_role WITH LOGIN PASSWORD 'SECRETPW'`)
+	r.Exec(t, `CREATE TABLE stats_t (a INT)`)
+	_, err := db.Exec(`IMPORT INTO stats_t CSV DATA ('nodelocal://1/missing.csv?AWS_SECRET_ACCESS_KEY=SECRETKEY')`)
+	require.Error(t, err)
+	r.Exec(t, `CREATE EXTERNAL CONNECTION stats_conn AS 'nodelocal://1/SECRETPATH'`)
+
+	for _, query := range []string{
+		`SELECT metadata::STRING, statistics::STRING FROM crdb_internal.statement_statistics`,
+		`SELECT key, last_error FROM crdb_internal.node_statement_statistics`,
+	} {
+		for _, row := range r.QueryStr(t, query) {
+			for _, secret := range []string{"SECRETPW", "SECRETKEY", "SECRETPATH"} {
+				assert.NotContains(t, strings.Join(row, " "), secret, query)
+			}
 		}
 	}
 }
