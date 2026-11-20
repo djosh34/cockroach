@@ -751,14 +751,19 @@ statement ok
 RESET testing_optimizer_random_seed;
 RESET testing_optimizer_disable_rule_probability;
 
-# Two constants with the same OID but different names are different values.
-# Without this, each REGTYPE below took the name of the other.
-query TT
-SELECT 20::REGTYPE::STRING, 'int8'::REGTYPE::STRING
+# A cast of an integer or an OID to REGTYPE names a built-in type the way a
+# cast from text does, as in Postgres.
+query T
+SELECT 20::REGTYPE::STRING
 ----
-int8  bigint
+bigint
 
-query TT
-SELECT 'int8'::REGTYPE::STRING, 20::REGTYPE::STRING
+statement ok
+CREATE TABLE t_regtype_cast (o OID);
+INSERT INTO t_regtype_cast VALUES (23), (2277)
+
+query T rowsort
+SELECT o::REGTYPE::STRING FROM t_regtype_cast
 ----
-bigint  int8
+integer
+anyarray

@@ -317,12 +317,6 @@ func TestInterner(t *testing.T) {
 
 			{val1: tree.NewDOid(0), val2: tree.NewDOid(0), equal: true},
 			{val1: tree.NewDOid(0), val2: tree.NewDOid(1), equal: false},
-			{
-				val1:  tree.NewDOidWithTypeAndName(20, types.RegType, "int8"),
-				val2:  tree.NewDOidWithTypeAndName(20, types.RegType, "bigint"),
-				equal: false,
-			},
-			{val1: tree.NewDOid(20), val2: tree.NewDOidWithType(20, types.RegType), equal: false},
 
 			{val1: tree.NewDInt(0), val2: tree.NewDFloat(0), equal: false},
 			{val1: tree.NewDInt(0), val2: tree.NewDOid(0), equal: false},

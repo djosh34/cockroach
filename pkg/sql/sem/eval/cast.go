@@ -868,10 +868,12 @@ func performIntToOidCast(
 	case oid.T_oid:
 		return tree.NewDOidWithType(o, t), nil
 	case oid.T_regtype:
-		// Mapping an dOid to a regtype is easy: we have a hardcoded map.
+		// Mapping an dOid to a regtype is easy: we have a hardcoded map. A
+		// built-in type gets the name a cast from text gives, as in Postgres:
+		// 20::REGTYPE is bigint, not int8.
 		var name string
 		if typ, ok := types.OidToType[o]; ok {
-			name = typ.PGName()
+			name = typ.SQLStandardName()
 		} else if types.IsOIDUserDefinedType(o) {
 			typ, err := res.ResolveTypeByOID(ctx, o)
 			if err != nil {
