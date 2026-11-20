@@ -43,14 +43,24 @@ curl -sSf 'http://127.0.0.1:8080/health?ready=1' >/dev/null
 sleep 60
 
 # Stop the node; a graceful shutdown may take long, so kill it after 30s.
+# strace exits with the node's status: 0 after a clean shutdown, 137 if it
+# had to be killed. Anything else means the node or strace failed.
 node=$(cat "$work/pid")
 kill -TERM "$node"
+expected=0
 for _ in $(seq 30); do
   kill -0 "$node" 2>/dev/null || break
   sleep 1
 done
-kill -KILL "$node" 2>/dev/null || true
-wait "$strace_pid" || true
+if kill -KILL "$node" 2>/dev/null; then
+  expected=137
+fi
+status=0
+wait "$strace_pid" || status=$?
+if [[ $status -ne $expected ]]; then
+  echo "the traced node exited with status $status, expected $expected" >&2
+  exit 1
+fi
 
 ip_calls='sa_family=AF_INET6?'
 loopback='inet_addr\("127\.[0-9.]+"\)|inet_pton\(AF_INET6, "(::1|::ffff:127\.[0-9.]+)"'

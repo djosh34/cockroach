@@ -3408,8 +3408,8 @@ func (s *Store) ComputeMetricsPeriodically(
 	// Periodically emit a store stats structured event to the TELEMETRY
 	// channel. These events are intended to be emitted at low frequency.
 	// Trigger on every (N-1)-th tick to avoid spamming the telemetry channel if
-	// crash-looping.
-	if tick%logStoreTelemetryTicks == logStoreTelemetryTicks-1 {
+	// crash-looping. An interval of zero or less turns the events off.
+	if logStoreTelemetryTicks > 0 && tick%logStoreTelemetryTicks == logStoreTelemetryTicks-1 {
 		// The stats event is populated from a subset of the Metrics.
 		e := m.AsStoreStatsEvent()
 		e.NodeId = int32(s.NodeID())

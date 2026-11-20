@@ -77,7 +77,6 @@ func ReportPanicWithGlobalSettings(ctx context.Context, r interface{}, depth int
 // RecoverAndReportPanic can be invoked on goroutines that run with
 // stderr redirected to logs to ensure the user gets informed on the
 // real stderr a panic has occurred.
-// The argument sv may be nil.
 //
 // Note: this function _must_ be called with `defer log.RecoverAndReportPanic()`.
 // Do not use `defer func() { ... log.RecoverAndReportPanic() ...}` as this
