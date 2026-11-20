@@ -6474,3 +6474,28 @@ func (m *mockTenantSideCostController) GetCostConfig() *tenantcostmodel.Config {
 func (m *mockTenantSideCostController) Metrics() metric.Struct {
 	return nil
 }
+
+// TestFillSkippedResponsesPointWrites checks that a point request that a
+// batch-wide limit kept from being sent gets a ResumeSpan. Without it, the
+// intent resolver took a skipped ResolveIntent on the right-hand side of a
+// split for done, removed the transaction record, and a later reader removed
+// the intent as aborted.
+func TestFillSkippedResponsesPointWrites(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	defer log.Scope(t).Close(t)
+
+	ba := &kvpb.BatchRequest{}
+	ba.Add(&kvpb.ResolveIntentRequest{RequestHeader: kvpb.RequestHeader{Key: roachpb.Key("a")}})
+	ba.Add(&kvpb.ResolveIntentRequest{RequestHeader: kvpb.RequestHeader{Key: roachpb.Key("z")}})
+	br := &kvpb.BatchResponse{}
+	br.Responses = make([]kvpb.ResponseUnion, 2)
+	// The range [a, m) was processed and hit the byte limit, so the request at
+	// z was never sent.
+	br.Responses[0].MustSetInner(&kvpb.ResolveIntentResponse{})
+
+	fillSkippedResponses(ba, br, roachpb.RKey("m"), kvpb.RESUME_BYTE_LIMIT, false /* isReverse */)
+
+	require.Nil(t, br.Responses[0].GetInner().Header().ResumeSpan)
+	require.Equal(t, &roachpb.Span{Key: roachpb.Key("z")}, br.Responses[1].GetInner().Header().ResumeSpan)
+	require.Equal(t, kvpb.RESUME_BYTE_LIMIT, br.Responses[1].GetInner().Header().ResumeReason)
+}

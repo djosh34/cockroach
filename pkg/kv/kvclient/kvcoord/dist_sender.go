@@ -2105,8 +2105,9 @@ func fillSkippedResponses(
 func maybeSetResumeSpan(
 	req kvpb.Request, hdr *kvpb.ResponseHeader, nextKey roachpb.RKey, isReverse bool,
 ) {
-	if _, ok := req.(*kvpb.GetRequest); ok {
-		// This is a Get request. There are three possibilities:
+	if !kvpb.IsRange(req) {
+		// This is a point request, such as a Get or a ResolveIntent. There are
+		// three possibilities:
 		//
 		//  1. The request was completed. In this case we don't want a ResumeSpan.
 		//
@@ -2118,26 +2119,32 @@ func maybeSetResumeSpan(
 		//  3. The request was not completed and was not sent to a kvserver (it was
 		//     beyond the last range we operated on). In this case we need to set
 		//     the ResumeSpan here.
+		//
+		// Case 3 matters for every point request, not only reads: a skipped
+		// ResolveIntent without a ResumeSpan looks resolved, and the intent
+		// resolver would then remove the transaction record while the intent
+		// is still there. A later reader would take the intent for aborted.
 		if hdr.ResumeSpan != nil {
 			// Case 2.
 			return
 		}
 		key := req.Header().Key
+		rKey, err := keys.Addr(key)
+		if err != nil {
+			// The batch was routed by this key, so it is addressable.
+			rKey = roachpb.RKey(key)
+		}
 		if isReverse {
-			if !nextKey.Less(roachpb.RKey(key)) {
+			if !nextKey.Less(rKey) {
 				// key <= nextKey, so this request was not completed (case 3).
 				hdr.ResumeSpan = &roachpb.Span{Key: key}
 			}
 		} else {
-			if !roachpb.RKey(key).Less(nextKey) {
+			if !rKey.Less(nextKey) {
 				// key >= nextKey, so this request was not completed (case 3).
 				hdr.ResumeSpan = &roachpb.Span{Key: key}
 			}
 		}
-		return
-	}
-
-	if !kvpb.IsRange(req) {
 		return
 	}
 

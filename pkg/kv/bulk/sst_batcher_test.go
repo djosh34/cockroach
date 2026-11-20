@@ -21,6 +21,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/kv/bulk"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvclient/kvcoord"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvclient/rangecache"
+	"github.com/cockroachdb/cockroach/pkg/kv/kvserver"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvpb"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/kvserverbase"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
@@ -360,4 +361,61 @@ func runTestImport(t *testing.T, batchSizeValue int64) {
 			require.Equal(t, expected, got)
 		})
 	}
+}
+
+// TestAsyncFlushErrorIsReturned checks that a failed AddSSTable of a flush
+// that runs in the background, because the batcher reached the end of a range,
+// fails the ingestion. Before, the error was only logged, and IMPORT, CREATE
+// TABLE AS and materialized view refreshes reported success with rows missing.
+func TestAsyncFlushErrorIsReturned(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	defer log.Scope(t).Close(t)
+	ctx := context.Background()
+
+	prefix := keys.SystemSQLCodec.IndexPrefix(200, 1)
+	key := func(i int) roachpb.Key {
+		return encoding.EncodeStringAscending(append([]byte{}, prefix...), fmt.Sprintf("k%d", i))
+	}
+	split := key(5)
+
+	// Fail every AddSSTable left of the split.
+	s, _, kvDB := serverutils.StartServer(t, base.TestServerArgs{
+		Knobs: base.TestingKnobs{Store: &kvserver.StoreTestingKnobs{
+			EvalKnobs: kvserverbase.BatchEvalTestingKnobs{
+				TestingEvalFilter: func(args kvserverbase.FilterArgs) *kvpb.Error {
+					if args.Req.Method() != kvpb.AddSSTable {
+						return nil
+					}
+					if args.Req.Header().Key.Compare(prefix) >= 0 && args.Req.Header().Key.Compare(split) < 0 {
+						return kvpb.NewErrorf("injected AddSSTable error")
+					}
+					return nil
+				},
+			},
+		}},
+	})
+	defer s.Stopper().Stop(ctx)
+	require.NoError(t, kvDB.AdminSplit(ctx, split, hlc.MaxTimestamp /* expirationTime */))
+
+	// The range cache of the batcher knows the split, so the batcher flushes
+	// the left-hand SST in the background when it reaches the split.
+	ds := s.DistSenderI().(*kvcoord.DistSender)
+	rc := rangecache.NewRangeCache(s.ClusterSettings(), ds, func() int64 { return 2 << 10 }, s.Stopper())
+	ent, err := ds.RangeDescriptorCache().Lookup(ctx, keys.MustAddr(key(0)))
+	require.NoError(t, err)
+	rc.Insert(ctx, roachpb.RangeInfo{Desc: *ent.Desc()})
+
+	mem := mon.NewUnlimitedMonitor(ctx, "lots", mon.MemoryResource, nil, nil, 0, nil)
+	reqs := limit.MakeConcurrentRequestLimiter("reqs", 1000)
+	b, err := bulk.MakeBulkAdder(ctx, kvDB, rc, s.ClusterSettings(), hlc.Timestamp{WallTime: 100},
+		kvserverbase.BulkAdderOptions{}, mem, reqs)
+	require.NoError(t, err)
+	defer b.Close(ctx)
+
+	for i := 0; i < 10; i++ {
+		v := roachpb.MakeValueFromString(fmt.Sprintf("value-%d", i))
+		v.InitChecksum(key(i))
+		require.NoError(t, b.Add(ctx, key(i), v.RawBytes))
+	}
+	require.ErrorContains(t, b.Flush(ctx), "injected AddSSTable error")
 }
