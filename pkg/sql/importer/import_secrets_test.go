@@ -38,15 +38,20 @@ func TestImportKeepsCredentialsSecret(t *testing.T) {
 
 	const schema = `{"type": "record", "name": "r", "fields": [{"name": "a", "type": "long"}]}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body string
 		switch r.URL.Path {
 		case "/schema.json":
-			_, _ = w.Write([]byte(schema))
+			body = schema
 		case "/bad.csv":
-			_, _ = w.Write([]byte("1,2,3\n"))
+			body = "1,2,3\n"
 		case "/many-bad.csv":
-			_, _ = w.Write([]byte(strings.Repeat("x\n", 1100)))
+			body = strings.Repeat("x\n", 1100)
 		default:
 			http.NotFound(w, r)
+			return
+		}
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Errorf("writing %s: %v", r.URL.Path, err)
 		}
 	}))
 	defer srv.Close()

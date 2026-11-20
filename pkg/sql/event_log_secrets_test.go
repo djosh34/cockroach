@@ -37,6 +37,8 @@ func TestEventLogKeepsSecrets(t *testing.T) {
 	r := sqlutils.MakeSQLRunner(db)
 
 	r.Exec(t, `SET CLUSTER SETTING cloudstorage.http.custom_ca = 'SECRETCA'`)
+	// A bare name is not a constant, but it is the value all the same.
+	r.Exec(t, `SET CLUSTER SETTING cloudstorage.http.custom_ca = secretident`)
 	r.Exec(t, `CREATE ROLE event_role WITH LOGIN PASSWORD $1`, "SECRETPW")
 	r.Exec(t, `ALTER ROLE event_role WITH PASSWORD $1`, "SECRETPW2")
 
@@ -45,14 +47,14 @@ func TestEventLogKeepsSecrets(t *testing.T) {
 		r.QueryRow(t, `SELECT count(*) FROM system.eventlog
 			WHERE "eventType" IN ('set_cluster_setting', 'create_role', 'alter_role')
 			AND (info LIKE '%event_role%' OR info LIKE '%custom_ca%')`).Scan(&n)
-		if n < 3 {
-			return errors.Newf("found %d of 3 events", n)
+		if n < 4 {
+			return errors.Newf("found %d of 4 events", n)
 		}
 		return nil
 	})
 	rows := r.QueryStr(t, `SELECT info FROM system.eventlog`)
 	for _, row := range rows {
-		for _, secret := range []string{"SECRETCA", "SECRETPW"} {
+		for _, secret := range []string{"SECRETCA", "SECRETPW", "secretident"} {
 			assert.NotContains(t, row[0], secret)
 		}
 	}

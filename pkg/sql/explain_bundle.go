@@ -190,7 +190,7 @@ func (bundle *diagnosticsBundle) insert(
 	// A statement that may carry a secret is stored without its constants.
 	stmt := tree.AsString(ast)
 	if statementMayCarrySecret(ast) {
-		stmt = tree.AsStringWithFlags(ast, tree.FmtHideConstants)
+		stmt = tree.AsStringWithFlags(withoutSecretSettingValue(ast), tree.FmtHideConstants)
 	}
 	var err error
 	bundle.diagID, err = stmtDiagRecorder.InsertStatementDiagnostics(
@@ -278,7 +278,7 @@ func (b *stmtBundleBuilder) buildPrettyStatement(stmtRawSQL string) error {
 		cfg.JSONFmt = true
 		cfg.ValueRedaction = b.flags.RedactValues
 		var err error
-		b.stmt, err = cfg.Pretty(b.plan.stmt.AST)
+		b.stmt, err = cfg.Pretty(withoutSecretSettingValue(b.plan.stmt.AST))
 		if errors.Is(err, pretty.ErrPrettyMaxRecursionDepthExceeded) {
 			// Use the raw statement string if pretty-printing fails.
 			b.stmt = stmtRawSQL

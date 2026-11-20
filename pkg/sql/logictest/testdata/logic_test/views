@@ -2013,7 +2013,7 @@ RESET ROLE
 
 statement ok
 DROP VIEW v_by_testuser;
-REVOKE SELECT ON view_owner_secret FROM testuser;
+DROP TABLE view_owner_secret;
 DROP USER view_reader
 
 subtest end
@@ -2025,14 +2025,17 @@ subtest view_owner_loses_role
 user root
 
 statement ok
+USE test;
+CREATE TABLE role_secret (a INT);
+INSERT INTO role_secret VALUES (1);
 CREATE ROLE view_secret_readers;
-GRANT SELECT ON view_owner_secret TO view_secret_readers;
+GRANT SELECT ON role_secret TO view_secret_readers;
 GRANT view_secret_readers TO testuser
 
 user testuser
 
 statement ok
-CREATE VIEW v_through_role AS SELECT a FROM view_owner_secret
+CREATE VIEW v_through_role AS SELECT a FROM role_secret
 
 query I
 SELECT * FROM v_through_role
@@ -2051,14 +2054,14 @@ REVOKE view_secret_readers FROM testuser
 
 user testuser
 
-query error user testuser does not have SELECT privilege on relation view_owner_secret
+query error user testuser does not have SELECT privilege on relation role_secret
 SELECT * FROM v_through_role
 
 user root
 
 statement ok
 DROP VIEW v_through_role;
-DROP TABLE view_owner_secret;
+DROP TABLE role_secret;
 DROP ROLE view_secret_readers
 
 subtest end

@@ -764,8 +764,9 @@ func (s *s3Storage) List(ctx context.Context, prefix, delim string, fn cloud.Lis
 		if marker == "" && len(page.Contents) > 0 {
 			marker = aws.ToString(page.Contents[len(page.Contents)-1].Key)
 		}
-		// A truncated listing that cannot continue would look complete.
-		if marker == "" || marker == aws.ToString(s3Input.Marker) {
+		// Keys are listed in order, so the marker must advance. Otherwise a
+		// truncated listing would look complete or repeat pages forever.
+		if marker <= aws.ToString(s3Input.Marker) {
 			return errors.Newf("failed to list s3 bucket: truncated page with no next marker after %q",
 				aws.ToString(s3Input.Marker))
 		}

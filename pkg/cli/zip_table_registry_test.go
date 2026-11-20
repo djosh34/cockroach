@@ -248,6 +248,13 @@ func TestUnredactedZipKeepsSecrets(t *testing.T) {
 	_, err = sqlDB.DB.ExecContext(context.Background(),
 		`IMPORT INTO import_target CSV DATA ('http://u:SECRETJOB@127.0.0.1:1/x.csv')`)
 	require.Error(t, err)
+	var withSecret int
+	sqlDB.QueryRow(t, `SELECT count(*) FROM system.job_info
+		WHERE info_key = 'legacy_payload' AND encode(value, 'escape') LIKE '%SECRETJOB%'`).Scan(&withSecret)
+	require.NotZero(t, withSecret)
+	// Jobs from before 23.1 keep their payload in system.jobs.
+	sqlDB.Exec(t, `UPDATE system.jobs SET payload = (SELECT value FROM system.job_info
+		WHERE job_id = jobs.id AND info_key = 'legacy_payload') WHERE job_type = 'IMPORT'`)
 	// Statements stored with bundles before they left out secrets.
 	sqlDB.Exec(t, `INSERT INTO system.statement_diagnostics (statement_fingerprint, statement, collected_at)
 		VALUES ('CREATE ROLE _ WITH PASSWORD _', 'CREATE ROLE r WITH PASSWORD ''SECRETDIAG''', now())`)

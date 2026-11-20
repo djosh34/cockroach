@@ -409,6 +409,7 @@ var zipInternalTablesPerCluster = DebugZipTableRegistry{
 			"claim_instance_id",
 			"num_runs",
 			"last_run",
+			"job_type",
 			CASE WHEN ` + jobPayloadHasNoURIs("payload") + ` THEN to_hex(payload) ELSE '<redacted>' END AS "hex_payload",
 			to_hex(progress) AS "hex_progress"
 			FROM crdb_internal.system_jobs`,
@@ -1078,6 +1079,7 @@ var zipSystemTables = DebugZipTableRegistry{
 			claim_instance_id,
 			num_runs,
 			last_run,
+			job_type,
 			CASE WHEN ` + jobPayloadHasNoURIs("payload") + ` THEN to_hex(payload) ELSE '<redacted>' END AS hex_payload,
 			to_hex(progress) AS hex_progress
 			FROM system.jobs`,

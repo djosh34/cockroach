@@ -521,13 +521,13 @@ func fromZipDir(
 			md.ID = jobspb.JobID(id)
 
 			// N.B. The "created" column takes 2 positions in our fields array.
-			// Skip payloads that the zip left out.
-			if fields[4] == "<redacted>" {
-				return nil
-			}
 			payloadBytes, ok := interpretString(fields[4])
 			if !ok {
 				return errors.Newf("job %d: failed to decode hex payload", id)
+			}
+			// Skip payloads that the zip left out.
+			if string(payloadBytes) == redactedJobPayload {
+				return nil
 			}
 			md.Payload = &jobspb.Payload{}
 			if err := protoutil.Unmarshal(payloadBytes, md.Payload); err != nil {
@@ -572,7 +572,7 @@ func fromZipDir(
 			}
 			row.ID = jobspb.JobID(id)
 			// Skip NULL job payloads and payloads that the zip left out.
-			if job.Payload == "NULL" || job.Payload == "<redacted>" {
+			if job.Payload == "NULL" || job.Payload == redactedJobPayload {
 				continue
 			}
 			payloadBytes, err := hx.DecodeString(job.Payload)
@@ -598,6 +598,10 @@ func fromZipDir(
 	}
 	return descTable, namespaceTable, jobsTable, nil
 }
+
+// redactedJobPayload is what debug zips export in place of a job payload
+// that they leave out.
+const redactedJobPayload = "<redacted>"
 
 func checkIfFileExists(zipDirPath string, fileName string) bool {
 	_, err := os.Stat(path.Join(zipDirPath, fileName))

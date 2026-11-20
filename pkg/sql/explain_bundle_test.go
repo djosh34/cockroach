@@ -664,6 +664,7 @@ func TestExplainBundleKeepsSecrets(t *testing.T) {
 	for _, stmt := range []string{
 		"EXPLAIN ANALYZE (DEBUG) CREATE USER bundle_user1 WITH PASSWORD 'SECRETPW'",
 		"EXPLAIN ANALYZE (DEBUG) SET CLUSTER SETTING cloudstorage.http.custom_ca = 'SECRETCA'",
+		"EXPLAIN ANALYZE (DEBUG) SET CLUSTER SETTING cloudstorage.http.custom_ca = secretident",
 		"EXPLAIN ANALYZE (DEBUG) SELECT 1",
 	} {
 		t.Run(stmt, func(t *testing.T) {
@@ -684,7 +685,7 @@ func TestExplainBundleKeepsSecrets(t *testing.T) {
 				contents, err := io.ReadAll(rc)
 				require.NoError(t, err)
 				require.NoError(t, rc.Close())
-				for _, secret := range []string{"SECRETCA", "SECRETPW"} {
+				for _, secret := range []string{"SECRETCA", "SECRETPW", "secretident"} {
 					require.NotContains(t, string(contents), secret, "file %s", f.Name)
 				}
 			}
@@ -692,7 +693,7 @@ func TestExplainBundleKeepsSecrets(t *testing.T) {
 	}
 	// The statement stored with the bundle leaves out the password too.
 	for _, row := range r.QueryStr(t, "SELECT statement FROM system.statement_diagnostics") {
-		for _, secret := range []string{"SECRETCA", "SECRETPW"} {
+		for _, secret := range []string{"SECRETCA", "SECRETPW", "secretident"} {
 			require.NotContains(t, row[0], secret)
 		}
 	}
