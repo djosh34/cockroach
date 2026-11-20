@@ -43,6 +43,8 @@ func TestImportKeepsCredentialsSecret(t *testing.T) {
 			_, _ = w.Write([]byte(schema))
 		case "/bad.csv":
 			_, _ = w.Write([]byte("1,2,3\n"))
+		case "/many-bad.csv":
+			_, _ = w.Write([]byte(strings.Repeat("x\n", 1100)))
 		default:
 			http.NotFound(w, r)
 		}
@@ -67,6 +69,12 @@ func TestImportKeepsCredentialsSecret(t *testing.T) {
 	t.Run("error", func(t *testing.T) {
 		_, err := db.Exec(`IMPORT INTO t CSV DATA ($1)`, withPassword("/bad.csv"))
 		require.Error(t, err)
+		require.NotContains(t, err.Error(), "SECRETPW")
+	})
+
+	t.Run("rejected rows error", func(t *testing.T) {
+		_, err := db.Exec(`IMPORT INTO t CSV DATA ($1) WITH experimental_save_rejected`, withPassword("/many-bad.csv"))
+		require.ErrorContains(t, err, "too many parsing errors")
 		require.NotContains(t, err.Error(), "SECRETPW")
 	})
 

@@ -128,7 +128,9 @@ func (c zstdCodec) decompress(compressedData []byte) ([]byte, error) {
 	return decompressUsing(
 		compressedData,
 		func(buf io.Reader) (io.ReadCloser, error) {
-			r, err := zstd.NewReader(buf)
+			// The window, and so the decoder's memory, stays within the
+			// output limit.
+			r, err := zstd.NewReader(buf, zstd.WithDecoderMaxMemory(maxDecompressedSize))
 			if err != nil {
 				return nil, err
 			}
@@ -176,7 +178,9 @@ func compressUsing(
 func decompressUsing(
 	compressedData []byte, getImpl func(buf io.Reader) (io.ReadCloser, error),
 ) (_ []byte, err error) {
-	r, err := getImpl(bytes.NewBuffer(compressedData))
+	// A bytes.Reader, unlike a bytes.Buffer, keeps the zstd decoder from
+	// decoding the whole input in memory before the limit below applies.
+	r, err := getImpl(bytes.NewReader(compressedData))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decompress")
 	}

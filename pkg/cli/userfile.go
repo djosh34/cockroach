@@ -274,16 +274,17 @@ func runUserFileGet(cmd *cobra.Command, args []string) (resErr error) {
 		if !filepath.IsLocal(filepath.FromSlash(file)) {
 			return errors.Newf("refusing to download %q: the name leaves the destination directory", file)
 		}
-		var fileDest string
+		// The file is written to rel inside dir.
+		var dir, rel string
 		if len(files) > 1 {
 			// If we matched multiple files, write their name in to dest or cwd.
-			fileDest = filepath.Join(dest, filepath.FromSlash(file))
+			dir, rel = dest, filepath.FromSlash(file)
 		} else {
 			filename := path.Base(file)
 			// If we matched just one file and do not have explicit dest, write it to
 			// its file name in cwd.
 			if dest == "" {
-				fileDest = filename
+				dir, rel = "", filename
 			} else {
 				// If we have an explicit destination, write the file to it, or in it if
 				// that destination is a directory.
@@ -292,14 +293,18 @@ func runUserFileGet(cmd *cobra.Command, args []string) (resErr error) {
 					return err
 				}
 				if err == nil && stat.IsDir() { // dest is dir in which to put the file.
-					fileDest = filepath.Join(dest, filename)
+					dir, rel = dest, filename
 				} else { // not a directory, so dest is the name for this file.
-					fileDest = dest
+					dir, rel = filepath.Dir(dest), filepath.Base(dest)
 				}
 			}
 		}
+		if dir == "" {
+			dir = "."
+		}
+		fileDest := filepath.Join(dir, rel)
 		fmt.Printf("downloading %s... ", file)
-		sz, err := downloadUserfile(ctx, f, src, fileDest)
+		sz, err := downloadUserfile(ctx, f, src, dir, rel)
 		if err != nil {
 			return err
 		}
@@ -465,26 +470,35 @@ func listUserFile(ctx context.Context, conn clisqlclient.Conn, glob string) ([]s
 	return res, nil
 }
 
+// downloadUserfile writes the file src to rel inside the directory dir. rel
+// cannot leave dir, also not through a symlink.
 func downloadUserfile(
-	ctx context.Context, store cloud.ExternalStorage, src, dst string,
-) (int64, error) {
+	ctx context.Context, store cloud.ExternalStorage, src, dir, rel string,
+) (_ int64, retErr error) {
 	remoteFile, _, err := store.ReadFile(ctx, src, cloud.ReadOptions{NoFileSize: true})
 	if err != nil {
 		return 0, err
 	}
 	defer remoteFile.Close(ctx)
 
-	localDir := path.Dir(dst)
-	if err := os.MkdirAll(localDir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return 0, err
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { retErr = errors.CombineErrors(retErr, root.Close()) }()
+	if err := root.MkdirAll(filepath.Dir(rel), 0700); err != nil {
 		return 0, err
 	}
 
 	// os.Create uses a permissive 0666 mode so use OpenFile directly.
-	localFile, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+	localFile, err := root.OpenFile(rel, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return 0, err
 	}
-	defer localFile.Close()
+	defer func() { retErr = errors.CombineErrors(retErr, localFile.Close()) }()
 
 	return io.Copy(localFile, ioctx.ReaderCtxAdapter(ctx, remoteFile))
 }

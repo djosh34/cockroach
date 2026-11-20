@@ -11,6 +11,7 @@
 package builtins
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
@@ -36,4 +37,19 @@ func TestDecompressIsBounded(t *testing.T) {
 			require.ErrorContains(t, err, "exceeds the limit")
 		})
 	}
+}
+
+// TestDecompressZstdAllocationIsBounded checks that decompressing a large zstd
+// output does not allocate it before the limit applies.
+func TestDecompressZstdAllocationIsBounded(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	compressed, err := compress(make([]byte, 512<<20), "zstd")
+	require.NoError(t, err)
+
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	_, err = decompress(compressed, "zstd")
+	runtime.ReadMemStats(&after)
+	require.ErrorContains(t, err, "exceeds the limit")
+	require.Less(t, after.TotalAlloc-before.TotalAlloc, uint64(400<<20))
 }

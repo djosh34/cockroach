@@ -27,6 +27,17 @@ func TestCompareVals(t *testing.T) {
 		a, b  []interface{}
 	}{
 		{
+			// SQL NULL and an empty array differ.
+			equal: false,
+			a:     []interface{}{nil},
+			b:     []interface{}{[]interface{}{}},
+		},
+		{
+			equal: true,
+			a:     []interface{}{[]interface{}{}},
+			b:     []interface{}{[]interface{}{}},
+		},
+		{
 			equal: true,
 			a:     []interface{}{apd.New(-2, 0)},
 			b:     []interface{}{apd.New(-2, 0)},

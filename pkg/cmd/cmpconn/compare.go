@@ -48,12 +48,6 @@ var (
 			out := make([]interface{}, len(x))
 			for i, v := range x {
 				switch t := v.(type) {
-				case []interface{}:
-					// Postgres and Cockroach differ in the element types of empty
-					// arrays, so all empty arrays are equal.
-					if len(t) == 0 {
-						v = nil
-					}
 				case pgtype.Bits:
 					if t.Valid {
 						v = bitString(t)
