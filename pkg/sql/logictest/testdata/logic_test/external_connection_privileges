@@ -18,6 +18,19 @@ GRANT DROP ON EXTERNAL CONNECTION foo TO testuser
 statement ok
 CREATE EXTERNAL CONNECTION foo AS 'nodelocal://1/foo'
 
+# A double quote in a new connection's name stays part of the name when the
+# creator is granted ALL on it.
+statement ok
+CREATE EXTERNAL CONNECTION "quo""te" AS 'nodelocal://1/quote'
+
+query TT
+SELECT username, privileges::STRING FROM system.privileges WHERE path = '/externalconn/quo"te'
+----
+root  {ALL}
+
+statement ok
+DROP EXTERNAL CONNECTION "quo""te"
+
 # A quote in the connection name stays part of the name. It must not change
 # the lookup query, which runs as the node user.
 statement error pq: failed to resolve External Connection: external connection with name nope' OR 'a'='a does not exist

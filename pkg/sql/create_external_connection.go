@@ -150,8 +150,10 @@ func (p *planner) createExternalConnection(
 	}
 
 	// Grant user `ALL` on the newly created External Connection.
-	grantStatement := fmt.Sprintf(`GRANT ALL ON EXTERNAL CONNECTION "%s" TO %s`,
-		ec.name, p.User().SQLIdentifier())
+	// The name is formatted as an identifier: it is chosen by the user and
+	// the statement runs as node.
+	grantStatement := fmt.Sprintf(`GRANT ALL ON EXTERNAL CONNECTION %s TO %s`,
+		tree.NameString(ec.name), p.User().SQLIdentifier())
 	_, err = txn.ExecEx(params.ctx,
 		"grant-on-create-external-connection", txn.KV(),
 		sessiondata.NodeUserSessionDataOverride, grantStatement)

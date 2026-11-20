@@ -44,33 +44,41 @@ type awsConfigParams struct {
 // or, with implicit auth, from the node's environment, wrapped in the chain of
 // roles to assume.
 func loadAWSConfig(ctx context.Context, p awsConfigParams) (aws.Config, error) {
-	opts := []func(*config.LoadOptions) error{
-		config.WithRetryer(newRetryer),
-		config.WithLogger(newLogAdapter(ctx)),
-	}
-	if p.httpClient != nil {
-		opts = append(opts, config.WithHTTPClient(p.httpClient))
-	}
-	if p.verbose {
-		opts = append(opts, config.WithClientLogMode(aws.LogRetries|aws.LogResponse))
-	}
+	var cfg aws.Config
 	switch p.auth {
 	case "", cloud.AuthParamSpecified:
-		// Only the credentials in the URI count: the node's AWS files are not
-		// read.
-		opts = append(opts,
-			config.WithCredentialsProvider(
+		// Only the credentials in the URI count, so nothing is read from the
+		// node's environment or AWS files.
+		cfg = aws.Config{
+			Credentials: aws.NewCredentialsCache(
 				credentials.NewStaticCredentialsProvider(p.accessKey, p.secret, p.tempToken)),
-			config.WithSharedConfigFiles([]string{}),
-			config.WithSharedCredentialsFiles([]string{}),
-		)
+			Retryer: newRetryer,
+			Logger:  newLogAdapter(ctx),
+		}
+		if p.httpClient != nil {
+			cfg.HTTPClient = p.httpClient
+		}
+		if p.verbose {
+			cfg.ClientLogMode = aws.LogRetries | aws.LogResponse
+		}
 	case cloud.AuthParamImplicit:
+		opts := []func(*config.LoadOptions) error{
+			config.WithRetryer(newRetryer),
+			config.WithLogger(newLogAdapter(ctx)),
+		}
+		if p.httpClient != nil {
+			opts = append(opts, config.WithHTTPClient(p.httpClient))
+		}
+		if p.verbose {
+			opts = append(opts, config.WithClientLogMode(aws.LogRetries|aws.LogResponse))
+		}
+		var err error
+		cfg, err = config.LoadDefaultConfig(ctx, opts...)
+		if err != nil {
+			return aws.Config{}, errors.Wrap(err, "loading aws config")
+		}
 	default:
 		return aws.Config{}, errors.Errorf("unsupported value %s for %s", p.auth, cloud.AuthParam)
-	}
-	cfg, err := config.LoadDefaultConfig(ctx, opts...)
-	if err != nil {
-		return aws.Config{}, errors.Wrap(err, "loading aws config")
 	}
 	if p.assumeRoleProvider.roleARN != "" {
 		// Each role in the chain gets its credentials from the one before.

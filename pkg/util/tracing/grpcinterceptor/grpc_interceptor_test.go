@@ -231,6 +231,7 @@ func TestGRPCInterceptors(t *testing.T) {
 					t.Error(err)
 				}
 			}))
+			//lint:ignore SA1019 deprecated but supported throughout gRPC 1.x; grpc.NewClient changes how connections are made
 			conn, err := grpc.DialContext(bgCtx, ln.Addr().String(),
 				//lint:ignore SA1019 grpc.WithInsecure is deprecated
 				grpc.WithInsecure(),

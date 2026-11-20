@@ -113,7 +113,8 @@ type s3Storage struct {
 
 // s3Client wraps an SDK client and uploader for a given session.
 type s3Client struct {
-	client   *s3.Client
+	client *s3.Client
+	//lint:ignore SA1019 the uploader of feature/s3/manager still works; its replacement transfermanager is new
 	uploader *manager.Uploader
 }
 
@@ -506,6 +507,7 @@ func (s *s3Storage) newClient(ctx context.Context) (s3Client, string, error) {
 	cfg.Region = region
 
 	c := s3.NewFromConfig(cfg, clientOpts)
+	//lint:ignore SA1019 the uploader of feature/s3/manager still works; its replacement transfermanager is new
 	u := manager.NewUploader(c, func(uploader *manager.Uploader) {
 		uploader.PartSize = cloud.WriteChunkSize.Get(&s.settings.SV)
 	})
@@ -526,6 +528,7 @@ func (s *s3Storage) getClient(ctx context.Context) (*s3.Client, error) {
 	return client.client, nil
 }
 
+//lint:ignore SA1019 the uploader of feature/s3/manager still works; its replacement transfermanager is new
 func (s *s3Storage) getUploader(ctx context.Context) (*manager.Uploader, error) {
 	if s.cached != nil {
 		return s.cached.uploader, nil
@@ -612,6 +615,7 @@ func (s *s3Storage) Writer(ctx context.Context, basename string) (io.WriteCloser
 		defer sp.Finish()
 		// Upload the file to S3.
 		// TODO(dt): test and tune the uploader parameters.
+		//lint:ignore SA1019 the uploader of feature/s3/manager still works; its replacement transfermanager is new
 		_, err := uploader.Upload(ctx, &s3.PutObjectInput{
 			Bucket:               s.bucket,
 			Key:                  aws.String(path.Join(s.prefix, basename)),

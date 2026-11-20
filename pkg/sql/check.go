@@ -44,9 +44,10 @@ import (
 // `indexIDForValidation`, if non-zero, is used to explicit hint the
 // validation query to validate against a specific index.
 //
-// The query runs as user. The expression may call user-defined functions or
-// builtins that check privileges, so user must be the one who added the
-// constraint: as root, these would run with root's privileges.
+// The query runs as user, the user running the schema change that adds or
+// validates the constraint. The expression may call user-defined functions or
+// builtins that check privileges: as root, these would run with root's
+// privileges. The user needs SELECT on the table.
 //
 // It operates entirely on the current goroutine and is thus able to
 // reuse an existing kv.Txn safely.

@@ -96,6 +96,7 @@ func configureGRPCGateway(
 		telemetry.Inc(getServerEndpointCounter(method))
 		return invoker(ctx, method, req, reply, cc, opts...)
 	}
+	//lint:ignore SA1019 deprecated but supported throughout gRPC 1.x; grpc.NewClient changes how connections are made
 	conn, err := grpc.DialContext(ctx, GRPCAddr, append(
 		dialOpts,
 		grpc.WithUnaryInterceptor(callCountInterceptor),

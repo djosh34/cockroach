@@ -119,6 +119,10 @@ func LoadExternalConnection(
 // CheckUsage returns an error unless user may use the external connection
 // called name: user is an admin, or user, one of its roles or public holds
 // USAGE or ALL on the connection.
+//
+// This repeats in SQL what the planner's privilege check does, because this
+// package sits below pkg/sql and cannot call it. The storage and KMS loaders
+// run without a planner.
 func CheckUsage(ctx context.Context, txn isql.Txn, user username.SQLUsername, name string) error {
 	if user.IsRootUser() || user.IsNodeUser() {
 		return nil

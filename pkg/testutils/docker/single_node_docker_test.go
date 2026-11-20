@@ -291,12 +291,12 @@ func removeLocalData() error {
 }
 
 // showContainerLog outputs the container's logs to the logFile and stderr.
-func (dn *dockerNode) showContainerLog(ctx context.Context, logFileName string) error {
+func (dn *dockerNode) showContainerLog(ctx context.Context, logFileName string) (retErr error) {
 	cmdLog, err := os.Create(logFileName)
 	if err != nil {
 		return errors.Wrap(err, "cannot create log file")
 	}
-	defer cmdLog.Close()
+	defer func() { retErr = errors.CombineErrors(retErr, cmdLog.Close()) }()
 	cmd := exec.CommandContext(ctx, "docker", "logs", dn.contID)
 	out := io.MultiWriter(cmdLog, os.Stderr)
 	cmd.Stdout = out

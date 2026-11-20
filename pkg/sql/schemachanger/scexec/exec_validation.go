@@ -69,7 +69,7 @@ func executeValidateConstraint(
 
 	// Execute the validation operation as a root user, except for a check
 	// constraint: its expression may call functions, so it runs as the user
-	// who added it.
+	// running the schema change.
 	execOverride := sessiondata.RootUserSessionDataOverride
 	if ck := constraint.AsCheck(); ck != nil && !ck.IsNotNullColumnConstraint() {
 		execOverride = sessiondata.InternalExecutorOverride{User: deps.User()}

@@ -1542,15 +1542,15 @@ func (e InvalidIndexesError) Error() string {
 }
 
 // checkValidationUser returns the user that validates ck: root for a NOT NULL
-// constraint, whose expression is fixed, and otherwise the user who added the
-// constraint, because its expression may call functions.
+// constraint, whose expression is fixed, and otherwise user, the user running
+// the schema change, because the expression may call functions.
 func checkValidationUser(
-	ck catalog.CheckConstraint, owner username.SQLUsername,
+	ck catalog.CheckConstraint, user username.SQLUsername,
 ) username.SQLUsername {
 	if ck.IsNotNullColumnConstraint() {
 		return username.RootUserName()
 	}
-	return owner
+	return user
 }
 
 // ValidateConstraint validates the constraint against all rows

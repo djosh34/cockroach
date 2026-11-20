@@ -38,6 +38,7 @@ import (
 	"github.com/petermattis/goid"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	//lint:ignore SA1019 the Zipkin exporter is deprecated; the zipkin collector setting still uses it
 	"go.opentelemetry.io/otel/exporters/zipkin"
 	"go.opentelemetry.io/otel/sdk/resource"
 	otelsdk "go.opentelemetry.io/otel/sdk/trace"

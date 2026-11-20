@@ -213,6 +213,7 @@ func TestClusterConnectivity(t *testing.T) {
 						return err
 					}
 
+					//lint:ignore SA1019 deprecated but supported throughout gRPC 1.x; grpc.NewClient changes how connections are made
 					conn, err := grpc.DialContext(ctx, target, dialOpts...)
 					if err != nil {
 						return err

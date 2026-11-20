@@ -51,6 +51,7 @@ func TestConsumeJoinToken(t *testing.T) {
 	require.NoError(t, jt.UnmarshalText([]byte(token)))
 
 	dialOpts := rpc.GetAddJoinDialOptions(ctx, nil)
+	//lint:ignore SA1019 deprecated but supported throughout gRPC 1.x; grpc.NewClient changes how connections are made
 	conn, err := grpc.DialContext(ctx, s.RPCAddr(), dialOpts...)
 	require.NoError(t, err)
 	defer func() {
@@ -73,6 +74,7 @@ func TestConsumeJoinToken(t *testing.T) {
 	certPool.AddCert(cert)
 
 	dialOpts = rpc.GetAddJoinDialOptions(ctx, certPool)
+	//lint:ignore SA1019 deprecated but supported throughout gRPC 1.x; grpc.NewClient changes how connections are made
 	conn2, err := grpc.DialContext(ctx, s.RPCAddr(), dialOpts...)
 	require.NoError(t, err)
 	defer func() {

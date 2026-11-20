@@ -210,13 +210,18 @@ func settingIsSensitive(name string) bool {
 }
 
 func (p *planner) getCommonSQLEventDetails(opt redactionOptions) eventpb.CommonSQLEventDetails {
-	redactableStmt := formatStmtKeyAsRedactableString(
-		p.extendedEvalCtx.VirtualSchemas, p.stmt.AST,
-		p.extendedEvalCtx.Context.Annotations, opt.toFlags(), p,
-	)
+	flags := opt.toFlags()
 	mayCarrySecret := statementMayCarrySecret(p.stmt.AST)
 	if mayCarrySecret {
-		// The constants are marked as unsafe; replace them.
+		// Only the constants are marked as unsafe, so that replacing the unsafe
+		// parts below hides the values and keeps the names.
+		flags = tree.FmtOmitNameRedaction
+	}
+	redactableStmt := formatStmtKeyAsRedactableString(
+		p.extendedEvalCtx.VirtualSchemas, p.stmt.AST,
+		p.extendedEvalCtx.Context.Annotations, flags, p,
+	)
+	if mayCarrySecret {
 		redactableStmt = redactableStmt.Redact()
 	}
 	commonSQLEventDetails := eventpb.CommonSQLEventDetails{

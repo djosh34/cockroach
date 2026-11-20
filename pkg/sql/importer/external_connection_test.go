@@ -17,6 +17,9 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
+	"github.com/cockroachdb/cockroach/pkg/cloud"
+	"github.com/cockroachdb/cockroach/pkg/security/username"
+	"github.com/cockroachdb/cockroach/pkg/sql/isql"
 	"github.com/cockroachdb/cockroach/pkg/testutils/serverutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/sqlutils"
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
@@ -48,6 +51,19 @@ func TestExternalConnectionChecks(t *testing.T) {
 		sqlDB.Exec(t, `IMPORT INTO t CSV DATA ('external://conn/data.csv')`)
 		sqlDB.ExpectErr(t, `must not contain ".."`,
 			`IMPORT INTO t CSV DATA ('external://conn/../secret/data.csv')`)
+	})
+
+	t.Run("KMS needs USAGE", func(t *testing.T) {
+		sqlDB.Exec(t, `CREATE USER kmsuser`)
+		env := &cloud.TestKMSEnv{
+			Settings:         s.ClusterSettings(),
+			ExternalIOConfig: &base.ExternalIODirConfig{},
+			DB:               s.InternalDB().(isql.DB),
+			Username:         username.MakeSQLUsernameFromPreNormalizedString("kmsuser"),
+		}
+		// No KMS is contacted: the check comes before the connection is loaded.
+		_, err := cloud.KMSFromURI(ctx, "external://conn", env)
+		require.ErrorContains(t, err, "does not have USAGE privilege on external connection conn")
 	})
 
 	t.Run("EXPORT needs USAGE", func(t *testing.T) {

@@ -274,6 +274,7 @@ func (s *EventsExporter) Start(ctx context.Context, stopper *stop.Stopper) error
 		opts = append(opts, grpc.WithContextDialer(s.dialer))
 	}
 	// Note that Dial is non-blocking.
+	//lint:ignore SA1019 deprecated but supported throughout gRPC 1.x; grpc.NewClient changes how connections are made
 	conn, err := grpc.Dial(s.targetAddr, opts...)
 	if err != nil {
 		return err
