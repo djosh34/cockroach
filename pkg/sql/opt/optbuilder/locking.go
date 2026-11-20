@@ -12,7 +12,6 @@ package optbuilder
 
 import (
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
-	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/concurrency/isolation"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/cat"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/memo"
@@ -137,7 +136,6 @@ func (lm lockingSpec) get() opt.Locking {
 		l = l.Max(opt.Locking{
 			Strength:   spec.Strength,
 			WaitPolicy: spec.WaitPolicy,
-			Form:       spec.Form,
 		})
 	}
 	return l
@@ -321,16 +319,6 @@ func (item *lockingItem) validate() {
 		panic(errors.AssertionFailedf("unknown locking wait policy: %d", li.WaitPolicy))
 	}
 
-	// Validate locking form.
-	switch li.Form {
-	case tree.LockRecord:
-		// Default. Only lock existing rows.
-	case tree.LockPredicate:
-		// Lock both existing rows and gaps between rows.
-	default:
-		panic(errors.AssertionFailedf("unknown locking form: %d", li.Form))
-	}
-
 	// Validate locking targets by checking that all targets are well-formed and
 	// all were found somewhere in the FROM clause.
 	for i, target := range li.Targets {
@@ -357,16 +345,14 @@ func (item *lockingItem) validate() {
 // constraint checks.
 func (b *Builder) shouldUseGuaranteedDurability() bool {
 	return b.evalCtx.Settings.Version.IsActive(b.ctx, clusterversion.V23_2) &&
-		(b.evalCtx.TxnIsoLevel != isolation.Serializable ||
-			b.evalCtx.SessionData().DurableLockingForSerializable)
+		b.evalCtx.SessionData().DurableLockingForSerializable
 }
 
 // shouldBuildLockOp returns whether we should use the Lock operator for SELECT
 // FOR UPDATE or SELECT FOR SHARE.
 func (b *Builder) shouldBuildLockOp() bool {
 	return b.evalCtx.Settings.Version.IsActive(b.ctx, clusterversion.V23_2) &&
-		(b.evalCtx.TxnIsoLevel != isolation.Serializable ||
-			b.evalCtx.SessionData().OptimizerUseLockOpForSerializable)
+		b.evalCtx.SessionData().OptimizerUseLockOpForSerializable
 }
 
 // buildLocking constructs one Lock operator for each data source that this

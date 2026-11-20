@@ -1578,10 +1578,6 @@ type ExecutorTestingKnobs struct {
 	// OnTxnRetry, if set, will be called if there is a transaction retry.
 	OnTxnRetry func(autoRetryReason error, evalCtx *eval.Context)
 
-	// OnReadCommittedStmtRetry, if set, will be called if there is an error
-	// that causes a per-statement retry in a read committed transaction.
-	OnReadCommittedStmtRetry func(retryReason error)
-
 	// BeforeTxnStatsRecorded, if set, will be called before the statistics
 	// of a transaction is being recorded.
 	BeforeTxnStatsRecorded func(
@@ -3347,10 +3343,6 @@ func (m *sessionDataMutator) SetLargeFullScanRows(val float64) {
 
 func (m *sessionDataMutator) SetInjectRetryErrorsEnabled(val bool) {
 	m.data.InjectRetryErrorsEnabled = val
-}
-
-func (m *sessionDataMutator) SetMaxRetriesForReadCommitted(val int32) {
-	m.data.MaxRetriesForReadCommitted = val
 }
 
 func (m *sessionDataMutator) SetJoinReaderOrderingStrategyBatchSize(val int64) {

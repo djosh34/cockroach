@@ -155,7 +155,6 @@ func TestSpanSplitterFamilyIDs(t *testing.T) {
 		index         string
 		neededColumns intsets.Fast
 		forDelete     bool
-		forSideEffect bool
 		familyIDs     []descpb.FamilyID
 	}{
 		{
@@ -220,13 +219,6 @@ func TestSpanSplitterFamilyIDs(t *testing.T) {
 			familyIDs:     []descpb.FamilyID(nil),
 		},
 		{
-			sql:           "a INT NOT NULL, b INT NULL, c INT NOT NULL, d INT NOT NULL, PRIMARY KEY (a, b), FAMILY (a, b), FAMILY (c, d)",
-			index:         "t_pkey",
-			neededColumns: intsets.MakeFast(0, 1, 2, 3),
-			forSideEffect: true,
-			familyIDs:     []descpb.FamilyID(nil),
-		},
-		{
 			sql:           "a INT NOT NULL, b INT NULL, c INT NOT NULL, d INT NOT NULL, e INT NULL, PRIMARY KEY (a, b), FAMILY (a, c), FAMILY (b, d), FAMILY (e)",
 			index:         "t_pkey",
 			neededColumns: intsets.MakeFast(0, 3),
@@ -238,13 +230,6 @@ func TestSpanSplitterFamilyIDs(t *testing.T) {
 			neededColumns: intsets.MakeFast(0, 3),
 			forDelete:     true,
 			familyIDs:     []descpb.FamilyID(nil),
-		},
-		{
-			sql:           "a INT NOT NULL, b INT NULL, c INT NOT NULL, d INT NOT NULL, e INT NULL, PRIMARY KEY (a, b), FAMILY (a, c), FAMILY (b, d), FAMILY (e)",
-			index:         "t_pkey",
-			neededColumns: intsets.MakeFast(0, 3),
-			forSideEffect: true,
-			familyIDs:     []descpb.FamilyID{0, 1},
 		},
 	}
 	if _, err := sqlDB.Exec("CREATE DATABASE t"); err != nil {
@@ -264,7 +249,7 @@ func TestSpanSplitterFamilyIDs(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			splitter := span.MakeSplitterBase(desc, idx, tc.neededColumns, tc.forDelete, tc.forSideEffect)
+			splitter := span.MakeSplitterBase(desc, idx, tc.neededColumns, tc.forDelete)
 			require.Equal(t, tc.familyIDs, splitter.FamilyIDs())
 		})
 	}

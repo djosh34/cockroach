@@ -27,7 +27,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/buildutil"
 	"github.com/cockroachdb/cockroach/pkg/util/errorutil"
 	"github.com/cockroachdb/cockroach/pkg/util/intsets"
-	"github.com/cockroachdb/cockroach/pkg/util/sentryutil"
+	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/redact"
 )
@@ -406,7 +406,7 @@ func (f *Factory) CheckConstructorStackDepth() {
 
 // onMaxConstructorStackDepthExceeded is called when constructorStackDepth
 // exceeds maxConstructorStackDepth. In test builds it panics. In release builds
-// it reports an error to Sentry to alert of a likely normalization rule cycle.
+// it logs an error to alert of a likely normalization rule cycle.
 func (f *Factory) onMaxConstructorStackDepthExceeded() {
 	err := errors.AssertionFailedf(
 		"optimizer factory constructor call stack exceeded max depth of %v",
@@ -415,7 +415,7 @@ func (f *Factory) onMaxConstructorStackDepthExceeded() {
 	if buildutil.CrdbTestBuild {
 		panic(err)
 	}
-	sentryutil.SendReport(f.ctx, &f.evalCtx.Settings.SV, err)
+	log.Errorf(f.ctx, "%v", err)
 }
 
 // onConstructRelational is called as a final step by each factory method that

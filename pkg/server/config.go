@@ -232,12 +232,6 @@ type BaseConfig struct {
 	// store blocks from disaggregated shared storage. For use with SharedStorage.
 	SecondaryCache base.SizeSpec
 
-	// StartDiagnosticsReporting starts the asynchronous goroutine that
-	// checks for CockroachDB upgrades and periodically reports
-	// diagnostics to Cockroach Labs.
-	// Should remain disabled during unit testing.
-	StartDiagnosticsReporting bool
-
 	// DisableHTTPListener prevents this server from starting a TCP
 	// listener for the HTTP service. Instead, it is expected that some
 	// other service (typically, the serverController) will accept and

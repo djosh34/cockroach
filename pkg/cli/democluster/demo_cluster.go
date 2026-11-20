@@ -623,8 +623,6 @@ func (c *transientCluster) createAndAddNode(
 	if idx == 0 {
 		// The first node also auto-inits the cluster.
 		args.NoAutoInitializeCluster = false
-		// The first node also runs diagnostics (unless disabled by cluster.TelemetryOptOut).
-		args.StartDiagnosticsReporting = true
 	}
 
 	serverKnobs := args.Knobs.Server.(*server.TestingKnobs)

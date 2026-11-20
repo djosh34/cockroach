@@ -155,12 +155,6 @@ type TestServerArgs struct {
 	// below for alternative options that suits your test case.
 	DefaultTestTenant DefaultTestTenantOptions
 
-	// StartDiagnosticsReporting checks cluster.TelemetryOptOut(), and
-	// if not disabled starts the asynchronous goroutine that checks for
-	// CockroachDB upgrades and periodically reports diagnostics to
-	// Cockroach Labs. Should remain disabled during unit testing.
-	StartDiagnosticsReporting bool
-
 	// ObsServiceAddr is the address to which events will be exported over OTLP.
 	// If empty, exporting events is inhibited.
 	ObsServiceAddr string
@@ -641,10 +635,4 @@ type TestTenantArgs struct {
 	// test. If set, this directory should be cleaned up after the test
 	// completes.
 	CPUProfileDirName string
-
-	// StartDiagnosticsReporting checks cluster.TelemetryOptOut(), and
-	// if not disabled starts the asynchronous goroutine that checks for
-	// CockroachDB upgrades and periodically reports diagnostics to
-	// Cockroach Labs. Should remain disabled during unit testing.
-	StartDiagnosticsReporting bool
 }

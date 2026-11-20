@@ -12,7 +12,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -70,7 +69,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/authserver"
 	"github.com/cockroachdb/cockroach/pkg/server/debug"
-	"github.com/cockroachdb/cockroach/pkg/server/diagnostics"
 	"github.com/cockroachdb/cockroach/pkg/server/privchecker"
 	"github.com/cockroachdb/cockroach/pkg/server/serverctl"
 	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
@@ -127,7 +125,6 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/logtags"
 	"github.com/cockroachdb/redact"
-	sentry "github.com/getsentry/sentry-go"
 	"google.golang.org/grpc/codes"
 )
 
@@ -161,7 +158,6 @@ type topLevelServer struct {
 	runtime          *status.RuntimeStatSampler
 	ruleRegistry     *metric.RuleRegistry
 	promRuleExporter *metric.PrometheusRuleExporter
-	updates          *diagnostics.UpdateChecker
 	ctSender         *sidetransport.Sender
 
 	http            *httpServer
@@ -883,21 +879,6 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 	)
 	appRegistry.AddMetricStruct(rpcContext.RemoteClocks.Metrics())
 
-	updates := &diagnostics.UpdateChecker{
-		StartTime:        timeutil.Now(),
-		AmbientCtx:       &cfg.AmbientCtx,
-		Config:           cfg.BaseConfig.Config,
-		Settings:         cfg.Settings,
-		StorageClusterID: rpcContext.StorageClusterID.Get,
-		LogicalClusterID: rpcContext.LogicalClusterID.Get,
-		NodeID:           nodeIDContainer.Get,
-		SQLInstanceID:    idContainer.SQLInstanceID,
-	}
-
-	if cfg.TestingKnobs.Server != nil {
-		updates.TestingKnobs = &cfg.TestingKnobs.Server.(*TestingKnobs).DiagnosticsTestingKnobs
-	}
-
 	tenantSettingsWatcher := tenantsettingswatcher.New(
 		clock, rangeFeedFactory, stopper, st,
 	)
@@ -1274,7 +1255,6 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 		recorder:                  recorder,
 		ruleRegistry:              ruleRegistry,
 		promRuleExporter:          promRuleExporter,
-		updates:                   updates,
 		ctSender:                  ctSender,
 		runtime:                   runtimeSampler,
 		http:                      sHTTP,
@@ -1837,16 +1817,6 @@ func (s *topLevelServer) PreStart(ctx context.Context) error {
 	}
 	s.replicationReporter.Start(workersCtx, s.stopper)
 
-	// Configure the Sentry reporter to add some additional context to reports.
-	sentry.ConfigureScope(func(scope *sentry.Scope) {
-		scope.SetTags(map[string]string{
-			"cluster":     s.StorageClusterID().String(),
-			"node":        s.NodeID().String(),
-			"server_id":   fmt.Sprintf("%s-%s", s.StorageClusterID().Short(), s.NodeID()),
-			"engine_type": s.cfg.StorageEngine.String(),
-		})
-	})
-
 	// Init a log metrics registry.
 	logRegistry := logmetrics.NewRegistry()
 	if logRegistry == nil {
@@ -2072,11 +2042,6 @@ func (s *topLevelServer) PreStart(ctx context.Context) error {
 	// external storage is initialized.
 	if err := s.initJobScheduler(ctx); err != nil {
 		return err
-	}
-
-	// If enabled, start reporting diagnostics.
-	if s.cfg.StartDiagnosticsReporting && !cluster.TelemetryOptOut {
-		s.startDiagnostics(workersCtx)
 	}
 
 	s.eventsExporter.SetNodeInfo(obs.NodeInfo{
@@ -2306,12 +2271,6 @@ func (s *topLevelServer) SpanConfigReporter() spanconfig.Reporter {
 // implementation exports the logical cluster ID of the system tenant.
 func (s *topLevelServer) LogicalClusterID() uuid.UUID {
 	return s.sqlServer.LogicalClusterID()
-}
-
-// startDiagnostics starts periodic diagnostics reporting and update checking.
-func (s *topLevelServer) startDiagnostics(ctx context.Context) {
-	s.updates.PeriodicallyCheckForUpdates(ctx, s.stopper)
-	s.sqlServer.StartDiagnostics(ctx)
 }
 
 func init() {

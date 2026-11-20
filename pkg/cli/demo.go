@@ -23,7 +23,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/cli/clisqlclient"
 	"github.com/cockroachdb/cockroach/pkg/cli/democluster"
 	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
-	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/util"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/stop"
@@ -43,10 +42,6 @@ subcommands: e.g. "cockroach demo startrek". See --help for a full list.
 
 By default, the 'movr' dataset is pre-loaded. You can also use --no-example-database
 to avoid pre-loading a dataset.
-
-cockroach demo attempts to connect to a Cockroach Labs server to send
-telemetry back to Cockroach Labs. In order to disable this behavior, set the
-environment variable "COCKROACH_SKIP_ENABLING_DIAGNOSTIC_REPORTING" to true.
 `,
 	Example: `  cockroach demo`,
 	Args:    cobra.NoArgs,
@@ -215,17 +210,6 @@ func runDemoInternal(
 `,
 				cliflags.Global.Name,
 			)
-		}
-
-		// Only print details about the telemetry configuration if the
-		// user has control over it.
-		if cluster.TelemetryOptOut {
-			cliCtx.PrintlnUnlessEmbedded("#\n# Telemetry disabled by configuration.")
-		} else {
-			cliCtx.PrintlnUnlessEmbedded("#\n" +
-				"# This demo session will send telemetry to Cockroach Labs in the background.\n" +
-				"# To disable this behavior, set the environment variable\n" +
-				"# COCKROACH_SKIP_ENABLING_DIAGNOSTIC_REPORTING=true.")
 		}
 	}
 

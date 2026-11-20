@@ -28,7 +28,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/cockroach/pkg/util/errorutil"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
-	"github.com/cockroachdb/cockroach/pkg/util/sentryutil"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/redact"
 )
@@ -386,7 +385,7 @@ func forecastColumnStatistics(
 					"forecasted histogram had first bucket with non-zero NumRange or DistinctRange: %s",
 					debugging,
 				)
-				sentryutil.SendReport(ctx, sv, err)
+				log.Errorf(ctx, "%v", err)
 				return nil, err
 			}
 			if bucket.UpperBound != tree.DNull {

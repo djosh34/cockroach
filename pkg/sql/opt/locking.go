@@ -44,28 +44,17 @@ type Locking struct {
 	//
 	WaitPolicy tree.LockingWaitPolicy
 
-	// The third property is the form of locking, either record locking or
-	// predicate locking (see tree.LockingForm). Record locking prevents
-	// modification of existing rows, but does not prevent insertion of new
-	// rows. Predicate locking prevents both modification of existing rows and
-	// insertion of new rows. Unlike locking strength, locking form is optional to
-	// specify in a locking clause. If not specified, the form defaults to record
-	// locking. We currently only use predicate locking for uniqueness checks
-	// under snapshot and read committed isolation, and only support predicate
-	// locking on single-key spans.
-	Form tree.LockingForm
-
-	// The fourth property is the durability of the locking (see
+	// The third property is the durability of the locking (see
 	// tree.LockingDurability). A guaranteed-durable lock always persists until
 	// commit time, while a best-effort lock may sometimes be lost before commit
 	// (for example, during a lease transfer). Unlike locking strength, locking
 	// durability is optional to specify in a locking clause. If not specified,
 	// the durability defaults to best-effort. We currently only require
 	// guaranteed-durable locks for SELECT FOR UPDATE statements and
-	// system-maintained constraint checks (e.g. FK checks) under snapshot and
-	// read commited isolation. Other locking statements, such as UPDATE, rely on
-	// the durability of intents for correctness, rather than the durability of
-	// locks.
+	// system-maintained constraint checks (e.g. FK checks) when the
+	// durable_locking_for_serializable session setting is on. Other locking
+	// statements, such as UPDATE, rely on the durability of intents for
+	// correctness, rather than the durability of locks.
 	Durability tree.LockingDurability
 }
 
@@ -75,7 +64,6 @@ func (l Locking) Max(l2 Locking) Locking {
 	return Locking{
 		Strength:   l.Strength.Max(l2.Strength),
 		WaitPolicy: l.WaitPolicy.Max(l2.WaitPolicy),
-		Form:       l.Form.Max(l2.Form),
 		Durability: l.Durability.Max(l2.Durability),
 	}
 }

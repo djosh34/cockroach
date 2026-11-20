@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/kv"
-	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/concurrency/isolation"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
@@ -61,9 +60,6 @@ type txnState struct {
 
 		// The transaction's priority.
 		priority roachpb.UserPriority
-
-		// The transaction's isolation level.
-		isolationLevel isolation.Level
 
 		// stmtCount keeps track of the number of statements that the transaction
 		// has executed.
@@ -188,7 +184,6 @@ func (ts *txnState) resetForNewSQLTxn(
 	txn *kv.Txn,
 	tranCtx transitionCtx,
 	qualityOfService sessiondatapb.QoSLevel,
-	isoLevel isolation.Level,
 ) (txnID uuid.UUID) {
 	// Reset state vars to defaults.
 	ts.sqlTimestamp = sqlTimestamp
@@ -230,9 +225,6 @@ func (ts *txnState) resetForNewSQLTxn(
 			ts.mu.txn = kv.NewTxnWithSteppingEnabled(ts.Ctx, tranCtx.db, tranCtx.nodeIDOrZero, qualityOfService)
 			ts.mu.txn.SetDebugName(opName)
 			if err := ts.setPriorityLocked(priority); err != nil {
-				panic(err)
-			}
-			if err := ts.setIsolationLevelLocked(isoLevel); err != nil {
 				panic(err)
 			}
 		} else {
@@ -358,20 +350,6 @@ func (ts *txnState) setPriorityLocked(userPriority roachpb.UserPriority) error {
 		return err
 	}
 	ts.mu.priority = userPriority
-	return nil
-}
-
-func (ts *txnState) setIsolationLevel(level isolation.Level) error {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-	return ts.setIsolationLevelLocked(level)
-}
-
-func (ts *txnState) setIsolationLevelLocked(level isolation.Level) error {
-	if err := ts.mu.txn.SetIsoLevel(level); err != nil {
-		return err
-	}
-	ts.mu.isolationLevel = level
 	return nil
 }
 

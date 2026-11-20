@@ -115,12 +115,6 @@ func setupMixedCluster(
 		ServerArgsPerNode: twh.args(),
 	})
 
-	// We simulate crashes using this cluster, and having this enabled (which is
-	// a default upgrade) causes leaktest to complain.
-	if _, err := tc.ServerConn(0).Exec("SET CLUSTER SETTING diagnostics.reporting.enabled = 'false'"); err != nil {
-		t.Fatal(err)
-	}
-
 	twh.TestCluster = tc
 	return twh
 }

@@ -19,7 +19,6 @@ package sql
 import (
 	"time"
 
-	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/concurrency/isolation"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondatapb"
@@ -123,7 +122,6 @@ type eventTxnStartPayload struct {
 	// qualityOfService denotes the user-level admission queue priority to use for
 	// any new Txn started using this payload.
 	qualityOfService sessiondatapb.QoSLevel
-	isoLevel         isolation.Level
 }
 
 // makeEventTxnStartPayload creates an eventTxnStartPayload.
@@ -134,7 +132,6 @@ func makeEventTxnStartPayload(
 	historicalTimestamp *hlc.Timestamp,
 	tranCtx transitionCtx,
 	qualityOfService sessiondatapb.QoSLevel,
-	isoLevel isolation.Level,
 ) eventTxnStartPayload {
 	return eventTxnStartPayload{
 		pri:                 pri,
@@ -143,7 +140,6 @@ func makeEventTxnStartPayload(
 		historicalTimestamp: historicalTimestamp,
 		tranCtx:             tranCtx,
 		qualityOfService:    qualityOfService,
-		isoLevel:            isoLevel,
 	}
 }
 
@@ -513,7 +509,6 @@ func noTxnToOpen(args fsm.Args) error {
 		nil, /* txn */
 		payload.tranCtx,
 		payload.qualityOfService,
-		payload.isoLevel,
 	)
 	ts.setAdvanceInfo(
 		advCode,

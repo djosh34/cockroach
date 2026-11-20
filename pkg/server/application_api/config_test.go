@@ -256,37 +256,24 @@ func TestAdminAPISettings(t *testing.T) {
 func TestClusterAPI(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	defer log.Scope(t).Close(t)
-	s, db, _ := serverutils.StartServer(t, base.TestServerArgs{
+	s, _, _ := serverutils.StartServer(t, base.TestServerArgs{
 		// Disable the default test tenant for now as this tests fails
 		// with it enabled. Tracked with #81590.
 		DefaultTestTenant: base.TODOTestTenantDisabled,
 	})
 	defer s.Stopper().Stop(context.Background())
 
-	testutils.RunTrueAndFalse(t, "reportingOn", func(t *testing.T, reportingOn bool) {
-		if _, err := db.Exec(`SET CLUSTER SETTING diagnostics.reporting.enabled = $1`, reportingOn); err != nil {
-			t.Fatal(err)
+	// We need to retry, because the cluster ID isn't set until after
+	// bootstrapping.
+	testutils.SucceedsSoon(t, func() error {
+		var resp serverpb.ClusterResponse
+		if err := srvtestutils.GetAdminJSONProto(s, "cluster", &resp); err != nil {
+			return err
 		}
-
-		// We need to retry, because the cluster ID isn't set until after
-		// bootstrapping and because setting a cluster setting isn't necessarily
-		// instantaneous.
-		//
-		// Also note that there's a migration that affects `diagnostics.reporting.enabled`,
-		// so manipulating the cluster setting var directly is a bad idea.
-		testutils.SucceedsSoon(t, func() error {
-			var resp serverpb.ClusterResponse
-			if err := srvtestutils.GetAdminJSONProto(s, "cluster", &resp); err != nil {
-				return err
-			}
-			if a, e := resp.ClusterID, s.RPCContext().StorageClusterID.String(); a != e {
-				return errors.Errorf("cluster ID %s != expected %s", a, e)
-			}
-			if a, e := resp.ReportingEnabled, reportingOn; a != e {
-				return errors.Errorf("reportingEnabled = %t, wanted %t", a, e)
-			}
-			return nil
-		})
+		if a, e := resp.ClusterID, s.RPCContext().StorageClusterID.String(); a != e {
+			return errors.Errorf("cluster ID %s != expected %s", a, e)
+		}
+		return nil
 	})
 }
 

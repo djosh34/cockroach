@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/keys"
-	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/concurrency/isolation"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/server/telemetry"
 	"github.com/cockroachdb/cockroach/pkg/settings"
@@ -853,12 +852,10 @@ func (ih *instrumentationHelper) emitExplainAnalyzePlanToOutputBuilder(
 	}
 
 	qos := sessiondatapb.Normal
-	iso := isolation.Serializable
 	if ih.evalCtx != nil {
 		qos = ih.evalCtx.QualityOfService()
-		iso = ih.evalCtx.TxnIsoLevel
 	}
-	ob.AddTxnInfo(iso, ih.txnPriority, qos)
+	ob.AddTxnInfo(ih.txnPriority, qos)
 
 	if err := emitExplain(ctx, ob, ih.evalCtx, ih.codec, ih.explainPlan); err != nil {
 		ob.AddField("error emitting plan", fmt.Sprint(err))

@@ -1888,9 +1888,6 @@ func TestSetSessionArguments(t *testing.T) {
 	defer srv.Stopper().Stop(ctx)
 	s := srv.ApplicationLayer()
 
-	_, err := s.SQLConn(t, serverutils.DBName("defaultdb")).Exec(`SET CLUSTER SETTING sql.txn.read_committed_isolation.enabled = true`)
-	require.NoError(t, err)
-
 	pgURL, cleanupFunc := s.PGUrl(
 		t, serverutils.CertsDirPrefix("testConnClose"), serverutils.User(username.RootUser),
 	)
@@ -1932,9 +1929,8 @@ func TestSetSessionArguments(t *testing.T) {
 
 	expectedOptions := map[string]string{
 		"search_path": "public, testsp, \"Abc\", def",
-		// Setting the isolation level to read uncommitted should map
-		// to read committed.
-		"default_transaction_isolation": "read committed",
+		// Every isolation level is stored as serializable.
+		"default_transaction_isolation": "serializable",
 		"application_name":              "test",
 		"datestyle":                     "ISO, YMD",
 		"intervalstyle":                 "iso_8601",

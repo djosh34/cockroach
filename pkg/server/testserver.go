@@ -176,7 +176,6 @@ func makeTestConfigFromParams(params base.TestServerArgs) Config {
 	cfg.SocketFile = params.SocketFile
 	cfg.RetryOptions = params.RetryOptions
 	cfg.Locality = params.Locality
-	cfg.StartDiagnosticsReporting = params.StartDiagnosticsReporting
 	cfg.DisableSQLServer = params.DisableSQLServer
 	if params.TraceDir != "" {
 		if err := initTraceDir(params.TraceDir); err == nil {
@@ -617,18 +616,17 @@ func (ts *testServer) startDefaultTestTenant(
 	params := base.TestTenantArgs{
 		// Currently, all the servers leverage the same tenant ID. We may
 		// want to change this down the road, for more elaborate testing.
-		TenantID:                  serverutils.TestTenantID(),
-		MemoryPoolSize:            ts.params.SQLMemoryPoolSize,
-		TempStorageConfig:         &tempStorageConfig,
-		Locality:                  ts.params.Locality,
-		ExternalIODir:             ts.params.ExternalIODir,
-		ExternalIODirConfig:       ts.params.ExternalIODirConfig,
-		ForceInsecure:             ts.Insecure(),
-		UseDatabase:               ts.params.UseDatabase,
-		SSLCertsDir:               ts.params.SSLCertsDir,
-		TestingKnobs:              ts.params.Knobs,
-		StartDiagnosticsReporting: ts.params.StartDiagnosticsReporting,
-		Settings:                  tenantSettings,
+		TenantID:            serverutils.TestTenantID(),
+		MemoryPoolSize:      ts.params.SQLMemoryPoolSize,
+		TempStorageConfig:   &tempStorageConfig,
+		Locality:            ts.params.Locality,
+		ExternalIODir:       ts.params.ExternalIODir,
+		ExternalIODirConfig: ts.params.ExternalIODirConfig,
+		ForceInsecure:       ts.Insecure(),
+		UseDatabase:         ts.params.UseDatabase,
+		SSLCertsDir:         ts.params.SSLCertsDir,
+		TestingKnobs:        ts.params.Knobs,
+		Settings:            tenantSettings,
 	}
 
 	// Since we're creating a tenant, it doesn't make sense to pass through the
@@ -636,10 +634,6 @@ func (ts *testServer) startDefaultTestTenant(
 	// tenant. Any remaining knobs which are required by the tenant should be
 	// passed through here.
 	params.TestingKnobs.Server = &TestingKnobs{}
-
-	if ts.params.Knobs.Server != nil {
-		params.TestingKnobs.Server.(*TestingKnobs).DiagnosticsTestingKnobs = ts.params.Knobs.Server.(*TestingKnobs).DiagnosticsTestingKnobs
-	}
 	return ts.StartTenant(ctx, params)
 }
 
@@ -652,9 +646,6 @@ func (ts *testServer) getSharedProcessDefaultTenantArgs() base.TestSharedProcess
 	}
 	// See comment above on separate process tenant regarding the testing knobs.
 	args.Knobs.Server = &TestingKnobs{}
-	if ts.params.Knobs.Server != nil {
-		args.Knobs.Server.(*TestingKnobs).DiagnosticsTestingKnobs = ts.params.Knobs.Server.(*TestingKnobs).DiagnosticsTestingKnobs
-	}
 	return args
 }
 
@@ -1698,7 +1689,6 @@ func (ts *testServer) StartTenant(
 	baseCfg.Insecure = params.ForceInsecure
 	baseCfg.Locality = params.Locality
 	baseCfg.ClusterName = ts.Cfg.ClusterName
-	baseCfg.StartDiagnosticsReporting = params.StartDiagnosticsReporting
 	baseCfg.DisableTLSForHTTP = params.DisableTLSForHTTP
 	baseCfg.TestingInsecureWebAccess = ts.Cfg.TestingInsecureWebAccess
 	baseCfg.DefaultZoneConfig = ts.Cfg.DefaultZoneConfig
@@ -1880,11 +1870,6 @@ func (ts *testServer) SetReadyFn(fn func(bool)) {
 // WriteSummaries implements the serverutils.StorageLayerInterface.
 func (ts *testServer) WriteSummaries() error {
 	return ts.node.writeNodeStatus(context.TODO(), time.Hour, false)
-}
-
-// UpdateChecker implements the serverutils.StorageLayerInterface.
-func (ts *testServer) UpdateChecker() interface{} {
-	return ts.topLevelServer.updates
 }
 
 // DiagnosticsReporter implements the serverutils.ApplicationLayerInterface.

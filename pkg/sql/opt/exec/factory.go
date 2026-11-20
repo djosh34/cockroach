@@ -71,13 +71,12 @@ const (
 
 	// PlanFlagContainsLocking is set if at least one node in the plan uses
 	// locking. (Examples of plans using locking include SELECT FOR UPDATE and
-	// SELECT FOR SHARE, UPDATE, UPSERT, and FK checks under read committed
-	// isolation.)
+	// SELECT FOR SHARE.)
 	PlanFlagContainsLocking
 
 	// PlanFlagCheckContainsLocking is set if at least one node in at least one
 	// check plan uses locking. Typically this is set for plans with FK checks
-	// under read committed isolation.
+	// when enable_implicit_fk_locking_for_serializable is on.
 	PlanFlagCheckContainsLocking
 )
 

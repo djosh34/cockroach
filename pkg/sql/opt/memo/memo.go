@@ -14,7 +14,6 @@ package memo
 import (
 	"context"
 
-	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/concurrency/isolation"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/cat"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/props"
@@ -195,11 +194,6 @@ type Memo struct {
 	proveImplicationWithVirtualComputedCols    bool
 	pushOffsetIntoIndexJoin                    bool
 
-	// txnIsoLevel is the isolation level under which the plan was created. This
-	// affects the planning of some locking operations, so it must be included in
-	// memo staleness calculation.
-	txnIsoLevel isolation.Level
-
 	// curRank is the highest currently in-use scalar expression rank.
 	curRank opt.ScalarRank
 
@@ -274,7 +268,6 @@ func (m *Memo) Init(ctx context.Context, evalCtx *eval.Context) {
 		useImprovedMultiColumnSelectivityEstimate:  evalCtx.SessionData().OptimizerUseImprovedMultiColumnSelectivityEstimate,
 		proveImplicationWithVirtualComputedCols:    evalCtx.SessionData().OptimizerProveImplicationWithVirtualComputedColumns,
 		pushOffsetIntoIndexJoin:                    evalCtx.SessionData().OptimizerPushOffsetIntoIndexJoin,
-		txnIsoLevel:                                evalCtx.TxnIsoLevel,
 	}
 	m.metadata.Init()
 	m.logPropsBuilder.init(ctx, evalCtx, m)
@@ -431,8 +424,7 @@ func (m *Memo) IsStale(
 		m.useImprovedZigzagJoinCosting != evalCtx.SessionData().OptimizerUseImprovedZigzagJoinCosting ||
 		m.useImprovedMultiColumnSelectivityEstimate != evalCtx.SessionData().OptimizerUseImprovedMultiColumnSelectivityEstimate ||
 		m.proveImplicationWithVirtualComputedCols != evalCtx.SessionData().OptimizerProveImplicationWithVirtualComputedColumns ||
-		m.pushOffsetIntoIndexJoin != evalCtx.SessionData().OptimizerPushOffsetIntoIndexJoin ||
-		m.txnIsoLevel != evalCtx.TxnIsoLevel {
+		m.pushOffsetIntoIndexJoin != evalCtx.SessionData().OptimizerPushOffsetIntoIndexJoin {
 		return true, nil
 	}
 

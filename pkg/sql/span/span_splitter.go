@@ -48,32 +48,19 @@ func NoopSplitter() Splitter {
 func MakeSplitter(
 	table catalog.TableDescriptor, index catalog.Index, neededColOrdinals intsets.Fast,
 ) Splitter {
-	return MakeSplitterBase(table, index, neededColOrdinals, false, /* forDelete */
-		false /* forSideEffect */)
-}
-
-func MakeSplitterForSideEffect(
-	table catalog.TableDescriptor, index catalog.Index, neededColOrdinals intsets.Fast,
-) Splitter {
-	return MakeSplitterBase(table, index, neededColOrdinals, false, /* forDelete */
-		true /* forSideEffect */)
+	return MakeSplitterBase(table, index, neededColOrdinals, false /* forDelete */)
 }
 
 func MakeSplitterForDelete(
 	table catalog.TableDescriptor, index catalog.Index, neededColOrdinals intsets.Fast,
 ) Splitter {
-	return MakeSplitterBase(table, index, neededColOrdinals, true, /* forDelete */
-		false /* forSideEffect */)
+	return MakeSplitterBase(table, index, neededColOrdinals, true /* forDelete */)
 }
 
 // MakeSplitterBase is the same as MakeSplitter but additionally specifies
-// whether the splitter will be used for deletes and/or side effects.
+// whether the splitter will be used for deletes.
 func MakeSplitterBase(
-	table catalog.TableDescriptor,
-	index catalog.Index,
-	neededColOrdinals intsets.Fast,
-	forDelete bool,
-	forSideEffect bool,
+	table catalog.TableDescriptor, index catalog.Index, neededColOrdinals intsets.Fast, forDelete bool,
 ) Splitter {
 	// We can only split a span into separate family specific point lookups if:
 	//
@@ -102,7 +89,7 @@ func MakeSplitterBase(
 		}
 	}
 
-	neededFamilies := rowenc.NeededColumnFamilyIDs(neededColOrdinals, table, index, forSideEffect)
+	neededFamilies := rowenc.NeededColumnFamilyIDs(neededColOrdinals, table, index)
 
 	// Sanity check.
 	for i := range neededFamilies[1:] {
