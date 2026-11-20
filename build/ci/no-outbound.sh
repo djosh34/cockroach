@@ -15,10 +15,12 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 if [[ ${NO_OUTBOUND_NETNS:-} != 1 ]]; then
-  exec env NO_OUTBOUND_NETNS=1 unshare --net "$0" "$@"
+  exec env NO_OUTBOUND_NETNS=1 unshare --net --uts "$0" "$@"
 fi
 
 ip link set lo up
+# A host name that no /etc/hosts lists, so looking it up would need DNS.
+hostname no-outbound-check
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 addr=127.0.0.1:26257
