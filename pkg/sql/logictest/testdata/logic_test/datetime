@@ -2057,6 +2057,12 @@ SELECT make_date(9223372036854775807, 1, 1)
 statement error pgcode 22008 date/time field value out of range
 SELECT make_timestamp(9223372036854775807, 1, 1, 0, 0, 0)
 
+# A leap second at the end of the year carries into the next year.
+query T
+SELECT make_timestamp(2023, 12, 31, 23, 59, 60)::STRING
+----
+2024-01-01 00:00:00
+
 subtest end
 
 subtest make_timestamp

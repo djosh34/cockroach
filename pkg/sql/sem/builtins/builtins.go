@@ -10918,8 +10918,10 @@ func makeDateTime(
 	wholeSec := math.Floor(sec)
 	nsec := math.Round((sec - wholeSec) * float64(time.Second))
 	t := time.Date(year, time.Month(month), day, hour, min, int(wholeSec), int(nsec), loc)
-	// A year too large for time.Date wraps around instead of failing.
-	if t.Year() != year && !(hour == 24 && t.Year() == year+1) {
+	// A year too large for time.Date wraps around instead of failing. A
+	// carry into the next year, as from 23:59:60 or 24:00:00 on December 31,
+	// is fine.
+	if t.Year() < year || t.Year() > year+1 {
 		return time.Time{}, outOfRange()
 	}
 	return t, nil
