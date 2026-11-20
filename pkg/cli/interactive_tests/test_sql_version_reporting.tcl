@@ -60,18 +60,17 @@ eexpect eof
 
 stop_server $argv
 
-start_test "Check that the client picks up a new server version, and warns about lower versions."
+start_test "Check that a release binary ignores the testing version override."
+# Only crdb_test builds read COCKROACH_TESTING_VERSION_OVERRIDE, so client and
+# server keep the same version.
 set env(COCKROACH_TESTING_VERSION_OVERRIDE) "v0.1.0-fakever"
 start_server $argv
-set env(COCKROACH_TESTING_VERSION_OVERRIDE) "v0.2.0-fakever"
 spawn $argv sql --no-line-editor
 send "select 1;\r"
-eexpect "# Client version: patchroaddb"
-eexpect "# Server version: patchroaddb"
-eexpect "fakever"
-eexpect "warning: server version older than client"
+eexpect "(same version as client)"
 eexpect root@
 end_test
+unset env(COCKROACH_TESTING_VERSION_OVERRIDE)
 
 send_eof
 eexpect eof

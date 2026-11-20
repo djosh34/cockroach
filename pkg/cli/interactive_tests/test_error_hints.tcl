@@ -132,7 +132,7 @@ eexpect "insecure\r\n"
 # then kill it
 set spawn_id $shell_spawn_id
 eexpect "connected"
-eexpect "patchroaddb sql"
+eexpect "cockroach sql"
 interrupt
 eexpect ":/# "
 # Check that cockroach sql becomes suitably confused.
