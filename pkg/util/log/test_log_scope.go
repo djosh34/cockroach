@@ -161,7 +161,7 @@ func newLogScope(t tShim, mostlyInline bool) (sc *TestLogScope) {
 			return err
 		}
 
-		t.Logf("test logs captured to: %s", sc.printableLogDirectory())
+		t.Logf("test logs captured to: %s", sc.logDir)
 		return nil
 	}()
 	if err != nil {
@@ -356,12 +356,6 @@ func (l *TestLogScope) SetupSingleFileLogging() (cleanup func()) {
 	return cleanup
 }
 
-// printableLogDirectory returns a human-readable version of the log directory
-// suitable for printing to the console.
-func (l *TestLogScope) printableLogDirectory() string {
-	return l.logDir
-}
-
 // GetDirectory retrieves the log directory for this scope.
 func (l *TestLogScope) GetDirectory() string {
 	return l.logDir
@@ -414,7 +408,7 @@ func (l *TestLogScope) Close(t tShim) {
 						"Details cannot be printed yet because we are still unwinding.\n"+
 						"Hopefully the test harness prints the panic below, otherwise check the test logs.\n\n")
 				}
-				fmt.Fprintln(OrigStderr, "test logs left over in:", l.printableLogDirectory())
+				fmt.Fprintln(OrigStderr, "test logs left over in:", l.logDir)
 			} else {
 				// Clean up.
 				if err := os.RemoveAll(l.logDir); err != nil {
