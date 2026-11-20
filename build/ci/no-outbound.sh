@@ -44,21 +44,19 @@ sleep 60
 
 # Stop the node; a graceful shutdown may take long, so kill it after 30s.
 # strace exits with the node's status: 0 after a clean shutdown, 137 if it
-# had to be killed. Anything else means the node or strace failed.
+# was killed. Anything else means the node or strace failed.
 node=$(cat "$work/pid")
 kill -TERM "$node"
-expected=0
 for _ in $(seq 30); do
   kill -0 "$node" 2>/dev/null || break
   sleep 1
 done
-if kill -KILL "$node" 2>/dev/null; then
-  expected=137
-fi
+killed=false
+kill -KILL "$node" 2>/dev/null && killed=true
 status=0
 wait "$strace_pid" || status=$?
-if [[ $status -ne $expected ]]; then
-  echo "the traced node exited with status $status, expected $expected" >&2
+if [[ $status -ne 0 && ! ($status -eq 137 && $killed == true) ]]; then
+  echo "the traced node exited with status $status" >&2
   exit 1
 fi
 

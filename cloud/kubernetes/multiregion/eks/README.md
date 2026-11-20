@@ -35,7 +35,7 @@ resources:
     memory: "8Gi"
 ```
 
-Replace the placeholder values in the `--join` and `--locality` flags with the namespace of the CockroachDB cluster in each region (e.g., `us-east-1`). `--join` specifies the host addresses that connect nodes to the cluster and distribute the rest of the node addresses. `--locality` describes the location of each CockroachDB node.
+Replace the placeholder values in the `--join` and `--locality` flags with the namespace of the CockroachDB cluster in each region (e.g., `us-east-1`). Add `az=<zone>` only if every pod of the StatefulSet runs in that zone; the flags are the same for all pods. `--join` specifies the host addresses that connect nodes to the cluster and distribute the rest of the node addresses. `--locality` describes the location of each CockroachDB node.
 
 ```
 --join cockroachdb-0.cockroachdb.<cluster-namespace-1>,cockroachdb-1.cockroachdb.<cluster-namespace-1>,cockroachdb-2.cockroachdb.<cluster-namespace-1>,cockroachdb-0.cockroachdb.<cluster-namespace-2>,cockroachdb-1.cockroachdb.<cluster-namespace-2>,cockroachdb-2.cockroachdb.<cluster-namespace-2>,cockroachdb-0.cockroachdb.<cluster-namespace-3>,cockroachdb-1.cockroachdb.<cluster-namespace-3>,cockroachdb-2.cockroachdb.<cluster-namespace-3>
