@@ -16,6 +16,7 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catenumpb"
+	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/colinfo"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/tabledesc"
@@ -411,9 +412,14 @@ func (i *immediateVisitor) AddColumnToIndex(ctx context.Context, op scop.AddColu
 			return colOrdMap.GetDefault(cids[i]) < colOrdMap.GetDefault(cids[j])
 		})
 	}
-	// If this is an inverted column, note that.
-	if indexDesc.Type == descpb.IndexDescriptor_INVERTED && op.ColumnID == indexDesc.InvertedColumnID() {
-		indexDesc.InvertedColumnKinds = append(indexDesc.InvertedColumnKinds, op.InvertedKind)
+	// If this is the inverted column, note its kind. Columns are added one at
+	// a time and in any order, so a column that is last for now may not be
+	// the inverted column in the end: set the kind, do not append it. With
+	// appending, (x, y gin_trgm_ops) got the kinds [DEFAULT, TRIGRAM] and
+	// showed as (x ASC, y).
+	if indexDesc.Type == descpb.IndexDescriptor_INVERTED && op.Kind == scpb.IndexColumn_KEY &&
+		op.ColumnID == indexDesc.InvertedColumnID() {
+		indexDesc.InvertedColumnKinds = []catpb.InvertedIndexColumnKind{op.InvertedKind}
 	}
 	return nil
 }

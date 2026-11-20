@@ -376,3 +376,23 @@ SELECT * FROM t_trgm_zero WHERE s % 'abc'
 
 statement ok
 RESET pg_trgm.similarity_threshold
+
+# A multi-column trigram index created with CREATE INDEX keeps its operator
+# class, so SHOW CREATE TABLE can be run again.
+statement ok
+CREATE TABLE t_trgm_multi (id INT PRIMARY KEY, x STRING, y STRING, FAMILY (id, x, y))
+
+statement ok
+CREATE INDEX t_trgm_multi_idx ON t_trgm_multi USING GIN (x, y gin_trgm_ops)
+
+query T
+SELECT create_statement FROM [SHOW CREATE TABLE t_trgm_multi]
+----
+CREATE TABLE public.t_trgm_multi (
+  id INT8 NOT NULL,
+  x STRING NULL,
+  y STRING NULL,
+  CONSTRAINT t_trgm_multi_pkey PRIMARY KEY (id ASC),
+  INVERTED INDEX t_trgm_multi_idx (x ASC, y gin_trgm_ops),
+  FAMILY fam_0_id_x_y (id, x, y)
+)
