@@ -2225,7 +2225,6 @@ SELECT id, payload, progress FROM "".crdb_internal.system_jobs ORDER BY id DESC 
 	if desc == "NULL" || errStr != "" || frac[0] != '-' {
 		t.Fatalf("%d: invalid row", rowNum)
 	}
-	rowNum++
 }
 
 func TestShowJobWhenComplete(t *testing.T) {

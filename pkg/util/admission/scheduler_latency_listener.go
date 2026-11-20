@@ -166,7 +166,7 @@ func (e *schedulerLatencyListener) getParams(period time.Duration) schedulerLate
 		return *e.testingParams
 	}
 
-	enabled := elasticCPUControlEnabled.Get(&e.settings.SV)
+	enabled := ElasticCPUControlEnabled.Get(&e.settings.SV)
 	targetP99 := elasticCPUSchedulerLatencyTarget.Get(&e.settings.SV)
 	minUtilization := elasticCPUMinUtilization.Get(&e.settings.SV)
 	maxUtilization := elasticCPUMaxUtilization.Get(&e.settings.SV)

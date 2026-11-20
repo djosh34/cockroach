@@ -911,10 +911,6 @@ func isGenerator(def *tree.ResolvedFunctionDefinition) bool {
 	return isClass(def, tree.GeneratorClass)
 }
 
-func isSQLFn(def *tree.ResolvedFunctionDefinition) bool {
-	return isClass(def, tree.SQLClass)
-}
-
 func isClass(def *tree.ResolvedFunctionDefinition, want tree.FunctionClass) bool {
 	cls, err := def.GetClass()
 	if err != nil {

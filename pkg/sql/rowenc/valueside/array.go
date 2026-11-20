@@ -201,12 +201,6 @@ func DatumTypeToArrayElementEncodingType(t *types.T) (encoding.Type, error) {
 		return encoding.Int, nil
 	case types.FloatFamily:
 		return encoding.Float, nil
-	case types.Box2DFamily:
-		return encoding.Box2D, nil
-	case types.GeometryFamily:
-		return encoding.Geo, nil
-	case types.GeographyFamily:
-		return encoding.Geo, nil
 	case types.DecimalFamily:
 		return encoding.Decimal, nil
 	case types.BytesFamily, types.StringFamily, types.CollatedStringFamily,
@@ -281,12 +275,6 @@ func encodeArrayElement(b []byte, d tree.Datum) ([]byte, error) {
 		return encoding.EncodeUntaggedIntValue(b, t.UnixEpochDaysWithOrig()), nil
 	case *tree.DPGLSN:
 		return encoding.EncodeUntaggedIntValue(b, int64(t.LSN)), nil
-	case *tree.DBox2D:
-		return encoding.EncodeUntaggedBox2DValue(b, t.CartesianBoundingBox.BoundingBox)
-	case *tree.DGeography:
-		return encoding.EncodeUntaggedGeoValue(b, t.SpatialObjectRef())
-	case *tree.DGeometry:
-		return encoding.EncodeUntaggedGeoValue(b, t.SpatialObjectRef())
 	case *tree.DTime:
 		return encoding.EncodeUntaggedIntValue(b, int64(*t)), nil
 	case *tree.DTimeTZ:

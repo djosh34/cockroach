@@ -367,7 +367,6 @@ vectorized: true
               table: d@foo_inv
               spans: /[]-/{} /???-/???
 
-
 # TODO(rytaft): Fix the stats so we don't choose an inverted index scan here
 # (see #56870).
 query T
@@ -1977,7 +1976,6 @@ vectorized: true
                       table: d@foo_inv
                       spans: /Arr/Arr/"a"-/Arr/Arr/"a"/PrefixEnd /Arr/Arr/"b"-/Arr/Arr/"b"/PrefixEnd /Arr/Arr/0-/Arr/Arr/0/PrefixEnd /Arr/Arr/1-/Arr/Arr/1/PrefixEnd
 
-
 # Testing the FetchVal with the IN operator with both JSON integers and strings as
 # the fetch value's index position.
 query T
@@ -2373,7 +2371,6 @@ vectorized: true
               table: d@foo_inv
               spans: /"a"-/"a"/PrefixEnd /Arr/"a"-/Arr/"a"/PrefixEnd
 
-
 query T
 EXPLAIN (VERBOSE) SELECT a FROM d WHERE b = '[[0, 1, 2], [0, 1, 2], "s"]'
 ----
@@ -2403,7 +2400,6 @@ vectorized: true
               right table: d@foo_inv
               right columns: (a, b_inverted_key)
               right fixed values: 1 column
-
 
 # Testing the IN operator without the fetch value operator on an
 # inverted index.
@@ -2477,7 +2473,6 @@ vectorized: true
                       estimated row count: 111 (missing stats)
                       table: d@foo_inv
                       spans: /1-/1/PrefixEnd /2-/2/PrefixEnd /Arr/1-/Arr/1/PrefixEnd /Arr/2-/Arr/2/PrefixEnd
-
 
 query T
 EXPLAIN (VERBOSE) SELECT a FROM d WHERE b IN ('[1, 2, 3]', '[1]', '[]')
@@ -2583,7 +2578,6 @@ vectorized: true
                       estimated row count: 111 (missing stats)
                       table: d@foo_inv
                       spans: /"a"/[]-/"a"/{}/PrefixEnd /???-/??? /???-/???
-
 
 query T
 EXPLAIN (VERBOSE) SELECT a FROM d WHERE b IN ('[[0, 1, 2], [0, 1, 2], "s"]')
@@ -3238,263 +3232,6 @@ CPut /Table/109/1/1/0 -> /TUPLE/1:1:Decimal/1.00/
 InitPut /Table/109/2/1/1/0 -> /BYTES/0x1503348964
 InitPut /Table/109/2/2/1/0 -> /BYTES/0x1503348964
 
-statement ok
-CREATE TABLE geo_table(
-  k int primary key,
-  geom geometry,
-  INVERTED INDEX geom_index(geom)
-)
-
-query T
-EXPLAIN (VERBOSE) SELECT k FROM geo_table WHERE ST_Intersects('POINT(3.0 3.0)'::geometry, geom)
-----
-distribution: local
-vectorized: true
-·
-• project
-│ columns: (k)
-│
-└── • filter
-    │ columns: (k, geom)
-    │ estimated row count: 110 (missing stats)
-    │ filter: st_intersects('010100000000000000000008400000000000000840', geom)
-    │
-    └── • index join
-        │ columns: (k, geom)
-        │ estimated row count: 111 (missing stats)
-        │ table: geo_table@geo_table_pkey
-        │ key columns: k
-        │
-        └── • project
-            │ columns: (k)
-            │
-            └── • inverted filter
-                │ columns: (k, geom_inverted_key)
-                │ estimated row count: 111 (missing stats)
-                │ inverted column: geom_inverted_key
-                │ num spans: 31
-                │
-                └── • scan
-                      columns: (k, geom_inverted_key)
-                      estimated row count: 111 (missing stats)
-                      table: geo_table@geom_index
-                      spans: /"B\xfd\x10\x00\x00\x00\x00\x00\x00\x00"-/"B\xfd\x10\x00\x00\x00\x00\x00\x00\x01" /"B\xfd\x10\x00\x00\x00\x00\x00\x00\x01"-/"B\xfd\x10\x00\x00\x00\x00\x00\x00\x02" /"B\xfd\x10\x00\x00\x00\x00\x00\x00\x04"-/"B\xfd\x10\x00\x00\x00\x00\x00\x00\x05" /"B\xfd\x10\x00\x00\x00\x00\x00\x00\x10"-/"B\xfd\x10\x00\x00\x00\x00\x00\x00\x11" /"B\xfd\x10\x00\x00\x00\x00\x00\x00@"-/"B\xfd\x10\x00\x00\x00\x00\x00\x00A" /"B\xfd\x10\x00\x00\x00\x00\x00\x01\x00"-/"B\xfd\x10\x00\x00\x00\x00\x00\x01\x01" /"B\xfd\x10\x00\x00\x00\x00\x00\x04\x00"-/"B\xfd\x10\x00\x00\x00\x00\x00\x04\x01" /"B\xfd\x10\x00\x00\x00\x00\x00\x10\x00"-/"B\xfd\x10\x00\x00\x00\x00\x00\x10\x01" /"B\xfd\x10\x00\x00\x00\x00\x00@\x00"-/"B\xfd\x10\x00\x00\x00\x00\x00@\x01" /"B\xfd\x10\x00\x00\x00\x00\x01\x00\x00"-/"B\xfd\x10\x00\x00\x00\x00\x01\x00\x01" /"B\xfd\x10\x00\x00\x00\x00\x04\x00\x00"-/"B\xfd\x10\x00\x00\x00\x00\x04\x00\x01" /"B\xfd\x10\x00\x00\x00\x00\x10\x00\x00"-/"B\xfd\x10\x00\x00\x00\x00\x10\x00\x01" /"B\xfd\x10\x00\x00\x00\x00@\x00\x00"-/"B\xfd\x10\x00\x00\x00\x00@\x00\x01" /"B\xfd\x10\x00\x00\x00\x01\x00\x00\x00"-/"B\xfd\x10\x00\x00\x00\x01\x00\x00\x01" /"B\xfd\x10\x00\x00\x00\x04\x00\x00\x00"-/"B\xfd\x10\x00\x00\x00\x04\x00\x00\x01" /"B\xfd\x10\x00\x00\x00\x10\x00\x00\x00"-/"B\xfd\x10\x00\x00\x00\x10\x00\x00\x01" /"B\xfd\x10\x00\x00\x00@\x00\x00\x00"-/"B\xfd\x10\x00\x00\x00@\x00\x00\x01" /"B\xfd\x10\x00\x00\x01\x00\x00\x00\x00"-/"B\xfd\x10\x00\x00\x01\x00\x00\x00\x01" /"B\xfd\x10\x00\x00\x04\x00\x00\x00\x00"-/"B\xfd\x10\x00\x00\x04\x00\x00\x00\x01" /"B\xfd\x10\x00\x00\x10\x00\x00\x00\x00"-/"B\xfd\x10\x00\x00\x10\x00\x00\x00\x01" /"B\xfd\x10\x00\x00@\x00\x00\x00\x00"-/"B\xfd\x10\x00\x00@\x00\x00\x00\x01" /"B\xfd\x10\x00\x01\x00\x00\x00\x00\x00"-/"B\xfd\x10\x00\x01\x00\x00\x00\x00\x01" /"B\xfd\x10\x00\x04\x00\x00\x00\x00\x00"-/"B\xfd\x10\x00\x04\x00\x00\x00\x00\x01" /"B\xfd\x10\x00\x10\x00\x00\x00\x00\x00"-/"B\xfd\x10\x00\x10\x00\x00\x00\x00\x01" /"B\xfd\x10\x00@\x00\x00\x00\x00\x00"-/"B\xfd\x10\x00@\x00\x00\x00\x00\x01" /"B\xfd\x10\x01\x00\x00\x00\x00\x00\x00"-/"B\xfd\x10\x01\x00\x00\x00\x00\x00\x01" /"B\xfd\x10\x04\x00\x00\x00\x00\x00\x00"-/"B\xfd\x10\x04\x00\x00\x00\x00\x00\x01" /"B\xfd\x10\x10\x00\x00\x00\x00\x00\x00"-/"B\xfd\x10\x10\x00\x00\x00\x00\x00\x01" /"B\xfd\x10@\x00\x00\x00\x00\x00\x00"-/"B\xfd\x10@\x00\x00\x00\x00\x00\x01" /"B\xfd\x11\x00\x00\x00\x00\x00\x00\x00"-/"B\xfd\x11\x00\x00\x00\x00\x00\x00\x01" /"B\xfd\x14\x00\x00\x00\x00\x00\x00\x00"-/"B\xfd\x14\x00\x00\x00\x00\x00\x00\x01"
-
-statement ok
-CREATE TABLE geo_table2(
-  k int primary key,
-  geom geometry
-)
-
-query T
-EXPLAIN (OPT, VERBOSE) SELECT * FROM geo_table2 JOIN geo_table@geom_index
-ON ST_Intersects(geo_table2.geom, geo_table.geom)
-----
-inner-join (lookup geo_table)
- ├── columns: k:1 geom:2 k:5 geom:6
- ├── key columns: [11] = [5]
- ├── lookup columns are key
- ├── immutable
- ├── stats: [rows=9801]
- ├── cost: 112716.87
- ├── key: (1,5)
- ├── fd: (1)-->(2), (5)-->(6)
- ├── distribution: test
- ├── prune: (1,5)
- ├── inner-join (inverted geo_table@geom_index)
- │    ├── columns: geo_table2.k:1 geo_table2.geom:2 geo_table.k:11
- │    ├── inverted-expr
- │    │    └── st_intersects(geo_table2.geom:2, geo_table.geom:12)
- │    ├── stats: [rows=10000, distinct(1)=999.957, null(1)=0, distinct(11)=999.957, null(11)=0]
- │    ├── cost: 41812.84
- │    ├── key: (1,11)
- │    ├── fd: (1)-->(2)
- │    ├── distribution: test
- │    ├── scan geo_table2
- │    │    ├── columns: geo_table2.k:1 geo_table2.geom:2
- │    │    ├── stats: [rows=1000, distinct(1)=1000, null(1)=0, distinct(2)=100, null(2)=10]
- │    │    ├── cost: 1108.82
- │    │    ├── key: (1)
- │    │    ├── fd: (1)-->(2)
- │    │    ├── distribution: test
- │    │    ├── prune: (1,2)
- │    │    └── unfiltered-cols: (1-4)
- │    └── filters (true)
- └── filters
-      └── st_intersects(geo_table2.geom:2, geo_table.geom:6) [outer=(2,6), immutable, constraints=(/2: (/NULL - ]; /6: (/NULL - ])]
-
-query T
-EXPLAIN (VERBOSE) SELECT * FROM geo_table2 JOIN geo_table@geom_index
-ON ST_Intersects(geo_table2.geom, geo_table.geom)
-----
-distribution: local
-vectorized: true
-·
-• project
-│ columns: (k, geom, k, geom)
-│
-└── • lookup join (inner)
-    │ columns: (k, geom, k, k, geom)
-    │ estimated row count: 9,801 (missing stats)
-    │ table: geo_table@geo_table_pkey
-    │ equality: (k) = (k)
-    │ equality cols are key
-    │ pred: st_intersects(geom, geom)
-    │
-    └── • project
-        │ columns: (k, geom, k)
-        │
-        └── • inverted join (inner)
-            │ columns: (k, geom, k, geom_inverted_key)
-            │ estimated row count: 10,000 (missing stats)
-            │ table: geo_table@geom_index
-            │ inverted expr: st_intersects(geom, geom_inverted_key)
-            │
-            └── • scan
-                  columns: (k, geom)
-                  estimated row count: 1,000 (missing stats)
-                  table: geo_table2@geo_table2_pkey
-                  spans: FULL SCAN
-
-# Do not use the index when using a _ prefixed builtin.
-query T
-EXPLAIN (VERBOSE) SELECT k FROM geo_table WHERE _ST_Intersects('POINT(3.0 3.0)'::geometry, geom)
-----
-distribution: local
-vectorized: true
-·
-• project
-│ columns: (k)
-│
-└── • filter
-    │ columns: (k, geom)
-    │ estimated row count: 330 (missing stats)
-    │ filter: _st_intersects('010100000000000000000008400000000000000840', geom)
-    │
-    └── • scan
-          columns: (k, geom)
-          estimated row count: 1,000 (missing stats)
-          table: geo_table@geo_table_pkey
-          spans: FULL SCAN
-
-query T
-EXPLAIN (OPT, VERBOSE) SELECT * FROM geo_table2 LEFT JOIN geo_table@geom_index
-ON ST_Intersects(geo_table2.geom, geo_table.geom)
-----
-left-join (lookup geo_table)
- ├── columns: k:1 geom:2 k:5 geom:6
- ├── key columns: [11] = [5]
- ├── lookup columns are key
- ├── second join in paired joiner
- ├── immutable
- ├── stats: [rows=10000]
- ├── cost: 112716.87
- ├── key: (1,5)
- ├── fd: (1)-->(2), (5)-->(6)
- ├── distribution: test
- ├── prune: (1,5)
- ├── left-join (inverted geo_table@geom_index)
- │    ├── columns: geo_table2.k:1 geo_table2.geom:2 geo_table.k:11 continuation:16
- │    ├── first join in paired joiner; continuation column: continuation:16
- │    ├── inverted-expr
- │    │    └── st_intersects(geo_table2.geom:2, geo_table.geom:12)
- │    ├── stats: [rows=10000, distinct(1)=1000, null(1)=0, distinct(11)=999.957, null(11)=0]
- │    ├── cost: 41812.84
- │    ├── key: (1,11)
- │    ├── fd: (1)-->(2), (11)-->(16)
- │    ├── distribution: test
- │    ├── scan geo_table2
- │    │    ├── columns: geo_table2.k:1 geo_table2.geom:2
- │    │    ├── stats: [rows=1000, distinct(1)=1000, null(1)=0]
- │    │    ├── cost: 1108.82
- │    │    ├── key: (1)
- │    │    ├── fd: (1)-->(2)
- │    │    ├── distribution: test
- │    │    ├── prune: (1,2)
- │    │    └── unfiltered-cols: (1-4)
- │    └── filters (true)
- └── filters
-      └── st_intersects(geo_table2.geom:2, geo_table.geom:6) [outer=(2,6), immutable, constraints=(/2: (/NULL - ]; /6: (/NULL - ])]
-
-query T
-EXPLAIN (OPT, VERBOSE) SELECT * FROM geo_table2 WHERE EXISTS (SELECT * FROM geo_table@geom_index
-WHERE ST_Intersects(geo_table2.geom, geo_table.geom))
-----
-semi-join (lookup geo_table)
- ├── columns: k:1 geom:2
- ├── key columns: [11] = [5]
- ├── lookup columns are key
- ├── second join in paired joiner
- ├── immutable
- ├── stats: [rows=10]
- ├── cost: 112516.87
- ├── key: (1)
- ├── fd: (1)-->(2)
- ├── distribution: test
- ├── prune: (1)
- ├── inner-join (inverted geo_table@geom_index)
- │    ├── columns: geo_table2.k:1 geo_table2.geom:2 geo_table.k:11 continuation:16
- │    ├── first join in paired joiner; continuation column: continuation:16
- │    ├── inverted-expr
- │    │    └── st_intersects(geo_table2.geom:2, geo_table.geom:12)
- │    ├── stats: [rows=10000, distinct(1)=999.957, null(1)=0, distinct(11)=999.957, null(11)=0]
- │    ├── cost: 41812.84
- │    ├── key: (1,11)
- │    ├── fd: (1)-->(2), (11)-->(16)
- │    ├── distribution: test
- │    ├── scan geo_table2
- │    │    ├── columns: geo_table2.k:1 geo_table2.geom:2
- │    │    ├── stats: [rows=1000, distinct(1)=1000, null(1)=0, distinct(2)=100, null(2)=10]
- │    │    ├── cost: 1108.82
- │    │    ├── key: (1)
- │    │    ├── fd: (1)-->(2)
- │    │    ├── distribution: test
- │    │    ├── prune: (1,2)
- │    │    ├── interesting orderings: (+1)
- │    │    └── unfiltered-cols: (1-4)
- │    └── filters (true)
- └── filters
-      └── st_intersects(geo_table2.geom:2, geo_table.geom:6) [outer=(2,6), immutable, constraints=(/2: (/NULL - ]; /6: (/NULL - ])]
-
-query T
-EXPLAIN (OPT, VERBOSE) SELECT * FROM geo_table2 WHERE NOT EXISTS (SELECT * FROM geo_table@geom_index
-WHERE ST_Intersects(geo_table2.geom, geo_table.geom))
-----
-anti-join (lookup geo_table)
- ├── columns: k:1 geom:2
- ├── key columns: [11] = [5]
- ├── lookup columns are key
- ├── second join in paired joiner
- ├── immutable
- ├── stats: [rows=990]
- ├── cost: 112516.87
- ├── key: (1)
- ├── fd: (1)-->(2)
- ├── distribution: test
- ├── prune: (1)
- ├── left-join (inverted geo_table@geom_index)
- │    ├── columns: geo_table2.k:1 geo_table2.geom:2 geo_table.k:11 continuation:16
- │    ├── first join in paired joiner; continuation column: continuation:16
- │    ├── inverted-expr
- │    │    └── st_intersects(geo_table2.geom:2, geo_table.geom:12)
- │    ├── stats: [rows=10000, distinct(1)=1000, null(1)=0, distinct(11)=999.957, null(11)=0]
- │    ├── cost: 41812.84
- │    ├── key: (1,11)
- │    ├── fd: (1)-->(2), (11)-->(16)
- │    ├── distribution: test
- │    ├── scan geo_table2
- │    │    ├── columns: geo_table2.k:1 geo_table2.geom:2
- │    │    ├── stats: [rows=1000, distinct(1)=1000, null(1)=0]
- │    │    ├── cost: 1108.82
- │    │    ├── key: (1)
- │    │    ├── fd: (1)-->(2)
- │    │    ├── distribution: test
- │    │    ├── prune: (1,2)
- │    │    └── unfiltered-cols: (1-4)
- │    └── filters (true)
- └── filters
-      └── st_intersects(geo_table2.geom:2, geo_table.geom:6) [outer=(2,6), immutable, constraints=(/2: (/NULL - ]; /6: (/NULL - ])]
-
 # Tests for multi-column inverted indexes.
 subtest multi_column
 
@@ -3512,27 +3249,27 @@ CREATE TABLE m (
 query T kvtrace
 SELECT k FROM m@i1 WHERE a = 10 AND j @> '{"a": "b"}'
 ----
-Scan /Table/112/2/10/"a"/"b"{-/PrefixEnd}
+Scan /Table/110/2/10/"a"/"b"{-/PrefixEnd}
 
 # Combine multiple constraint spans with the inverted constraint.
 query T kvtrace
 SELECT k FROM m@i1 WHERE a IN (10, 20) AND j @> '{"a": "b"}'
 ----
-Scan /Table/112/2/10/"a"/"b"{-/PrefixEnd}, /Table/112/2/20/"a"/"b"{-/PrefixEnd}
+Scan /Table/110/2/10/"a"/"b"{-/PrefixEnd}, /Table/110/2/20/"a"/"b"{-/PrefixEnd}
 
 # Combine multiple constraint spans with multiple columns with the inverted
 # constraint.
 query T kvtrace
 SELECT k FROM m@i2 WHERE a = 10 AND b IN (15, 25) AND j @> '{"a": "b"}'
 ----
-Scan /Table/112/3/10/15/"a"/"b"{-/PrefixEnd}, /Table/112/3/10/25/"a"/"b"{-/PrefixEnd}
+Scan /Table/110/3/10/15/"a"/"b"{-/PrefixEnd}, /Table/110/3/10/25/"a"/"b"{-/PrefixEnd}
 
 # Combine multiple constraint spans with multiple columns with the inverted
 # constraint.
 query T kvtrace
 SELECT k FROM m@i2 WHERE a IN (10, 20) AND b IN (15, 25) AND j @> '{"a": "b"}'
 ----
-Scan /Table/112/3/10/15/"a"/"b"{-/PrefixEnd}, /Table/112/3/10/25/"a"/"b"{-/PrefixEnd}, /Table/112/3/20/15/"a"/"b"{-/PrefixEnd}, /Table/112/3/20/25/"a"/"b"{-/PrefixEnd}
+Scan /Table/110/3/10/15/"a"/"b"{-/PrefixEnd}, /Table/110/3/10/25/"a"/"b"{-/PrefixEnd}, /Table/110/3/20/15/"a"/"b"{-/PrefixEnd}, /Table/110/3/20/25/"a"/"b"{-/PrefixEnd}
 
 # Regression test for incorrectly simplifying inverted expressions (#117979).
 statement ok

@@ -1,4 +1,4 @@
-# LogicTest: 5node-default-configs
+# LogicTest: fakedist
 
 # Regression test for #32652: make sure subqueries that have extra columns for
 # stream merges don't crash when executed.

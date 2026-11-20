@@ -90,22 +90,22 @@ func newTestHelperForTables(
 	}
 
 	return &testHelper{
-			env:    env,
-			server: s,
-			cfg: &scheduledjobs.JobExecutionConfig{
-				Settings:     s.ClusterSettings(),
-				DB:           s.InternalDB().(isql.DB),
-				TestingKnobs: knobs,
-			},
-			sqlDB:         sqlDB,
-			execSchedules: execSchedules,
-		}, func() {
-			if envTableType == jobstest.UseTestTables {
-				sqlDB.Exec(t, "DROP TABLE "+env.SystemJobsTableName())
-				sqlDB.Exec(t, "DROP TABLE "+env.ScheduledJobsTableName())
-			}
-			s.Stopper().Stop(context.Background())
+		env:    env,
+		server: s,
+		cfg: &scheduledjobs.JobExecutionConfig{
+			Settings:     s.ClusterSettings(),
+			DB:           s.InternalDB().(isql.DB),
+			TestingKnobs: knobs,
+		},
+		sqlDB:         sqlDB,
+		execSchedules: execSchedules,
+	}, func() {
+		if envTableType == jobstest.UseTestTables {
+			sqlDB.Exec(t, "DROP TABLE "+env.SystemJobsTableName())
+			sqlDB.Exec(t, "DROP TABLE "+env.ScheduledJobsTableName())
 		}
+		s.Stopper().Stop(context.Background())
+	}
 }
 
 // newScheduledJob is a helper to create scheduled job with helper environment.

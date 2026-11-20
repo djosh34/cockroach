@@ -65,18 +65,6 @@ var (
 		Measurement: "Memory",
 		Unit:        metric.Unit_BYTES,
 	}
-	metaCgoAllocBytes = metric.Metadata{
-		Name:        "sys.cgo.allocbytes",
-		Help:        "Current bytes of memory allocated by cgo",
-		Measurement: "Memory",
-		Unit:        metric.Unit_BYTES,
-	}
-	metaCgoTotalBytes = metric.Metadata{
-		Name:        "sys.cgo.totalbytes",
-		Help:        "Total bytes of memory allocated by cgo, but not released",
-		Measurement: "Memory",
-		Unit:        metric.Unit_BYTES,
-	}
 	metaGCCount = metric.Metadata{
 		Name:        "sys.gc.count",
 		Help:        "Total number of GC runs",
@@ -292,14 +280,6 @@ var (
 // physical volume(s).
 var diskMetricsIgnoredDevices = envutil.EnvOrDefaultString("COCKROACH_DISK_METRICS_IGNORED_DEVICES", getDefaultIgnoredDevices())
 
-// getCgoMemStats is a function that fetches stats for the C++ portion of the code.
-// We will not necessarily have implementations for all builds, so check for nil first.
-// Returns the following:
-// allocated uint: bytes allocated by application
-// total     uint: total bytes requested from system
-// error           : any issues fetching stats. This should be a warning only.
-var getCgoMemStats func(context.Context) (uint, uint, error)
-
 // Estimated total CPU time goroutines spent performing GC tasks to assist the
 // GC and prevent it from falling behind the application. This metric is an
 // overestimate, and not directly comparable to system CPU time measurements.
@@ -422,8 +402,6 @@ type RuntimeStatSampler struct {
 	RunnableGoroutinesPerCPU *metric.GaugeFloat64
 	GoAllocBytes             *metric.Gauge
 	GoTotalBytes             *metric.Gauge
-	CgoAllocBytes            *metric.Gauge
-	CgoTotalBytes            *metric.Gauge
 	GcCount                  *metric.Counter
 	GcPauseNS                *metric.Counter
 	GcPausePercent           *metric.GaugeFloat64
@@ -510,8 +488,6 @@ func NewRuntimeStatSampler(ctx context.Context, clock hlc.WallClock) *RuntimeSta
 		RunnableGoroutinesPerCPU: metric.NewGaugeFloat64(metaRunnableGoroutinesPerCPU),
 		GoAllocBytes:             metric.NewGauge(metaGoAllocBytes),
 		GoTotalBytes:             metric.NewGauge(metaGoTotalBytes),
-		CgoAllocBytes:            metric.NewGauge(metaCgoAllocBytes),
-		CgoTotalBytes:            metric.NewGauge(metaCgoTotalBytes),
 		GcCount:                  metric.NewCounter(metaGCCount),
 		GcPauseNS:                metric.NewCounter(metaGCPauseNS),
 		GcPausePercent:           metric.NewGaugeFloat64(metaGCPausePercent),
@@ -563,30 +539,6 @@ type GoMemStats struct {
 	Collected time.Time
 }
 
-// CGoMemStats reports what has been allocated outside of Go.
-type CGoMemStats struct {
-	// CGoAllocated represents allocated bytes.
-	CGoAllocatedBytes uint64
-	// CGoTotal represents total bytes (allocated + metadata etc).
-	CGoTotalBytes uint64
-}
-
-// GetCGoMemStats collects non-Go memory statistics.
-func GetCGoMemStats(ctx context.Context) *CGoMemStats {
-	var cgoAllocated, cgoTotal uint
-	if getCgoMemStats != nil {
-		var err error
-		cgoAllocated, cgoTotal, err = getCgoMemStats(ctx)
-		if err != nil {
-			log.Warningf(ctx, "problem fetching CGO memory stats: %s; CGO stats will be empty.", err)
-		}
-	}
-	return &CGoMemStats{
-		CGoAllocatedBytes: uint64(cgoAllocated),
-		CGoTotalBytes:     uint64(cgoTotal),
-	}
-}
-
 // SampleEnvironment queries the runtime system for various interesting metrics,
 // storing the resulting values in the set of metric gauges maintained by
 // RuntimeStatSampler. This makes runtime statistics more convenient for
@@ -597,10 +549,7 @@ func GetCGoMemStats(ctx context.Context) *CGoMemStats {
 //
 // SampleEnvironment takes GoMemStats as input because that is collected
 // separately, on a different schedule.
-// The CGoMemStats should be provided via GetCGoMemStats().
-func (rsr *RuntimeStatSampler) SampleEnvironment(
-	ctx context.Context, ms *GoMemStats, cs *CGoMemStats,
-) {
+func (rsr *RuntimeStatSampler) SampleEnvironment(ctx context.Context, ms *GoMemStats) {
 	// Note that debug.ReadGCStats() does not suffer the same problem as
 	// runtime.ReadMemStats(). The only way you can know that is by reading the
 	// source.
@@ -741,8 +690,6 @@ func (rsr *RuntimeStatSampler) SampleEnvironment(
 		HeapFragmentBytes: ms.HeapInuse - ms.HeapAlloc,
 		HeapReservedBytes: ms.HeapIdle - ms.HeapReleased,
 		HeapReleasedBytes: ms.HeapReleased,
-		CGoAllocBytes:     cs.CGoAllocatedBytes,
-		CGoTotalBytes:     cs.CGoTotalBytes,
 		CGoCallRate:       float32(cgoRate),
 		CPUUserPercent:    float32(procUrate) * 100,
 		CPUSysPercent:     float32(procSrate) * 100,
@@ -762,8 +709,6 @@ func (rsr *RuntimeStatSampler) SampleEnvironment(
 	rsr.CgoCalls.Update(numCgoCall)
 	rsr.Goroutines.Update(int64(numGoroutine))
 	rsr.RunnableGoroutinesPerCPU.Update(runnableAvg)
-	rsr.CgoAllocBytes.Update(int64(cs.CGoAllocatedBytes))
-	rsr.CgoTotalBytes.Update(int64(cs.CGoTotalBytes))
 	rsr.GcCount.Update(gc.NumGC)
 	rsr.GcPauseNS.Update(int64(gc.PauseTotal))
 	rsr.GcPausePercent.Update(gcPauseRatio)

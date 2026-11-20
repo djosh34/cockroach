@@ -76,7 +76,7 @@ func (rlf *rangeListenerFactory) ListenAndUpdateAddrs(
 	nextPort := rlf.lowerBound + (rlf.startHint % numCandidates)
 
 	var ln net.Listener
-	for numAttempts := 0; numAttempts < numCandidates; numCandidates++ {
+	for numAttempts := 0; numAttempts < numCandidates; numAttempts++ {
 		nextAddr := net.JoinHostPort(h, strconv.Itoa(nextPort))
 		ln, err = net.Listen("tcp", nextAddr)
 		if err == nil {

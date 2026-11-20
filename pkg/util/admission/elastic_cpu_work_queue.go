@@ -17,6 +17,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
+	"github.com/cockroachdb/cockroach/pkg/util/grunning"
 )
 
 const (
@@ -30,11 +31,15 @@ const (
 )
 
 var (
-	elasticCPUControlEnabled = settings.RegisterBoolSetting(
+	// ElasticCPUControlEnabled turns elastic CPU admission control on. It is
+	// exported so tests can turn it on where the default is off.
+	ElasticCPUControlEnabled = settings.RegisterBoolSetting(
 		settings.SystemOnly,
 		"admission.elastic_cpu.enabled",
 		"when true, elastic work (like backups) performed by the KV layer is subject to admission control",
-		true,
+		// Elastic admission needs per-goroutine CPU time. Stock Go does not
+		// provide it, so the default is off there (see grunning.Supported).
+		grunning.Supported(),
 	)
 )
 
@@ -129,7 +134,7 @@ func (e *ElasticCPUWorkQueue) enabled() bool {
 		return true
 	}
 
-	return elasticCPUControlEnabled.Get(&e.settings.SV)
+	return ElasticCPUControlEnabled.Get(&e.settings.SV)
 }
 
 func (e *ElasticCPUWorkQueue) close() {

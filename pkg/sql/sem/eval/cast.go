@@ -19,8 +19,6 @@ import (
 
 	"github.com/cockroachdb/apd/v3"
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
-	"github.com/cockroachdb/cockroach/pkg/geo"
-	"github.com/cockroachdb/cockroach/pkg/geo/geopb"
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
@@ -30,7 +28,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util"
 	"github.com/cockroachdb/cockroach/pkg/util/bitarray"
 	"github.com/cockroachdb/cockroach/pkg/util/duration"
-	"github.com/cockroachdb/cockroach/pkg/util/encoding"
 	"github.com/cockroachdb/cockroach/pkg/util/timeofday"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil/pgdate"
@@ -432,7 +429,7 @@ func performCastWithoutPrecisionTruncation(
 			}
 		case *tree.DBool, *tree.DDecimal:
 			s = d.String()
-		case *tree.DTimestamp, *tree.DDate, *tree.DTime, *tree.DTimeTZ, *tree.DGeography, *tree.DGeometry, *tree.DBox2D, *tree.DPGLSN:
+		case *tree.DTimestamp, *tree.DDate, *tree.DTime, *tree.DTimeTZ, *tree.DPGLSN:
 			s = tree.AsStringWithFlags(d, tree.FmtBareStrings)
 		case *tree.DTimestampTZ:
 			// Convert to context timezone for correct display.
@@ -539,10 +536,6 @@ func performCastWithoutPrecisionTruncation(
 			return tree.NewDBytes(tree.DBytes(t.GetBytes())), nil
 		case *tree.DBytes:
 			return d, nil
-		case *tree.DGeography:
-			return tree.NewDBytes(tree.DBytes(t.Geography.EWKB())), nil
-		case *tree.DGeometry:
-			return tree.NewDBytes(tree.DBytes(t.Geometry.EWKB())), nil
 		}
 
 	case types.UuidFamily:
@@ -565,22 +558,6 @@ func performCastWithoutPrecisionTruncation(
 			return tree.ParseDIPAddrFromINetString(t.Contents)
 		case *tree.DIPAddr:
 			return d, nil
-		}
-
-	case types.Box2DFamily:
-		switch d := d.(type) {
-		case *tree.DString:
-			return tree.ParseDBox2D(string(*d))
-		case *tree.DCollatedString:
-			return tree.ParseDBox2D(d.Contents)
-		case *tree.DBox2D:
-			return d, nil
-		case *tree.DGeometry:
-			bbox := d.CartesianBoundingBox()
-			if bbox == nil {
-				return tree.DNull, nil
-			}
-			return tree.NewDBox2D(*bbox), nil
 		}
 
 	case types.PGLSNFamily:
@@ -609,109 +586,6 @@ func performCastWithoutPrecisionTruncation(
 			return tree.NewDRefCursor(string(*d)), nil
 		case *tree.DCollatedString:
 			return tree.NewDRefCursor(d.Contents), nil
-		}
-
-	case types.GeographyFamily:
-		switch d := d.(type) {
-		case *tree.DString:
-			return tree.ParseDGeography(string(*d))
-		case *tree.DCollatedString:
-			return tree.ParseDGeography(d.Contents)
-		case *tree.DGeography:
-			if err := geo.SpatialObjectFitsColumnMetadata(
-				d.Geography.SpatialObject(),
-				t.InternalType.GeoMetadata.SRID,
-				t.InternalType.GeoMetadata.ShapeType,
-			); err != nil {
-				return nil, err
-			}
-			return d, nil
-		case *tree.DGeometry:
-			g, err := d.AsGeography()
-			if err != nil {
-				return nil, err
-			}
-			if err := geo.SpatialObjectFitsColumnMetadata(
-				g.SpatialObject(),
-				t.InternalType.GeoMetadata.SRID,
-				t.InternalType.GeoMetadata.ShapeType,
-			); err != nil {
-				return nil, err
-			}
-			return &tree.DGeography{Geography: g}, nil
-		case *tree.DJSON:
-			t, err := d.AsText()
-			if err != nil {
-				return nil, err
-			}
-			if t == nil {
-				return tree.DNull, nil
-			}
-			g, err := geo.ParseGeographyFromGeoJSON(encoding.UnsafeConvertStringToBytes(*t))
-			if err != nil {
-				return nil, err
-			}
-			return &tree.DGeography{Geography: g}, nil
-		case *tree.DBytes:
-			g, err := geo.ParseGeographyFromEWKB(geopb.EWKB(*d))
-			if err != nil {
-				return nil, err
-			}
-			return &tree.DGeography{Geography: g}, nil
-		}
-	case types.GeometryFamily:
-		switch d := d.(type) {
-		case *tree.DString:
-			return tree.ParseDGeometry(string(*d))
-		case *tree.DCollatedString:
-			return tree.ParseDGeometry(d.Contents)
-		case *tree.DGeometry:
-			if err := geo.SpatialObjectFitsColumnMetadata(
-				d.Geometry.SpatialObject(),
-				t.InternalType.GeoMetadata.SRID,
-				t.InternalType.GeoMetadata.ShapeType,
-			); err != nil {
-				return nil, err
-			}
-			return d, nil
-		case *tree.DGeography:
-			if err := geo.SpatialObjectFitsColumnMetadata(
-				d.Geography.SpatialObject(),
-				t.InternalType.GeoMetadata.SRID,
-				t.InternalType.GeoMetadata.ShapeType,
-			); err != nil {
-				return nil, err
-			}
-			g, err := d.AsGeometry()
-			if err != nil {
-				return nil, err
-			}
-			return &tree.DGeometry{Geometry: g}, nil
-		case *tree.DJSON:
-			t, err := d.AsText()
-			if err != nil {
-				return nil, err
-			}
-			if t == nil {
-				return tree.DNull, nil
-			}
-			g, err := geo.ParseGeometryFromGeoJSON(encoding.UnsafeConvertStringToBytes(*t))
-			if err != nil {
-				return nil, err
-			}
-			return &tree.DGeometry{Geometry: g}, nil
-		case *tree.DBox2D:
-			g, err := geo.MakeGeometryFromGeomT(d.ToGeomT(geopb.DefaultGeometrySRID))
-			if err != nil {
-				return nil, err
-			}
-			return &tree.DGeometry{Geometry: g}, nil
-		case *tree.DBytes:
-			g, err := geo.ParseGeometryFromEWKB(geopb.EWKB(*d))
-			if err != nil {
-				return nil, err
-			}
-			return &tree.DGeometry{Geometry: g}, nil
 		}
 
 	case types.DateFamily:
@@ -871,18 +745,6 @@ func performCastWithoutPrecisionTruncation(
 			return tree.ParseDJSON(string(*v))
 		case *tree.DJSON:
 			return v, nil
-		case *tree.DGeography:
-			j, err := geo.SpatialObjectToGeoJSON(v.Geography.SpatialObject(), geo.FullPrecisionGeoJSON, geo.SpatialObjectToGeoJSONFlagZero)
-			if err != nil {
-				return nil, err
-			}
-			return tree.ParseDJSON(string(j))
-		case *tree.DGeometry:
-			j, err := geo.SpatialObjectToGeoJSON(v.Geometry.SpatialObject(), geo.FullPrecisionGeoJSON, geo.SpatialObjectToGeoJSONFlagZero)
-			if err != nil {
-				return nil, err
-			}
-			return tree.ParseDJSON(string(j))
 		}
 	case types.TSQueryFamily:
 		if !evalCtx.Settings.Version.IsActive(ctx, clusterversion.V23_1) {

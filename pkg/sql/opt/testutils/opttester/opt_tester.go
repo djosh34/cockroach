@@ -31,7 +31,6 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
 	"github.com/cockroachdb/cockroach/pkg/keys"
 	"github.com/cockroachdb/cockroach/pkg/kv"
@@ -73,7 +72,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/treeprinter"
 	"github.com/cockroachdb/datadriven"
 	"github.com/cockroachdb/errors"
-	"github.com/cockroachdb/errors/oserror"
 	"github.com/pmezard/go-difflib/difflib"
 )
 
@@ -1868,13 +1866,6 @@ func (ot *OptTester) Import(tb testing.TB) {
 
 // testFixturePath returns the path of a fixture inside opttester/testfixtures.
 func (ot *OptTester) testFixturePath(tb testing.TB, file string) string {
-	if bazel.BuiltWithBazel() {
-		runfile := datapathutils.RewritableDataPath(tb, "pkg", "sql", "opt", "testutils", "opttester", "testfixtures", file)
-		if _, err := os.Stat(runfile); oserror.IsNotExist(err) {
-			tb.Fatalf("%s; is your package missing a dependency on \"//pkg/sql/opt/testutils/opttester:testfixtures\"?", err)
-		}
-		return runfile
-	}
 	// Get the path to this file from the runtime.
 	_, thisFilePath, _, ok := runtime.Caller(0)
 	if !ok {

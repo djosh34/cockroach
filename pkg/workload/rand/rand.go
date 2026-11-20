@@ -21,8 +21,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/cockroachdb/cockroach/pkg/geo"
-	"github.com/cockroachdb/cockroach/pkg/geo/geopb"
 	"github.com/cockroachdb/cockroach/pkg/sql/randgen"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
@@ -342,30 +340,13 @@ type randOp struct {
 	writeStmt *gosql.Stmt
 }
 
-// sqlArray implements the driver.Valuer interface and abstracts away
-// the differences between arrays of geographic/geometric data and
-// other arrays: the former use ':' as separator, while the latter
-// uses ','
+// sqlArray implements the driver.Valuer interface for arrays.
 type sqlArray struct {
 	array     []interface{}
 	paramType *types.T
 }
 
 func (sa sqlArray) Value() (driver.Value, error) {
-	family := sa.paramType.Family()
-	if family == types.GeographyFamily || family == types.GeometryFamily {
-		var repr strings.Builder
-		repr.WriteString("{")
-		var sep string
-		for _, elt := range sa.array {
-			repr.WriteString(fmt.Sprintf(`%s"%s"`, sep, string(elt.(geopb.EWKT))))
-			sep = ": "
-		}
-
-		repr.WriteString("}")
-		return repr.String(), nil
-	}
-
 	return pq.Array(sa.array).Value()
 }
 
@@ -423,12 +404,6 @@ func DatumToGoSQL(d tree.Datum) (interface{}, error) {
 		return d.JSON.String(), nil
 	case *tree.DTimeTZ:
 		return d.TimeTZ.String(), nil
-	case *tree.DBox2D:
-		return d.CartesianBoundingBox.Repr(), nil
-	case *tree.DGeography:
-		return geo.SpatialObjectToEWKT(d.Geography.SpatialObject(), 2)
-	case *tree.DGeometry:
-		return geo.SpatialObjectToEWKT(d.Geometry.SpatialObject(), 2)
 	case *tree.DPGLSN:
 		return d.LSN.String(), nil
 	case *tree.DTSQuery:

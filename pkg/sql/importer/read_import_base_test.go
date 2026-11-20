@@ -46,6 +46,11 @@ func TestRejectedFilename(t *testing.T) {
 			fname:    "nodelocal://1/file.csv",
 			rejected: "nodelocal://1/file.csv.rejected",
 		},
+		{
+			name:     "http with several hosts",
+			fname:    "http://a:1,b:2/data.csv",
+			rejected: "http://a:1,b:2/data.csv.rejected",
+		},
 	}
 	for _, tc := range tests {
 		rej, err := rejectedFilename(tc.fname)

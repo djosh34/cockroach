@@ -33,7 +33,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/cli/cliflags"
 	"github.com/cockroachdb/cockroach/pkg/cli/exit"
 	"github.com/cockroachdb/cockroach/pkg/docs"
-	"github.com/cockroachdb/cockroach/pkg/geo/geos"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/kvstorage"
 	"github.com/cockroachdb/cockroach/pkg/security/clientsecopts"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
@@ -580,8 +579,6 @@ If problems persist, please see %s.`
 			log.Ops.Warningf(ctx, msg, docLink)
 		}
 	}
-
-	initGEOS(ctx)
 
 	// Beyond this point, the configuration is set and the server is
 	// ready to start.
@@ -1400,19 +1397,6 @@ func setupAndInitializeLoggingAndProfiling(
 	log.Event(ctx, "initialized profiles")
 
 	return stopper, nil
-}
-
-// initGEOS sets up the Geospatial library.
-// We need to make sure this happens before any queries involving geospatial data is executed.
-func initGEOS(ctx context.Context) {
-	loc, err := geos.EnsureInit(geos.EnsureInitErrorDisplayPrivate, startCtx.geoLibsDir)
-	if err != nil {
-		log.Ops.Warningf(ctx,
-			"could not initialize GEOS - spatial functions may not be available: %v",
-			log.SafeManaged(err))
-	} else {
-		log.Ops.Infof(ctx, "GEOS loaded from directory %s", log.SafeManaged(loc))
-	}
 }
 
 // reportReadinessExternally reports when the server has finished initializing

@@ -14,6 +14,9 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/cockroachdb/cockroach/pkg/testutils/lint/passes/deferunlockcheck"
 	"github.com/cockroachdb/cockroach/pkg/testutils/lint/passes/errcmp"
 	"github.com/cockroachdb/cockroach/pkg/testutils/lint/passes/errwrap"
@@ -28,6 +31,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/testutils/lint/passes/returnerrcheck"
 	"github.com/cockroachdb/cockroach/pkg/testutils/lint/passes/timer"
 	"github.com/cockroachdb/cockroach/pkg/testutils/lint/passes/unconvert"
+	"github.com/kisielk/errcheck/errcheck"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/asmdecl"
 	"golang.org/x/tools/go/analysis/passes/assign"
@@ -104,7 +108,25 @@ func main() {
 	// Additional analyzers:
 	as = append(as,
 		shadow.Analyzer,
+		errcheck.Analyzer,
 	)
+
+	// ROACHVET_PART=K/N runs only every Nth analyzer, starting at the Kth.
+	// CI spreads the analyzers over several jobs this way.
+	if part := os.Getenv("ROACHVET_PART"); part != "" {
+		var k, n int
+		if _, err := fmt.Sscanf(part, "%d/%d", &k, &n); err != nil || n <= 0 || k < 0 || k >= n {
+			fmt.Fprintf(os.Stderr, "roachvet: invalid ROACHVET_PART %q, want K/N with 0 <= K < N\n", part)
+			os.Exit(2)
+		}
+		var mine []*analysis.Analyzer
+		for i, a := range as {
+			if i%n == k {
+				mine = append(mine, a)
+			}
+		}
+		as = mine
+	}
 
 	unitchecker.Main(as...)
 }

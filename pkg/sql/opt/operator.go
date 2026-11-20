@@ -143,8 +143,6 @@ var ComparisonOpReverseMap = map[Operator]treecmp.ComparisonOperatorSymbol{
 	JsonSomeExistsOp: treecmp.JSONSomeExists,
 	JsonAllExistsOp:  treecmp.JSONAllExists,
 	OverlapsOp:       treecmp.Overlaps,
-	BBoxCoversOp:     treecmp.RegMatch,
-	BBoxIntersectsOp: treecmp.Overlaps,
 	TSMatchesOp:      treecmp.TSMatches,
 }
 
@@ -283,7 +281,7 @@ func ScalarOperatorTransmitsNulls(op Operator) bool {
 	case BitandOp, BitorOp, BitxorOp, PlusOp, MinusOp, MultOp, DivOp, FloorDivOp,
 		ModOp, PowOp, EqOp, NeOp, LtOp, GtOp, LeOp, GeOp, LikeOp, NotLikeOp, ILikeOp,
 		NotILikeOp, SimilarToOp, NotSimilarToOp, RegMatchOp, NotRegMatchOp, RegIMatchOp,
-		NotRegIMatchOp, ConstOp, BBoxCoversOp, BBoxIntersectsOp:
+		NotRegIMatchOp, ConstOp:
 		return true
 
 	default:
@@ -298,8 +296,7 @@ func BoolOperatorRequiresNotNullArgs(op Operator) bool {
 	case
 		EqOp, LtOp, LeOp, GtOp, GeOp, NeOp,
 		LikeOp, NotLikeOp, ILikeOp, NotILikeOp, SimilarToOp, NotSimilarToOp,
-		RegMatchOp, NotRegMatchOp, RegIMatchOp, NotRegIMatchOp, BBoxCoversOp,
-		BBoxIntersectsOp:
+		RegMatchOp, NotRegMatchOp, RegIMatchOp, NotRegIMatchOp:
 		return true
 	}
 	return false

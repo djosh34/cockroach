@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/cockroachdb/cockroach/pkg/geo/geoindex"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
@@ -144,9 +143,7 @@ func indexForDisplay(
 	}
 
 	if !f.HasFlags(tree.FmtPGCatalog) {
-		if err := formatStorageConfigs(table, index, f); err != nil {
-			return "", err
-		}
+		formatStorageConfigs(index, f)
 	}
 
 	if index.IsPartial() {
@@ -253,95 +250,10 @@ func FormatIndexElements(
 
 // formatStorageConfigs writes the index's storage configurations to the given
 // format context.
-func formatStorageConfigs(
-	table catalog.TableDescriptor, index *descpb.IndexDescriptor, f *tree.FmtCtx,
-) error {
-	numCustomSettings := 0
-	if index.GeoConfig.S2Geometry != nil || index.GeoConfig.S2Geography != nil {
-		var s2Config *geoindex.S2Config
-
-		if index.GeoConfig.S2Geometry != nil {
-			s2Config = index.GeoConfig.S2Geometry.S2Config
-		}
-		if index.GeoConfig.S2Geography != nil {
-			s2Config = index.GeoConfig.S2Geography.S2Config
-		}
-
-		defaultS2Config := geoindex.DefaultS2Config()
-		if *s2Config != *defaultS2Config {
-			for _, check := range []struct {
-				key        string
-				val        int32
-				defaultVal int32
-			}{
-				{`s2_max_level`, s2Config.MaxLevel, defaultS2Config.MaxLevel},
-				{`s2_level_mod`, s2Config.LevelMod, defaultS2Config.LevelMod},
-				{`s2_max_cells`, s2Config.MaxCells, defaultS2Config.MaxCells},
-			} {
-				if check.val != check.defaultVal {
-					if numCustomSettings > 0 {
-						f.WriteString(", ")
-					} else {
-						f.WriteString(" WITH (")
-					}
-					numCustomSettings++
-					f.WriteString(check.key)
-					f.WriteString("=")
-					f.WriteString(strconv.Itoa(int(check.val)))
-				}
-			}
-		}
-
-		if index.GeoConfig.S2Geometry != nil {
-			col, err := catalog.MustFindColumnByID(table, index.InvertedColumnID())
-			if err != nil {
-				return errors.Wrapf(err, "expected column %q to exist in table", index.InvertedColumnName())
-			}
-			defaultConfig, err := geoindex.GeometryIndexConfigForSRID(col.GetType().GeoSRIDOrZero())
-			if err != nil {
-				return errors.Wrapf(err, "expected SRID definition for %d", col.GetType().GeoSRIDOrZero())
-			}
-			cfg := index.GeoConfig.S2Geometry
-
-			for _, check := range []struct {
-				key        string
-				val        float64
-				defaultVal float64
-			}{
-				{`geometry_min_x`, cfg.MinX, defaultConfig.S2Geometry.MinX},
-				{`geometry_max_x`, cfg.MaxX, defaultConfig.S2Geometry.MaxX},
-				{`geometry_min_y`, cfg.MinY, defaultConfig.S2Geometry.MinY},
-				{`geometry_max_y`, cfg.MaxY, defaultConfig.S2Geometry.MaxY},
-			} {
-				if check.val != check.defaultVal {
-					if numCustomSettings > 0 {
-						f.WriteString(", ")
-					} else {
-						f.WriteString(" WITH (")
-					}
-					numCustomSettings++
-					f.WriteString(check.key)
-					f.WriteString("=")
-					f.WriteString(strconv.FormatFloat(check.val, 'f', -1, 64))
-				}
-			}
-		}
-	}
-
+func formatStorageConfigs(index *descpb.IndexDescriptor, f *tree.FmtCtx) {
 	if index.IsSharded() {
-		if numCustomSettings > 0 {
-			f.WriteString(", ")
-		} else {
-			f.WriteString(" WITH (")
-		}
-		f.WriteString(`bucket_count=`)
+		f.WriteString(" WITH (bucket_count=")
 		f.WriteString(strconv.FormatInt(int64(index.Sharded.ShardBuckets), 10))
-		numCustomSettings++
-	}
-
-	if numCustomSettings > 0 {
 		f.WriteString(")")
 	}
-
-	return nil
 }

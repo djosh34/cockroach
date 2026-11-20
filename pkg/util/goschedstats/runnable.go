@@ -47,13 +47,6 @@ func RecentNormalizedRunnableGoroutines() float64 {
 	return float64(atomic.LoadUint64(&ewma)) * fromFixedPoint
 }
 
-// If you get a compilation error here, the Go version you are using is not
-// supported by this package. Cross-check the structures in runtime_go1.18.go
-// against those in the new Go's runtime, and if they are still accurate adjust
-// the build tag in that file to accept the version. If they don't match, you
-// will have to add a new version of that file.
-var _ = numRunnableGoroutines
-
 // We sample the number of runnable goroutines once per samplePeriodShort or
 // samplePeriodLong (if the system is underloaded). Using samplePeriodLong can
 // cause sluggish response to a load spike, from the perspective of

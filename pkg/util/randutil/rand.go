@@ -16,10 +16,10 @@ import (
 	"fmt"
 	"log" // Don't bring cockroach/util/log into this low-level package.
 	"math/rand"
+	randv2 "math/rand/v2"
 	"runtime"
 	"strings"
 	"time"
-	_ "unsafe" // required by go:linkname
 
 	"github.com/cockroachdb/cockroach/pkg/util/envutil"
 	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
@@ -195,11 +195,10 @@ func RandBytes(r *rand.Rand, size int) []byte {
 }
 
 // FastUint32 returns a lock free uint32 value. Compared to rand.Uint32, this
-// implementation scales. We're using the go runtime's implementation through a
-// linker trick.
-//
-//go:linkname FastUint32 runtime.fastrand
-func FastUint32() uint32
+// implementation scales: math/rand/v2 uses the runtime's per-thread generator.
+func FastUint32() uint32 {
+	return randv2.Uint32()
+}
 
 // FastInt63 returns a non-negative pseudo-random 63-bit integer as an int64.
 // Compared to rand.Int63(), this implementation scales.

@@ -19,7 +19,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cockroachdb/cockroach/pkg/geo/geoindex"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/colinfo"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/tabledesc"
@@ -751,7 +750,6 @@ func (tt *Table) addIndexWithVersion(
 
 	// Add explicit columns. Primary key columns definitions have already been
 	// updated to be non-nullable and non-virtual.
-	// Add the geoConfig if applicable.
 	idx.ExplicitColCount = len(def.Columns)
 	notNullIndex := true
 	for i, colDef := range def.Columns {
@@ -763,38 +761,6 @@ func (tt *Table) addIndexWithVersion(
 
 		if col.IsNullable() {
 			notNullIndex = false
-		}
-
-		if isLastIndexCol && def.Inverted {
-			switch tt.Columns[col.InvertedSourceColumnOrdinal()].DatumType().Family() {
-			case types.GeometryFamily:
-				// Don't use the default config because it creates a huge number of spans.
-				idx.geoConfig = geoindex.Config{
-					S2Geometry: &geoindex.S2GeometryConfig{
-						MinX: -5,
-						MaxX: 5,
-						MinY: -5,
-						MaxY: 5,
-						S2Config: &geoindex.S2Config{
-							MinLevel: 0,
-							MaxLevel: 2,
-							LevelMod: 1,
-							MaxCells: 3,
-						},
-					},
-				}
-
-			case types.GeographyFamily:
-				// Don't use the default config because it creates a huge number of spans.
-				idx.geoConfig = geoindex.Config{
-					S2Geography: &geoindex.S2GeographyConfig{S2Config: &geoindex.S2Config{
-						MinLevel: 0,
-						MaxLevel: 2,
-						LevelMod: 1,
-						MaxCells: 3,
-					}},
-				}
-			}
 		}
 	}
 

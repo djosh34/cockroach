@@ -16,7 +16,6 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
 	"github.com/cockroachdb/cockroach/pkg/docs"
-	"github.com/cockroachdb/cockroach/pkg/geo/geoindex"
 	"github.com/cockroachdb/cockroach/pkg/server/telemetry"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
@@ -278,12 +277,6 @@ func makeIndexDescriptor(
 	// Increment telemetry once a descriptor has been successfully created.
 	if indexDesc.Type == descpb.IndexDescriptor_INVERTED {
 		telemetry.Inc(sqltelemetry.InvertedIndexCounter)
-		if indexDesc.GeoConfig.IsGeometry() {
-			telemetry.Inc(sqltelemetry.GeometryInvertedIndexCounter)
-		}
-		if indexDesc.GeoConfig.IsGeography() {
-			telemetry.Inc(sqltelemetry.GeographyInvertedIndexCounter)
-		}
 		if len(indexDesc.InvertedColumnKinds) > 0 && indexDesc.InvertedColumnKinds[0] == catpb.InvertedIndexColumnKind_TRIGRAM {
 			telemetry.Inc(sqltelemetry.TrigramInvertedIndexCounter)
 		}
@@ -390,20 +383,6 @@ func populateInvertedIndexDescriptor(
 		default:
 			return newUndefinedOpclassError(invCol.OpClass)
 		}
-	case types.GeometryFamily:
-		if invCol.OpClass != "" {
-			return newUndefinedOpclassError(invCol.OpClass)
-		}
-		config, err := geoindex.GeometryIndexConfigForSRID(column.GetType().GeoSRIDOrZero())
-		if err != nil {
-			return err
-		}
-		indexDesc.GeoConfig = *config
-	case types.GeographyFamily:
-		if invCol.OpClass != "" {
-			return newUndefinedOpclassError(invCol.OpClass)
-		}
-		indexDesc.GeoConfig = *geoindex.DefaultGeographyIndexConfig()
 	case types.StringFamily:
 		// Check the opclass of the last column in the list, which is the column
 		// we're going to inverted index.

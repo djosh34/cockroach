@@ -352,12 +352,12 @@ func TestJSONErrors(t *testing.T) {
 		testCase(`{`, `unexpected EOF`, useStdGoJSON),
 		testCase(`{`, `unable to decode JSON`, useFastJSONParser),
 
-		testCase(`"\v"`, `invalid character 'v' in string escape code`, useStdGoJSON),
+		testCase(`"\v"`, `invalid escape sequence .\\v. in string`, useStdGoJSON),
 		testCase(`"\v"`, `
 ...|"\v"|...
 ...|^...|...: invalid string literal token`, useFastJSONParser),
 
-		testCase(`"\x00"`, `invalid character 'x' in string escape code`, useStdGoJSON),
+		testCase(`"\x00"`, `invalid escape sequence .\\x. in string`, useStdGoJSON),
 		testCase(`"\x00"`, `
 ...|"\x00"|...
 ...|^.....|...: invalid string literal token`, useFastJSONParser),

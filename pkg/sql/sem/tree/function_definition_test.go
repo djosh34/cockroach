@@ -49,7 +49,7 @@ func TestBuiltinFunctionResolver(t *testing.T) {
 		},
 		{
 			testName:       "explicit to use public schema",
-			fnName:         tree.UnresolvedName{NumParts: 2, Parts: tree.NameParts{"st_makeline", "public", "", ""}},
+			fnName:         tree.UnresolvedName{NumParts: 2, Parts: tree.NameParts{"show_trgm", "public", "", ""}},
 			expectedSchema: "public",
 		},
 		{

@@ -208,15 +208,12 @@ build
 SELECT array_agg(NULL)
 ----
 error (42725): ambiguous call: array_agg(unknown), candidates are:
-array_agg(box2d) -> box2d[]
 array_agg(int) -> int[]
 array_agg(float) -> float[]
 array_agg(decimal) -> decimal[]
 array_agg(date) -> date[]
 array_agg(timestamp) -> timestamp[]
 array_agg(interval) -> interval[]
-array_agg(geography) -> geography[]
-array_agg(geometry) -> geometry[]
 array_agg(string) -> string[]
 array_agg(bytes) -> bytes[]
 array_agg(timestamptz) -> timestamptz[]
@@ -524,7 +521,6 @@ group-by (hash)
  │         └── k:1 + v:2 [as=column8:8]
  └── aggregations
       └── count-rows [as=count_rows:7]
-
 
 # Selecting a more complex expression, made up of things which are each grouped, works.
 build
@@ -1042,7 +1038,6 @@ scalar-group-by
       └── max [as=max:7]
            └── k:1
 
-
 build
 SELECT array_agg(k) || 1 FROM (SELECT k FROM kv ORDER BY s)
 ----
@@ -1427,7 +1422,6 @@ scalar-group-by
       └── max [as=max:6]
            └── x:1
 
-
 # VARIANCE/STDDEV
 
 build
@@ -1697,7 +1691,6 @@ scalar-group-by
       │    └── b:1
       └── bool-or [as=bool_or:6]
            └── b:1
-
 
 # Tests with * inside GROUP BY.
 build
@@ -2516,7 +2509,6 @@ SELECT y, count(*) FILTER (WHERE count(*) > 5) FROM xyz GROUP BY y
 ----
 error (42803): count_rows(): aggregate functions are not allowed in FILTER
 
-
 # Check that ordering by an alias of an aggregate works.
 build
 SELECT max(k) AS mk FROM kv GROUP BY v ORDER BY mk
@@ -3040,7 +3032,6 @@ build
 SELECT regr_sxx(k) FROM kv
 ----
 error (42883): unknown signature: regr_sxx(int)
-
 
 build
 SELECT regr_sxx(k, 'x', 'y') FROM kv

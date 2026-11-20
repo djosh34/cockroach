@@ -37,8 +37,8 @@ import (
 //                                                                            //
 //                                WARNING                                     //
 //                                                                            //
-//  Adding a fake usage of a package here as a workaround for bazel           //
-//  auto-generated code doesn't work - distinct_gen.go needs to be modified.  //
+//  Adding a fake usage of a package here as a workaround for goimports in    //
+//  generated code does not work - distinct_gen.go needs to be modified.      //
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 

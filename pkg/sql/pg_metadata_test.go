@@ -125,7 +125,6 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
@@ -1687,15 +1686,7 @@ func getCachedFileLookupFn(file string) func() string {
 	path := ""
 	return func() string {
 		if path == "" {
-			var err error
-			if bazel.BuiltWithBazel() {
-				path, err = bazel.Runfile("//pkg/sql/" + file)
-				if err != nil {
-					panic(err)
-				}
-			} else {
-				path = file
-			}
+			path = file
 		}
 		return path
 	}

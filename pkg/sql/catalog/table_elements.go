@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cockroachdb/cockroach/pkg/geo/geoindex"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catenumpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
@@ -177,7 +176,6 @@ type Index interface {
 	GetInvisibility() float64
 	GetPredicate() string
 	GetType() descpb.IndexDescriptor_Type
-	GetGeoConfig() geoindex.Config
 	GetVersion() descpb.IndexDescriptorVersion
 	GetEncodingType() catenumpb.IndexDescriptorEncodingType
 
@@ -1076,7 +1074,7 @@ func ColumnNamesForIDs(tbl TableDescriptor, ids descpb.ColumnIDs) ([]string, err
 			}
 		}
 		if names[i] == "" {
-			return nil, errors.AssertionFailedf("no column with ID %d found in table %q (%q)",
+			return nil, errors.AssertionFailedf("no column with ID %d found in table %q (%d)",
 				id, tbl.GetName(), tbl.GetID())
 		}
 	}

@@ -67,15 +67,11 @@ func NewStatsProfiler(
 }
 
 // MaybeTakeProfile takes a profile if the non-go size is big enough.
-func (o *StatsProfiler) MaybeTakeProfile(
-	ctx context.Context, curRSS int64, ms *status.GoMemStats, cs *status.CGoMemStats,
-) {
-	o.maybeTakeProfile(ctx, curRSS, func(ctx context.Context, path string, _ ...interface{}) bool { return saveStats(ctx, path, ms, cs) })
+func (o *StatsProfiler) MaybeTakeProfile(ctx context.Context, curRSS int64, ms *status.GoMemStats) {
+	o.maybeTakeProfile(ctx, curRSS, func(ctx context.Context, path string, _ ...interface{}) bool { return saveStats(ctx, path, ms) })
 }
 
-func saveStats(
-	ctx context.Context, path string, ms *status.GoMemStats, cs *status.CGoMemStats,
-) bool {
+func saveStats(ctx context.Context, path string, ms *status.GoMemStats) bool {
 	f, err := os.Create(path)
 	if err != nil {
 		log.Warningf(ctx, "error creating stats profile %s: %v", path, err)
@@ -87,12 +83,7 @@ func saveStats(
 		log.Warningf(ctx, "error marshaling stats profile %s: %v", path, err)
 		return false
 	}
-	csJ, err := json.MarshalIndent(cs, "", "  ")
-	if err != nil {
-		log.Warningf(ctx, "error marshaling stats profile %s: %v", path, err)
-		return false
-	}
-	_, err = fmt.Fprintf(f, "Go memory stats:\n%s\n----\nNon-Go stats:\n%s\n", msJ, csJ)
+	_, err = fmt.Fprintf(f, "Go memory stats:\n%s\n", msJ)
 	if err != nil {
 		log.Warningf(ctx, "error writing stats profile %s: %v", path, err)
 		return false

@@ -2030,25 +2030,7 @@ func (d *DInterval) TypeCheck(_ context.Context, _ *SemaContext, _ *types.T) (Ty
 
 // TypeCheck implements the Expr interface. It is implemented as an idempotent
 // identity function for Datum.
-func (d *DBox2D) TypeCheck(_ context.Context, _ *SemaContext, _ *types.T) (TypedExpr, error) {
-	return d, nil
-}
-
-// TypeCheck implements the Expr interface. It is implemented as an idempotent
-// identity function for Datum.
 func (d *DPGLSN) TypeCheck(_ context.Context, _ *SemaContext, _ *types.T) (TypedExpr, error) {
-	return d, nil
-}
-
-// TypeCheck implements the Expr interface. It is implemented as an idempotent
-// identity function for Datum.
-func (d *DGeography) TypeCheck(_ context.Context, _ *SemaContext, _ *types.T) (TypedExpr, error) {
-	return d, nil
-}
-
-// TypeCheck implements the Expr interface. It is implemented as an idempotent
-// identity function for Datum.
-func (d *DGeometry) TypeCheck(_ context.Context, _ *SemaContext, _ *types.T) (TypedExpr, error) {
 	return d, nil
 }
 

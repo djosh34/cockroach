@@ -477,12 +477,10 @@ func init() {
 			cliflagcfg.VarFlag(f, &serverCfg.SecondaryCache, cliflags.SecondaryCache)
 			cliflagcfg.VarFlag(f, &serverCfg.MaxOffset, cliflags.MaxOffset)
 			cliflagcfg.BoolFlag(f, &serverCfg.DisableMaxOffsetCheck, cliflags.DisableMaxOffsetCheck)
-			cliflagcfg.StringFlag(f, &serverCfg.ClockDevicePath, cliflags.ClockDevice)
 
 			cliflagcfg.StringFlag(f, &startCtx.listeningURLFile, cliflags.ListeningURLFile)
 
 			cliflagcfg.StringFlag(f, &startCtx.pidFile, cliflags.PIDFile)
-			cliflagcfg.StringFlag(f, &startCtx.geoLibsDir, cliflags.GeoLibsDir)
 
 			// Enable/disable various external storage endpoints.
 			cliflagcfg.BoolFlag(f, &serverCfg.ExternalIODirConfig.DisableHTTP, cliflags.ExternalIODisableHTTP)
@@ -809,12 +807,6 @@ func init() {
 		_ = f.MarkHidden(cliflags.DemoDisableServerController.Name)
 
 		cliflagcfg.BoolFlag(f, &demoCtx.SimulateLatency, cliflags.Global)
-		// We also support overriding the GEOS library path for 'demo'.
-		// Even though the demoCtx uses mostly different configuration
-		// variables from startCtx, this is one case where we afford
-		// sharing a variable between both.
-		cliflagcfg.StringFlag(f, &startCtx.geoLibsDir, cliflags.GeoLibsDir)
-
 		cliflagcfg.IntFlag(f, &demoCtx.SQLPort, cliflags.DemoSQLPort)
 		cliflagcfg.IntFlag(f, &demoCtx.HTTPPort, cliflags.DemoHTTPPort)
 		cliflagcfg.StringFlag(f, &demoCtx.ListeningURLFile, cliflags.ListeningURLFile)
@@ -930,10 +922,6 @@ func init() {
 	{
 		cliflagcfg.BoolFlag(userFileUploadCmd.Flags(), &userfileCtx.recursive, cliflags.Recursive)
 	}
-}
-
-type tenantIDWrapper struct {
-	tenID *roachpb.TenantID
 }
 
 // extraServerFlagInit configures the server.Config based on the command-line flags.

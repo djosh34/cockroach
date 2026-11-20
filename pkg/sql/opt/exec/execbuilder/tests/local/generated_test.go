@@ -18,7 +18,6 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvclient/kvtenant"
 	"github.com/cockroachdb/cockroach/pkg/security/securityassets"
 	"github.com/cockroachdb/cockroach/pkg/security/securitytest"
@@ -37,15 +36,7 @@ const configIdx = 0
 var execBuildLogicTestDir string
 
 func init() {
-	if bazel.BuiltWithBazel() {
-		var err error
-		execBuildLogicTestDir, err = bazel.Runfile("pkg/sql/opt/exec/execbuilder/testdata")
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		execBuildLogicTestDir = "../../../../../../sql/opt/exec/execbuilder/testdata"
-	}
+	execBuildLogicTestDir = "../../../../../../sql/opt/exec/execbuilder/testdata"
 }
 
 func TestMain(m *testing.M) {
@@ -260,13 +251,6 @@ func TestExecBuild_forecast1401(
 	runExecBuildLogicTest(t, "forecast1401")
 }
 
-func TestExecBuild_geospatial(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runExecBuildLogicTest(t, "geospatial")
-}
-
 func TestExecBuild_group_join(
 	t *testing.T,
 ) {
@@ -309,13 +293,6 @@ func TestExecBuild_insert(
 	runExecBuildLogicTest(t, "insert")
 }
 
-func TestExecBuild_inverted_filter_geospatial(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runExecBuildLogicTest(t, "inverted_filter_geospatial")
-}
-
 func TestExecBuild_inverted_filter_json_array(
 	t *testing.T,
 ) {
@@ -330,25 +307,11 @@ func TestExecBuild_inverted_index(
 	runExecBuildLogicTest(t, "inverted_index")
 }
 
-func TestExecBuild_inverted_index_geospatial(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runExecBuildLogicTest(t, "inverted_index_geospatial")
-}
-
 func TestExecBuild_inverted_index_multi_column(
 	t *testing.T,
 ) {
 	defer leaktest.AfterTest(t)()
 	runExecBuildLogicTest(t, "inverted_index_multi_column")
-}
-
-func TestExecBuild_inverted_join_geospatial(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runExecBuildLogicTest(t, "inverted_join_geospatial")
 }
 
 func TestExecBuild_inverted_join_json_array(
@@ -566,13 +529,6 @@ func TestExecBuild_sql_activity_stats_compaction(
 ) {
 	defer leaktest.AfterTest(t)()
 	runExecBuildLogicTest(t, "sql_activity_stats_compaction")
-}
-
-func TestExecBuild_sql_fn(
-	t *testing.T,
-) {
-	defer leaktest.AfterTest(t)()
-	runExecBuildLogicTest(t, "sql_fn")
 }
 
 func TestExecBuild_sql_statistics_persisted(

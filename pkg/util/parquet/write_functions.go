@@ -563,51 +563,6 @@ func writeDate(
 	return writeBatch[parquet.ByteArray](w, a.byteArrayBatch[:], defLevels, repLevels)
 }
 
-func writeBox2D(
-	d tree.Datum, w file.ColumnChunkWriter, a *batchAlloc, defLevels, repLevels []int16,
-) error {
-	if d == tree.DNull {
-		return writeBatch[parquet.ByteArray](w, a.byteArrayBatch[:], defLevels, repLevels)
-	}
-	_, ok := tree.AsDBox2D(d)
-	if !ok {
-		return pgerror.Newf(pgcode.DatatypeMismatch, "expected DBox2D, found %T", d)
-	}
-	if err := formatDatum(d, a); err != nil {
-		return err
-	}
-	return writeBatch[parquet.ByteArray](w, a.byteArrayBatch[:], defLevels, repLevels)
-}
-
-func writeGeography(
-	d tree.Datum, w file.ColumnChunkWriter, a *batchAlloc, defLevels, repLevels []int16,
-) error {
-	if d == tree.DNull {
-		return writeBatch[parquet.ByteArray](w, a.byteArrayBatch[:], defLevels, repLevels)
-	}
-	di, ok := tree.AsDGeography(d)
-	if !ok {
-		return pgerror.Newf(pgcode.DatatypeMismatch, "expected DGeography, found %T", d)
-	}
-
-	a.byteArrayBatch[0] = parquet.ByteArray(di.EWKB())
-	return writeBatch[parquet.ByteArray](w, a.byteArrayBatch[:], defLevels, repLevels)
-}
-
-func writeGeometry(
-	d tree.Datum, w file.ColumnChunkWriter, a *batchAlloc, defLevels, repLevels []int16,
-) error {
-	if d == tree.DNull {
-		return writeBatch[parquet.ByteArray](w, a.byteArrayBatch[:], defLevels, repLevels)
-	}
-	di, ok := tree.AsDGeometry(d)
-	if !ok {
-		return pgerror.Newf(pgcode.DatatypeMismatch, "expected DGeometry, found %T", d)
-	}
-	a.byteArrayBatch[0] = parquet.ByteArray(di.EWKB())
-	return writeBatch[parquet.ByteArray](w, a.byteArrayBatch[:], defLevels, repLevels)
-}
-
 func writeInterval(
 	d tree.Datum, w file.ColumnChunkWriter, a *batchAlloc, defLevels, repLevels []int16,
 ) error {

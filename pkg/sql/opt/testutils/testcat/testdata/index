@@ -66,10 +66,7 @@ exec-ddl
 CREATE TABLE g (
     k INT PRIMARY KEY,
     a INT,
-    b INT,
-    geog GEOGRAPHY,
-    INVERTED INDEX (a, geog),
-    INVERTED INDEX (a, b, geog)
+    b INT
 )
 ----
 
@@ -80,21 +77,9 @@ TABLE g
  ├── k int not null
  ├── a int
  ├── b int
- ├── geog geography
  ├── crdb_internal_mvcc_timestamp decimal [hidden] [system]
  ├── tableoid oid [hidden] [system]
- ├── geog_inverted_key encodedkey not null [inverted]
- ├── geog_inverted_key encodedkey not null [inverted]
- ├── PRIMARY INDEX g_pkey
- │    └── k int not null
- ├── INVERTED INDEX g_a_geog_idx
- │    ├── a int
- │    ├── geog_inverted_key encodedkey not null [inverted]
- │    └── k int not null
- └── INVERTED INDEX g_a_b_geog_idx
-      ├── a int
-      ├── b int
-      ├── geog_inverted_key encodedkey not null [inverted]
+ └── PRIMARY INDEX g_pkey
       └── k int not null
 
 # Test for expression index columns.

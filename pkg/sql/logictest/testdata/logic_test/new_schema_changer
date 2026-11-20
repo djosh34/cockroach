@@ -974,12 +974,7 @@ CREATE TABLE privs (a INT PRIMARY KEY, b INT)
 
 user testuser
 
-skipif config local-legacy-schema-changer
 statement error  must be owner of table privs or have CREATE privilege on table privs
-CREATE INDEX foo ON privs (b)
-
-onlyif config local-legacy-schema-changer
-statement error user testuser does not have CREATE privilege on relation privs
 CREATE INDEX foo ON privs (b)
 
 user root
@@ -1472,11 +1467,9 @@ subtest create-schema
 statement ok
 BEGIN
 
-skipif config local-mixed-23.1
 statement ok
 CREATE SCHEMA sc
 
-skipif config local-mixed-23.1
 query TT rowsort
 SHOW SCHEMAS
 ----
@@ -1487,11 +1480,9 @@ pg_extension        node
 public              root
 sc                  root
 
-skipif config local-mixed-23.1
 statement ok
 DROP SCHEMA sc
 
-skipif config local-mixed-23.1
 query TT rowsort
 SHOW SCHEMAS
 ----
@@ -1530,7 +1521,6 @@ EXPLAIN (DDL) CREATE SEQUENCE sq2
 statement ok
 SET CLUSTER SETTING sql.schema.force_declarative_statements='+CREATE SEQUENCE'
 
-skipif config local-mixed-23.1
 statement ok
 EXPLAIN (DDL) CREATE SEQUENCE sq2
 
@@ -1596,7 +1586,6 @@ EXPLAIN (DDL) ALTER TABLE t_108870 DROP COLUMN j, ADD COLUMN k INT DEFAULT 30;
 statement ok
 EXPLAIN (DDL) ALTER TABLE t_108870 ADD COLUMN k INT DEFAULT 30, ALTER PRIMARY KEY USING COLUMNS (j);
 
-skipif config local-mixed-23.1
 statement ok
 EXPLAIN (DDL) ALTER TABLE t_108870 ALTER PRIMARY KEY USING COLUMNS (j), DROP COLUMN i, ADD COLUMN k INT DEFAULT 30;
 
@@ -1617,7 +1606,6 @@ EXPLAIN (DDL) ALTER TABLE t_108870 DROP COLUMN j, ADD COLUMN k INT DEFAULT 30;
 statement ok
 EXPLAIN (DDL) ALTER TABLE t_108870 ADD COLUMN k INT DEFAULT 30, ALTER PRIMARY KEY USING COLUMNS (j);
 
-skipif config local-mixed-23.1
 statement ok
 EXPLAIN (DDL) ALTER TABLE t_108870 ALTER PRIMARY KEY USING COLUMNS (j), DROP COLUMN i, ADD COLUMN k INT DEFAULT 30;
 

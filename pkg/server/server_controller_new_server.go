@@ -234,7 +234,6 @@ func makeSharedProcessTenantServerConfig(
 	baseCfg.Config.AcceptSQLWithoutTLS = kvServerCfg.Config.AcceptSQLWithoutTLS
 	baseCfg.Config.RPCHeartbeatInterval = kvServerCfg.Config.RPCHeartbeatInterval
 	baseCfg.Config.RPCHeartbeatTimeout = kvServerCfg.Config.RPCHeartbeatTimeout
-	baseCfg.Config.ClockDevicePath = kvServerCfg.Config.ClockDevicePath
 	baseCfg.Config.ClusterName = kvServerCfg.Config.ClusterName
 	baseCfg.Config.DisableClusterNameVerification = kvServerCfg.Config.DisableClusterNameVerification
 
@@ -242,7 +241,6 @@ func makeSharedProcessTenantServerConfig(
 	baseCfg.StorageEngine = kvServerCfg.BaseConfig.StorageEngine
 	baseCfg.TestingInsecureWebAccess = kvServerCfg.BaseConfig.TestingInsecureWebAccess
 	baseCfg.Locality = kvServerCfg.BaseConfig.Locality
-	baseCfg.EnableDemoLoginEndpoint = kvServerCfg.BaseConfig.EnableDemoLoginEndpoint
 	baseCfg.DefaultZoneConfig = kvServerCfg.BaseConfig.DefaultZoneConfig
 	baseCfg.HeapProfileDirName = kvServerCfg.BaseConfig.HeapProfileDirName
 	baseCfg.CPUProfileDirName = kvServerCfg.BaseConfig.CPUProfileDirName

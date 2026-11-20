@@ -17,7 +17,6 @@ import (
 	"io"
 	"math"
 	"net/http/httptrace"
-	"net/url"
 	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
@@ -132,7 +131,7 @@ func RegisterExternalStorageProvider(
 func ExternalStorageConfFromURI(
 	path string, user username.SQLUsername,
 ) (cloudpb.ExternalStorage, error) {
-	uri, err := url.Parse(path)
+	uri, err := ParseURI(path)
 	if err != nil {
 		return cloudpb.ExternalStorage{}, err
 	}

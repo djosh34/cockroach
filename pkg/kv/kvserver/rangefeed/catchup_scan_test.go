@@ -81,11 +81,11 @@ func TestCatchupScan(t *testing.T) {
 			WriteTimestamp: ts,
 		}
 		return roachpb.Transaction{
-				TxnMeta:       txnMeta,
-				ReadTimestamp: ts,
-			}, roachpb.Value{
-				RawBytes: val.RawBytes,
-			}
+			TxnMeta:       txnMeta,
+			ReadTimestamp: ts,
+		}, roachpb.Value{
+			RawBytes: val.RawBytes,
+		}
 	}
 
 	makeKTV := func(key roachpb.Key, ts hlc.Timestamp, value roachpb.Value) storage.MVCCKeyValue {

@@ -1,4 +1,4 @@
-# LogicTest: default-configs !local-legacy-schema-changer
+# LogicTest: default-configs
 # Skipped on legacy schema changer since it unsupported.
 
 # Test dropping nothing.

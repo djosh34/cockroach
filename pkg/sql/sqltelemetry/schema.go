@@ -59,16 +59,6 @@ var (
 	// multi-column inverted index is created.
 	MultiColumnInvertedIndexCounter = telemetry.GetCounterOnce("sql.schema.multi_column_inverted_index")
 
-	// GeographyInvertedIndexCounter is to be incremented every time a
-	// geography inverted index is created. These are a subset of the
-	// indexes counted in InvertedIndexCounter.
-	GeographyInvertedIndexCounter = telemetry.GetCounterOnce("sql.schema.geography_inverted_index")
-
-	// GeometryInvertedIndexCounter is to be incremented every time a
-	// geometry inverted index is created. These are a subset of the
-	// indexes counted in InvertedIndexCounter.
-	GeometryInvertedIndexCounter = telemetry.GetCounterOnce("sql.schema.geometry_inverted_index")
-
 	// TrigramInvertedIndexCounter is to be incremented every time a
 	// trigram inverted index is created. These are a subset of the
 	// indexes counted in InvertedIndexCounter.

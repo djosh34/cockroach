@@ -818,7 +818,7 @@ func ResolveFK(
 				pgerror.Newf(pgcode.InvalidForeignKey,
 					"foreign references between databases are not allowed (see the '%s' cluster setting)",
 					allowCrossDatabaseFKsSetting),
-				crossDBReferenceDeprecationHint(),
+				"%s", crossDBReferenceDeprecationHint(),
 			)
 		}
 	}
@@ -1820,14 +1820,6 @@ func NewTableDesc(
 		}
 		if idx.GetType() == descpb.IndexDescriptor_INVERTED {
 			telemetry.Inc(sqltelemetry.InvertedIndexCounter)
-			geoConfig := idx.GetGeoConfig()
-			if !geoConfig.IsEmpty() {
-				if geoConfig.IsGeography() {
-					telemetry.Inc(sqltelemetry.GeographyInvertedIndexCounter)
-				} else if geoConfig.IsGeometry() {
-					telemetry.Inc(sqltelemetry.GeometryInvertedIndexCounter)
-				}
-			}
 			if idx.InvertedColumnKind() == catpb.InvertedIndexColumnKind_TRIGRAM {
 				telemetry.Inc(sqltelemetry.TrigramInvertedIndexCounter)
 			}
@@ -2319,14 +2311,6 @@ func incTelemetryForNewColumn(def *tree.ColumnTableDef, desc *descpb.ColumnDescr
 	}
 	if desc.HasOnUpdate() {
 		telemetry.Inc(sqltelemetry.SchemaNewColumnTypeQualificationCounter("on_update"))
-	}
-}
-
-func regionalByRowRegionDefaultExpr(oid oid.Oid, region tree.Name) tree.Expr {
-	return &tree.CastExpr{
-		Expr:       tree.NewDString(string(region)),
-		Type:       &tree.OIDTypeReference{OID: oid},
-		SyntaxMode: tree.CastShort,
 	}
 }
 

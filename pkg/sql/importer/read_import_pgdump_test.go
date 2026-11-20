@@ -233,8 +233,8 @@ COPY t (array_column, array_column2) FROM STDIN;
 			data: `
 CREATE TABLE t (x INT);
 
-SELECT addgeometrycolumn('t', 'foo', 4326, 'POINT', 2)`,
-			expected: [][]string{},
+SELECT lower('x')`,
+			errorRE: ".*unsupported function call: lower.*",
 		},
 
 		{
@@ -242,7 +242,7 @@ SELECT addgeometrycolumn('t', 'foo', 4326, 'POINT', 2)`,
 			data: `
 CREATE TABLE t (x INT);
 
-SELECT addgeometrycolumn('t', 'foo', 4326, (SELECT 'POINT'), 2)`,
+SELECT lower((SELECT 'x'))`,
 			errorRE: ".*subqueries are not allowed in pg_dump function arguments.*",
 		},
 	}

@@ -18,7 +18,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cockroachdb/cockroach/pkg/geo/geoindex"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/colinfo"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
@@ -58,13 +57,6 @@ var (
 	// results (like descending primary keys). This should be used on the
 	// output of sqlbase.RandCreateTable.
 	PostgresCreateTableMutator MultiStatementMutation = postgresCreateTableMutator
-)
-
-var (
-	// These are used in pkg/compose/compare/compare/compare_test.go, but
-	// it has a build tag so it's not detected by the linter.
-	_ = IndexStoringMutator
-	_ = PostgresCreateTableMutator
 )
 
 // StatementMutator defines a func that can change a statement.
@@ -362,14 +354,7 @@ func randHistogram(rng *rand.Rand, colType *types.T) stats.HistogramData {
 func encodeInvertedIndexHistogramUpperBounds(colType *types.T, val tree.Datum) (encs [][]byte) {
 	var keys [][]byte
 	var err error
-	switch colType.Family() {
-	case types.GeometryFamily:
-		keys, err = rowenc.EncodeGeoInvertedIndexTableKeys(val, nil, *geoindex.DefaultGeometryIndexConfig())
-	case types.GeographyFamily:
-		keys, err = rowenc.EncodeGeoInvertedIndexTableKeys(val, nil, *geoindex.DefaultGeographyIndexConfig())
-	default:
-		keys, err = rowenc.EncodeInvertedIndexTableKeys(val, nil, descpb.LatestIndexDescriptorVersion)
-	}
+	keys, err = rowenc.EncodeInvertedIndexTableKeys(val, nil, descpb.LatestIndexDescriptorVersion)
 
 	if err != nil {
 		panic(err)
@@ -729,28 +714,6 @@ func postgresCreateTableMutator(
 		for _, def := range mutatedStmt.Defs {
 			switch def := def.(type) {
 			case *tree.IndexTableDef:
-				var newCols tree.IndexElemList
-				for _, col := range def.Columns {
-					isBox2d := false
-					// NB: col.Column is empty for expression-based indexes.
-					if col.Expr == nil {
-						// Postgres doesn't support box2d as a btree index key.
-						colTypeFamily := colTypes[string(col.Column)].Family()
-						if colTypeFamily == types.Box2DFamily {
-							isBox2d = true
-						}
-					}
-					if isBox2d {
-						changed = true
-					} else {
-						newCols = append(newCols, col)
-					}
-				}
-				if len(newCols) == 0 {
-					// Break without adding this index at all.
-					break
-				}
-				def.Columns = newCols
 				// Hoist this IndexTableDef into a separate CreateIndex.
 				changed = true
 				// TODO(rafi): Postgres supports inverted indexes with a different
@@ -761,34 +724,12 @@ func postgresCreateTableMutator(
 						Name:     def.Name,
 						Table:    mutatedStmt.Table,
 						Inverted: def.Inverted,
-						Columns:  newCols,
+						Columns:  def.Columns,
 						Storing:  def.Storing,
 						// Postgres doesn't support NotVisible Index, so NotVisible is not populated here.
 					})
 				}
 			case *tree.UniqueConstraintTableDef:
-				var newCols tree.IndexElemList
-				for _, col := range def.Columns {
-					isBox2d := false
-					// NB: col.Column is empty for expression-based indexes.
-					if col.Expr == nil {
-						// Postgres doesn't support box2d as a btree index key.
-						colTypeFamily := colTypes[string(col.Column)].Family()
-						if colTypeFamily == types.Box2DFamily {
-							isBox2d = true
-						}
-					}
-					if isBox2d {
-						changed = true
-					} else {
-						newCols = append(newCols, col)
-					}
-				}
-				if len(newCols) == 0 {
-					// Break without adding this index at all.
-					break
-				}
-				def.Columns = newCols
 				if def.PrimaryKey {
 					for i, col := range def.Columns {
 						// Postgres doesn't support descending PKs.
@@ -811,7 +752,7 @@ func postgresCreateTableMutator(
 					Table:    mutatedStmt.Table,
 					Unique:   true,
 					Inverted: def.Inverted,
-					Columns:  newCols,
+					Columns:  def.Columns,
 					Storing:  def.Storing,
 					// Postgres doesn't support NotVisible Index, so NotVisible is not populated here.
 				})

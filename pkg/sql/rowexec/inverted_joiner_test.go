@@ -35,7 +35,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/testutils/distsqlutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/serverutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/sqlutils"
-	"github.com/cockroachdb/cockroach/pkg/util/encoding"
 	"github.com/cockroachdb/cockroach/pkg/util/json"
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
@@ -69,53 +68,21 @@ const invertedJoinerNumRows = 99
 // generate the array for each row. And this is also the set for row index
 // 50, since 50%10 = 0, 50/10 = 5.
 type arrayIntersectionExpr struct {
-	t         *testing.T
-	toExclude *struct {
-		left, right int64
-	}
+	t *testing.T
 }
 
 var _ invertedexpr.DatumsToInvertedExpr = &arrayIntersectionExpr{}
 
-func decodeInvertedValToInt(b []byte) int64 {
-	b, val, err := encoding.DecodeVarintAscending(b)
-	if err != nil {
-		panic(err)
-	}
-	if len(b) > 0 {
-		panic("leftover bytes")
-	}
-	return val
-}
-
 func (a arrayIntersectionExpr) Convert(
 	_ context.Context, datums rowenc.EncDatumRow,
-) (*inverted.SpanExpressionProto, interface{}, error) {
+) (*inverted.SpanExpressionProto, error) {
 	d := int64(*(datums[0].Datum.(*tree.DInt)))
 	d1Span := inverted.MakeSingleValSpan(intToEncodedInvertedVal(d / 10))
 	d2Span := inverted.MakeSingleValSpan(intToEncodedInvertedVal(d % 10))
 	// The tightness only affects the optimizer, so arbitrarily use true.
 	expr := inverted.And(inverted.ExprForSpan(d1Span, true),
 		inverted.ExprForSpan(d2Span, true))
-	return expr.(*inverted.SpanExpression).ToProto(), d, nil
-}
-
-func (a arrayIntersectionExpr) CanPreFilter() bool {
-	return a.toExclude != nil
-}
-
-func (a arrayIntersectionExpr) PreFilter(
-	enc inverted.EncVal, preFilters []interface{}, result []bool,
-) (bool, error) {
-	require.True(a.t, a.CanPreFilter())
-	right := decodeInvertedValToInt(enc)
-	rv := false
-	for i := range preFilters {
-		left := preFilters[i].(int64)
-		result[i] = !(a.toExclude != nil && a.toExclude.left == left && a.toExclude.right == right)
-		rv = rv || result[i]
-	}
-	return rv, nil
+	return expr.(*inverted.SpanExpression).ToProto(), nil
 }
 
 // This expression converter is similar to the arrayIntersectionExpr, but for
@@ -128,7 +95,7 @@ var _ invertedexpr.DatumsToInvertedExpr = &jsonIntersectionExpr{}
 
 func (jsonIntersectionExpr) Convert(
 	_ context.Context, datums rowenc.EncDatumRow,
-) (*inverted.SpanExpressionProto, interface{}, error) {
+) (*inverted.SpanExpressionProto, error) {
 	d := int64(*(datums[0].Datum.(*tree.DInt)))
 	d1 := d / 10
 	d2 := d % 10
@@ -148,14 +115,7 @@ func (jsonIntersectionExpr) Convert(
 	// The tightness only affects the optimizer, so arbitrarily use false.
 	expr := inverted.And(inverted.ExprForSpan(d1Span, false),
 		inverted.ExprForSpan(d2Span, false))
-	return expr.(*inverted.SpanExpression).ToProto(), nil, nil
-}
-
-func (jsonIntersectionExpr) CanPreFilter() bool {
-	return false
-}
-func (jsonIntersectionExpr) PreFilter(_ inverted.EncVal, _ []interface{}, _ []bool) (bool, error) {
-	return false, errors.Errorf("unsupported")
+	return expr.(*inverted.SpanExpression).ToProto(), nil
 }
 
 // For each integer d provided by the left side, this expression converter
@@ -168,7 +128,7 @@ var _ invertedexpr.DatumsToInvertedExpr = &jsonUnionExpr{}
 
 func (jsonUnionExpr) Convert(
 	_ context.Context, datums rowenc.EncDatumRow,
-) (*inverted.SpanExpressionProto, interface{}, error) {
+) (*inverted.SpanExpressionProto, error) {
 	d := int64(*(datums[0].Datum.(*tree.DInt)))
 	d1 := d / 10
 	d2 := d % 10
@@ -188,14 +148,7 @@ func (jsonUnionExpr) Convert(
 	// The tightness only affects the optimizer, so arbitrarily use true.
 	expr := inverted.Or(inverted.ExprForSpan(d1Span, true),
 		inverted.ExprForSpan(d2Span, true))
-	return expr.(*inverted.SpanExpression).ToProto(), nil, nil
-}
-
-func (jsonUnionExpr) CanPreFilter() bool {
-	return false
-}
-func (jsonUnionExpr) PreFilter(_ inverted.EncVal, _ []interface{}, _ []bool) (bool, error) {
-	return false, errors.Errorf("unsupported")
+	return expr.(*inverted.SpanExpression).ToProto(), nil
 }
 
 func TestInvertedJoiner(t *testing.T) {
@@ -296,26 +249,6 @@ func TestInvertedJoiner(t *testing.T) {
 			outputColumns:            []uint32{0, 2},
 			expected:                 "[[5 5] [5 50] [20 2] [20 20] [42 24] [42 42]]",
 			expectedWithContinuation: "[[5 5 false] [5 50 true] [20 2 false] [20 20 true] [42 24 false] [42 42 true]]",
-		},
-		{
-			description: "array intersection with pre-filter",
-			indexIdx:    biIndex,
-			// Similar to above, but with a pre-filter that prevents a left row 5
-			// from matching right rows with inverted key 0. Note that a right row 0
-			// is also used for the left row 20, due to 20 % 10 = 0, but that won't
-			// be excluded. This causes left row 5 to not match anything.
-			input: [][]tree.Datum{
-				{tree.NewDInt(tree.DInt(5))}, {tree.NewDInt(tree.DInt(20))}, {tree.NewDInt(tree.DInt(42))},
-			},
-			inputTypes: types.OneIntCol,
-			datumsToExpr: arrayIntersectionExpr{
-				t: t, toExclude: &struct{ left, right int64 }{left: 5, right: 0},
-			},
-			joinType:                 descpb.InnerJoin,
-			outputTypes:              types.TwoIntCols,
-			outputColumns:            []uint32{0, 2},
-			expected:                 "[[20 2] [20 20] [42 24] [42 42]]",
-			expectedWithContinuation: "[[20 2 false] [20 20 true] [42 24 false] [42 42 true]]",
 		},
 		{
 			// This case is similar to the "array intersection" case, and uses the
@@ -511,28 +444,6 @@ func TestInvertedJoiner(t *testing.T) {
 			outputColumns:            []uint32{0, 1, 4},
 			expected:                 "[[5 50 5] [42 420 42]]",
 			expectedWithContinuation: "[[5 50 5 false] [42 420 42 false]]",
-		},
-		{
-			description: "array intersection with pre-filter two-column index",
-			indexIdx:    dbiIndex,
-			// Similar to above, but with a pre-filter that prevents a left row
-			// 5 from matching right rows with inverted key 0.
-			input: [][]tree.Datum{
-				{tree.NewDInt(tree.DInt(5)), tree.NewDInt(tree.DInt(50))},
-				{tree.NewDInt(tree.DInt(20)), tree.NewDInt(tree.DInt(200))},
-				{tree.NewDInt(tree.DInt(21)), tree.NewDInt(tree.DInt(0))},
-				{tree.NewDInt(tree.DInt(42)), tree.NewDInt(tree.DInt(420))},
-			},
-			inputTypes:            types.TwoIntCols,
-			prefixEqualityColumns: []uint32{1},
-			datumsToExpr: arrayIntersectionExpr{
-				t: t, toExclude: &struct{ left, right int64 }{left: 5, right: 0},
-			},
-			joinType:                 descpb.InnerJoin,
-			outputTypes:              types.ThreeIntCols,
-			outputColumns:            []uint32{0, 1, 4},
-			expected:                 "[[20 200 20] [42 420 42]]",
-			expectedWithContinuation: "[[20 200 20 false] [42 420 42 false]]",
 		},
 		{
 			// This case is similar to the "array intersection" case, and uses

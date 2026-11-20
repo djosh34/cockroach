@@ -85,7 +85,6 @@ SELECT * FROM t AS OF SYSTEM TIME '0'
 statement ok
 EXPLAIN SELECT * FROM t AS OF SYSTEM TIME '-1us'
 
-skipif config 3node-tenant-default-configs
 # Regression test for out of bounds error during the type-checking of AOST with
 # a placeholder (#56488).
 statement error pq: no value provided for placeholder: \$1

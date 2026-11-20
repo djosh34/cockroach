@@ -76,7 +76,14 @@ CockroachDB supports the PostgreSQL wire protocol, so you can use any available 
 
 ## Building from source
 
-See [our wiki](https://wiki.crdb.io/wiki/spaces/CRDB/pages/181338446/Getting+and+building+from+source) for more details.
+You need Go; the `go` command fetches the version that `go.mod` names.
+
+```
+CGO_ENABLED=0 go build -o cockroach ./pkg/cmd/cockroach-oss
+```
+
+[build/README.md](build/README.md) explains how to regenerate code and run the
+tests.
 
 ## Contributing
 

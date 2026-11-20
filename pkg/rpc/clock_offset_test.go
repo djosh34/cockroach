@@ -201,7 +201,7 @@ func TestLatencies(t *testing.T) {
 		monitor.UpdateOffset(context.Background(), emptyKey, RemoteOffset{}, 0)
 	}
 	if l, ok := monitor.mu.latencyInfos[emptyKey]; ok {
-		t.Errorf("expected no latency measurement for %q, got %v", emptyKey, l.avgNanos.Value())
+		t.Errorf("expected no latency measurement for %d, got %v", emptyKey, l.avgNanos.Value())
 	}
 
 	testCases := []struct {

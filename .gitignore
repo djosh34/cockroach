@@ -27,8 +27,6 @@ work-Fuzz*
 /vendor
 # vendoring by `go mod vendor` may produce this file temporarily
 /.vendor.tmp.*
-# The Observability Service binary.
-/obsservice
 
 # Instrumentation artifacts.
 /instrument*
@@ -36,24 +34,6 @@ work-Fuzz*
 
 # Custom or private env vars (e.g. internal keys, access tokens, etc).
 customenv.mk
-
-# Generated files containing include paths.
-zcgo_flags*.go
-build/Railroad.jar
-
-# Bazel generated symlinks
-/_bazel
-
-# Per-user .bazelrc
-/.bazelrc.user
-
-# Local disk buffers for "roachprod logs" command
-/*.logs
-
-# Generated code.
-*.pb.go
-*.pb.gw.go
-pkg/testutils/serverutils/*_generated.go
 
 # Temporary directories during gomock generate
 **/gomock_reflect_*

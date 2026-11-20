@@ -420,10 +420,6 @@ type Config struct {
 	ApplicationInternalRPCPortMin int
 	ApplicationInternalRPCPortMax int
 
-	// Enables the use of an PTP hardware clock user space API for HLC current time.
-	// This contains the path to the device to be used (i.e. /dev/ptp0)
-	ClockDevicePath string
-
 	// AutoInitializeCluster, if set, causes the server to bootstrap the
 	// cluster. Note that if two nodes are started with this flag set
 	// and also configured to join each other, each node will bootstrap
@@ -490,7 +486,6 @@ func (cfg *Config) InitDefaults() {
 	cfg.RPCHeartbeatTimeout = DefaultRPCHeartbeatTimeout
 	cfg.ClusterName = ""
 	cfg.DisableClusterNameVerification = false
-	cfg.ClockDevicePath = ""
 	cfg.AcceptSQLWithoutTLS = false
 	cfg.ApplicationInternalRPCPortMin = 0
 	cfg.ApplicationInternalRPCPortMax = 0

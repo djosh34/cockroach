@@ -78,7 +78,7 @@ func MakeHTTPStorage(
 	if err != nil {
 		return nil, err
 	}
-	uri, err := url.Parse(base)
+	uri, err := cloud.ParseURI(base)
 	if err != nil {
 		return nil, err
 	}

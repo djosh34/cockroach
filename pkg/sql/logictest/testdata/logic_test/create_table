@@ -712,14 +712,14 @@ DROP TABLE test_serial;
 
 subtest test_storage_params_validation
 
-statement error pq: invalid storage param "s2_max_level" on primary key
+statement error pq: invalid storage param "fillfactor" on primary key
 CREATE TABLE t_bad_param (
-  a INT PRIMARY KEY WITH (s2_max_level=20)
+  a INT PRIMARY KEY WITH (fillfactor=20)
 );
 
-statement error pq: invalid storage param "s2_max_level" on primary key
+statement error pq: invalid storage param "fillfactor" on primary key
 CREATE TABLE t_bad_param (
-  a INT PRIMARY KEY USING HASH WITH (s2_max_level=20)
+  a INT PRIMARY KEY USING HASH WITH (fillfactor=20)
 );
 
 statement error pq: "bucket_count" storage param should only be set with "USING HASH" for hash sharded index
@@ -737,16 +737,16 @@ CREATE TABLE t_bad_param (
   a INT PRIMARY KEY USING HASH WITH BUCKET_COUNT = NULL
 );
 
-statement error pq: invalid storage param "s2_max_level" on primary key
+statement error pq: invalid storage param "fillfactor" on primary key
 CREATE TABLE t_bad_param (
   a INT NOT NULL,
-  PRIMARY KEY (a) WITH (s2_max_level=20)
+  PRIMARY KEY (a) WITH (fillfactor=20)
 );
 
-statement error pq: invalid storage param "s2_max_level" on primary key
+statement error pq: invalid storage param "fillfactor" on primary key
 CREATE TABLE t_bad_param (
   a INT NOT NULL,
-  PRIMARY KEY (a) USING HASH WITH (s2_max_level=20)
+  PRIMARY KEY (a) USING HASH WITH (fillfactor=20)
 );
 
 statement error pq: "bucket_count" storage param should only be set with "USING HASH" for hash sharded index
@@ -761,16 +761,16 @@ CREATE TABLE t_bad_param (
   PRIMARY KEY (a) USING HASH WITH BUCKET_COUNT = 5 WITH (bucket_count=5)
 );
 
-statement error pq: invalid storage param "s2_max_level" on primary key
+statement error pq: invalid storage param "fillfactor" on primary key
 CREATE TABLE t_bad_param (
   a INT NOT NULL,
-  CONSTRAINT t_bad_param_pkey PRIMARY KEY (a) WITH (s2_max_level=20)
+  CONSTRAINT t_bad_param_pkey PRIMARY KEY (a) WITH (fillfactor=20)
 );
 
-statement error pq: invalid storage param "s2_max_level" on primary key
+statement error pq: invalid storage param "fillfactor" on primary key
 CREATE TABLE t_bad_param (
   a INT NOT NULL,
-  CONSTRAINT t_bad_param_pkey PRIMARY KEY (a) USING HASH WITH (s2_max_level=20)
+  CONSTRAINT t_bad_param_pkey PRIMARY KEY (a) USING HASH WITH (fillfactor=20)
 );
 
 statement error pq: "bucket_count" storage param should only be set with "USING HASH" for hash sharded index
@@ -785,16 +785,16 @@ CREATE TABLE t_bad_param (
   CONSTRAINT t_bad_param_pkey PRIMARY KEY (a) USING HASH WITH BUCKET_COUNT = 5 WITH (bucket_count=5)
 );
 
-statement error pq: invalid storage param "s2_max_level" on unique index
+statement error pq: invalid storage param "fillfactor" on unique index
 CREATE TABLE t_bad_param (
   a INT,
-  UNIQUE INDEX (a) WITH (s2_max_level=20)
+  UNIQUE INDEX (a) WITH (fillfactor=20)
 );
 
-statement error pq: invalid storage param "s2_max_level" on unique index
+statement error pq: invalid storage param "fillfactor" on unique index
 CREATE TABLE t_bad_param (
   a INT,
-  UNIQUE INDEX (a) USING HASH WITH (s2_max_level=20)
+  UNIQUE INDEX (a) USING HASH WITH (fillfactor=20)
 );
 
 statement error pq: "bucket_count" storage param should only be set with "USING HASH" for hash sharded index
@@ -828,13 +828,13 @@ CREATE TABLE t_source (
 
 statement error pq: storage parameters are not supported on primary key for CREATE TABLE...AS... statement
 CREATE TABLE t_bad_param (
-  a PRIMARY KEY WITH (s2_max_level=20)
+  a PRIMARY KEY WITH (fillfactor=20)
 ) AS SELECT * FROM t_source;
 
 statement error pq: storage parameters are not supported on primary key for CREATE TABLE...AS... statement
 CREATE TABLE t_bad_param (
   a,
-  PRIMARY KEY (a) WITH (s2_max_level=20)
+  PRIMARY KEY (a) WITH (fillfactor=20)
 ) AS SELECT * FROM t_source;
 
 subtest test_old_bucket_count_syntax

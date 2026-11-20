@@ -81,11 +81,6 @@ type GeneratorWithExprsOverload interface {
 	GeneratorWithExprs()
 }
 
-// SQLFnOverload is an opaque type used to box an eval.SQLFnOverload.
-type SQLFnOverload interface {
-	SQLFn()
-}
-
 // FunctionClass specifies the class of the builtin function.
 type FunctionClass int
 
@@ -98,18 +93,6 @@ const (
 	WindowClass
 	// GeneratorClass is a builtin generator function.
 	GeneratorClass
-	// SQLClass is a builtin function that executes a SQL statement as a side
-	// effect of the function call.
-	//
-	// For example, AddGeometryColumn is a SQLClass function that executes an
-	// ALTER TABLE ... ADD COLUMN statement to add a geometry column to an
-	// existing table. It returns metadata about the column added.
-	//
-	// All builtin functions of this class should include a definition for
-	// Overload.SQLFn, which returns the SQL statement to be executed. They
-	// should also include a definition for Overload.Fn, which is executed
-	// like a NormalClass function and returns a Datum.
-	SQLClass
 )
 
 // String returns the string representation of the function class.
@@ -123,8 +106,6 @@ func (c FunctionClass) String() string {
 		return "window"
 	case GeneratorClass:
 		return "generator"
-	case SQLClass:
-		return "SQL"
 	default:
 		panic(errors.AssertionFailedf("unexpected class %d", c))
 	}
@@ -183,8 +164,8 @@ type Overload struct {
 	AggregateFunc AggregateOverload
 	WindowFunc    WindowOverload
 
-	// Only one of the "Fn", "FnWithExprs", "Generate", "GeneratorWithExprs",
-	// "SQLFn" and "Body" attributes can be set.
+	// Only one of the "Fn", "FnWithExprs", "Generate", "GeneratorWithExprs"
+	// and "Body" attributes can be set.
 
 	// Class is the kind of built-in function (normal/aggregate/window/etc.)
 	Class FunctionClass
@@ -205,10 +186,6 @@ type Overload struct {
 	// GeneratorWithExprs is for SRFs that need access to their arguments as Exprs
 	// and not pre-evaluated Datums, but is otherwise identical to Generator.
 	GeneratorWithExprs GeneratorWithExprsOverload
-
-	// SQLFn must be set for overloads of type SQLClass. It should return a SQL
-	// statement which will be executed as a common table expression in the query.
-	SQLFn SQLFnOverload
 
 	// OnTypeCheck is called every time this overload is type checked.
 	// This is a pointer so that it can be set in a builtinsregistry hook, which

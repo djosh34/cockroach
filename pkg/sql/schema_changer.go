@@ -3098,7 +3098,7 @@ func (p *planner) CanCreateCrossDBSequenceOwnerRef() error {
 			pgerror.Newf(pgcode.FeatureNotSupported,
 				"OWNED BY cannot refer to other databases; (see the '%s' cluster setting)",
 				allowCrossDatabaseSeqOwnerSetting),
-			crossDBReferenceDeprecationHint(),
+			"%s", crossDBReferenceDeprecationHint(),
 		)
 	}
 	return nil

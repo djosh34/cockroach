@@ -11,7 +11,6 @@
 package valueside
 
 import (
-	"github.com/cockroachdb/cockroach/pkg/geo"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgrepl/lsn"
@@ -83,11 +82,6 @@ func MarshalLegacy(colType *types.T, val tree.Datum) (roachpb.Value, error) {
 			r.SetInt(v.UnixEpochDaysWithOrig())
 			return r, nil
 		}
-	case types.Box2DFamily:
-		if v, ok := val.(*tree.DBox2D); ok {
-			r.SetBox2D(v.CartesianBoundingBox.BoundingBox)
-			return r, nil
-		}
 	case types.PGLSNFamily:
 		if v, ok := val.(*tree.DPGLSN); ok {
 			r.SetInt(int64(v.LSN))
@@ -97,16 +91,6 @@ func MarshalLegacy(colType *types.T, val tree.Datum) (roachpb.Value, error) {
 		if v, ok := tree.AsDString(val); ok {
 			r.SetString(string(v))
 			return r, nil
-		}
-	case types.GeographyFamily:
-		if v, ok := val.(*tree.DGeography); ok {
-			err := r.SetGeo(v.SpatialObject())
-			return r, err
-		}
-	case types.GeometryFamily:
-		if v, ok := val.(*tree.DGeometry); ok {
-			err := r.SetGeo(v.SpatialObject())
-			return r, err
 		}
 	case types.TimeFamily:
 		if v, ok := val.(*tree.DTime); ok {
@@ -294,26 +278,6 @@ func UnmarshalLegacy(a *tree.DatumAlloc, typ *types.T, value roachpb.Value) (tre
 			return nil, err
 		}
 		return a.NewDDate(tree.MakeDDate(pgdate.MakeCompatibleDateFromDisk(v))), nil
-	case types.Box2DFamily:
-		v, err := value.GetBox2D()
-		if err != nil {
-			return nil, err
-		}
-		return a.NewDBox2D(tree.DBox2D{
-			CartesianBoundingBox: geo.CartesianBoundingBox{BoundingBox: v},
-		}), nil
-	case types.GeographyFamily:
-		v, err := value.GetGeo()
-		if err != nil {
-			return nil, err
-		}
-		return a.NewDGeography(tree.DGeography{Geography: geo.MakeGeographyUnsafe(v)}), nil
-	case types.GeometryFamily:
-		v, err := value.GetGeo()
-		if err != nil {
-			return nil, err
-		}
-		return a.NewDGeometry(tree.DGeometry{Geometry: geo.MakeGeometryUnsafe(v)}), nil
 	case types.TimeFamily:
 		v, err := value.GetInt()
 		if err != nil {

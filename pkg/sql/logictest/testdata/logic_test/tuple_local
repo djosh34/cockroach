@@ -1,4 +1,4 @@
-# LogicTest: !fakedist !fakedist-vec-off !fakedist-disk !3node-tenant
+# LogicTest: !fakedist
 
 # At the moment, the query below results in an internal error when executed in
 # a distributed fashion. We should fix that and merge this file into 'tuple'

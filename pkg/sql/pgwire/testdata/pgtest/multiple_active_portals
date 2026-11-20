@@ -1069,8 +1069,6 @@ Sync
 until crdb_only
 ReadyForQuery
 ----
-{"Type":"DataRow","Values":[{"text":"auth_name"},{"text":"t"},null]}
-{"Type":"DataRow","Values":[{"text":"auth_srid"},{"text":"t"},null]}
 {"Type":"DataRow","Values":[{"text":"b"},{"text":"t"},null]}
 {"Type":"DataRow","Values":[{"text":"b"},{"text":"t"},null]}
 {"Type":"DataRow","Values":[{"text":"b"},{"text":"t"},null]}
@@ -1079,23 +1077,13 @@ ReadyForQuery
 {"Type":"DataRow","Values":[{"text":"b"},{"text":"t"},null]}
 {"Type":"DataRow","Values":[{"text":"b"},{"text":"t"},null]}
 {"Type":"DataRow","Values":[{"text":"b"},{"text":"t"},null]}
-{"Type":"DataRow","Values":[{"text":"coord_dimension"},{"text":"t"},null]}
-{"Type":"DataRow","Values":[{"text":"f_geometry_column"},{"text":"t"},null]}
-{"Type":"DataRow","Values":[{"text":"f_table_catalog"},{"text":"t"},null]}
-{"Type":"DataRow","Values":[{"text":"f_table_name"},{"text":"t"},null]}
-{"Type":"DataRow","Values":[{"text":"f_table_schema"},{"text":"t"},null]}
-{"Type":"DataRow","Values":[{"text":"proj4text"},{"text":"t"},null]}
 {"Type":"DataRow","Values":[{"text":"rowid"},{"text":"f"},{"text":"unique_rowid()"}]}
 {"Type":"DataRow","Values":[{"text":"rowid"},{"text":"f"},{"text":"unique_rowid()"}]}
-{"Type":"DataRow","Values":[{"text":"srid"},{"text":"t"},null]}
-{"Type":"DataRow","Values":[{"text":"srid"},{"text":"t"},null]}
-{"Type":"DataRow","Values":[{"text":"srtext"},{"text":"t"},null]}
-{"Type":"DataRow","Values":[{"text":"type"},{"text":"t"},null]}
 {"Type":"DataRow","Values":[{"text":"x"},{"text":"t"},null]}
 {"Type":"DataRow","Values":[{"text":"x"},{"text":"t"},null]}
 {"Type":"DataRow","Values":[{"text":"y"},{"text":"t"},null]}
 {"Type":"DataRow","Values":[{"text":"z"},{"text":"t"},null]}
-{"Type":"CommandComplete","CommandTag":"SELECT 26"}
+{"Type":"CommandComplete","CommandTag":"SELECT 14"}
 {"Type":"ReadyForQuery","TxStatus":"T"}
 
 send

@@ -83,9 +83,12 @@ func CatchVectorizedRuntimeError(operation func()) (retErr error) {
 		// panic frame.
 		var panicLineFound bool
 		var panicEmittedFrom string
-		// We should be able to find it within 3 program counters, starting with the
+		// We should be able to find it within 5 program counters, starting with the
 		// caller of this deferred function (2 above the runtime.Callers frame).
-		pc := make([]uintptr, 3)
+		// With Go 1.27, bounds check failures pass through runtime.panicBounds,
+		// an assembly stub outside panic.go, so runtime frames after the panic
+		// line are skipped too.
+		pc := make([]uintptr, 5)
 		n := runtime.Callers(2, pc)
 		if n >= 1 {
 			frames := runtime.CallersFrames(pc[:n])
@@ -94,7 +97,7 @@ func CatchVectorizedRuntimeError(operation func()) (retErr error) {
 				frame, more := frames.Next()
 				if strings.Contains(frame.File, panicLineSubstring) {
 					panicLineFound = true
-				} else if panicLineFound {
+				} else if panicLineFound && !strings.HasPrefix(frame.Function, "runtime.") {
 					panicEmittedFrom = frame.Function
 					break
 				}
@@ -149,7 +152,7 @@ const (
 	sqlColPackagesPrefix   = "github.com/cockroachdb/cockroach/pkg/sql/col"
 	sqlRowPackagesPrefix   = "github.com/cockroachdb/cockroach/pkg/sql/row"
 	sqlSemPackagesPrefix   = "github.com/cockroachdb/cockroach/pkg/sql/sem"
-	// When running BenchmarkCatchVectorizedRuntimeError under bazel, the
+	// When BenchmarkCatchVectorizedRuntimeError runs with -trimpath, the
 	// repository prefix is missing.
 	testSqlColPackagesPrefix = "pkg/sql/col"
 )

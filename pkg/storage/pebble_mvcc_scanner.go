@@ -223,7 +223,7 @@ func (p *pebbleResults) put(
 		if err := memAccount.Grow(ctx, int64(newSize)); err != nil {
 			return err
 		}
-		p.repr = nonZeroingMakeByteSlice(newSize)[:0]
+		p.repr = make([]byte, 0, newSize)
 	}
 
 	startIdx := len(p.repr)

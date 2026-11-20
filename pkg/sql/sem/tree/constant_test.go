@@ -319,27 +319,6 @@ func mustParseDUuid(t *testing.T, s string) tree.Datum {
 	}
 	return d
 }
-func mustParseDBox2D(t *testing.T, s string) tree.Datum {
-	d, err := tree.ParseDBox2D(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return d
-}
-func mustParseDGeography(t *testing.T, s string) tree.Datum {
-	d, err := tree.ParseDGeography(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return d
-}
-func mustParseDGeometry(t *testing.T, s string) tree.Datum {
-	d, err := tree.ParseDGeometry(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return d
-}
 func mustParseDPGLSN(t *testing.T, s string) tree.Datum {
 	d, err := tree.ParseDPGLSN(s)
 	if err != nil {
@@ -404,9 +383,6 @@ var parseFuncs = map[*types.T]func(*testing.T, string) tree.Datum{
 	types.Interval:         mustParseDInterval,
 	types.Jsonb:            mustParseDJSON,
 	types.Uuid:             mustParseDUuid,
-	types.Box2D:            mustParseDBox2D,
-	types.Geography:        mustParseDGeography,
-	types.Geometry:         mustParseDGeometry,
 	types.INet:             mustParseDINet,
 	types.VarBit:           mustParseDVarBit,
 	types.PGLSN:            mustParseDPGLSN,
@@ -502,14 +478,12 @@ func TestStringConstantResolveAvailableTypes(t *testing.T) {
 			parseOptions: typeSet(types.String, types.Bytes),
 		},
 		{
-			c: tree.NewStrVal("box(0 0, 1 1)"),
-			parseOptions: typeSet(types.String, types.Bytes, types.Box2D, types.TSVector,
-				types.RefCursor),
+			c:            tree.NewStrVal("box(0 0, 1 1)"),
+			parseOptions: typeSet(types.String, types.Bytes, types.TSVector, types.RefCursor),
 		},
 		{
-			c: tree.NewStrVal("POINT(-100.59 42.94)"),
-			parseOptions: typeSet(types.String, types.Bytes, types.Geography, types.Geometry,
-				types.TSVector, types.RefCursor),
+			c:            tree.NewStrVal("POINT(-100.59 42.94)"),
+			parseOptions: typeSet(types.String, types.Bytes, types.TSVector, types.RefCursor),
 		},
 		{
 			c: tree.NewStrVal("192.168.100.128/25"),

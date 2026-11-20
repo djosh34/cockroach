@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
 	"github.com/cockroachdb/cockroach/pkg/testutils/datapathutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/skip"
@@ -34,20 +33,6 @@ func (p ProfilerFunc) Profile(
 	ctx context.Context, req *serverpb.ProfileRequest,
 ) (*serverpb.JSONResponse, error) {
 	return p(ctx, req)
-}
-
-func init() {
-	if bazel.BuiltWithBazel() {
-		path, err := os.Getwd()
-		if err != nil {
-			panic(err)
-		}
-		// dot wants HOME set.
-		err = os.Setenv("HOME", path)
-		if err != nil {
-			panic(err)
-		}
-	}
 }
 
 var supportedProfiles = []string{

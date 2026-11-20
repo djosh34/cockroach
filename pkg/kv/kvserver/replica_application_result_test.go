@@ -42,8 +42,9 @@ func makeProposalData() *ProposalData {
 		AdmissionOriginNode:   1,
 	}
 
+	type ctxKey struct{}
 	return &ProposalData{
-		ctx:                     context.WithValue(context.Background(), struct{}{}, "nonempty-ctx"),
+		ctx:                     context.WithValue(context.Background(), ctxKey{}, "nonempty-ctx"),
 		sp:                      &tracing.Span{},
 		idKey:                   "deadbeef",
 		proposedAtTicks:         1,

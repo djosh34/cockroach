@@ -72,10 +72,6 @@ ALTER TABLE t4 ALTER PRIMARY KEY USING COLUMNS (b);
 # In Declarative schema changer we don't generate a primary key swap mutation.
 # So the truncate will wait until the concurrent schema change to finish and
 # hang this test. So we need to test this only in legacy schema changer.
-onlyif config local-legacy-schema-changer
-statement error pq: unimplemented: cannot perform TRUNCATE on "t4" which has an ongoing primary key change
-TRUNCATE TABLE t4;
-
 statement ok
 SET CLUSTER SETTING jobs.debug.pausepoints = '';
 

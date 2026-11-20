@@ -1085,16 +1085,6 @@ cast(B'11011' || B'00' as bit(6))
 ----
 B'110110'
 
-eval
-'0101000000000000000000F03F000000000000F03F'::geography::geometry
-----
-'0101000020E6100000000000000000F03F000000000000F03F'
-
-eval
-'0101000000000000000000F03F000000000000F03F'::geometry::geography
-----
-'0101000020E6100000000000000000F03F000000000000F03F'
-
 # Test that decimals are correctly cast when the original value is negative.
 eval
 '-2020-10-10'::timestamp::decimal
@@ -1275,16 +1265,6 @@ eval
 'abc'::string::"char"
 ----
 'a'
-
-eval
-'null'::jsonb::geography
-----
-NULL
-
-eval
-'null'::jsonb::geometry
-----
-NULL
 
 # "char" will cast integer values to ASCII characters
 eval

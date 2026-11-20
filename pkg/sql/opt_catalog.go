@@ -17,7 +17,6 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
 	"github.com/cockroachdb/cockroach/pkg/config"
-	"github.com/cockroachdb/cockroach/pkg/geo/geoindex"
 	"github.com/cockroachdb/cockroach/pkg/keys"
 	"github.com/cockroachdb/cockroach/pkg/kv"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
@@ -1546,11 +1545,6 @@ func (oi *optIndex) ImplicitColumnCount() int {
 	return 0
 }
 
-// GeoConfig is part of the cat.Index interface.
-func (oi *optIndex) GeoConfig() geoindex.Config {
-	return oi.idx.IndexDesc().GeoConfig
-}
-
 // Version is part of the cat.Index interface.
 func (oi *optIndex) Version() descpb.IndexDescriptorVersion {
 	return oi.idx.GetVersion()
@@ -2378,11 +2372,6 @@ func (oi *optVirtualIndex) Ordinal() cat.IndexOrdinal {
 // ImplicitColumnCount is part of the cat.Index interface.
 func (oi *optVirtualIndex) ImplicitColumnCount() int {
 	return 0
-}
-
-// GeoConfig is part of the cat.Index interface.
-func (oi *optVirtualIndex) GeoConfig() geoindex.Config {
-	return geoindex.Config{}
 }
 
 // Version is part of the cat.Index interface.

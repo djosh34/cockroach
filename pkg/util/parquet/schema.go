@@ -282,33 +282,6 @@ func makeColumn(colName string, typ *types.T, repetitions parquet.Repetition) (d
 		}
 		result.colWriter = scalarWriter(writeDate)
 		return result, nil
-	case types.Box2DFamily:
-		result.node, err = schema.NewPrimitiveNodeLogical(colName,
-			repetitions, schema.StringLogicalType{}, parquet.Types.ByteArray,
-			defaultTypeLength, defaultSchemaFieldID)
-		if err != nil {
-			return datumColumn{}, err
-		}
-		result.colWriter = scalarWriter(writeBox2D)
-		return result, nil
-	case types.GeographyFamily:
-		result.node, err = schema.NewPrimitiveNode(colName,
-			repetitions, parquet.Types.ByteArray,
-			defaultTypeLength, defaultSchemaFieldID)
-		if err != nil {
-			return datumColumn{}, err
-		}
-		result.colWriter = scalarWriter(writeGeography)
-		return result, nil
-	case types.GeometryFamily:
-		result.node, err = schema.NewPrimitiveNode(colName,
-			repetitions, parquet.Types.ByteArray,
-			defaultTypeLength, defaultSchemaFieldID)
-		if err != nil {
-			return datumColumn{}, err
-		}
-		result.colWriter = scalarWriter(writeGeometry)
-		return result, nil
 	case types.IntervalFamily:
 		result.node, err = schema.NewPrimitiveNodeLogical(colName,
 			repetitions, schema.StringLogicalType{}, parquet.Types.ByteArray,

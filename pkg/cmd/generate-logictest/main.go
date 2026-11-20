@@ -11,6 +11,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -19,27 +20,21 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 	"github.com/cockroachdb/cockroach/pkg/sql/logictest/logictestbase"
-	"github.com/cockroachdb/cockroach/pkg/sql/sqlitelogictest"
 )
 
 type testFileTemplateConfig struct {
-	LogicTest                     bool
-	ExecBuildLogicTest            bool
-	SqliteLogicTest               bool
-	CockroachGoTestserverTest     bool
-	ForceProductionValues         bool
-	Package, TestRuleName, RelDir string
-	ConfigIdx                     int
-	TestCount                     int
-	NumCPU                        int
+	LogicTest             bool
+	ExecBuildLogicTest    bool
+	ForceProductionValues bool
+	Package, RelDir       string
+	ConfigIdx             int
 }
 
 var outDir = flag.String("out-dir", "", "path to the root of the cockroach workspace")
 
 type logicTestGenerator struct {
-	execBuildLogicTestsGlob, logicTestsGlob, sqliteLogicTestsPath string
+	execBuildLogicTestsGlob, logicTestsGlob string
 }
 
 func (g *logicTestGenerator) testdir(rel string) (*testdir, error) {
@@ -67,9 +62,9 @@ type testPrefixConfigPaths struct {
 }
 
 type testdir struct {
-	g                                                                                  *logicTestGenerator
-	dir, relPathToParent                                                               string
-	execBuildLogicTestsConfigPaths, logicTestsConfigPaths, sqliteLogicTestsConfigPaths []testPrefixConfigPaths
+	g                                                     *logicTestGenerator
+	dir, relPathToParent                                  string
+	execBuildLogicTestsConfigPaths, logicTestsConfigPaths []testPrefixConfigPaths
 }
 
 func (t *testdir) addLogicTests(testPrefix string, calc logictestbase.ConfigCalculator) error {
@@ -89,21 +84,6 @@ func (t *testdir) addExecBuildLogicTests(
 		return err
 	}
 	t.execBuildLogicTestsConfigPaths = append(t.execBuildLogicTestsConfigPaths, testPrefixConfigPaths{testPrefix: testPrefix, configPaths: paths})
-	return nil
-}
-
-func (t *testdir) addSqliteLogicTests(
-	testPrefix string, calc logictestbase.ConfigCalculator,
-) error {
-	sqliteLogicTestsGlobs := make([]string, len(sqlitelogictest.Globs))
-	for i, glob := range sqlitelogictest.Globs {
-		sqliteLogicTestsGlobs[i] = t.g.sqliteLogicTestsPath + glob
-	}
-	paths, err := calc.Enumerate(sqliteLogicTestsGlobs...)
-	if err != nil {
-		return err
-	}
-	t.sqliteLogicTestsConfigPaths = append(t.sqliteLogicTestsConfigPaths, testPrefixConfigPaths{testPrefix: testPrefix, configPaths: paths})
 	return nil
 }
 
@@ -138,58 +118,35 @@ func (t *testdir) dump() error {
 				tplCfg.ExecBuildLogicTest = true
 			}
 		}
-		for _, configPaths := range t.sqliteLogicTestsConfigPaths {
-			paths := configPaths.configPaths[configIdx]
-			testCount += nonTmpCount(paths)
-			if len(paths) > 0 {
-				tplCfg.SqliteLogicTest = true
-			}
-		}
 		if testCount == 0 {
 			continue
 		}
 		cfg := logictestbase.LogicTestConfigs[configIdx]
 		tplCfg.ConfigIdx = configIdx
-		tplCfg.TestRuleName = strings.ReplaceAll(cfg.Name, ".", "_")
 		tplCfg.Package = strings.ReplaceAll(strings.ReplaceAll(cfg.Name, "-", "_"), ".", "")
 		tplCfg.RelDir = t.relPathToParent
-		tplCfg.TestCount = testCount
-		tplCfg.CockroachGoTestserverTest = cfg.UseCockroachGoTestserver
-		// The NumCPU calculation is a guess pulled out of thin air to
-		// allocate the tests which use 3-node clusters 2 vCPUs, and
-		// the ones which use more a bit more.
-		tplCfg.NumCPU = (cfg.NumNodes / 2) + 1
 		subdir := filepath.Join(t.dir, cfg.Name)
-		f, buildF, cleanup, err := openTestSubdir(subdir)
-		if err != nil {
+		if err := os.Mkdir(subdir, 0777); err != nil {
 			return err
 		}
-		defer cleanup()
-		err = testFileTpl.Execute(f, tplCfg)
+		var f bytes.Buffer
+		err := testFileTpl.Execute(&f, tplCfg)
 		if err != nil {
 			return err
 		}
 		for _, configPaths := range t.logicTestsConfigPaths {
 			paths := configPaths.configPaths[configIdx]
 			for _, file := range paths {
-				dumpTestForFile(f, configPaths.testPrefix, filepath.Base(file), "runLogicTest")
+				dumpTestForFile(&f, configPaths.testPrefix, filepath.Base(file), "runLogicTest")
 			}
 		}
 		for _, configPaths := range t.execBuildLogicTestsConfigPaths {
 			paths := configPaths.configPaths[configIdx]
 			for _, file := range paths {
-				dumpTestForFile(f, configPaths.testPrefix, filepath.Base(file), "runExecBuildLogicTest")
+				dumpTestForFile(&f, configPaths.testPrefix, filepath.Base(file), "runExecBuildLogicTest")
 			}
 		}
-		for _, configPaths := range t.sqliteLogicTestsConfigPaths {
-			paths := configPaths.configPaths[configIdx]
-			for _, file := range paths {
-				dumpTestForFile(f, configPaths.testPrefix, strings.TrimPrefix(file, t.g.sqliteLogicTestsPath), "runSqliteLogicTest")
-			}
-		}
-
-		err = buildFileTpl.Execute(buildF, tplCfg)
-		if err != nil {
+		if err := os.WriteFile(filepath.Join(subdir, "generated_test.go"), f.Bytes(), 0666); err != nil {
 			return err
 		}
 	}
@@ -211,33 +168,6 @@ func dumpTestForFile(f io.Writer, prefix, file string, whichFunc string) {
 	fmt.Fprintln(f, "}")
 }
 
-func openTestSubdir(dir string) (testFile, buildFile *os.File, cleanup func(), err error) {
-	err = os.Mkdir(dir, 0777)
-	if err != nil {
-		return
-	}
-	testFile, err = os.Create(filepath.Join(dir, "generated_test.go"))
-	if err != nil {
-		return
-	}
-	buildFile, err = os.Create(filepath.Join(dir, "BUILD.bazel"))
-	if err != nil {
-		_ = testFile.Close()
-		return
-	}
-	cleanup = func() {
-		err := testFile.Close()
-		if err != nil {
-			panic(err)
-		}
-		err = buildFile.Close()
-		if err != nil {
-			panic(err)
-		}
-	}
-	return
-}
-
 func generate() error {
 	if *outDir == "" {
 		cwd, err := os.Getwd()
@@ -246,35 +176,9 @@ func generate() error {
 		}
 		*outDir = cwd
 	}
-	var gen logicTestGenerator
-	if bazel.BuiltWithBazel() {
-		runfiles, err := bazel.Runfile("pkg/sql/opt/exec/execbuilder/testdata/")
-		if err != nil {
-			return err
-		}
-		execBuildLogicTestsGlob := filepath.Join(runfiles, "[^.]*")
-		runfiles, err = bazel.Runfile("pkg/sql/logictest/testdata/logic_test")
-		if err != nil {
-			return err
-		}
-		logicTestsGlob := filepath.Join(runfiles, "[^.]*")
-		sqliteLogicTestsPath, err := bazel.Runfile("external/com_github_cockroachdb_sqllogictest")
-		if err != nil {
-			return err
-		}
-		gen = logicTestGenerator{
-			execBuildLogicTestsGlob, logicTestsGlob, sqliteLogicTestsPath,
-		}
-	} else {
-		logicTestsGlob := "pkg/sql/logictest/testdata/logic_test/[^.]*"
-		execBuildLogicTestsGlob := "pkg/sql/opt/exec/execbuilder/testdata/[^.]*"
-		sqliteLogicTestsPath, err := sqlitelogictest.FindLocalLogicTestClone()
-		if err != nil {
-			return err
-		}
-		gen = logicTestGenerator{
-			execBuildLogicTestsGlob, logicTestsGlob, sqliteLogicTestsPath,
-		}
+	gen := logicTestGenerator{
+		execBuildLogicTestsGlob: "pkg/sql/opt/exec/execbuilder/testdata/[^.]*",
+		logicTestsGlob:          "pkg/sql/logictest/testdata/logic_test/[^.]*",
 	}
 
 	{
@@ -283,21 +187,6 @@ func generate() error {
 			return err
 		}
 		err = t.addLogicTests("TestLogic", logictestbase.ConfigCalculator{})
-		if err != nil {
-			return err
-		}
-		err = t.dump()
-		if err != nil {
-			return err
-		}
-	}
-
-	{
-		t, err := gen.testdir("pkg/sql/sqlitelogictest/tests")
-		if err != nil {
-			return err
-		}
-		err = t.addSqliteLogicTests("TestSqlLiteLogic", logictestbase.ConfigCalculator{})
 		if err != nil {
 			return err
 		}

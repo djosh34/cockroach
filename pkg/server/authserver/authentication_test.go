@@ -140,11 +140,11 @@ func TestSSLEnforcement(t *testing.T) {
 		// Health endpoint is special-cased; allowed to serve on HTTP.
 		{"/health", insecureContext, http.StatusOK},
 
-		// /ui/: basic file server: no auth.
-		{"", rootCertsContext, http.StatusOK},
-		{"", nodeCertsContext, http.StatusOK},
-		{"", testCertsContext, http.StatusOK},
-		{"", noCertsContext, http.StatusOK},
+		// The root path served the UI, which is removed.
+		{"", rootCertsContext, http.StatusNotFound},
+		{"", nodeCertsContext, http.StatusNotFound},
+		{"", testCertsContext, http.StatusNotFound},
+		{"", noCertsContext, http.StatusNotFound},
 		{"", insecureContext, http.StatusTemporaryRedirect},
 
 		// /_admin/: server.adminServer: no auth.

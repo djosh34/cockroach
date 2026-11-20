@@ -18,7 +18,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/execinfrapb"
 	"github.com/cockroachdb/cockroach/pkg/sql/execstats"
 	"github.com/cockroachdb/cockroach/pkg/sql/inverted"
-	"github.com/cockroachdb/cockroach/pkg/sql/opt/invertedidx"
 	"github.com/cockroachdb/cockroach/pkg/sql/rowcontainer"
 	"github.com/cockroachdb/cockroach/pkg/sql/rowenc"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
@@ -125,21 +124,6 @@ func newInvertedFilterer(
 		ifr.ExecStatsForTrace = ifr.execStatsForTrace
 	}
 
-	if spec.PreFiltererSpec != nil {
-		semaCtx := flowCtx.NewSemaContext(flowCtx.Txn)
-		var exprHelper execinfrapb.ExprHelper
-		colTypes := []*types.T{spec.PreFiltererSpec.Type}
-		if err := exprHelper.Init(ctx, spec.PreFiltererSpec.Expression, colTypes, semaCtx, ifr.EvalCtx); err != nil {
-			return nil, err
-		}
-		preFilterer, preFiltererState, err := invertedidx.NewBoundPreFilterer(
-			spec.PreFiltererSpec.Type, exprHelper.Expr)
-		if err != nil {
-			return nil, err
-		}
-		ifr.invertedEval.filterer = preFilterer
-		ifr.invertedEval.preFilterState = append(ifr.invertedEval.preFilterState, preFiltererState)
-	}
 	// TODO(sumeer): for expressions that only involve unions, and the output
 	// does not need to be in key-order, we should incrementally output after
 	// de-duping. It will reduce the container memory/disk by 2x.
@@ -233,27 +217,21 @@ func (ifr *invertedFilterer) readInput() (invertedFiltererState, *execinfrapb.Pr
 		}
 		enc = []byte(*row[ifr.invertedColIdx].Datum.(*tree.DEncodedKey))
 	}
-	shouldAdd, err := ifr.invertedEval.prepareAddIndexRow(enc, nil /* encFull */)
+	if err := ifr.invertedEval.prepareAddIndexRow(enc, nil /* encFull */); err != nil {
+		ifr.MoveToDraining(err)
+		return ifrStateUnknown, ifr.DrainHelper()
+	}
+	// Transform to keyRow which is everything other than the inverted
+	// column and then add it to the row container and the inverted expr
+	// evaluator.
+	copy(ifr.keyRow, row[:ifr.invertedColIdx])
+	copy(ifr.keyRow[ifr.invertedColIdx:], row[ifr.invertedColIdx+1:])
+	keyIndex, err := ifr.rc.AddRow(ifr.Ctx(), ifr.keyRow)
 	if err != nil {
 		ifr.MoveToDraining(err)
 		return ifrStateUnknown, ifr.DrainHelper()
 	}
-	if shouldAdd {
-		// Transform to keyRow which is everything other than the inverted
-		// column and then add it to the row container and the inverted expr
-		// evaluator.
-		copy(ifr.keyRow, row[:ifr.invertedColIdx])
-		copy(ifr.keyRow[ifr.invertedColIdx:], row[ifr.invertedColIdx+1:])
-		keyIndex, err := ifr.rc.AddRow(ifr.Ctx(), ifr.keyRow)
-		if err != nil {
-			ifr.MoveToDraining(err)
-			return ifrStateUnknown, ifr.DrainHelper()
-		}
-		if err = ifr.invertedEval.addIndexRow(keyIndex); err != nil {
-			ifr.MoveToDraining(err)
-			return ifrStateUnknown, ifr.DrainHelper()
-		}
-	}
+	ifr.invertedEval.addIndexRow(keyIndex)
 	return ifrReadingInput, nil
 }
 

@@ -14,19 +14,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 	"github.com/cockroachdb/cockroach/pkg/testutils/lint/passes/forbiddenmethod"
 	"github.com/cockroachdb/cockroach/pkg/testutils/lint/passes/unconvert"
 	"github.com/cockroachdb/cockroach/pkg/testutils/skip"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/analysis/analysistest"
 )
-
-func init() {
-	if bazel.BuiltWithBazel() {
-		bazel.SetGoEnv()
-	}
-}
 
 // Use tests from other packages to also test this package. This ensures
 // that if that code changes, somebody will look here. Also it allows for
@@ -40,11 +33,6 @@ func requireNotEmpty(t *testing.T, path string) {
 }
 
 func getTestdataForPackage(t *testing.T, pkg string) string {
-	if bazel.BuiltWithBazel() {
-		runfiles, err := bazel.RunfilesPath()
-		require.NoError(t, err)
-		return filepath.Join(runfiles, "pkg", "testutils", "lint", "passes", pkg, "testdata")
-	}
 	return filepath.Join("..", pkg, "testdata")
 }
 

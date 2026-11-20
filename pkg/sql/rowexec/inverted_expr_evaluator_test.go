@@ -261,16 +261,10 @@ func TestInvertedExpressionEvaluator(t *testing.T) {
 		indexRows[i], indexRows[j] = indexRows[j], indexRows[i]
 	})
 	for _, elem := range indexRows {
-		add, err := batchEvalUnion.prepareAddIndexRow(inverted.EncVal(elem.key), nil /* encFull */)
-		require.NoError(t, err)
-		require.Equal(t, true, add)
-		err = batchEvalUnion.addIndexRow(elem.index)
-		require.NoError(t, err)
-		add, err = batchEvalIntersection.prepareAddIndexRow(inverted.EncVal(elem.key), nil /* encFull */)
-		require.NoError(t, err)
-		require.Equal(t, true, add)
-		err = batchEvalIntersection.addIndexRow(elem.index)
-		require.NoError(t, err)
+		require.NoError(t, batchEvalUnion.prepareAddIndexRow(inverted.EncVal(elem.key), nil /* encFull */))
+		batchEvalUnion.addIndexRow(elem.index)
+		require.NoError(t, batchEvalIntersection.prepareAddIndexRow(inverted.EncVal(elem.key), nil /* encFull */))
+		batchEvalIntersection.addIndexRow(elem.index)
 	}
 	require.Equal(t, expectedUnion, keyIndexesToString(batchEvalUnion.evaluate()))
 	require.Equal(t, expectedIntersection, keyIndexesToString(batchEvalIntersection.evaluate()))
@@ -284,11 +278,8 @@ func TestInvertedExpressionEvaluator(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, elem := range indexRows {
-		add, err := batchBoth.prepareAddIndexRow(inverted.EncVal(elem.key), nil /* encFull */)
-		require.NoError(t, err)
-		require.Equal(t, true, add)
-		err = batchBoth.addIndexRow(elem.index)
-		require.NoError(t, err)
+		require.NoError(t, batchBoth.prepareAddIndexRow(inverted.EncVal(elem.key), nil /* encFull */))
+		batchBoth.addIndexRow(elem.index)
 	}
 	require.Equal(t, "0: 0 3 4 5 6 7 8 \n1: 0 4 6 8 \n",
 		keyIndexesToString(batchBoth.evaluate()))
@@ -344,115 +335,6 @@ func TestFragmentedSpans(t *testing.T) {
 			"span: [j, l)  indexes (expr, set): (2, 0) (expr): 2 \n"+
 			"span: [o, p)  indexes (expr, set): (2, 0) (expr): 2 \n",
 		fragmentedSpansToString(batchEval.fragmentedSpans))
-}
-
-type testPreFilterer struct {
-	t                  *testing.T
-	expectedPreFilters []interface{}
-	result             []bool
-}
-
-func (t *testPreFilterer) PreFilter(
-	enc inverted.EncVal, preFilters []interface{}, result []bool,
-) (bool, error) {
-	require.Equal(t.t, t.expectedPreFilters, preFilters)
-	rv := false
-	require.Equal(t.t, len(t.result), len(result))
-	for i := range result {
-		result[i] = t.result[i]
-		rv = rv || result[i]
-	}
-	return rv, nil
-}
-
-func TestInvertedExpressionEvaluatorPreFilter(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	defer log.Scope(t).Close(t)
-
-	// Setup expressions such that the same expression appears multiple times
-	// in a span.
-	leaf1 := &spanExpression{
-		FactoredUnionSpans: []invertedSpan{{Start: []byte("a"), End: []byte("d")}},
-		Operator:           inverted.None,
-	}
-	leaf2 := &spanExpression{
-		FactoredUnionSpans: []invertedSpan{{Start: []byte("e"), End: []byte("h")}},
-		Operator:           inverted.None,
-	}
-	expr1 := &spanExpression{
-		Operator: inverted.SetIntersection,
-		Left: &spanExpression{
-			Operator: inverted.SetIntersection,
-			Left:     leaf1,
-			Right:    leaf2,
-		},
-		Right: leaf1,
-	}
-	expr1Proto := inverted.SpanExpressionProto{Node: *expr1}
-	expr2 := &spanExpression{
-		Operator: inverted.SetIntersection,
-		Left: &spanExpression{
-			Operator: inverted.SetIntersection,
-			Left:     leaf2,
-			Right:    leaf1,
-		},
-		Right: leaf2,
-	}
-	expr2Proto := inverted.SpanExpressionProto{Node: *expr2}
-	preFilters := []interface{}{"pf1", "pf2"}
-	batchEval := &batchedInvertedExprEvaluator{
-		exprs:          []*inverted.SpanExpressionProto{&expr1Proto, &expr2Proto},
-		preFilterState: preFilters,
-	}
-	invertedSpans, err := batchEval.init()
-	require.NoError(t, err)
-	require.Equal(t, "[a, d) [e, h) ", spansToString(invertedSpans))
-	require.Equal(t,
-		"span: [a, d)  indexes (expr, set): (0, 2) (0, 4) (1, 3) (expr): 0 1 \n"+
-			"span: [e, h)  indexes (expr, set): (0, 3) (1, 2) (1, 4) (expr): 0 1 \n",
-		fragmentedSpansToString(batchEval.fragmentedSpans))
-	feedIndexRows := func(indexRows []keyAndIndex, expectedAdd bool) {
-		for _, elem := range indexRows {
-			add, err := batchEval.prepareAddIndexRow(inverted.EncVal(elem.key), nil /* encFull */)
-			require.NoError(t, err)
-			require.Equal(t, expectedAdd, add)
-			if add {
-				err = batchEval.addIndexRow(elem.index)
-			}
-			require.NoError(t, err)
-		}
-
-	}
-	filterer := testPreFilterer{
-		t:                  t,
-		expectedPreFilters: preFilters,
-	}
-	batchEval.filterer = &filterer
-	// Neither row is pre-filtered, so 0 will appear in output.
-	filterer.result = []bool{true, true}
-	feedIndexRows([]keyAndIndex{{"a", 0}, {"e", 0}}, true)
-
-	// Row is excluded from second expression
-	filterer.result = []bool{true, false}
-	feedIndexRows([]keyAndIndex{{"a", 1}}, true)
-	filterer.result = []bool{true, true}
-	// Row is not excluded, but the previous exclusion means 1 will not appear
-	// in output of second expression.
-	feedIndexRows([]keyAndIndex{{"e", 1}}, true)
-
-	// Row is excluded from first expression
-	filterer.result = []bool{false, true}
-	feedIndexRows([]keyAndIndex{{"a", 2}}, true)
-	filterer.result = []bool{true, true}
-	// Row is not excluded, but the previous exclusion means 2 will not appear
-	// in output of first expression.
-	feedIndexRows([]keyAndIndex{{"e", 2}}, true)
-
-	// Rows are excluded from both expressions.
-	filterer.result = []bool{false, false}
-	feedIndexRows([]keyAndIndex{{"a", 3}, {"e", 3}}, false)
-
-	require.Equal(t, "0: 0 1 \n1: 0 2 \n", keyIndexesToString(batchEval.evaluate()))
 }
 
 // TODO(sumeer): randomized inputs for union, intersection and expression evaluation.

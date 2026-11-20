@@ -29,7 +29,7 @@ var statsTemplate = template.Must(template.New("runtime stats").Funcs(template.F
 }).Parse(`{{iBytes .MemRSSBytes}} RSS, {{.GoroutineCount}} goroutines (stacks: {{iBytes .MemStackSysBytes}}), ` +
 	`{{iBytes .GoAllocBytes}}/{{iBytes .GoTotalBytes}} Go alloc/total{{if .GoStatsStaleness}}(stale){{end}} ` +
 	`(heap fragmentation: {{iBytes .HeapFragmentBytes}}, heap reserved: {{iBytes .HeapReservedBytes}}, heap released: {{iBytes .HeapReleasedBytes}}), ` +
-	`{{iBytes .CGoAllocBytes}}/{{iBytes .CGoTotalBytes}} CGO alloc/total ({{printf "%.1f" .CGoCallRate}} CGO/sec), ` +
+	`{{printf "%.1f" .CGoCallRate}} CGO/sec, ` +
 	`{{printf "%.1f" .CPUUserPercent}}/{{printf "%.1f" .CPUSysPercent}} %(u/s)time, {{printf "%.1f" .GCPausePercent}} %gc ({{.GCRunCount}}x), ` +
 	`{{iBytes .NetHostRecvBytes}}/{{iBytes .NetHostSendBytes}} (r/w)net`))
 

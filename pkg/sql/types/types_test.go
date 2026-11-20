@@ -16,7 +16,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cockroachdb/cockroach/pkg/geo/geopb"
 	"github.com/cockroachdb/cockroach/pkg/sql/oidext"
 	"github.com/cockroachdb/cockroach/pkg/util/protoutil"
 	"github.com/lib/pq/oid"
@@ -146,83 +145,6 @@ func TestTypes(t *testing.T) {
 		{Float4, &T{InternalType: InternalType{
 			Family: FloatFamily, Width: 32, Oid: oid.T_float4, Locale: &emptyLocale}}},
 		{Float4, MakeScalar(FloatFamily, oid.T_float4, 0, 32, emptyLocale)},
-
-		// GEOGRAPHY
-		{
-			Geography,
-			&T{
-				InternalType: InternalType{
-					Family: GeographyFamily,
-					Oid:    oidext.T_geography,
-					Locale: &emptyLocale,
-					GeoMetadata: &GeoMetadata{
-						SRID:      0,
-						ShapeType: geopb.ShapeType_Unset,
-					},
-				},
-			},
-		},
-		{
-			Geography,
-			MakeScalar(GeographyFamily, oidext.T_geography, 0, 0, emptyLocale),
-		},
-		{
-			&T{
-				InternalType: InternalType{
-					Family: GeographyFamily,
-					Oid:    oidext.T_geography,
-					Locale: &emptyLocale,
-					GeoMetadata: &GeoMetadata{
-						SRID:      4325,
-						ShapeType: geopb.ShapeType_MultiPoint,
-					},
-				},
-			},
-			MakeGeography(geopb.ShapeType_MultiPoint, 4325),
-		},
-
-		// GEOMETRY
-		{
-			Geometry,
-			&T{
-				InternalType: InternalType{
-					Family: GeometryFamily,
-					Oid:    oidext.T_geometry,
-					Locale: &emptyLocale,
-					GeoMetadata: &GeoMetadata{
-						SRID:      0,
-						ShapeType: geopb.ShapeType_Unset,
-					},
-				},
-			},
-		},
-		{
-			Geometry,
-			MakeScalar(GeometryFamily, oidext.T_geometry, 0, 0, emptyLocale),
-		},
-		{
-			&T{
-				InternalType: InternalType{
-					Family: GeometryFamily,
-					Oid:    oidext.T_geometry,
-					Locale: &emptyLocale,
-					GeoMetadata: &GeoMetadata{
-						SRID:      4325,
-						ShapeType: geopb.ShapeType_MultiPoint,
-					},
-				},
-			},
-			MakeGeometry(geopb.ShapeType_MultiPoint, 4325),
-		},
-		// BOX2D
-		{
-			Box2D,
-			&T{InternalType: InternalType{Family: Box2DFamily, Oid: oidext.T_box2d, Locale: &emptyLocale}},
-		},
-		{
-			Box2D,
-			MakeScalar(Box2DFamily, oidext.T_box2d, 0, 0, emptyLocale),
-		},
 
 		// INET
 		{INet, &T{InternalType: InternalType{
@@ -1104,8 +1026,6 @@ func TestWithoutTypeModifiers(t *testing.T) {
 		{MakeArray(MakeDecimal(5, 1)), DecimalArray},
 		{MakeTuple([]*T{MakeString(2), Time, MakeDecimal(5, 1)}),
 			MakeTuple([]*T{String, Time, Decimal})},
-		{MakeGeography(geopb.ShapeType_Point, 3857), Geography},
-		{MakeGeometry(geopb.ShapeType_PointZ, 4326), Geometry},
 
 		// Types without modifiers.
 		{Bool, Bool},
@@ -1114,8 +1034,6 @@ func TestWithoutTypeModifiers(t *testing.T) {
 		{Date, Date},
 		{Float, Float},
 		{Float4, Float4},
-		{Geography, Geography},
-		{Geometry, Geometry},
 		{INet, INet},
 		{Int, Int},
 		{Int4, Int4},
@@ -1164,9 +1082,6 @@ func TestDelimiter(t *testing.T) {
 		{Jsonb, ","},
 		{Uuid, ","},
 		{INet, ","},
-		{Geometry, ":"},
-		{Geography, ":"},
-		{Box2D, ","},
 		{Void, ","},
 		{EncodedKey, ","},
 	}

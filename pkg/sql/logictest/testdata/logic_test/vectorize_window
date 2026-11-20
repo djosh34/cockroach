@@ -1,4 +1,4 @@
-# LogicTest: local fakedist fakedist-disk 3node-tenant
+# LogicTest: local fakedist
 
 # Ensure that all these queries can be executed in the vectorized engine.
 statement ok

@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cockroachdb/cockroach/pkg/geo/geoindex"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catenumpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
@@ -262,11 +261,6 @@ func (w index) CollectKeySuffixColumnIDs() catalog.TableColSet {
 // IDs.
 func (w index) CollectCompositeColumnIDs() catalog.TableColSet {
 	return catalog.MakeTableColSet(w.desc.CompositeColumnIDs...)
-}
-
-// GetGeoConfig returns the geo config in the index descriptor.
-func (w index) GetGeoConfig() geoindex.Config {
-	return w.desc.GeoConfig
 }
 
 // GetSharded returns the ShardedDescriptor in the index descriptor

@@ -171,7 +171,6 @@ project
  └── projections
       └── (1, 2, 3) [as=coalesce:8]
 
-
 # --------------------------------------------------
 # EliminateCast
 # --------------------------------------------------
@@ -2372,50 +2371,6 @@ project
 # --------------------------------------------------
 # SimplifyNotDisjoint
 # --------------------------------------------------
-
-exec-ddl
-CREATE TABLE g
-(
-    id1 INT PRIMARY KEY,
-    geom1 GEOMETRY,
-    geom2 GEOMETRY,
-    INVERTED INDEX (geom1),
-    INVERTED INDEX (geom2)
-)
-----
-
-norm expect=SimplifyNotDisjoint
-SELECT NOT st_disjoint(geom1, geom2) FROM g;
-----
-project
- ├── columns: "?column?":8
- ├── immutable
- ├── scan g
- │    └── columns: geom1:2 geom2:3
- └── projections
-      └── st_intersects(geom1:2, geom2:3) [as="?column?":8, outer=(2,3), immutable]
-
-norm expect-not=SimplifyNotDisjoint
-SELECT st_disjoint(geom1, geom2) FROM g;
-----
-project
- ├── columns: st_disjoint:8
- ├── immutable
- ├── scan g
- │    └── columns: geom1:2 geom2:3
- └── projections
-      └── st_disjoint(geom1:2, geom2:3) [as=st_disjoint:8, outer=(2,3), immutable]
-
-norm expect-not=SimplifyNotDisjoint
-SELECT NOT st_intersects(geom1, geom2) FROM g;
-----
-project
- ├── columns: "?column?":8
- ├── immutable
- ├── scan g
- │    └── columns: geom1:2 geom2:3
- └── projections
-      └── NOT st_intersects(geom1:2, geom2:3) [as="?column?":8, outer=(2,3), immutable]
 
 # --------------------------------------------------
 # ConvertJSONSubscriptToFetchValue

@@ -732,15 +732,6 @@ func TestPGPreparedQuery(t *testing.T) {
 		{"SELECT $1::VOID", []preparedQueryTest{
 			baseTest.SetArgs("this will not be the result").Results(""),
 		}},
-		{"SELECT $1::BOX2D", []preparedQueryTest{
-			baseTest.SetArgs("BOX(1 2,3 4)").Results("BOX(1 2,3 4)"),
-		}},
-		{"SELECT $1::GEOGRAPHY", []preparedQueryTest{
-			baseTest.SetArgs("POINT(1.0 1.0)").Results("0101000020E6100000000000000000F03F000000000000F03F"),
-		}},
-		{"SELECT $1::GEOMETRY", []preparedQueryTest{
-			baseTest.SetArgs("POINT(1.0 1.0)").Results("0101000000000000000000F03F000000000000F03F"),
-		}},
 		{"SELECT $1:::FLOAT[]", []preparedQueryTest{
 			baseTest.SetArgs("{}").Results("{}"),
 			baseTest.SetArgs("{1.0,2.0,3.0}").Results("{1,2,3}"),

@@ -25,12 +25,10 @@ import (
 	"unsafe"
 
 	"github.com/cockroachdb/apd/v3"
-	"github.com/cockroachdb/cockroach/pkg/geo/geopb"
 	"github.com/cockroachdb/cockroach/pkg/util/bitarray"
 	"github.com/cockroachdb/cockroach/pkg/util/duration"
 	"github.com/cockroachdb/cockroach/pkg/util/encoding/encodingtype"
 	"github.com/cockroachdb/cockroach/pkg/util/ipaddr"
-	"github.com/cockroachdb/cockroach/pkg/util/protoutil"
 	"github.com/cockroachdb/cockroach/pkg/util/timeofday"
 	"github.com/cockroachdb/cockroach/pkg/util/timetz"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
@@ -83,9 +81,10 @@ const (
 	bitArrayDataTerminator     = 0x00
 	bitArrayDataDescTerminator = 0xff
 
-	timeTZMarker  = bitArrayDescMarker + 1
-	geoMarker     = timeTZMarker + 1
-	geoDescMarker = geoMarker + 1
+	timeTZMarker = bitArrayDescMarker + 1
+	// The next two markers (0x3d and 0x3e) were the removed spatial types,
+	// ascending and descending. They stay reserved so that the markers
+	// after them keep their values in stored keys.
 
 	// Markers and terminators for key encoding Datum arrays in sorted order.
 	// For the arrayKeyMarker and other types like bytes and bit arrays, it
@@ -95,13 +94,12 @@ const (
 	// in. In order to safely decode a set of bytes without knowing the direction
 	// of the encoding, we must store this information in the marker. Otherwise,
 	// we would not know what terminator to look for when decoding this format.
-	arrayKeyMarker           = geoDescMarker + 1
+	arrayKeyMarker           = timeTZMarker + 3
 	arrayKeyDescendingMarker = arrayKeyMarker + 1
 
-	box2DMarker            = arrayKeyDescendingMarker + 1
-	geoInvertedIndexMarker = box2DMarker + 1
-
-	emptyArray = geoInvertedIndexMarker + 1
+	// The next two markers (0x41 and 0x42) were the removed box2d type and
+	// spatial inverted index keys. They stay reserved for the same reason.
+	emptyArray = arrayKeyDescendingMarker + 3
 	voidMarker = emptyArray + 1
 
 	// Defining different key markers, for the ascending designation,
@@ -626,9 +624,6 @@ type escapes struct {
 var (
 	ascendingBytesEscapes  = escapes{escape, escapedTerm, escaped00, escapedFF, bytesMarker}
 	descendingBytesEscapes = escapes{^escape, ^escapedTerm, ^escaped00, ^escapedFF, bytesDescMarker}
-
-	ascendingGeoEscapes  = escapes{escape, escapedTerm, escaped00, escapedFF, geoMarker}
-	descendingGeoEscapes = escapes{^escape, ^escapedTerm, ^escaped00, ^escapedFF, geoDescMarker}
 )
 
 // EncodeBytesAscending encodes the []byte value using an escape-based
@@ -1034,98 +1029,6 @@ func EncodeJSONAscending(b []byte) []byte {
 	return append(b, jsonInvertedIndex)
 }
 
-// Geo inverted keys are formatted as:
-// geoInvertedIndexMarker + EncodeUvarintAscending(cellid) + encoded-bbox
-// We don't have a single function to do the whole encoding since a shape is typically
-// indexed under multiple cellids, but has a single bbox. So the caller can more
-// efficiently
-// - append geoInvertedIndex to construct the prefix.
-// - encode the bbox once
-// - iterate over the cellids and append the encoded cellid to the prefix and then the
-//   previously encoded bbox.
-
-// EncodeGeoInvertedAscending appends the geoInvertedIndexMarker.
-func EncodeGeoInvertedAscending(b []byte) []byte {
-	return append(b, geoInvertedIndexMarker)
-}
-
-// Currently only the lowest bit is used to define the encoding kind and the
-// remaining 7 bits are unused.
-type geoInvertedBBoxEncodingKind byte
-
-const (
-	geoInvertedFourFloats geoInvertedBBoxEncodingKind = iota
-	geoInvertedTwoFloats
-)
-
-// MaxGeoInvertedBBoxLen is the maximum length of the encoded bounding box for
-// geo inverted keys.
-const MaxGeoInvertedBBoxLen = 1 + 4*uint64AscendingEncodedLength
-
-// EncodeGeoInvertedBBox encodes the bounding box for the geo inverted index.
-func EncodeGeoInvertedBBox(b []byte, loX, loY, hiX, hiY float64) []byte {
-	encodeTwoFloats := loX == hiX && loY == hiY
-	if encodeTwoFloats {
-		b = append(b, byte(geoInvertedTwoFloats))
-		b = EncodeUntaggedFloatValue(b, loX)
-		b = EncodeUntaggedFloatValue(b, loY)
-	} else {
-		b = append(b, byte(geoInvertedFourFloats))
-		b = EncodeUntaggedFloatValue(b, loX)
-		b = EncodeUntaggedFloatValue(b, loY)
-		b = EncodeUntaggedFloatValue(b, hiX)
-		b = EncodeUntaggedFloatValue(b, hiY)
-	}
-	return b
-}
-
-// DecodeGeoInvertedKey decodes the bounding box from the geo inverted key.
-// The cellid is skipped in the decoding.
-func DecodeGeoInvertedKey(b []byte) (loX, loY, hiX, hiY float64, remaining []byte, err error) {
-	// Minimum: 1 byte marker + 1 byte cell length +
-	//          1 byte bbox encoding kind + 16 bytes for 2 floats
-	if len(b) < 3+2*uint64AscendingEncodedLength {
-		return 0, 0, 0, 0, b,
-			errors.Errorf("inverted key length %d too small", len(b))
-	}
-	if b[0] != geoInvertedIndexMarker {
-		return 0, 0, 0, 0, b, errors.Errorf("marker is not geoInvertedIndexMarker")
-	}
-	b = b[1:]
-	var cellLen int
-	if cellLen, err = getVarintLen(b); err != nil {
-		return 0, 0, 0, 0, b, err
-	}
-	if len(b) < cellLen+17 {
-		return 0, 0, 0, 0, b,
-			errors.Errorf("insufficient length for encoded bbox in inverted key: %d", len(b)-cellLen)
-	}
-	encodingKind := geoInvertedBBoxEncodingKind(b[cellLen])
-	if encodingKind != geoInvertedTwoFloats && encodingKind != geoInvertedFourFloats {
-		return 0, 0, 0, 0, b,
-			errors.Errorf("unknown encoding kind for bbox in inverted key: %d", encodingKind)
-	}
-	b = b[cellLen+1:]
-	if b, loX, err = DecodeUntaggedFloatValue(b); err != nil {
-		return 0, 0, 0, 0, b, err
-	}
-	if b, loY, err = DecodeUntaggedFloatValue(b); err != nil {
-		return 0, 0, 0, 0, b, err
-	}
-	if encodingKind == geoInvertedFourFloats {
-		if b, hiX, err = DecodeUntaggedFloatValue(b); err != nil {
-			return 0, 0, 0, 0, b, err
-		}
-		if b, hiY, err = DecodeUntaggedFloatValue(b); err != nil {
-			return 0, 0, 0, 0, b, err
-		}
-	} else {
-		hiX = loX
-		hiY = loY
-	}
-	return loX, loY, hiX, hiY, b, nil
-}
-
 // EncodeNullDescending is the descending equivalent of EncodeNullAscending.
 func EncodeNullDescending(b []byte) []byte {
 	return append(b, encodedNullDesc)
@@ -1266,165 +1169,6 @@ func DecodeVoidAscendingOrDescending(b []byte) ([]byte, error) {
 		return nil, errors.Errorf("did not find Void marker")
 	}
 	return b[1:], nil
-}
-
-// EncodeBox2DAscending encodes a bounding box in ascending order.
-func EncodeBox2DAscending(b []byte, box geopb.BoundingBox) ([]byte, error) {
-	b = append(b, box2DMarker)
-	b = EncodeFloatAscending(b, box.LoX)
-	b = EncodeFloatAscending(b, box.HiX)
-	b = EncodeFloatAscending(b, box.LoY)
-	b = EncodeFloatAscending(b, box.HiY)
-	return b, nil
-}
-
-// EncodeBox2DDescending encodes a bounding box in descending order.
-func EncodeBox2DDescending(b []byte, box geopb.BoundingBox) ([]byte, error) {
-	b = append(b, box2DMarker)
-	b = EncodeFloatDescending(b, box.LoX)
-	b = EncodeFloatDescending(b, box.HiX)
-	b = EncodeFloatDescending(b, box.LoY)
-	b = EncodeFloatDescending(b, box.HiY)
-	return b, nil
-}
-
-// DecodeBox2DAscending decodes a box2D object in ascending order.
-func DecodeBox2DAscending(b []byte) ([]byte, geopb.BoundingBox, error) {
-	box := geopb.BoundingBox{}
-	if PeekType(b) != Box2D {
-		return nil, box, errors.Errorf("did not find Box2D marker")
-	}
-
-	b = b[1:]
-	var err error
-	b, box.LoX, err = DecodeFloatAscending(b)
-	if err != nil {
-		return nil, box, err
-	}
-	b, box.HiX, err = DecodeFloatAscending(b)
-	if err != nil {
-		return nil, box, err
-	}
-	b, box.LoY, err = DecodeFloatAscending(b)
-	if err != nil {
-		return nil, box, err
-	}
-	b, box.HiY, err = DecodeFloatAscending(b)
-	if err != nil {
-		return nil, box, err
-	}
-	return b, box, nil
-}
-
-// DecodeBox2DDescending decodes a box2D object in descending order.
-func DecodeBox2DDescending(b []byte) ([]byte, geopb.BoundingBox, error) {
-	box := geopb.BoundingBox{}
-	if PeekType(b) != Box2D {
-		return nil, box, errors.Errorf("did not find Box2D marker")
-	}
-
-	b = b[1:]
-	var err error
-	b, box.LoX, err = DecodeFloatDescending(b)
-	if err != nil {
-		return nil, box, err
-	}
-	b, box.HiX, err = DecodeFloatDescending(b)
-	if err != nil {
-		return nil, box, err
-	}
-	b, box.LoY, err = DecodeFloatDescending(b)
-	if err != nil {
-		return nil, box, err
-	}
-	b, box.HiY, err = DecodeFloatDescending(b)
-	if err != nil {
-		return nil, box, err
-	}
-	return b, box, nil
-}
-
-// EncodeGeoAscending encodes a geopb.SpatialObject value in ascending order and
-// returns the new buffer.
-// It is sorted by the given curve index, followed by the bytes of the spatial object.
-func EncodeGeoAscending(b []byte, curveIndex uint64, so *geopb.SpatialObject) ([]byte, error) {
-	b = append(b, geoMarker)
-	b = EncodeUint64Ascending(b, curveIndex)
-
-	data, err := protoutil.Marshal(so)
-	if err != nil {
-		return nil, err
-	}
-	b = encodeBytesAscendingWithTerminator(b, data, ascendingGeoEscapes.escapedTerm)
-	return b, nil
-}
-
-// EncodeGeoDescending encodes a geopb.SpatialObject value in descending order and
-// returns the new buffer.
-// It is sorted by the given curve index, followed by the bytes of the spatial object.
-func EncodeGeoDescending(b []byte, curveIndex uint64, so *geopb.SpatialObject) ([]byte, error) {
-	b = append(b, geoDescMarker)
-	b = EncodeUint64Descending(b, curveIndex)
-
-	data, err := protoutil.Marshal(so)
-	if err != nil {
-		return nil, err
-	}
-	n := len(b)
-	b = encodeBytesAscendingWithTerminator(b, data, ascendingGeoEscapes.escapedTerm)
-	onesComplement(b[n:])
-	return b, nil
-}
-
-// DecodeGeoAscending decodes a geopb.SpatialObject value that was encoded
-// in ascending order back into a geopb.SpatialObject. The so parameter
-// must already be empty/reset.
-func DecodeGeoAscending(b []byte, so *geopb.SpatialObject) ([]byte, error) {
-	if PeekType(b) != Geo {
-		return nil, errors.Errorf("did not find Geo marker")
-	}
-	b = b[1:]
-	var err error
-	b, _, err = DecodeUint64Ascending(b)
-	if err != nil {
-		return nil, err
-	}
-
-	var pbBytes []byte
-	b, pbBytes, err = decodeBytesInternal(b, pbBytes, ascendingGeoEscapes, false /* expectMarker */, false /* deepCopy */)
-	if err != nil {
-		return b, err
-	}
-	// Not using protoutil.Unmarshal since the call to so.Reset() will waste the
-	// pre-allocated EWKB.
-	err = so.Unmarshal(pbBytes)
-	return b, err
-}
-
-// DecodeGeoDescending decodes a geopb.SpatialObject value that was encoded
-// in descending order back into a geopb.SpatialObject. The so parameter
-// must already be empty/reset.
-func DecodeGeoDescending(b []byte, so *geopb.SpatialObject) ([]byte, error) {
-	if PeekType(b) != GeoDesc {
-		return nil, errors.Errorf("did not find Geo marker")
-	}
-	b = b[1:]
-	var err error
-	b, _, err = DecodeUint64Descending(b)
-	if err != nil {
-		return nil, err
-	}
-
-	var pbBytes []byte
-	b, pbBytes, err = decodeBytesInternal(b, pbBytes, descendingGeoEscapes, false /* expectMarker */, false /* deepCopy */)
-	if err != nil {
-		return b, err
-	}
-	onesComplement(pbBytes)
-	// Not using protoutil.Unmarshal since the call to so.Reset() will waste the
-	// pre-allocated EWKB.
-	err = so.Unmarshal(pbBytes)
-	return b, err
 }
 
 // EncodeTimeTZAscending encodes a timetz.TimeTZ value and appends it to
@@ -1749,17 +1493,16 @@ const (
 	// value requires more than 4 bits, and thus will be encoded in two bytes. It
 	// is not used as a type value, and thus intentionally overlaps with the
 	// subsequent type value. The 'Type' annotation is intentionally omitted here.
-	SentinelType        = 15
-	JSON           Type = 15
-	Tuple          Type = 16
-	BitArray       Type = 17
-	BitArrayDesc   Type = 18 // BitArray encoded descendingly
-	TimeTZ         Type = 19
-	Geo            Type = 20
-	GeoDesc        Type = 21
-	ArrayKeyAsc    Type = 22 // Array key encoding
-	ArrayKeyDesc   Type = 23 // Array key encoded descendingly
-	Box2D          Type = 24
+	SentinelType      = 15
+	JSON         Type = 15
+	Tuple        Type = 16
+	BitArray     Type = 17
+	BitArrayDesc Type = 18 // BitArray encoded descendingly
+	TimeTZ       Type = 19
+	// 20 and 21 were the removed spatial types.
+	ArrayKeyAsc  Type = 22 // Array key encoding
+	ArrayKeyDesc Type = 23 // Array key encoded descendingly
+	// 24 was the removed box2d type.
 	Void           Type = 25
 	TSQuery        Type = 26
 	TSVector       Type = 27
@@ -1860,12 +1603,6 @@ func slowPeekType(b []byte) Type {
 			return Time
 		case m == timeTZMarker:
 			return TimeTZ
-		case m == geoMarker:
-			return Geo
-		case m == box2DMarker:
-			return Box2D
-		case m == geoDescMarker:
-			return GeoDesc
 		case m == byte(Array):
 			return Array
 		case m == byte(True):
@@ -1937,28 +1674,6 @@ func getArrayOrJSONLength(
 		result += next
 	}
 	return result, nil
-}
-
-// peekBox2DLength peeks to look at the length of a box2d encoding.
-func peekBox2DLength(b []byte) (int, error) {
-	length := 0
-	curr := b
-	for i := 0; i < 4; i++ {
-		if len(curr) == 0 {
-			return 0, errors.Newf("slice too short for box2d")
-		}
-		switch curr[0] {
-		case floatNaN, floatNaNDesc, floatZero:
-			length++
-			curr = curr[1:]
-		case floatNeg, floatPos:
-			length += 9
-			curr = curr[9:]
-		default:
-			return 0, errors.Newf("unexpected marker for box2d: %x", curr[0])
-		}
-	}
-	return length, nil
 }
 
 // PeekLength returns the length of the encoded value at the start of b.  Note:
@@ -2033,41 +1748,10 @@ func PeekLength(b []byte) (int, error) {
 		return 1 + length, err
 	case bytesMarker:
 		return getBytesLength(b, ascendingBytesEscapes)
-	case box2DMarker:
-		if len(b) == 0 {
-			return 0, errors.Newf("slice too short for box2d")
-		}
-		length, err := peekBox2DLength(b[1:])
-		if err != nil {
-			return 0, err
-		}
-		return 1 + length, nil
-	case geoInvertedIndexMarker:
-		return getGeoInvertedIndexKeyLength(b)
-	case geoMarker:
-		// Expect to reserve at least 8 bytes for int64.
-		if len(b) < 8 {
-			return 0, errors.Errorf("slice too short for spatial object (%d)", len(b))
-		}
-		ret, err := getBytesLength(b[8:], ascendingGeoEscapes)
-		if err != nil {
-			return 0, err
-		}
-		return 8 + ret, nil
 	case jsonInvertedIndex:
 		return getJSONInvertedIndexKeyLength(b)
 	case bytesDescMarker:
 		return getBytesLength(b, descendingBytesEscapes)
-	case geoDescMarker:
-		// Expect to reserve at least 8 bytes for int64.
-		if len(b) < 8 {
-			return 0, errors.Errorf("slice too short for spatial object (%d)", len(b))
-		}
-		ret, err := getBytesLength(b[8:], descendingGeoEscapes)
-		if err != nil {
-			return 0, err
-		}
-		return 8 + ret, nil
 	case timeMarker, timeTZMarker:
 		return GetMultiVarintLen(b, 2)
 	case durationBigNegMarker, durationMarker, durationBigPosMarker:
@@ -2677,40 +2361,6 @@ func EncodeVoidValue(appendTo []byte, colID uint32) []byte {
 	return EncodeValueTag(appendTo, colID, Void)
 }
 
-// EncodeBox2DValue encodes a geopb.BoundingBox with its value tag, appends it to
-// the supplied buffer and returns the final buffer.
-func EncodeBox2DValue(appendTo []byte, colID uint32, b geopb.BoundingBox) ([]byte, error) {
-	appendTo = EncodeValueTag(appendTo, colID, Box2D)
-	return EncodeUntaggedBox2DValue(appendTo, b)
-}
-
-// EncodeUntaggedBox2DValue encodes a geopb.BoundingBox value, appends it to the supplied buffer,
-// and returns the final buffer.
-func EncodeUntaggedBox2DValue(appendTo []byte, b geopb.BoundingBox) ([]byte, error) {
-	appendTo = EncodeFloatAscending(appendTo, b.LoX)
-	appendTo = EncodeFloatAscending(appendTo, b.HiX)
-	appendTo = EncodeFloatAscending(appendTo, b.LoY)
-	appendTo = EncodeFloatAscending(appendTo, b.HiY)
-	return appendTo, nil
-}
-
-// EncodeGeoValue encodes a geopb.SpatialObject value with its value tag, appends it to
-// the supplied buffer, and returns the final buffer.
-func EncodeGeoValue(appendTo []byte, colID uint32, so *geopb.SpatialObject) ([]byte, error) {
-	appendTo = EncodeValueTag(appendTo, colID, Geo)
-	return EncodeUntaggedGeoValue(appendTo, so)
-}
-
-// EncodeUntaggedGeoValue encodes a geopb.SpatialObject value, appends it to the supplied buffer,
-// and returns the final buffer.
-func EncodeUntaggedGeoValue(appendTo []byte, so *geopb.SpatialObject) ([]byte, error) {
-	bytes, err := protoutil.Marshal(so)
-	if err != nil {
-		return nil, err
-	}
-	return EncodeUntaggedBytesValue(appendTo, bytes), nil
-}
-
 // EncodeDecimalValue encodes an apd.Decimal value with its value tag, appends
 // it to the supplied buffer, and returns the final buffer.
 func EncodeDecimalValue(appendTo []byte, colID uint32, d *apd.Decimal) []byte {
@@ -2998,45 +2648,6 @@ func DecodeDecimalValue(b []byte) (remaining []byte, d apd.Decimal, err error) {
 	return DecodeUntaggedDecimalValue(b)
 }
 
-// DecodeUntaggedBox2DValue decodes a value encoded by EncodeUntaggedBox2DValue.
-func DecodeUntaggedBox2DValue(b []byte) (remaining []byte, box geopb.BoundingBox, err error) {
-	box = geopb.BoundingBox{}
-	remaining = b
-
-	remaining, box.LoX, err = DecodeFloatAscending(remaining)
-	if err != nil {
-		return b, box, err
-	}
-	remaining, box.HiX, err = DecodeFloatAscending(remaining)
-	if err != nil {
-		return b, box, err
-	}
-	remaining, box.LoY, err = DecodeFloatAscending(remaining)
-	if err != nil {
-		return b, box, err
-	}
-	remaining, box.HiY, err = DecodeFloatAscending(remaining)
-	if err != nil {
-		return b, box, err
-	}
-	return remaining, box, err
-}
-
-// DecodeUntaggedGeoValue decodes a value encoded by EncodeUntaggedGeoValue into
-// the provided geopb.SpatialObject reference. The so parameter must already be
-// empty/reset.
-func DecodeUntaggedGeoValue(b []byte, so *geopb.SpatialObject) (remaining []byte, err error) {
-	var data []byte
-	remaining, data, err = DecodeUntaggedBytesValue(b)
-	if err != nil {
-		return b, err
-	}
-	// Not using protoutil.Unmarshal since the call to so.Reset() will waste the
-	// pre-allocated EWKB.
-	err = so.Unmarshal(data)
-	return remaining, err
-}
-
 // DecodeUntaggedDecimalValue decodes a value encoded by EncodeUntaggedDecimalValue.
 func DecodeUntaggedDecimalValue(b []byte) (remaining []byte, d apd.Decimal, err error) {
 	var i uint64
@@ -3208,15 +2819,9 @@ func PeekValueLengthWithOffsetsAndType(b []byte, dataOffset int, typ Type) (leng
 		return dataOffset + n, err
 	case Float:
 		return dataOffset + floatValueEncodedLength, nil
-	case Bytes, Array, JSON, Geo, TSVector, TSQuery:
+	case Bytes, Array, JSON, TSVector, TSQuery:
 		_, n, i, err := DecodeNonsortingUvarint(b)
 		return dataOffset + n + int(i), err
-	case Box2D:
-		length, err := peekBox2DLength(b)
-		if err != nil {
-			return 0, err
-		}
-		return dataOffset + length, nil
 	case BitArray:
 		_, n, bitLen, err := DecodeNonsortingUvarint(b)
 		if err != nil {
@@ -3409,25 +3014,6 @@ func getJSONInvertedIndexKeyLength(buf []byte) (int, error) {
 
 		return len + valLen, nil
 	}
-}
-
-func getGeoInvertedIndexKeyLength(buf []byte) (int, error) {
-	// Minimum: 1 byte marker + 1 byte cell length +
-	//          1 byte bbox encoding kind + 16 bytes for 2 floats
-	if len(buf) < 3+2*uint64AscendingEncodedLength {
-		return 0, errors.Errorf("buf length %d too small", len(buf))
-	}
-	var cellLen int
-	var err error
-	if cellLen, err = getVarintLen(buf[1:]); err != nil {
-		return 0, err
-	}
-	encodingKind := geoInvertedBBoxEncodingKind(buf[1+cellLen])
-	floatsLen := 4 * uint64AscendingEncodedLength
-	if encodingKind == geoInvertedTwoFloats {
-		floatsLen = 2 * uint64AscendingEncodedLength
-	}
-	return 1 + cellLen + 1 + floatsLen, nil
 }
 
 // EncodeJSONNullKeyMarker adds a JSON Null key encoding marker

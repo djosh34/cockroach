@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 
-# This is used through bazel when generating sql.go and pgrepl.go.
-# Look at BUILD.bazel in pkg/sql/parser or pkg/sql/pgrepl/pgreplparser for
-# usage.
+# build/generate.sh uses this to generate sql.go and pgrepl.go.
 
 set -euo pipefail
 

@@ -14,8 +14,6 @@ import (
 	"time"
 
 	"github.com/cockroachdb/apd/v3"
-	"github.com/cockroachdb/cockroach/pkg/geo"
-	"github.com/cockroachdb/cockroach/pkg/geo/geopb"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgrepl/lsn"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
@@ -157,36 +155,6 @@ func Decode(
 	case types.VoidFamily:
 		rkey, err = encoding.DecodeVoidAscendingOrDescending(key)
 		return a.NewDVoid(), rkey, err
-	case types.Box2DFamily:
-		var r geopb.BoundingBox
-		if dir == encoding.Ascending {
-			rkey, r, err = encoding.DecodeBox2DAscending(key)
-		} else {
-			rkey, r, err = encoding.DecodeBox2DDescending(key)
-		}
-		return a.NewDBox2D(tree.DBox2D{
-			CartesianBoundingBox: geo.CartesianBoundingBox{BoundingBox: r},
-		}), rkey, err
-	case types.GeographyFamily:
-		g := a.NewDGeographyEmpty()
-		so := g.Geography.SpatialObjectRef()
-		if dir == encoding.Ascending {
-			rkey, err = encoding.DecodeGeoAscending(key, so)
-		} else {
-			rkey, err = encoding.DecodeGeoDescending(key, so)
-		}
-		a.DoneInitNewDGeo(so)
-		return g, rkey, err
-	case types.GeometryFamily:
-		g := a.NewDGeometryEmpty()
-		so := g.Geometry.SpatialObjectRef()
-		if dir == encoding.Ascending {
-			rkey, err = encoding.DecodeGeoAscending(key, so)
-		} else {
-			rkey, err = encoding.DecodeGeoDescending(key, so)
-		}
-		a.DoneInitNewDGeo(so)
-		return g, rkey, err
 	case types.DateFamily:
 		var t int64
 		if dir == encoding.Ascending {

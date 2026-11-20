@@ -501,7 +501,6 @@ CREATE TYPE db1.sc1.typ AS ENUM ('a');
 statement ok
 SET CLUSTER SETTING jobs.debug.pausepoints="typeschemachanger.before.exec"
 
-skipif config local-legacy-schema-changer
 statement error job \d+ was paused before it completed with reason: pause point "typeschemachanger.before.exec" hit
 ALTER TYPE db1.sc1.typ OWNER TO testuser
 
@@ -511,7 +510,6 @@ SET CLUSTER SETTING jobs.debug.pausepoints=""
 statement ok
 SET CLUSTER SETTING jobs.debug.pausepoints="newschemachanger.before.exec"
 
-skipif config local-legacy-schema-changer
 statement error job \d+ was paused before it completed with reason: pause point "newschemachanger.before.exec" hit
 DROP SCHEMA db1.sc1 CASCADE
 

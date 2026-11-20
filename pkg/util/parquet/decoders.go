@@ -14,8 +14,6 @@ import (
 	"time"
 
 	"github.com/apache/arrow/go/v11/parquet"
-	"github.com/cockroachdb/cockroach/pkg/geo"
-	"github.com/cockroachdb/cockroach/pkg/geo/geopb"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgrepl/lsn"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
@@ -174,36 +172,6 @@ func (dateDecoder) decode(v parquet.ByteArray) (tree.Datum, error) {
 	return d, err
 }
 
-type box2DDecoder struct{}
-
-func (box2DDecoder) decode(v parquet.ByteArray) (tree.Datum, error) {
-	b, err := geo.ParseCartesianBoundingBox(string(v))
-	if err != nil {
-		return nil, err
-	}
-	return tree.NewDBox2D(b), nil
-}
-
-type geographyDecoder struct{}
-
-func (geographyDecoder) decode(v parquet.ByteArray) (tree.Datum, error) {
-	g, err := geo.ParseGeographyFromEWKB(geopb.EWKB(v))
-	if err != nil {
-		return nil, err
-	}
-	return &tree.DGeography{Geography: g}, nil
-}
-
-type geometryDecoder struct{}
-
-func (geometryDecoder) decode(v parquet.ByteArray) (tree.Datum, error) {
-	g, err := geo.ParseGeometryFromEWKB(geopb.EWKB(v))
-	if err != nil {
-		return nil, err
-	}
-	return &tree.DGeometry{Geometry: g}, nil
-}
-
 type intervalDecoder struct{}
 
 func (intervalDecoder) decode(v parquet.ByteArray) (tree.Datum, error) {
@@ -290,16 +258,10 @@ func decoderFromFamilyAndType(typOid oid.Oid, family types.Family) (decoder, err
 		return enumDecoder{}, nil
 	case types.DateFamily:
 		return dateDecoder{}, nil
-	case types.Box2DFamily:
-		return box2DDecoder{}, nil
 	case types.PGLSNFamily:
 		return pglsnDecoder{}, nil
 	case types.RefCursorFamily:
 		return refcursorDecoder{}, nil
-	case types.GeographyFamily:
-		return geographyDecoder{}, nil
-	case types.GeometryFamily:
-		return geometryDecoder{}, nil
 	case types.IntervalFamily:
 		return intervalDecoder{}, nil
 	case types.TimeFamily:
@@ -342,9 +304,6 @@ func init() {
 	var _, _ = bytesDecoder{}.decode(parquet.ByteArray{})
 	var _, _ = enumDecoder{}.decode(parquet.ByteArray{})
 	var _, _ = dateDecoder{}.decode(parquet.ByteArray{})
-	var _, _ = box2DDecoder{}.decode(parquet.ByteArray{})
-	var _, _ = geographyDecoder{}.decode(parquet.ByteArray{})
-	var _, _ = geometryDecoder{}.decode(parquet.ByteArray{})
 	var _, _ = intervalDecoder{}.decode(parquet.ByteArray{})
 	var _, _ = timeDecoder{}.decode(0)
 	var _, _ = timeTZDecoder{}.decode(parquet.ByteArray{})

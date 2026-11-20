@@ -351,12 +351,12 @@ func makeIntentScanner(data []storeOp, span roachpb.RSpan) (*blockingScanner, fu
 		return nil, nil, err
 	}
 	return &blockingScanner{
-			wrapped: scanner,
-			block:   make(chan interface{}),
-			done:    make(chan interface{}),
-		}, func() {
-			engine.Close()
-		}, nil
+		wrapped: scanner,
+		block:   make(chan interface{}),
+		done:    make(chan interface{}),
+	}, func() {
+		engine.Close()
+	}, nil
 }
 
 func newTestProcessor(

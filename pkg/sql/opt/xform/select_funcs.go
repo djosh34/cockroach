@@ -377,7 +377,7 @@ func (c *CustomFuncs) GenerateInvertedIndexScans(
 	iter.Init(c.e.evalCtx, c.e, c.e.mem, &c.im, scanPrivate, filters, rejectNonInvertedIndexes)
 	iter.ForEach(func(index cat.Index, filters memo.FiltersExpr, indexCols opt.ColSet, _ bool, _ memo.ProjectionsExpr) {
 		// Check whether the filter can constrain the index.
-		spanExpr, constraint, remainingFilters, pfState, ok := invertedidx.TryFilterInvertedIndex(
+		spanExpr, constraint, remainingFilters, ok := invertedidx.TryFilterInvertedIndex(
 			c.e.ctx, c.e.evalCtx, c.e.f, filters, optionalFilters, scanPrivate.Table, index, tabMeta.ComputedCols,
 			c.checkCancellation,
 		)
@@ -396,15 +396,15 @@ func (c *CustomFuncs) GenerateInvertedIndexScans(
 		//
 		// Consider the example:
 		//
-		//   CREATE TABLE t (a INT, b INT, g GEOMETRY, INVERTED INDEX (b, g))
+		//   CREATE TABLE t (a INT, b INT, j JSONB, INVERTED INDEX (b, j))
 		//
-		//   SELECT * FROM t WHERE a = 1 AND b = 2 AND ST_Intersects(.., g)
+		//   SELECT * FROM t WHERE a = 1 AND b = 2 AND j @> '{"x": 1}'
 		//
 		// The constraint would constrain b to [/2 - /2], guaranteeing that
 		// the inverted index scan would only produce rows where (b = 2).
 		// Reapplying the (b = 2) filter after the scan would be
 		// unnecessary, so the remainingFilters in this case would be
-		// (a = 1 AND ST_Intersects(.., g)).
+		// (a = 1 AND j @> '{"x": 1}').
 		filters = remainingFilters
 
 		// Construct new ScanOpDef with the new index and constraint.
@@ -442,7 +442,7 @@ func (c *CustomFuncs) GenerateInvertedIndexScans(
 
 		// Add an inverted filter if needed.
 		if needInvertedFilter {
-			sb.AddInvertedFilter(spanExpr, pfState, invertedCol)
+			sb.AddInvertedFilter(spanExpr, invertedCol)
 		}
 
 		// If remaining filters exists, split them into two parts: one that can
@@ -1074,7 +1074,7 @@ func (c *CustomFuncs) GenerateInvertedIndexZigzagJoins(
 		// TODO(mgartner): Once we support multi-column inverted indexes, pass
 		// optional filters generated from CHECK constraints and computed column
 		// expressions to help constrain non-inverted prefix columns.
-		spanExpr, _, remainingFilters, _, ok := invertedidx.TryFilterInvertedIndex(
+		spanExpr, _, remainingFilters, ok := invertedidx.TryFilterInvertedIndex(
 			c.e.ctx,
 			c.e.evalCtx,
 			c.e.f, filters,

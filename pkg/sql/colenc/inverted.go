@@ -54,21 +54,14 @@ func (b *BatchEncoder) encodeInvertedSecondaryIndex(
 	if i, ok := b.colMap.Get(index.InvertedColumnID()); ok {
 		vec = b.b.ColVecs()[i]
 	}
-	indexGeoConfig := index.GetGeoConfig()
 	for row := 0; row < b.count; row++ {
 		if kys[row] == nil {
 			continue
 		}
 		var keys [][]byte
 		val := invertedColToDatum(vec, row+b.start)
-		if !indexGeoConfig.IsEmpty() {
-			if keys, err = rowenc.EncodeGeoInvertedIndexTableKeys(val, kys[row], indexGeoConfig); err != nil {
-				return err
-			}
-		} else {
-			if keys, err = rowenc.EncodeInvertedIndexTableKeys(val, kys[row], index.GetVersion()); err != nil {
-				return err
-			}
+		if keys, err = rowenc.EncodeInvertedIndexTableKeys(val, kys[row], index.GetVersion()); err != nil {
+			return err
 		}
 		for _, key := range keys {
 			if !index.IsUnique() {

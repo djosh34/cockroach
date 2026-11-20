@@ -72,12 +72,6 @@ type TestClusterConfig struct {
 	// DeclarativeCorpusCollection enables support for collecting corpuses
 	// for the declarative schema changer.
 	DeclarativeCorpusCollection bool
-	// UseCockroachGoTestserver determines if the logictest uses the
-	// cockroach-go/testserver package to run the logic test.
-	// This allows us to do testing on different binary versions or to
-	// restart/upgrade nodes. This always bootstraps with the predecessor version
-	// of the current commit, and upgrades to the current commit.
-	UseCockroachGoTestserver bool
 }
 
 // TenantMode is the type of the UseSecondaryTenant field in TestClusterConfig.
@@ -92,8 +86,6 @@ const (
 	Never
 )
 
-const threeNodeTenantConfigName = "3node-tenant"
-
 // LogicTestConfigs contains all possible cluster configs. A test file can
 // specify a list of configs to run in a file-level comment like:
 //
@@ -104,7 +96,7 @@ const threeNodeTenantConfigName = "3node-tenant"
 // If no configs are indicated in a test file, the default configs are used.
 // See DefaultConfigNames for the list of default configs.
 //
-// Note: If you add a new config, you should run `./dev gen testlogic`.
+// Note: If you add a new config, you should run build/generate.sh.
 //
 // Note: If you add a new config, it will not automatically run in CI for any
 // test files. It must either be included in the list of default configs or name
@@ -124,81 +116,10 @@ var LogicTestConfigs = []TestClusterConfig{
 		DeclarativeCorpusCollection: true,
 	},
 	{
-		Name:                            "local-legacy-schema-changer",
-		NumNodes:                        1,
-		OverrideDistSQLMode:             "off",
-		DisableDeclarativeSchemaChanger: true,
-	},
-	{
-		Name:                "local-vec-off",
-		NumNodes:            1,
-		OverrideDistSQLMode: "off",
-		OverrideVectorize:   "off",
-	},
-	{
 		Name:                "fakedist",
 		NumNodes:            3,
 		UseFakeSpanResolver: true,
 		OverrideDistSQLMode: "on",
-	},
-	{
-		Name:                "fakedist-vec-off",
-		NumNodes:            3,
-		UseFakeSpanResolver: true,
-		OverrideDistSQLMode: "on",
-		OverrideVectorize:   "off",
-	},
-	{
-		Name:                "fakedist-disk",
-		NumNodes:            3,
-		UseFakeSpanResolver: true,
-		OverrideDistSQLMode: "on",
-		SQLExecUseDisk:      true,
-		SkipShort:           true,
-	},
-	{
-		Name:                "5node",
-		NumNodes:            5,
-		OverrideDistSQLMode: "on",
-		// Have to disable the default test tenant here as there are test run in
-		// this mode which try to modify zone configurations and we're more
-		// restrictive in the way we allow zone configs to be modified by
-		// secondary tenants. See #100787 for more info.
-		//
-		// TODO(#76378): We should review this choice. Zone configs have
-		// been supported for secondary tenants since v22.2.
-		// Should this config use "Random" instead?
-		UseSecondaryTenant: Never,
-	},
-	{
-		Name:                "5node-disk",
-		NumNodes:            5,
-		OverrideDistSQLMode: "on",
-		SQLExecUseDisk:      true,
-		SkipShort:           true,
-	},
-	{
-		// 3node-tenant is a config that runs the test as a SQL tenant.
-		Name:                        threeNodeTenantConfigName,
-		NumNodes:                    3,
-		UseSecondaryTenant:          Always,
-		OverrideDistSQLMode:         "on",
-		DeclarativeCorpusCollection: true,
-	},
-	{
-		// This config runs tests using 23.1 cluster version, simulating a node that
-		// is operating in a mixed-version cluster.
-		Name:                        "local-mixed-23.1",
-		NumNodes:                    1,
-		OverrideDistSQLMode:         "off",
-		BootstrapVersion:            clusterversion.V23_1,
-		DisableUpgrade:              true,
-		DeclarativeCorpusCollection: true,
-	},
-	{
-		Name:                     "cockroach-go-testserver-upgrade-to-master",
-		UseCockroachGoTestserver: true,
-		NumNodes:                 3,
 	},
 }
 
@@ -262,33 +183,10 @@ var (
 	// DefaultConfigNames is the list of default configs captured by the DefaultConfigName.
 	DefaultConfigNames = []string{
 		"local",
-		"local-legacy-schema-changer",
-		"local-vec-off",
 		"fakedist",
-		"fakedist-vec-off",
-		"fakedist-disk",
-		"local-mixed-23.1",
-	}
-	// FiveNodeDefaultConfigName is a special alias for all 5 node configs.
-	FiveNodeDefaultConfigName = "5node-default-configs"
-	// FiveNodeDefaultConfigNames is the list of 5 node configs.
-	FiveNodeDefaultConfigNames = []string{
-		"5node",
-		"5node-disk",
-	}
-	// ThreeNodeTenantDefaultConfigName is a special alias for all 3-node tenant
-	// configs.
-	ThreeNodeTenantDefaultConfigName = "3node-tenant-default-configs"
-	// ThreeNodeTenantDefaultConfigNames is the list of 3 node tenant configs.
-	ThreeNodeTenantDefaultConfigNames = []string{
-		"3node-tenant",
 	}
 	// DefaultConfig is the default test configuration.
 	DefaultConfig = parseTestConfig(DefaultConfigNames)
-	// FiveNodeDefaultConfig is the five-node default test configuration.
-	FiveNodeDefaultConfig = parseTestConfig(FiveNodeDefaultConfigNames)
-	// ThreeNodeTenantDefaultConfig is the three-node tenant default test configuration.
-	ThreeNodeTenantDefaultConfig = parseTestConfig(ThreeNodeTenantDefaultConfigNames)
 )
 
 // logger is an interface implemented by testing.TB as well as stdlogger below.
@@ -426,10 +324,6 @@ func processConfigs(
 			switch configName {
 			case DefaultConfigName:
 				configs = append(configs, applyBlocklistToConfigs(defaults, blocklist)...)
-			case FiveNodeDefaultConfigName:
-				configs = append(configs, applyBlocklistToConfigs(FiveNodeDefaultConfig, blocklist)...)
-			case ThreeNodeTenantDefaultConfigName:
-				configs = append(configs, applyBlocklistToConfigs(ThreeNodeTenantDefaultConfig, blocklist)...)
 			default:
 				t.Fatalf("%s: unknown config name %s", path, configName)
 			}
@@ -499,10 +393,6 @@ func getDefaultConfigListNames(name string) []string {
 	switch name {
 	case DefaultConfigName:
 		return DefaultConfigNames
-	case FiveNodeDefaultConfigName:
-		return FiveNodeDefaultConfigNames
-	case ThreeNodeTenantDefaultConfigName:
-		return ThreeNodeTenantDefaultConfigNames
 	}
 	return []string{}
 }

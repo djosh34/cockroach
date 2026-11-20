@@ -138,9 +138,6 @@ type TestServerArgs struct {
 	// is running in secure mode.
 	InsecureWebAccess bool
 
-	// IF set, the demo login endpoint will be enabled.
-	EnableDemoLoginEndpoint bool
-
 	// Tracer, if set, will be used by the Server for creating Spans.
 	Tracer *tracing.Tracer
 	// TracingDefault kicks in if Tracer is not set. It is passed to the Tracer
@@ -609,10 +606,6 @@ type TestTenantArgs struct {
 
 	// DisableTLSForHTTP, if set, disables TLS for the HTTP listener.
 	DisableTLSForHTTP bool
-
-	// EnableDemoLoginEndpoint enables the HTTP GET endpoint for user logins,
-	// which a feature unique to the demo shell.
-	EnableDemoLoginEndpoint bool
 
 	// StartingRPCAndSQLPort, if it is non-zero, is added to the tenant ID in order to
 	// determine the tenant's SQL+RPC port.

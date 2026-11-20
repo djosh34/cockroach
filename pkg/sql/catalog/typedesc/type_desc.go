@@ -452,6 +452,13 @@ func (desc *immutable) ValidateSelf(vea catalog.ValidationErrorAccumulator) {
 	case descpb.TypeDescriptor_COMPOSITE:
 		if desc.Composite == nil {
 			vea.Report(errors.AssertionFailedf("COMPOSITE type desc has nil composite type"))
+			break
+		}
+		for _, e := range desc.Composite.Elements {
+			if e.ElementType != nil && e.ElementType.ContainsRemovedSpatialType() {
+				vea.Report(errors.Newf("element %q has type %s: spatial types are unsupported",
+					e.ElementLabel, e.ElementType.Family().Name()))
+			}
 		}
 	case descpb.TypeDescriptor_TABLE_IMPLICIT_RECORD_TYPE:
 		vea.Report(errors.AssertionFailedf("invalid type descriptor: kind %s should never be serialized or validated", desc.Kind.String()))

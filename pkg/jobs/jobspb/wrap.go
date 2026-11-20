@@ -95,8 +95,8 @@ func (p *Payload) CheckType() (Type, error) {
 	return DetailsType(p.Details)
 }
 
-// Import base which is in the generated proto field but won't get picked up
-// by bazel if it were not imported in a non-generated file.
+// Import base, which the generated proto code uses, from a non-generated file
+// too.
 var _ base.SQLInstanceID
 
 // ReplicationStatus describes the status of the replication stream, and stored

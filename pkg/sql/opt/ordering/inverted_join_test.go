@@ -25,8 +25,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/testutils/testexpr"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/eval"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
-	"github.com/cockroachdb/cockroach/pkg/sql/types"
-	"github.com/cockroachdb/errors"
 )
 
 func TestInvertedJoinProvided(t *testing.T) {
@@ -39,7 +37,7 @@ func TestInvertedJoinProvided(t *testing.T) {
 
 	// Add the table with the inverted index.
 	if _, err := tc.ExecuteDDL(
-		"CREATE TABLE t1 (c1 INT, c2 INT, c3 GEOMETRY, PRIMARY KEY(c1, c2), INVERTED INDEX (c3))",
+		"CREATE TABLE t1 (c1 INT, c2 INT, c3 JSONB, PRIMARY KEY(c1, c2), INVERTED INDEX (c3))",
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +52,7 @@ func TestInvertedJoinProvided(t *testing.T) {
 	// It starts at c6 since column IDs 4 and 5 were used for the system column
 	// and inverted key column in the previous table.
 	if _, err := tc.ExecuteDDL(
-		"CREATE TABLE t2 (c6 INT, c7 GEOMETRY)",
+		"CREATE TABLE t2 (c6 INT, c7 JSONB)",
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +75,7 @@ func TestInvertedJoinProvided(t *testing.T) {
 	}{
 		// In these tests, the input (left side of the join) has columns 7,8 and the
 		// index (right side) has columns 1,2,5 (where 5 is the inverted key column
-		// representing 3) and the join has condition st_intersects(c8, c3) AND
+		// representing 3) and the join has condition c3 @> c8 AND
 		// c2 = c7.
 		//
 		{ // case 1: the inverted join adds columns 1,2 from the table and retains the
@@ -111,20 +109,9 @@ func TestInvertedJoinProvided(t *testing.T) {
 					Ordering: props.ParseOrdering(tc.input),
 				},
 			}
-			args := memo.ScalarListExpr{
-				f.ConstructVariable(opt.ColumnID(8)), f.ConstructVariable(opt.ColumnID(3)),
-			}
-			name := "st_intersects"
-			funcProps, overload, ok := memo.FindFunction(&args, name)
-			if !ok {
-				panic(errors.AssertionFailedf("could not find overload for %s", name))
-			}
-			invertedExpr := f.ConstructFunction(args, &memo.FunctionPrivate{
-				Name:       name,
-				Typ:        types.Bool,
-				Properties: funcProps,
-				Overload:   overload,
-			})
+			invertedExpr := f.ConstructContains(
+				f.ConstructVariable(opt.ColumnID(3)), f.ConstructVariable(opt.ColumnID(8)),
+			)
 
 			invertedJoin := f.Memo().MemoizeInvertedJoin(
 				input,

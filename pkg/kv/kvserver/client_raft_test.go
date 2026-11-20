@@ -3408,20 +3408,23 @@ func TestReplicaGCRace(t *testing.T) {
 	// The receiver of this message should return an error. If we don't get a
 	// quick response, assume that the message got dropped and try sending it
 	// again.
-	select {
-	case pErr := <-errChan:
-		switch pErr.GetDetail().(type) {
-		case *kvpb.RaftGroupDeletedError:
-		default:
-			t.Fatalf("unexpected error type %T: %s", pErr.GetDetail(), pErr)
-		}
-	case <-time.After(time.Second):
-		if heartbeatsSent >= 5 {
-			t.Fatal("did not get expected error")
-		}
-		heartbeatsSent++
-		if sent := sendHeartbeat(); !sent {
-			t.Fatal("failed to send heartbeat")
+	for {
+		select {
+		case pErr := <-errChan:
+			switch pErr.GetDetail().(type) {
+			case *kvpb.RaftGroupDeletedError:
+			default:
+				t.Fatalf("unexpected error type %T: %s", pErr.GetDetail(), pErr)
+			}
+			return
+		case <-time.After(time.Second):
+			if heartbeatsSent >= 5 {
+				t.Fatal("did not get expected error")
+			}
+			heartbeatsSent++
+			if sent := sendHeartbeat(); !sent {
+				t.Fatal("failed to send heartbeat")
+			}
 		}
 	}
 }

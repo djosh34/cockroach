@@ -13,7 +13,6 @@ package xform
 import (
 	"github.com/cockroachdb/cockroach/pkg/sql/inverted"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
-	"github.com/cockroachdb/cockroach/pkg/sql/opt/invertedexpr"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/memo"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/norm"
 	"github.com/cockroachdb/errors"
@@ -91,9 +90,7 @@ func (b *indexScanBuilder) AddConstProjections(proj memo.ProjectionsExpr) {
 // AddInvertedFilter wraps the input expression with an InvertedFilter
 // expression having the given span expression.
 func (b *indexScanBuilder) AddInvertedFilter(
-	spanExpr *inverted.SpanExpression,
-	pfState *invertedexpr.PreFiltererStateForInvertedFilterer,
-	invertedCol opt.ColumnID,
+	spanExpr *inverted.SpanExpression, invertedCol opt.ColumnID,
 ) {
 	if spanExpr != nil {
 		if b.hasInvertedFilter() {
@@ -104,7 +101,6 @@ func (b *indexScanBuilder) AddInvertedFilter(
 		}
 		b.invertedFilterPrivate = memo.InvertedFilterPrivate{
 			InvertedExpression: spanExpr,
-			PreFiltererState:   pfState,
 			InvertedColumn:     invertedCol,
 		}
 	}

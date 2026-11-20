@@ -97,7 +97,7 @@ func (s schemaTelemetryExecutor) NotifyJobTermination(
 	case jobs.StatusSucceeded:
 		s.metrics.NumSucceeded.Inc(1)
 	}
-	sj.SetScheduleStatus(string(jobStatus))
+	sj.SetScheduleStatus("%s", string(jobStatus))
 	return nil
 }
 

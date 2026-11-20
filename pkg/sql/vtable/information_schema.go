@@ -1010,17 +1010,6 @@ CREATE TABLE information_schema.tablespaces (
 	tablespace_name STRING
 )`
 
-// InformationSchemaStSpatialReferenceSystems is an empty table in the pg_catalog that is not implemented yet
-const InformationSchemaStSpatialReferenceSystems = `
-CREATE TABLE information_schema.st_spatial_reference_systems (
-	srs_id INT,
-	srs_name STRING,
-	definition STRING,
-	description STRING,
-	organization STRING,
-	organization_coordsys_id INT
-)`
-
 // InformationSchemaProcesslist is an empty table in the pg_catalog that is not implemented yet
 const InformationSchemaProcesslist = `
 CREATE TABLE information_schema.processlist (
@@ -1210,15 +1199,6 @@ CREATE TABLE information_schema.schemata_extensions (
 	schema_name STRING
 )`
 
-// InformationSchemaStUnitsOfMeasure is an empty table in the pg_catalog that is not implemented yet
-const InformationSchemaStUnitsOfMeasure = `
-CREATE TABLE information_schema.st_units_of_measure (
-	conversion_factor FLOAT,
-	description STRING,
-	unit_name STRING,
-	unit_type STRING
-)`
-
 // InformationSchemaFiles is an empty table in the pg_catalog that is not implemented yet
 const InformationSchemaFiles = `
 CREATE TABLE information_schema.files (
@@ -1282,18 +1262,6 @@ CREATE TABLE information_schema.columns_extensions (
 	table_name STRING,
 	table_schema STRING,
 	column_name STRING
-)`
-
-// InformationSchemaStGeometryColumns is an empty table in the pg_catalog that is not implemented yet
-const InformationSchemaStGeometryColumns = `
-CREATE TABLE information_schema.st_geometry_columns (
-	srs_id INT,
-	srs_name STRING,
-	table_catalog STRING,
-	table_name STRING,
-	table_schema STRING,
-	column_name STRING,
-	geometry_type_name STRING
 )`
 
 // InformationSchemaPlugins is an empty table in the pg_catalog that is not implemented yet

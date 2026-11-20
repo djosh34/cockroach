@@ -18,7 +18,6 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -93,7 +92,7 @@ func (c *antagonisticConn) Read(b []byte) (int, error) {
 }
 
 func appendPath(t *testing.T, s, add string) string {
-	u, err := url.Parse(s)
+	u, err := cloud.ParseURI(s)
 	if err != nil {
 		t.Fatal(err)
 	}

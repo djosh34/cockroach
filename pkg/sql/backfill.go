@@ -1817,19 +1817,10 @@ func countExpectedRowsForInvertedIndex(
 	if err := runHistoricalTxn.Exec(ctx, func(
 		ctx context.Context, txn descs.Txn,
 	) error {
-		var stmt string
-		geoConfig := idx.GetGeoConfig()
-		if geoConfig.IsEmpty() {
-			stmt = fmt.Sprintf(
-				`SELECT coalesce(sum_int(crdb_internal.num_inverted_index_entries(%s, %d)), 0) FROM [%d AS t]`,
-				colNameOrExpr, idx.GetVersion(), desc.GetID(),
-			)
-		} else {
-			stmt = fmt.Sprintf(
-				`SELECT coalesce(sum_int(crdb_internal.num_geo_inverted_index_entries(%d, %d, %s)), 0) FROM [%d AS t]`,
-				desc.GetID(), idx.GetID(), colNameOrExpr, desc.GetID(),
-			)
-		}
+		stmt := fmt.Sprintf(
+			`SELECT coalesce(sum_int(crdb_internal.num_inverted_index_entries(%s, %d)), 0) FROM [%d AS t]`,
+			colNameOrExpr, idx.GetVersion(), desc.GetID(),
+		)
 		// If the index is a partial index the predicate must be added
 		// as a filter to the query.
 		if idx.IsPartial() {

@@ -80,6 +80,6 @@ ReadyForQuery
 {"Type":"ParseComplete"}
 {"Type":"BindComplete"}
 {"Type":"RowDescription","Fields":[{"Name":"max","TableOID":0,"TableAttributeNumber":0,"DataTypeOID":23,"DataTypeSize":4,"TypeModifier":-1,"Format":1},{"Name":"min","TableOID":0,"TableAttributeNumber":0,"DataTypeOID":700,"DataTypeSize":4,"TypeModifier":-1,"Format":1}]}
-{"Type":"DataRow","Values":[{"binary":"000003e8"},{"text":"A1\ufffd\ufffd"}]}
+{"Type":"DataRow","Values":[{"binary":"000003e8"},{"text":"A1��"}]}
 {"Type":"CommandComplete","CommandTag":"SELECT 1"}
 {"Type":"ReadyForQuery","TxStatus":"I"}

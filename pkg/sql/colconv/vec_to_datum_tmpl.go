@@ -36,8 +36,8 @@ import (
 	"github.com/lib/pq/oid"
 )
 
-// Workaround for bazel auto-generated code. goimports does not automatically
-// pick up the right packages when run within the bazel sandbox.
+// Workaround for generated code: goimports may drop or pick the wrong
+// packages for the generated file otherwise.
 var (
 	_ colexecerror.StorageError
 	_ json.JSON

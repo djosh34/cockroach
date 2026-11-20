@@ -740,11 +740,6 @@ SELECT to_regnamespace(' 1330834471')
 NULL
 
 query T
-SELECT to_regproc('_st_contains')
-----
-_st_contains
-
-query T
 SELECT to_regproc('version')
 ----
 version

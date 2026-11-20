@@ -344,7 +344,7 @@ func (n *renameTableNode) checkForCrossDbReferences(
 					"(see the '%s' cluster setting)",
 				fk.GetName(),
 				allowCrossDatabaseFKsSetting),
-			crossDBReferenceDeprecationHint(),
+			"%s", crossDBReferenceDeprecationHint(),
 		)
 	}
 	// Validates if a given dependency on a relation will
@@ -376,7 +376,7 @@ func (n *renameTableNode) checkForCrossDbReferences(
 								"(see the '%s' cluster setting)",
 							dependentObject.GetName(),
 							allowCrossDatabaseViewsSetting),
-						crossDBReferenceDeprecationHint(),
+						"%s", crossDBReferenceDeprecationHint(),
 					)
 				}
 			case dependentObject.IsSequence() && depType == owner:
@@ -387,7 +387,7 @@ func (n *renameTableNode) checkForCrossDbReferences(
 								"(see the '%s' cluster setting)",
 							dependentObject.GetName(),
 							allowCrossDatabaseSeqOwnerSetting),
-						crossDBReferenceDeprecationHint(),
+						"%s", crossDBReferenceDeprecationHint(),
 					)
 				}
 			case dependentObject.IsSequence() && depType == reference:
@@ -398,7 +398,7 @@ func (n *renameTableNode) checkForCrossDbReferences(
 								"(see the '%s' cluster setting)",
 							dependentObject.GetName(),
 							allowCrossDatabaseSeqOwnerSetting),
-						crossDBReferenceDeprecationHint(),
+						"%s", crossDBReferenceDeprecationHint(),
 					)
 				}
 			}
@@ -412,7 +412,7 @@ func (n *renameTableNode) checkForCrossDbReferences(
 							"(see the '%s' cluster setting)",
 						dependentObject.GetName(),
 						allowCrossDatabaseViewsSetting),
-					crossDBReferenceDeprecationHint(),
+					"%s", crossDBReferenceDeprecationHint(),
 				)
 			}
 		case tableDesc.IsSequence() && depType == reference:
@@ -425,7 +425,7 @@ func (n *renameTableNode) checkForCrossDbReferences(
 							"(see the '%s' cluster setting)",
 						dependentObject.GetName(),
 						allowCrossDatabaseSeqReferencesSetting),
-					crossDBReferenceDeprecationHint(),
+					"%s", crossDBReferenceDeprecationHint(),
 				)
 			}
 		case tableDesc.IsSequence() && depType == owner:
@@ -438,7 +438,7 @@ func (n *renameTableNode) checkForCrossDbReferences(
 							"(see the '%s' cluster setting)",
 						dependentObject.GetName(),
 						allowCrossDatabaseSeqReferencesSetting),
-					crossDBReferenceDeprecationHint(),
+					"%s", crossDBReferenceDeprecationHint(),
 				)
 			}
 		}
@@ -463,7 +463,7 @@ func (n *renameTableNode) checkForCrossDbReferences(
 					"(see the '%s' cluster setting)",
 				dependentObject.GetName(),
 				allowCrossDatabaseViewsSetting),
-			crossDBReferenceDeprecationHint(),
+			"%s", crossDBReferenceDeprecationHint(),
 		)
 	}
 

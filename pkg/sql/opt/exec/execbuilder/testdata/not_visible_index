@@ -558,53 +558,8 @@ DROP TABLE t2
 statement ok
 CREATE TABLE t1 (
   id INT,
-  data JSONB,
-  geom GEOMETRY,
-  INVERTED INDEX idx_geom_visible(geom) VISIBLE
+  data JSONB
 );
-
-# idx_geom_visible is chosen because it is visible.
-query T
-EXPLAIN SELECT * FROM t1 WHERE st_covers(geom, 'LINESTRING ( 0 0, 0 2 )'::geometry)
-----
-distribution: local
-vectorized: true
-·
-• filter
-│ filter: st_covers(geom, '0102000000020000000000000000000000000000000000000000000000000000000000000000000040')
-│
-└── • index join
-    │ table: t1@t1_pkey
-    │
-    └── • inverted filter
-        │ inverted column: geom_inverted_key
-        │ num spans: 31
-        │
-        └── • scan
-              missing stats
-              table: t1@idx_geom_visible
-              spans: 31 spans
-
-statement ok
-DROP INDEX idx_geom_visible
-
-statement ok
-CREATE INDEX idx_geom_invisible ON t1 USING GIN (geom) NOT VISIBLE;
-
-# Check invisible inverted index: ignored idx_geom_invisible.
-query T
-EXPLAIN SELECT * FROM t1 WHERE st_covers(geom, 'LINESTRING ( 0 0, 0 2 )'::geometry)
-----
-distribution: local
-vectorized: true
-·
-• filter
-│ filter: st_covers(geom, '0102000000020000000000000000000000000000000000000000000000000000000000000000000040')
-│
-└── • scan
-      missing stats
-      table: t1@t1_pkey
-      spans: FULL SCAN
 
 # Check JSONB.
 statement ok
@@ -627,36 +582,8 @@ vectorized: true
 
 statement ok
 CREATE TABLE t2 (
-  id INT,
-  geom2 GEOMETRY,
-  INVERTED INDEX idx_geom2_invisible(geom2) NOT VISIBLE
+  id INT
 )
-
-# Force INVERTED JOIN will result in error because idx_geom2_invisible is invisible.
-statement error could not produce a query plan conforming to the INVERTED JOIN hint
-SELECT * FROM t1 INNER INVERTED JOIN t2 ON st_covers(t1.geom, t2.geom2)
-
-
-# INVERTED JOIN can still work with force index on idx_geom2_invisible.
-query T
-EXPLAIN SELECT * FROM t1 INNER INVERTED JOIN t2@idx_geom2_invisible ON st_covers(t1.geom, t2.geom2)
-----
-distribution: local
-vectorized: true
-·
-• lookup join
-│ table: t2@t2_pkey
-│ equality: (rowid) = (rowid)
-│ equality cols are key
-│ pred: st_covers(geom, geom2)
-│
-└── • inverted join
-    │ table: t2@idx_geom2_invisible
-    │
-    └── • scan
-          missing stats
-          table: t1@t1_pkey
-          spans: FULL SCAN
 
 statement ok
 DROP TABLE t1

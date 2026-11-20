@@ -17,15 +17,11 @@ import (
 	"math"
 	"math/rand"
 	"regexp"
-	"strconv"
 	"testing"
 	"time"
 
 	"github.com/cockroachdb/apd/v3"
-	"github.com/cockroachdb/cockroach/pkg/geo"
 	// Blank import so projections are initialized correctly.
-	_ "github.com/cockroachdb/cockroach/pkg/geo/geographiclib"
-	"github.com/cockroachdb/cockroach/pkg/geo/geopb"
 	"github.com/cockroachdb/cockroach/pkg/testutils/skip"
 	"github.com/cockroachdb/cockroach/pkg/util/bitarray"
 	"github.com/cockroachdb/cockroach/pkg/util/duration"
@@ -1253,234 +1249,6 @@ func TestEncodeDecodeTimeTZ(t *testing.T) {
 	}
 }
 
-func TestEncodeDecodeBox2D(t *testing.T) {
-	testCases := []struct {
-		ordered []geopb.BoundingBox
-	}{
-		{
-			ordered: []geopb.BoundingBox{
-				{LoX: -100, HiX: 99, LoY: -100, HiY: 100},
-				{LoX: -100, HiX: 100, LoY: -100, HiY: 100},
-				{LoX: -50, HiX: 100, LoY: -100, HiY: 100},
-				{LoX: 0, HiX: 100, LoY: 0, HiY: 100},
-				{LoX: 0, HiX: 100, LoY: 50, HiY: 100},
-				{LoX: 10, HiX: 100, LoY: -100, HiY: 100},
-				{LoX: 10, HiX: 100, LoY: -10, HiY: 50},
-				{LoX: 10, HiX: 100, LoY: -10, HiY: 100},
-			},
-		},
-	}
-	for i, tc := range testCases {
-		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
-			for _, dir := range []Direction{Ascending, Descending} {
-				t.Run(fmt.Sprintf("dir:%d", dir), func(t *testing.T) {
-					var lastEncoded []byte
-					for j := range tc.ordered {
-						var b []byte
-						var err error
-						var decoded geopb.BoundingBox
-
-						if dir == Ascending {
-							b, err = EncodeBox2DAscending(b, tc.ordered[j])
-							require.NoError(t, err)
-							_, decoded, err = DecodeBox2DAscending(b)
-							require.NoError(t, err)
-						} else {
-							b, err = EncodeBox2DDescending(b, tc.ordered[j])
-							require.NoError(t, err)
-							_, decoded, err = DecodeBox2DDescending(b)
-							require.NoError(t, err)
-						}
-						require.Equal(t, tc.ordered[j], decoded)
-						testPeekLength(t, b)
-
-						if j > 0 {
-							if dir == Ascending {
-								assert.Truef(t, bytes.Compare(b, lastEncoded) > 0, "expected %s > %s", tc.ordered[j], tc.ordered[j-1])
-							} else {
-								assert.Truef(t, bytes.Compare(b, lastEncoded) < 0, "expected %s < %s", tc.ordered[j], tc.ordered[j-1])
-							}
-						}
-
-						lastEncoded = b
-					}
-				})
-			}
-		})
-	}
-}
-
-func TestEncodeDecodeGeometry(t *testing.T) {
-	testCases := []struct {
-		orderedWKTs []string
-	}{
-		{
-			orderedWKTs: []string{
-				"SRID=4326;POLYGON EMPTY",
-				"SRID=4326;POINT EMPTY",
-				"SRID=4326;LINESTRING(0 0, -90 -80)",
-				"SRID=4326;POINT(-80 80)",
-				"SRID=4326;POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))",
-			},
-		},
-	}
-	for i, tc := range testCases {
-		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
-			for _, dir := range []Direction{Ascending, Descending} {
-				t.Run(fmt.Sprintf("dir:%d", dir), func(t *testing.T) {
-					var lastEncoded []byte
-					for j, wkt := range tc.orderedWKTs {
-						parsed, err := geo.ParseGeometry(wkt)
-						require.NoError(t, err)
-						spatialObject := parsed.SpatialObject()
-
-						var b []byte
-						var decoded geopb.SpatialObject
-						spaceCurveIndex, err := parsed.SpaceCurveIndex()
-						require.NoError(t, err)
-						if dir == Ascending {
-							b, err = EncodeGeoAscending(b, spaceCurveIndex, &spatialObject)
-							require.NoError(t, err)
-							_, err = DecodeGeoAscending(b, &decoded)
-							require.NoError(t, err)
-						} else {
-							b, err = EncodeGeoDescending(b, spaceCurveIndex, &spatialObject)
-							require.NoError(t, err)
-							_, err = DecodeGeoDescending(b, &decoded)
-							require.NoError(t, err)
-						}
-						require.Equal(t, spatialObject, decoded)
-						testPeekLength(t, b)
-
-						if j > 0 {
-							if dir == Ascending {
-								assert.Truef(t, bytes.Compare(b, lastEncoded) > 0, "expected %s > %s", tc.orderedWKTs[j], tc.orderedWKTs[j-1])
-							} else {
-								assert.Truef(t, bytes.Compare(b, lastEncoded) < 0, "expected %s < %s", tc.orderedWKTs[j], tc.orderedWKTs[j-1])
-							}
-						}
-
-						lastEncoded = b
-					}
-				})
-			}
-		})
-	}
-}
-
-func TestEncodeDecodeGeography(t *testing.T) {
-	testCases := []struct {
-		orderedWKTs []string
-	}{
-		{
-			orderedWKTs: []string{
-				"SRID=4326;POLYGON EMPTY",
-				"SRID=4326;POINT EMPTY",
-				"SRID=4326;POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))",
-				"SRID=4326;POINT(-80 80)",
-				"SRID=4326;LINESTRING(0 0, -90 -80)",
-			},
-		},
-	}
-	for i, tc := range testCases {
-		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
-			for _, dir := range []Direction{Ascending, Descending} {
-				t.Run(fmt.Sprintf("dir:%d", dir), func(t *testing.T) {
-					var lastEncoded []byte
-					for j, wkt := range tc.orderedWKTs {
-						parsed, err := geo.ParseGeography(wkt)
-						require.NoError(t, err)
-						spatialObject := parsed.SpatialObject()
-
-						var b []byte
-						var decoded geopb.SpatialObject
-						if dir == Ascending {
-							b, err = EncodeGeoAscending(b, parsed.SpaceCurveIndex(), &spatialObject)
-							require.NoError(t, err)
-							_, err = DecodeGeoAscending(b, &decoded)
-							require.NoError(t, err)
-						} else {
-							b, err = EncodeGeoDescending(b, parsed.SpaceCurveIndex(), &spatialObject)
-							require.NoError(t, err)
-							_, err = DecodeGeoDescending(b, &decoded)
-							require.NoError(t, err)
-						}
-						require.Equal(t, spatialObject, decoded)
-						testPeekLength(t, b)
-
-						if j > 0 {
-							if dir == Ascending {
-								assert.Truef(t, bytes.Compare(b, lastEncoded) > 0, "expected %s > %s", tc.orderedWKTs[j], tc.orderedWKTs[j-1])
-							} else {
-								assert.Truef(t, bytes.Compare(b, lastEncoded) < 0, "expected %s < %s", tc.orderedWKTs[j], tc.orderedWKTs[j-1])
-							}
-						}
-
-						lastEncoded = b
-					}
-				})
-			}
-		})
-	}
-}
-
-func TestEncodeDecodeGeoInvertedIndex(t *testing.T) {
-	testCases := []struct {
-		shape          string
-		cellID         uint64
-		expectedLength int
-	}{
-		{
-			shape:          "SRID=4326;LINESTRING(0 0, -90 -80)",
-			cellID:         0,
-			expectedLength: 35,
-		},
-		{
-			shape:          "SRID=4326;LINESTRING(0 0, -90 -80)",
-			cellID:         math.MaxUint64,
-			expectedLength: 43,
-		},
-		{
-			shape:          "SRID=4326;POINT(-80 80)",
-			cellID:         0,
-			expectedLength: 19,
-		},
-		{
-			shape:          "SRID=4326;POINT(-80 80)",
-			cellID:         math.MaxUint64,
-			expectedLength: 27,
-		},
-		{
-			shape:          "SRID=4326;POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))",
-			cellID:         10000,
-			expectedLength: 37,
-		},
-		{
-			shape:          "SRID=4326;POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))",
-			cellID:         math.MaxUint32,
-			expectedLength: 39,
-		},
-	}
-	for i, tc := range testCases {
-		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
-			parsed, err := geo.ParseGeometry(tc.shape)
-			require.NoError(t, err)
-			var b []byte
-			b = EncodeGeoInvertedAscending(b)
-			b = EncodeUvarintAscending(b, tc.cellID)
-			bbox := parsed.BoundingBoxRef()
-			require.NotNil(t, bbox)
-			b = EncodeGeoInvertedBBox(b, bbox.LoX, bbox.LoY, bbox.HiX, bbox.HiY)
-			require.Equal(t, tc.expectedLength, len(b))
-			var dBBox geopb.BoundingBox
-			dBBox.LoX, dBBox.LoY, dBBox.HiX, dBBox.HiY, b, err = DecodeGeoInvertedKey(b)
-			require.NoError(t, err)
-			require.Equal(t, *bbox, dBBox)
-			require.Equal(t, 0, len(b))
-		})
-	}
-}
-
 type testCaseDuration struct {
 	value  duration.Duration
 	expEnc []byte
@@ -1559,10 +1327,6 @@ func TestPeekType(t *testing.T) {
 	require.NoError(t, err)
 	encodedDurationDescending, err := EncodeDurationDescending(nil, duration.Duration{})
 	require.NoError(t, err)
-	encodedGeoAscending, err := EncodeGeoAscending(nil, 0, &geopb.SpatialObject{})
-	require.NoError(t, err)
-	encodedGeoDescending, err := EncodeGeoDescending(nil, 0, &geopb.SpatialObject{})
-	require.NoError(t, err)
 	testCases := []struct {
 		enc []byte
 		typ Type
@@ -1585,8 +1349,6 @@ func TestPeekType(t *testing.T) {
 		{EncodeTimeDescending(nil, timeutil.Now()), Time},
 		{EncodeTimeTZAscending(nil, timetz.Now()), TimeTZ},
 		{EncodeTimeTZDescending(nil, timetz.Now()), TimeTZ},
-		{encodedGeoAscending, Geo},
-		{encodedGeoDescending, GeoDesc},
 		{encodedDurationAscending, Duration},
 		{encodedDurationDescending, Duration},
 		{EncodeBitArrayAscending(nil, bitarray.BitArray{}), BitArray},
@@ -2950,6 +2712,73 @@ func BenchmarkDecodeDurationValue(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		if _, _, err := DecodeDurationValue(vals[i%len(vals)]); err != nil {
 			b.Fatal(err)
+		}
+	}
+}
+
+// TestKeyMarkerValues pins the byte value of every key encoding marker.
+// Stored keys contain these bytes, so they must never change. The markers
+// of the removed spatial types (0x3d, 0x3e, 0x41 and 0x42) stay unused.
+func TestKeyMarkerValues(t *testing.T) {
+	markers := []struct {
+		name  string
+		value byte
+		want  byte
+	}{
+		{"encodedNull", encodedNull, 0x00},
+		{"encodedNotNull", encodedNotNull, 0x01},
+		{"floatNaN", floatNaN, 0x02},
+		{"floatNeg", floatNeg, 0x03},
+		{"floatZero", floatZero, 0x04},
+		{"floatPos", floatPos, 0x05},
+		{"floatNaNDesc", floatNaNDesc, 0x06},
+		{"bytesMarker", bytesMarker, 0x12},
+		{"bytesDescMarker", bytesDescMarker, 0x13},
+		{"timeMarker", timeMarker, 0x14},
+		{"durationBigNegMarker", durationBigNegMarker, 0x15},
+		{"durationMarker", durationMarker, 0x16},
+		{"durationBigPosMarker", durationBigPosMarker, 0x17},
+		{"decimalNaN", decimalNaN, 0x18},
+		{"decimalNegativeInfinity", decimalNegativeInfinity, 0x19},
+		{"decimalNegLarge", decimalNegLarge, 0x1a},
+		{"decimalNegMedium", decimalNegMedium, 0x25},
+		{"decimalNegSmall", decimalNegSmall, 0x26},
+		{"decimalZero", decimalZero, 0x27},
+		{"decimalPosSmall", decimalPosSmall, 0x28},
+		{"decimalPosMedium", decimalPosMedium, 0x29},
+		{"decimalPosLarge", decimalPosLarge, 0x34},
+		{"decimalInfinity", decimalInfinity, 0x35},
+		{"decimalNaNDesc", decimalNaNDesc, 0x36},
+		{"jsonInvertedIndex", jsonInvertedIndex, 0x37},
+		{"jsonEmptyArray", jsonEmptyArray, 0x38},
+		{"jsonEmptyObject", jsonEmptyObject, 0x39},
+		{"bitArrayMarker", bitArrayMarker, 0x3a},
+		{"bitArrayDescMarker", bitArrayDescMarker, 0x3b},
+		{"timeTZMarker", timeTZMarker, 0x3c},
+		{"arrayKeyMarker", arrayKeyMarker, 0x3f},
+		{"arrayKeyDescendingMarker", arrayKeyDescendingMarker, 0x40},
+		{"emptyArray", emptyArray, 0x43},
+		{"voidMarker", voidMarker, 0x44},
+		{"jsonEmptyArrayKeyMarker", jsonEmptyArrayKeyMarker, 0x45},
+		{"jsonNullKeyMarker", jsonNullKeyMarker, 0x46},
+		{"jsonStringKeyMarker", jsonStringKeyMarker, 0x47},
+		{"jsonNumberKeyMarker", jsonNumberKeyMarker, 0x48},
+		{"jsonFalseKeyMarker", jsonFalseKeyMarker, 0x49},
+		{"jsonTrueKeyMarker", jsonTrueKeyMarker, 0x4a},
+		{"jsonArrayKeyMarker", jsonArrayKeyMarker, 0x4b},
+		{"jsonObjectKeyMarker", jsonObjectKeyMarker, 0x4c},
+		{"jsonEmptyArrayKeyDescendingMarker", jsonEmptyArrayKeyDescendingMarker, 0x54},
+		{"jsonNullKeyDescendingMarker", jsonNullKeyDescendingMarker, 0x53},
+		{"jsonStringKeyDescendingMarker", jsonStringKeyDescendingMarker, 0x52},
+		{"jsonNumberKeyDescendingMarker", jsonNumberKeyDescendingMarker, 0x51},
+		{"jsonFalseKeyDescendingMarker", jsonFalseKeyDescendingMarker, 0x50},
+		{"jsonTrueKeyDescendingMarker", jsonTrueKeyDescendingMarker, 0x4f},
+		{"jsonArrayKeyDescendingMarker", jsonArrayKeyDescendingMarker, 0x4e},
+		{"jsonObjectKeyDescendingMarker", jsonObjectKeyDescendingMarker, 0x4d},
+	}
+	for _, m := range markers {
+		if m.value != m.want {
+			t.Errorf("%s = %#x, want %#x", m.name, m.value, m.want)
 		}
 	}
 }

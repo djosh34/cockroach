@@ -716,7 +716,6 @@ up to this work, see [^20]
 ```
     ۩ tree -L 1 pkg/kv/kvserver/kvflowcontrol
     pkg/kv/kvserver/kvflowcontrol
-    ├── BUILD.bazel
     ├── doc.go
     ├── kvflowcontrol.go
     ├── kvflowcontroller

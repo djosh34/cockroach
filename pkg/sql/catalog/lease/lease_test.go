@@ -1775,22 +1775,25 @@ CREATE TABLE t.test0 (k CHAR PRIMARY KEY, v CHAR);
 	log.Infof(ctx, "until %s", end)
 
 	go func() {
+		defer wg.Done()
 		for count := 0; timeutil.Now().Before(end); count++ {
 			log.Infof(ctx, "renaming test%d to test%d", count, count+1)
 			if _, err := t.db.Exec(fmt.Sprintf(`ALTER TABLE t.test%d RENAME TO t.test%d`, count, count+1)); err != nil {
-				t.Fatal(err)
+				t.Error(err)
+				return
 			}
 		}
-		wg.Done()
 	}()
 
 	go func() {
+		defer wg.Done()
 		leaseMgr := t.node(1)
 		for timeutil.Now().Before(end) {
 			log.Infof(ctx, "publishing new descriptor")
 			desc, err := leaseMgr.Publish(ctx, descID, func(catalog.MutableDescriptor) error { return nil }, nil)
 			if err != nil {
-				t.Fatalf("error while publishing: %v", err)
+				t.Errorf("error while publishing: %v", err)
+				return
 			}
 			table := desc.(catalog.TableDescriptor)
 
@@ -1813,22 +1816,24 @@ CREATE TABLE t.test0 (k CHAR PRIMARY KEY, v CHAR);
 			descKey := catalogkeys.MakeDescMetadataKey(t.server.Codec(), descID)
 			res, err := txn.Get(ctx, descKey)
 			if err != nil {
-				t.Fatalf("error while reading proto: %v", err)
+				t.Errorf("error while reading proto: %v", err)
+				return
 			}
 			b, err := descbuilder.FromSerializedValue(res.Value)
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
+				return
 			}
 			// Look at the descriptor that comes back from the database.
 			if b != nil && b.DescriptorType() == catalog.Table {
 				dbTable := b.BuildImmutable()
 				if v, modTime := dbTable.GetVersion(), dbTable.GetModificationTime(); v != table.GetVersion() || modTime != table.GetModificationTime() {
-					t.Fatalf("db has version %d at ts %s, expected version %d at ts %s",
+					t.Errorf("db has version %d at ts %s, expected version %d at ts %s",
 						v, modTime, table.GetVersion(), table.GetModificationTime())
+					return
 				}
 			}
 		}
-		wg.Done()
 	}()
 
 	wg.Wait()

@@ -7,10 +7,10 @@ server started
 system-sql
 SHOW DATABASES
 ----
-defaultdb root NULL NULL {} NULL
-example root NULL NULL {} NULL
-postgres root NULL NULL {} NULL
-system node NULL NULL {} NULL
+defaultdb root
+example root
+postgres root
+system node
 
 system-sql
 SELECT * FROM example.data

@@ -247,7 +247,6 @@ func newMetadata(compiled *lang.CompiledExpr, pkg string) *metadata {
 		"SpanExpression":       {fullName: "inverted.SpanExpression", isPointer: true, usePointerIntern: true},
 		"InvertedSpans":        {fullName: "inverted.Spans", passByVal: true},
 		"Persistence":          {fullName: "tree.Persistence", passByVal: true},
-		"PreFiltererState":     {fullName: "invertedexpr.PreFiltererStateForInvertedFilterer", isPointer: true, usePointerIntern: true},
 		"Volatility":           {fullName: "volatility.V", passByVal: true},
 		"LiteralRows":          {fullName: "opt.LiteralRows", isExpr: true, isPointer: true},
 		"Distribution":         {fullName: "physical.Distribution", passByVal: true},

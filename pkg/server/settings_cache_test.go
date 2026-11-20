@@ -189,7 +189,7 @@ func TestCachedSettingDeletionIsPersisted(t *testing.T) {
 	kvserver.RangeFeedRefreshInterval.Override(ctx, &st.SV, 10*time.Millisecond*time.Duration(factor))
 
 	// Customize a setting.
-	db.Exec(t, `SET CLUSTER SETTING ui.display_timezone = 'America/New_York'`)
+	db.Exec(t, `SET CLUSTER SETTING sql.metrics.statement_details.enabled = false`)
 	// The setting won't propagate to the store until the setting watcher caches
 	// up with the rangefeed, which might take a while.
 	testutils.SucceedsSoon(t, func() error {
@@ -197,21 +197,21 @@ func TestCachedSettingDeletionIsPersisted(t *testing.T) {
 		require.NoError(t, err)
 		settings, err := loadCachedSettingsKVs(context.Background(), store.TODOEngine())
 		require.NoError(t, err)
-		if !hasKey(settings, `ui.display_timezone`) {
+		if !hasKey(settings, `sql.metrics.statement_details.enabled`) {
 			return errors.New("cached setting not found")
 		}
 		return nil
 	})
 
 	// Reset the setting.
-	db.Exec(t, `RESET CLUSTER SETTING ui.display_timezone`)
+	db.Exec(t, `RESET CLUSTER SETTING sql.metrics.statement_details.enabled`)
 	// Check that the setting is eventually deleted from the store.
 	testutils.SucceedsSoon(t, func() error {
 		store, err := ts.GetStores().(*kvserver.Stores).GetStore(1)
 		require.NoError(t, err)
 		settings, err := loadCachedSettingsKVs(context.Background(), store.TODOEngine())
 		require.NoError(t, err)
-		if hasKey(settings, `ui.display_timezone`) {
+		if hasKey(settings, `sql.metrics.statement_details.enabled`) {
 			return errors.New("cached setting was still found")
 		}
 		return nil

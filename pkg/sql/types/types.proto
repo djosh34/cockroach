@@ -14,7 +14,6 @@ package cockroach.sql.sem.types;
 option go_package = "github.com/cockroachdb/cockroach/pkg/sql/types";
 
 import "gogoproto/gogo.proto";
-import "geo/geopb/geopb.proto";
 
 // See the comment header for the T.Family method for more details.
 enum Family {
@@ -458,10 +457,12 @@ message IntervalDurationField {
   optional IntervalDurationType from_duration_type = 2 [(gogoproto.nullable) = false];
 }
 
-// GeoMetadata contains metadata associated with Geospatial data types.
+// GeoMetadata is the wire definition of the metadata of the removed spatial
+// types. Stored types may still carry it; nothing reads it. shape_type was an
+// enum and keeps its varint encoding as an int32.
 message GeoMetadata {
-  optional int32 srid = 1 [(gogoproto.nullable)=false,(gogoproto.customname)="SRID",(gogoproto.casttype)="github.com/cockroachdb/cockroach/pkg/geo/geopb.SRID"];
-  optional geopb.ShapeType shape_type = 2 [(gogoproto.nullable)=false];
+  optional int32 srid = 1 [(gogoproto.nullable)=false,(gogoproto.customname)="SRID"];
+  optional int32 shape_type = 2 [(gogoproto.nullable)=false];
 }
 
 // PersistentUserDefinedTypeMetadata contains user defined type metadata
@@ -565,7 +566,7 @@ message InternalType {
     // typmod or precision data that may be required.
     optional IntervalDurationField interval_duration_field = 13;
 
-    // GeoMetadata is populated for geospatial types.
+    // GeoMetadata was populated for the removed spatial types.
     optional GeoMetadata geo_metadata = 14;
 
     // UDTMetadata is populated for user defined types that are not arrays.

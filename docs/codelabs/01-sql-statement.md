@@ -122,7 +122,7 @@ generators will provide assistance to users.  Let's give it a try.  First, we
 need to regenerate the file `sql.go`:
 
 ```text
-~/go/src/github.com/cockroachdb/cockroach$ ./dev gen
+~/go/src/github.com/cockroachdb/cockroach$ build/generate.sh parser
 ```
 
 Wait until the command finishes, then open `pkg/sql/parser/sql.go`, search for `frobnicate`, and see if there is
@@ -151,7 +151,7 @@ return unimplemented(sqllex, "frobnicate all")
 Next step is to compile the project:
 
 ```text
-~/go/src/github.com/cockroachdb/cockroach$ ./dev build
+~/go/src/github.com/cockroachdb/cockroach$ go build -o cockroach ./pkg/cmd/cockroach-oss
 ...
 github.com/cockroachdb/cockroach
 ```
@@ -287,7 +287,7 @@ There are a few other `$` symbols that you can use with yacc.  One of the more
 useful forms refers to node values of sub-productions (for instance, in these
 three statements `$1` would be the token `FROBNICATE`).
 
-`./dev build` this project again (don't forget to regenerate the parser). Now
+`go build -o cockroach ./pkg/cmd/cockroach-oss` this project again (don't forget to regenerate the parser). Now
 try out the statement again:
 
 ```text
@@ -335,7 +335,7 @@ func (p *planner) Frobnicate(ctx context.Context, stmt *tree.Frobnicate) (planNo
 }
 ```
 
-Run `./dev build` again and give it another go:
+Run `go build -o cockroach ./pkg/cmd/cockroach-oss` again and give it another go:
 
 ```text
 $ cockroach sql --insecure -e "frobnicate cluster"
@@ -493,7 +493,7 @@ FROBNICATE ALL
 ```
 
 Back to the terminal, make sure you are at `~/go/src/github.com/cockroachdb/cockroach`,
-and run `./dev test pkg/sql/parser -f TestParseDatadriven --rewrite`.
+and run `go test ./pkg/sql/parser -run TestParseDatadriven -rewrite`.
 The flag `--rewrite` is meant to automatically rewrite the datadriven test with the output it received.
 
 Wait until the test command finishes, and open `pkg/sql/parser/testdata/frobnicate`, and you would expect:

@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -312,7 +311,7 @@ func readInputFiles(
 }
 
 func rejectedFilename(datafile string) (string, error) {
-	parsedURI, err := url.Parse(datafile)
+	parsedURI, err := cloud.ParseURI(datafile)
 	if err != nil {
 		return "", err
 	}
@@ -345,7 +344,7 @@ func guessCompressionFromName(
 	case strings.HasSuffix(name, ".bz2") || strings.HasSuffix(name, ".bz"):
 		return roachpb.IOFileFormat_Bzip
 	default:
-		if parsed, err := url.Parse(name); err == nil && parsed.Path != name {
+		if parsed, err := cloud.ParseURI(name); err == nil && parsed.Path != name {
 			return guessCompressionFromName(parsed.Path, hint)
 		}
 		return roachpb.IOFileFormat_None

@@ -897,17 +897,6 @@ fields. It is permissible for the <cert-principal> string to contain colons.
 		Description: `Path to the CA key.`,
 	}
 
-	ClockDevice = FlagInfo{
-		Name: "clock-device",
-		Description: `
-Override HLC to use PTP hardware clock user space API when querying for current
-time. The value corresponds to the clock device to be used. This is currently
-only tested and supported on Linux.
-<PRE>
-
-  --clock-device=/dev/ptp0</PRE>`,
-	}
-
 	MaxOffset = FlagInfo{
 		Name: "max-offset",
 		Description: `
@@ -1458,12 +1447,6 @@ This makes 'cockroach demo' faster to start.`,
 		Name:        "config-profile",
 		EnvVar:      "COCKROACH_CONFIG_PROFILE",
 		Description: `Select a configuration profile to apply.`,
-	}
-
-	GeoLibsDir = FlagInfo{
-		Name: "spatial-libs",
-		Description: `
-The location where all libraries for spatial operations is located.`,
 	}
 
 	Global = FlagInfo{

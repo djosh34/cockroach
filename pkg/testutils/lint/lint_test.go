@@ -14,11 +14,11 @@
 package lint
 
 import (
-	"bufio"
 	"bytes"
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,15 +27,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
-	"github.com/cockroachdb/cockroach/pkg/internal/codeowners"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/builtins"
 	"github.com/cockroachdb/cockroach/pkg/testutils/datapathutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/skip"
 	"github.com/cockroachdb/errors"
 	"github.com/ghemawat/stream"
 	"github.com/jordanlewis/gcassert"
-	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -43,18 +40,6 @@ const cockroachDB = "github.com/cockroachdb/cockroach"
 
 //go:embed gcassert_paths.txt
 var rawGcassertPaths string
-
-func init() {
-	if bazel.BuiltWithBazel() {
-		gobin, err := bazel.Runfile("bin/go")
-		if err != nil {
-			panic(err)
-		}
-		if err := os.Setenv("PATH", fmt.Sprintf("%s%c%s", filepath.Dir(gobin), os.PathListSeparator, os.Getenv("PATH"))); err != nil {
-			panic(err)
-		}
-	}
-}
 
 func dirCmd(
 	dir string, name string, args ...string,
@@ -70,32 +55,92 @@ func dirCmd(
 	return cmd, stderr, stream.ReadLines(stdout), nil
 }
 
-// vetCmd executes commands like dirCmd, but stderr is used as the output
-// instead of stdout, as produced by programs like `go vet`.
-func vetCmd(t *testing.T, dir, name string, args []string, filters []stream.Filter) {
-	cmd := exec.Command(name, args...)
-	cmd.Dir = dir
-	var b bytes.Buffer
-	cmd.Stdout = &b
-	cmd.Stderr = &b
-	switch err := cmd.Run(); err.(type) {
-	case nil:
-	case *exec.ExitError:
-		// Non-zero exit is expected.
-	default:
-		t.Fatal(err)
+// generatedCodeHeader matches the comment that marks generated Go files.
+var generatedCodeHeader = regexp.MustCompile(`(?m)^// Code generated .* DO NOT EDIT\.$`)
+
+// isGeneratedFile reports whether the file at path starts with the comment
+// that marks generated Go files.
+func isGeneratedFile(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
 	}
-	filters = append([]stream.Filter{
-		stream.FilterFunc(func(arg stream.Arg) error {
-			scanner := bufio.NewScanner(&b)
-			for scanner.Scan() {
-				if s := scanner.Text(); strings.TrimSpace(s) != "" {
-					arg.Out <- s
+	defer f.Close()
+	data := make([]byte, 1024)
+	n, _ := f.Read(data)
+	return generatedCodeHeader.Match(data[:n])
+}
+
+// vetJSONCmd runs go vet with the given arguments and -json. It reports each
+// diagnostic as "file:line:col: message", unless analyzers.json excludes the
+// file for the analyzer that reported it, and passes the lines through
+// filters. It fails the test if go vet fails.
+func vetJSONCmd(
+	t *testing.T,
+	dir string,
+	args []string,
+	excludes map[string][]*regexp.Regexp,
+	filters []stream.Filter,
+) {
+	cmd := exec.Command("go", append([]string{"vet", "-json"}, args...)...)
+	cmd.Dir = dir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	// With -json, go vet reports findings with exit status 0, so any other
+	// exit status means that vet itself failed, for example on a build error.
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("go vet failed: %v\n%s", err, stderr.String())
+	}
+
+	var lines []string
+	for _, l := range strings.Split(stderr.String(), "\n") {
+		// Lines starting with # name packages, and the go command reports
+		// module downloads; neither is a finding.
+		if strings.TrimSpace(l) != "" && !strings.HasPrefix(l, "#") &&
+			!strings.HasPrefix(l, "go: downloading ") {
+			lines = append(lines, l)
+		}
+	}
+	dec := json.NewDecoder(&stdout)
+	for {
+		var pkgs map[string]map[string]json.RawMessage
+		if err := dec.Decode(&pkgs); err != nil {
+			if !errors.Is(err, io.EOF) {
+				t.Fatalf("parsing the output of go vet: %v", err)
+			}
+			break
+		}
+		for _, analyzers := range pkgs {
+			for name, raw := range analyzers {
+				var diags []struct {
+					Posn    string `json:"posn"`
+					Message string `json:"message"`
+				}
+				if err := json.Unmarshal(raw, &diags); err != nil {
+					// A failed analyzer reports an object with an error.
+					lines = append(lines, fmt.Sprintf("%s: %s", name, raw))
+					continue
+				}
+			diagLoop:
+				for _, d := range diags {
+					posn := strings.TrimPrefix(d.Posn, dir+"/")
+					file := posn
+					if i := strings.Index(posn, ".go:"); i >= 0 {
+						file = posn[:i+len(".go")]
+					}
+					for _, re := range excludes[name] {
+						if re.MatchString(file) {
+							continue diagLoop
+						}
+					}
+					lines = append(lines, fmt.Sprintf("%s: %s", posn, d.Message))
 				}
 			}
-			return scanner.Err()
-		})}, filters...)
+		}
+	}
 
+	filters = append([]stream.Filter{stream.Items(lines...)}, filters...)
 	var msgs strings.Builder
 	if err := stream.ForEach(stream.Sequence(filters...), func(s string) {
 		fmt.Fprintln(&msgs, s)
@@ -137,12 +182,14 @@ func TestLint(t *testing.T) {
 
 	pkgVar, pkgSpecified := os.LookupEnv("PKG")
 
-	var nogoConfig map[string]any
-	nogoJson, err := os.ReadFile(filepath.Join(crdbDir, "build", "bazelutil", "nogo_config.json"))
+	// analyzers.json lists, per analyzer, the files whose findings are
+	// ignored, and the printf-like functions of this repository.
+	var analyzerConfig map[string]any
+	analyzerJSON, err := os.ReadFile(filepath.Join(pkgDir, "testutils", "lint", "analyzers.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal(nogoJson, &nogoConfig); err != nil {
+	if err := json.Unmarshal(analyzerJSON, &analyzerConfig); err != nil {
 		t.Error(err)
 	}
 
@@ -251,13 +298,9 @@ func TestLint(t *testing.T) {
 			stream.GrepNot(`_string\.go`),
 			stream.GrepNot(`_generated(_test)?\.go`),
 			stream.GrepNot(`/embedded.go`),
-			stream.GrepNot(`geo/geographiclib/geodesic\.c$`),
-			stream.GrepNot(`geo/geographiclib/geodesic\.h$`),
 			// The opentelemetry-proto files are copied from otel with their own
 			// license.
 			stream.GrepNot(`opentelemetry-proto/.*.proto$`),
-			// These files are copied from bazel upstream with its own license.
-			stream.GrepNot(`build/bazel/bes/.*.proto$`),
 		), func(filename string) {
 			file, err := os.Open(filepath.Join(pkgDir, filename))
 			if err != nil {
@@ -271,6 +314,11 @@ func TestLint(t *testing.T) {
 				t.Errorf("reading start of %s: %s", filename, err)
 			}
 			data = data[0:n]
+
+			// Generated files carry no license header.
+			if generatedCodeHeader.Match(data) {
+				return
+			}
 
 			isApache := strings.HasPrefix(filename, "obsservice")
 			switch {
@@ -462,15 +510,11 @@ func TestLint(t *testing.T) {
 			excludes []string
 		}{
 			{re: `\bos\.(Getenv|LookupEnv)\("COCKROACH`,
-				excludes: []string{
-					":!cmd/bazci/githubpost",
-				},
+				excludes: []string{},
 			},
 			{
 				re: `\bos\.(Getenv|LookupEnv)\(`,
 				excludes: []string{
-					":!acceptance",
-					":!build/bazel",
 					// KMS requires AWS credentials from environment variables.
 					":!cloud",
 					":!internal/reporoot/reporoot.go",
@@ -480,19 +524,14 @@ func TestLint(t *testing.T) {
 					":!testutils/lint",
 					":!util/envutil/env.go",
 					":!testutils/data_path.go",
-					":!testutils/bazelcodecover/code_cover_on.go", // For BAZEL_COVER_DIR.
 					":!util/log/tracebacks.go",
 					":!util/sdnotify/sdnotify_unix.go",
 					":!util/grpcutil",                        // GRPC_GO_* variables
-					":!roachprod",                            // roachprod requires AWS environment variables
 					":!cli/env.go",                           // The CLI needs the PGHOST variable.
 					":!cli/start.go",                         // The CLI needs the GOMEMLIMIT variable.
-					":!internal/codeowners/codeowners.go",    // For BAZEL_TEST.
-					":!internal/team/team.go",                // For BAZEL_TEST.
 					":!util/log/test_log_scope.go",           // For TEST_UNDECLARED_OUTPUT_DIR, REMOTE_EXEC
 					":!testutils/datapathutils/data_path.go", // For TEST_UNDECLARED_OUTPUT_DIR, REMOTE_EXEC
 					":!testutils/backup.go",                  // For BACKUP_TESTING_BUCKET
-					":!compose/compose_test.go",              // For PATH.
 				},
 			},
 		} {
@@ -970,7 +1009,6 @@ func TestLint(t *testing.T) {
 			":!*_test.go",
 			":!cli/debug_synctest.go",
 			":!cmd/**",
-			":!roachprod", // TODO: switch to timeutil
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -1195,7 +1233,8 @@ func TestLint(t *testing.T) {
 			`\.Marshal\(`,
 			"--",
 			"*.go",
-			":!sql/*.pb.go",
+			// Generated protobuf code marshals messages without a Marshal method.
+			":!*.pb.go",
 			":!util/protoutil/marshal.go",
 			":!util/protoutil/marshaler.go",
 			":!rpc/codec.go",
@@ -1217,7 +1256,7 @@ func TestLint(t *testing.T) {
 
 		if err := stream.ForEach(stream.Sequence(
 			filter,
-			stream.GrepNot(`(json|jsonpb|yaml|protoutil|xml|\.Field|ewkb|wkb|wkt)\.Marshal\(`),
+			stream.GrepNot(`(json|jsonpb|yaml|protoutil|xml|\.Field)\.Marshal\(`),
 		), func(s string) {
 			t.Errorf("\n%s <- forbidden; use 'protoutil.Marshal' instead", s)
 		}); err != nil {
@@ -1262,7 +1301,7 @@ func TestLint(t *testing.T) {
 
 		if err := stream.ForEach(stream.Sequence(
 			filter,
-			stream.GrepNot(`(json|jsonpb|yaml|xml|protoutil|toml|Codec|ewkb|wkb|wkt)\.Unmarshal\(`),
+			stream.GrepNot(`(json|jsonpb|yaml|xml|protoutil|toml|Codec)\.Unmarshal\(`),
 		), func(s string) {
 			t.Errorf("\n%s <- forbidden; use 'protoutil.Unmarshal' instead", s)
 		}); err != nil {
@@ -1484,6 +1523,15 @@ func TestLint(t *testing.T) {
 				stream.Map(func(s string) string {
 					return filepath.Join(pkgDir, s)
 				}),
+				// Generated files are formatted by their generators.
+				stream.FilterFunc(func(arg stream.Arg) error {
+					for path := range arg.In {
+						if !isGeneratedFile(path) {
+							arg.Out <- path
+						}
+					}
+					return nil
+				}),
 				stream.Xargs("gofmt", "-s", "-d", "-l"),
 			), func(s string) {
 				fmt.Fprintln(&buf, s)
@@ -1642,10 +1690,8 @@ func TestLint(t *testing.T) {
 			stream.Uniq(),
 			stream.Grep(`^`+settingsPkgPrefix+`: | `+grepBuf.String()),
 			stream.GrepNot(`cockroach/pkg/cmd/`),
-			stream.GrepNot(`cockroach/pkg/roachprod/logger: log$`),
 			stream.GrepNot(`cockroach/pkg/testutils/lint: log$`),
 			stream.GrepNot(`cockroach/pkg/util/sysutil: syscall$`),
-			stream.GrepNot(`cockroachdb/cockroach/pkg/build/bazel/util/tinystringer: errors$`),
 			stream.GrepNot(`cockroachdb/cockroach/pkg/util/grpcutil: github\.com/cockroachdb\/errors\/errbase$`),
 			stream.GrepNot(`cockroachdb/cockroach/pkg/util/future: github\.com/cockroachdb\/errors\/errbase$`),
 			stream.GrepNot(`cockroach/pkg/util/log: github\.com/pkg/errors$`),
@@ -1734,51 +1780,8 @@ func TestLint(t *testing.T) {
 		}
 	})
 
-	// TODO(tamird): replace this with errcheck.NewChecker() when
-	// https://github.com/dominikh/go-tools/issues/57 is fixed.
-	t.Run("TestErrCheck", func(t *testing.T) {
-		skip.UnderShort(t)
-		if bazel.BuiltWithBazel() {
-			skip.IgnoreLint(t, "the errcheck tests are run during the bazel build")
-		}
-		excludesPath, err := filepath.Abs(datapathutils.TestDataPath(t, "errcheck_excludes.txt"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		// errcheck uses 2GB of ram (as of 2017-07-13), so don't parallelize it.
-		cmd, stderr, filter, err := dirCmd(
-			crdbDir,
-			"errcheck",
-			"-exclude",
-			excludesPath,
-			pkgScope,
-		)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if err := cmd.Start(); err != nil {
-			t.Fatal(err)
-		}
-
-		if err := stream.ForEach(filter, func(s string) {
-			t.Errorf("%s <- unchecked error", s)
-		}); err != nil {
-			t.Error(err)
-		}
-
-		if err := cmd.Wait(); err != nil {
-			if out := stderr.String(); len(out) > 0 {
-				t.Fatalf("err=%s, stderr=%s", err, out)
-			}
-		}
-	})
-
 	t.Run("TestReturnCheck", func(t *testing.T) {
 		skip.UnderShort(t)
-		if bazel.BuiltWithBazel() {
-			skip.IgnoreLint(t, "the returncheck tests are run during the bazel build")
-		}
 		// returncheck uses 2GB of ram (as of 2017-07-13), so don't parallelize it.
 		cmd, stderr, filter, err := dirCmd(crdbDir, "returncheck", pkgScope)
 		if err != nil {
@@ -1805,19 +1808,19 @@ func TestLint(t *testing.T) {
 	t.Run("TestStaticCheck", func(t *testing.T) {
 		// staticcheck uses 2.4GB of ram (as of 2019-05-10), so don't parallelize it.
 		skip.UnderShort(t)
-		// If run outside of Bazel, we assume this binary must be in the PATH.
+		// We assume this binary is in the PATH.
 		staticcheck := "staticcheck"
-		if bazel.BuiltWithBazel() {
-			var err error
-			staticcheck, err = bazel.Runfile("external/co_honnef_go_tools/cmd/staticcheck/staticcheck_/staticcheck")
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
 
 		// Determine the list of files to exclude."
 
-		cmd, stderr, filter, err := dirCmd(crdbDir, staticcheck, pkgScope)
+		// STATICCHECK_PKGS, if set, lists the packages to check instead. CI
+		// splits the packages over several jobs, because staticcheck keeps
+		// all the packages it checks in memory.
+		args := []string{pkgScope}
+		if pkgs := os.Getenv("STATICCHECK_PKGS"); pkgs != "" {
+			args = strings.Fields(pkgs)
+		}
+		cmd, stderr, filter, err := dirCmd(crdbDir, staticcheck, args...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1827,22 +1830,11 @@ func TestLint(t *testing.T) {
 			filter,
 			stream.GrepNot(`\.pb\.go`),
 			stream.GrepNot(`\.pb\.gw\.go`),
-			// NB: we define a data structure here that mirrors the shape of a stdlib
-			// data structure. This causes staticcheck to think fields in the structure
-			// are unused, when in fact the runtime uses them.
-			stream.GrepNot(`pkg/util/goschedstats/runtime_go1\.19\.go:.*\(U1000\)`),
-			// NB: Looks like false positives in this file. Maybe due to the bazel build tag.
-			// If this situation gets much worse, we can look at running staticcheck multiple
-			// times and merging the results: https://staticcheck.io/docs/running-staticcheck/cli/build-tags/
-			// This is more trouble than it's worth right now.
-			stream.GrepNot(`pkg/cmd/mirror/go/mirror.go`),
 		}
-		for analyzerName, config := range nogoConfig {
+		for analyzerName, config := range analyzerConfig {
 			if !staticcheckCheckNameRe.MatchString(analyzerName) {
 				continue
 			}
-			// NB: We're not loading only_files because right now we don't need it.
-			// This could lead to disagreements between `nogo` and `lint` if things change.
 			excludeFiles := config.(map[string]any)["exclude_files"]
 			if excludeFiles == nil {
 				continue
@@ -2311,9 +2303,6 @@ func TestLint(t *testing.T) {
 	// See pkg/cmd/roachvet.
 	t.Run("TestRoachVet", func(t *testing.T) {
 		skip.UnderShort(t)
-		if bazel.BuiltWithBazel() {
-			skip.IgnoreLint(t, "the roachvet tests are run during the bazel build")
-		}
 		// The -printfuncs functionality is interesting and
 		// under-documented. It checks two things:
 		//
@@ -2328,21 +2317,15 @@ func TestLint(t *testing.T) {
 		//    A function may be a Printf or Print wrapper if its last argument is ...interface{}.
 		//    If the next-to-last argument is a string, then this may be a Printf wrapper.
 		//    Otherwise it may be a Print wrapper.
-		// Note we retrieve the list of printfuncs from nogo_config.json.
-		analyzerFlags := nogoConfig["printf"].(map[string]any)
+		// Note we retrieve the list of printfuncs from analyzers.json.
+		analyzerFlags := analyzerConfig["printf"].(map[string]any)
 		printfuncs := analyzerFlags["analyzer_flags"].(map[string]any)["funcs"].(string)
 		nakedGoroutineExceptions := `(` + strings.Join([]string{
 			`pkg/.*_test\.go`,
-			`pkg/acceptance/.*\.go`,
 			`pkg/cli/syncbench/.*\.go`,
-			`pkg/cli/systembench/.*\.go`,
-			`pkg/cmd/allocsim/.*\.go`,
 			`pkg/cmd/cmp-protocol/.*\.go`,
 			`pkg/cmd/cr2pg/.*\.go`,
 			`pkg/cmd/reduce/.*\.go`,
-			`pkg/cmd/smithtest/.*\.go`,
-			`pkg/cmd/urlcheck/.*\.go`,
-			`pkg/cmd/zerosum/.*\.go`,
 			`pkg/testutils/.*\.go`,
 			`pkg/workload/.*\.go`,
 		}, "|") + `)`
@@ -2355,10 +2338,6 @@ func TestLint(t *testing.T) {
 
 			// Ignore types that can change by system.
 			stream.GrepNot(`pkg/util/sysutil/sysutil_unix.go:`),
-
-			// Ignore jemalloc issues warnings.
-			stream.GrepNot(`In file included from.*(start|runtime)_jemalloc\.go`),
-			stream.GrepNot(`include/jemalloc/jemalloc\.h`),
 
 			// Allow shadowing for variables named err, pErr (proto-errors in kv) and
 			// ctx. For these variables, these names are very common and having too
@@ -2403,9 +2382,6 @@ func TestLint(t *testing.T) {
 			// instead of ...interface{}.
 			stream.GrepNot(`pkg/util/log/channels\.go:\d+:\d+: logfDepth\(\): format argument is not a constant expression`),
 			stream.GrepNot(`pkg/util/log/channels\.go:\d+:\d+: logfDepthInternal\(\): format argument is not a constant expression`),
-			// roachprod/logger is not collecting redactable logs so we don't care
-			// about printf hygiene there as much.
-			stream.GrepNot(`pkg/roachprod/logger/log\.go:.*format argument is not a constant expression`),
 			// We purposefully produce nil dereferences in this file to test crash conditions
 			stream.GrepNot(`pkg/util/log/logcrash/crash_reporting_test\.go:.*nil dereference in type assertion`),
 			// Temporarily copied code from google-cloud-go's retry predicate.
@@ -2422,17 +2398,44 @@ func TestLint(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to find %s: %s", vetTool, err)
 		}
-		vetCmd(t, crdbDir, "go",
-			[]string{"vet", "-vettool", vetToolPath, "-all", "-printf.funcs", printfuncs, pkgScope},
-			filters)
+		// roachvet also runs errcheck, which reports unchecked errors
+		// except for the functions listed in errcheck_excludes.txt.
+		excludesPath, err := filepath.Abs(datapathutils.TestDataPath(t, "errcheck_excludes.txt"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// analyzers.json lists, per analyzer, the files whose findings are
+		// ignored.
+		excludes := map[string][]*regexp.Regexp{}
+		for name, config := range analyzerConfig {
+			excludeFiles, _ := config.(map[string]any)["exclude_files"].(map[string]any)
+			for re := range excludeFiles {
+				excludes[name] = append(excludes[name],
+					regexp.MustCompile(strings.TrimPrefix(re, "cockroach/")))
+			}
+		}
+		// With ROACHVET_PART set, roachvet runs only some of its analyzers and
+		// defines only their flags, so pass just the flags it knows.
+		flagsOut, err := exec.Command(vetToolPath, "-flags").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var vetFlags []struct{ Name string }
+		if err := json.Unmarshal(flagsOut, &vetFlags); err != nil {
+			t.Fatal(err)
+		}
+		known := map[string]bool{}
+		for _, f := range vetFlags {
+			known[f.Name] = true
+		}
+		args := []string{"-vettool", vetToolPath, "-all"}
+		if known["printf.funcs"] {
+			args = append(args, "-printf.funcs", printfuncs)
+		}
+		if known["errcheck.exclude"] {
+			args = append(args, "-errcheck.exclude", excludesPath)
+		}
+		vetJSONCmd(t, crdbDir, append(args, pkgScope), excludes, filters)
 
-	})
-
-	t.Run("CODEOWNERS", func(t *testing.T) {
-		co, err := codeowners.DefaultLoadCodeOwners()
-		require.NoError(t, err)
-		const verbose = false
-		repoRoot := filepath.Join("../../../")
-		codeowners.LintEverythingIsOwned(t, verbose, co, repoRoot, "pkg")
 	})
 }

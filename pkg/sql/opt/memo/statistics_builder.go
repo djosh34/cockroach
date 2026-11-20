@@ -15,7 +15,6 @@ import (
 	"math"
 	"reflect"
 
-	"github.com/cockroachdb/cockroach/pkg/geo/geoindex"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/colinfo"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/tabledesc"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt"
@@ -3403,12 +3402,6 @@ func (sb *statisticsBuilder) applyFiltersItem(
 		histCols.UnionWith(histColsLocal)
 		if !scalarProps.TightConstraints {
 			unapplied.unknown++
-			// Mimic constrainScan in the case of no histogram information
-			// that assumes a geo function is a single closed span that
-			// corresponds to two "conjuncts".
-			if isGeoIndexScanCond(filter.Condition) {
-				unapplied.unknown++
-			}
 		}
 		return constrainedCols, histCols
 	}
@@ -4827,32 +4820,11 @@ func isPlaceholderEqualityFilter(e opt.ScalarExpr) (opt.ColumnID, bool) {
 	return 0, false
 }
 
-// isInvertedJoinCond returns true if the given condition is either an index-
-// accelerated geospatial function, a bounding box operation, or a contains
+// isInvertedJoinCond returns true if the given condition is a contains
 // operation with two variable arguments.
 func isInvertedJoinCond(cond opt.ScalarExpr) bool {
-	switch t := cond.(type) {
-	case *FunctionExpr:
-		if _, ok := geoindex.RelationshipMap[t.Name]; ok && len(t.Args) >= 2 {
-			return t.Args[0].Op() == opt.VariableOp && t.Args[1].Op() == opt.VariableOp
-		}
-
-	case *BBoxIntersectsExpr, *BBoxCoversExpr, *ContainsExpr:
-		return t.Child(0).Op() == opt.VariableOp && t.Child(1).Op() == opt.VariableOp
-	}
-
-	return false
-}
-
-// isGeoIndexScanCond returns true if the given condition is an
-// index-accelerated geospatial function with one variable argument.
-func isGeoIndexScanCond(cond opt.ScalarExpr) bool {
-	if fn, ok := cond.(*FunctionExpr); ok {
-		if _, ok := geoindex.RelationshipMap[fn.Name]; ok && len(fn.Args) >= 2 {
-			firstIsVar := fn.Args[0].Op() == opt.VariableOp
-			secondIsVar := fn.Args[1].Op() == opt.VariableOp
-			return (firstIsVar && !secondIsVar) || (!firstIsVar && secondIsVar)
-		}
+	if t, ok := cond.(*ContainsExpr); ok {
+		return t.Left.Op() == opt.VariableOp && t.Right.Op() == opt.VariableOp
 	}
 	return false
 }

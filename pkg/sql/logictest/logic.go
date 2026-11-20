@@ -18,9 +18,7 @@ import (
 	gosql "database/sql"
 	"flag"
 	"fmt"
-	"io/fs"
 	"math/rand"
-	"net"
 	"net/url"
 	"os"
 	"path"
@@ -38,10 +36,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/cockroachdb/cockroach-go/v2/testserver"
 	"github.com/cockroachdb/cockroach/pkg/base"
-	"github.com/cockroachdb/cockroach/pkg/build"
-	"github.com/cockroachdb/cockroach/pkg/build/bazel"
 	_ "github.com/cockroachdb/cockroach/pkg/cloud/externalconn/providers" // imported to register ExternalConnection providers
 	"github.com/cockroachdb/cockroach/pkg/clusterversion"
 	"github.com/cockroachdb/cockroach/pkg/col/coldata"
@@ -71,7 +66,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/testutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/floatcmp"
 	"github.com/cockroachdb/cockroach/pkg/testutils/physicalplanutils"
-	"github.com/cockroachdb/cockroach/pkg/testutils/release"
 	"github.com/cockroachdb/cockroach/pkg/testutils/serverutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/skip"
 	"github.com/cockroachdb/cockroach/pkg/testutils/sqlutils"
@@ -81,7 +75,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/randutil"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/cockroach/pkg/util/tracing"
-	"github.com/cockroachdb/cockroach/pkg/util/version"
 	"github.com/cockroachdb/errors"
 	"github.com/lib/pq"
 	"github.com/pmezard/go-difflib/difflib"
@@ -389,10 +382,6 @@ import (
 //    the user session to be against the host cluster (useful for multi-tenant
 //    configurations).
 //
-//  - upgrade N
-//    When using a cockroach-go/testserver logictest, upgrades the node at
-//    index N to the version specified by the logictest config.
-//
 //  - skipif <mysql/mssql/postgresql/cockroachdb/config CONFIG [ISSUE]>
 //    Skips the following `statement` or `query` if the argument is
 //    postgresql, cockroachdb, or a config matching the currently
@@ -447,9 +436,6 @@ import (
 //
 // -d <glob>  selects all files matching <glob>. This can mix and
 //            match wildcards (*/?) or groups like {a,b,c}.
-//
-// -bigtest   enable the long-running SqlLiteLogic test, which uses files from
-//            CockroachDB's fork of Sqllogictest.
 //
 // Configuration:
 //
@@ -506,7 +492,7 @@ import (
 //
 // Suggested use:
 //
-// - For validation testing: just -d or -bigtest.
+// - For validation testing: just -d.
 // - For compatibility testing: add -allow-prepare-fail -flex-types.
 // - For troubleshooting / analysis: add -v -show-sql -error-summary.
 
@@ -518,9 +504,6 @@ var (
 	orderRE     = regexp.MustCompile(`(?i)ORDER\s+BY`)
 	explainRE   = regexp.MustCompile(`(?i)EXPLAIN\W+`)
 	showTraceRE = regexp.MustCompile(`(?i)SHOW\s+(KV\s+)?TRACE`)
-
-	// Bigtest is a flag which should be set if the long-running sqlite logic tests should be run.
-	Bigtest = flag.Bool("bigtest", false, "enable the long-running SqlLiteLogic test")
 
 	// Testing mode
 	maxErrs = flag.Int(
@@ -983,11 +966,6 @@ type logicTest struct {
 	// cluster is the test cluster against which we are testing. This cluster
 	// may be reset during the lifetime of the test.
 	cluster serverutils.TestClusterInterface
-	// testserverCluster is the testserver cluster. This uses real binaries.
-	testserverCluster testserver.TestServer
-	// logsDir is the directory where logs are located when using a
-	// testserverCluster.
-	logsDir string
 	// sharedIODir is the ExternalIO directory that is shared between all clusters
 	// created in the same logicTest. It is populated during setup() of the logic
 	// test.
@@ -1194,25 +1172,13 @@ func (t *logicTest) getOrOpenClient(user string, nodeIdx int, newSession bool) *
 
 	var pgURL url.URL
 	pgUser := strings.TrimPrefix(user, "host-cluster-")
-	if t.cfg.UseCockroachGoTestserver {
-		pgURL = *t.testserverCluster.PGURLForNode(nodeIdx)
-		_, port, err := net.SplitHostPort(pgURL.Host)
-		if err != nil {
-			t.Fatal(err)
-		}
-		// The host needs to use 127.0.0.1 instead of localhost, since if the node
-		// is listening on port 0, then macs only listen on ipv4 and not ipv6.
-		pgURL.Host = net.JoinHostPort("127.0.0.1", port)
-		pgURL.User = url.User(pgUser)
-	} else {
-		addr := t.cluster.Server(nodeIdx).AdvSQLAddr()
-		if len(t.tenantAddrs) > 0 && !strings.HasPrefix(user, "host-cluster-") {
-			addr = t.tenantAddrs[nodeIdx]
-		}
-		var cleanupFunc func()
-		pgURL, cleanupFunc = sqlutils.PGUrl(t.rootT, addr, "TestLogic", url.User(pgUser))
-		t.clusterCleanupFuncs = append(t.clusterCleanupFuncs, cleanupFunc)
+	addr := t.cluster.Server(nodeIdx).AdvSQLAddr()
+	if len(t.tenantAddrs) > 0 && !strings.HasPrefix(user, "host-cluster-") {
+		addr = t.tenantAddrs[nodeIdx]
 	}
+	var cleanupFunc func()
+	pgURL, cleanupFunc = sqlutils.PGUrl(t.rootT, addr, "TestLogic", url.User(pgUser))
+	t.clusterCleanupFuncs = append(t.clusterCleanupFuncs, cleanupFunc)
 	pgURL.Path = "test"
 
 	db := t.openDB(pgURL)
@@ -1261,125 +1227,6 @@ func (t *logicTest) openDB(pgURL url.URL) *gosql.DB {
 	})
 
 	return gosql.OpenDB(connector)
-}
-
-// Prevent a lint failure "this value is never used" in
-// `(*logicTest).setup` when bazel.BuiltWithBazel returns false.
-var _ = ((*logicTest)(nil)).newTestServerCluster
-
-// newTestServerCluster creates a 3-node cluster using the cockroach-go library.
-// bootstrapBinaryPath is given by the config's CockroachGoBootstrapVersion.
-// upgradeBinaryPath is given by the config's CockroachGoUpgradeVersion, or
-// is the locally built version if CockroachGoUpgradeVersion was not specified.
-func (t *logicTest) newTestServerCluster(bootstrapBinaryPath, upgradeBinaryPath string) {
-	logsDir, err := os.MkdirTemp("", "cockroach-logs*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cleanupLogsDir := func() {
-		if t.rootT.Failed() {
-			fmt.Fprintf(os.Stderr, "cockroach logs captured in: %s\n", logsDir)
-		} else {
-			_ = os.RemoveAll(logsDir)
-		}
-	}
-	t.logsDir = logsDir
-
-	// During config initialization, NumNodes is required to be 3.
-	opts := []testserver.TestServerOpt{
-		testserver.ThreeNodeOpt(),
-		testserver.StoreOnDiskOpt(),
-		testserver.CockroachBinaryPathOpt(bootstrapBinaryPath),
-		testserver.UpgradeCockroachBinaryPathOpt(upgradeBinaryPath),
-		testserver.PollListenURLTimeoutOpt(120),
-		testserver.CockroachLogsDirOpt(logsDir),
-	}
-	if strings.Contains(upgradeBinaryPath, "cockroach-short") {
-		opts = append(opts, testserver.EnvVarOpt([]string{
-			// If we're using a cockroach-short binary, that means it was
-			// locally built, so we need to opt-out of version offsetting to
-			// better simulate a real upgrade path.
-			"COCKROACH_TESTING_FORCE_RELEASE_BRANCH=true",
-			// The build is made during testing, so it has metamorphic constants.
-			// We disable them here so that the test is more stable.
-			"COCKROACH_INTERNAL_DISABLE_METAMORPHIC_TESTING=true",
-		}))
-	}
-
-	ts, err := testserver.NewTestServer(opts...)
-	if err != nil {
-		t.handleWaitForInitErr(err)
-	}
-	t.testserverCluster = ts
-	t.clusterCleanupFuncs = append(t.clusterCleanupFuncs, ts.Stop, cleanupLogsDir)
-	t.waitForAllNodes()
-	t.setSessionUser(username.RootUser, 0 /* nodeIdx */, false /* newSession */)
-
-	// These tests involve stopping and starting nodes, so to reduce flakiness,
-	// we increase the lease Transfer timeout.
-	// Note: we use the old name of the setting for the benefit of mixed-version
-	// testing.
-	if _, err := t.db.Exec("SET CLUSTER SETTING server.shutdown.lease_transfer_wait = '40s'"); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// waitForAllNodes waits for each node to initialize when under
-// cockroach-go-testserver logic test configurations.
-func (t *logicTest) waitForAllNodes() {
-	if !t.cfg.UseCockroachGoTestserver {
-		return
-	}
-	for i := 0; i < t.cfg.NumNodes; i++ {
-		// Wait for each node to be reachable.
-		if err := t.testserverCluster.WaitForInitFinishForNode(i); err != nil {
-			t.handleWaitForInitErr(err)
-		}
-	}
-}
-
-// Check for `Can't find decompressor for snappy` error in the logs.
-// This error appears to be some sort of infra issue where CRDB is
-// unable to connect to another node, possibly because there is
-// another non-CRDB server listening on that port. Since this is a rare
-// issue, and we haven't been able to investigate it effectively, we
-// will ignore this error.
-// See https://github.com/cockroachdb/cockroach/issues/128759.
-func (t *logicTest) handleWaitForInitErr(err error) {
-	if testutils.IsError(err, "init did not finish for node") {
-		foundSnappyErr := false
-		walkErr := filepath.WalkDir(t.logsDir, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				return nil
-			}
-			file, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			defer file.Close()
-
-			scanner := bufio.NewScanner(file)
-			for scanner.Scan() {
-				if strings.Contains(scanner.Text(), "Can't find decompressor for snappy") {
-					foundSnappyErr = true
-					return filepath.SkipAll
-				}
-			}
-			if err := scanner.Err(); err != nil {
-				return err
-			}
-			return nil
-		})
-		if walkErr != nil {
-			t.t().Logf("error while walking logs directory: %v", walkErr)
-		} else if foundSnappyErr {
-			t.t().Skip("ignoring init did not finish for node error due to snappy error")
-		}
-	}
-	t.Fatal(err)
 }
 
 // newCluster creates a new cluster. It should be called after the logic tests's
@@ -1681,13 +1528,8 @@ func (t *logicTest) newCluster(
 	var randomWorkmem int
 	if t.rng.Float64() < 0.5 && !serverArgs.DisableWorkmemRandomization {
 		// Randomize sql.distsql.temp_storage.workmem cluster setting in
-		// [10KiB, 100KiB) range for normal tests and even bigger for sqlite
-		// tests.
-		if *Bigtest {
-			randomWorkmem = 100<<10 + t.rng.Intn(90<<10)
-		} else {
-			randomWorkmem = 10<<10 + t.rng.Intn(90<<10)
-		}
+		// [10KiB, 100KiB) range.
+		randomWorkmem = 10<<10 + t.rng.Intn(90<<10)
 	}
 
 	// Set cluster settings.
@@ -1890,40 +1732,7 @@ func (t *logicTest) setup(
 	t.sharedIODir = tempExternalIODir
 	t.testCleanupFuncs = append(t.testCleanupFuncs, tempExternalIODirCleanup)
 
-	if cfg.UseCockroachGoTestserver {
-		skip.UnderRace(t.t(), "test uses a different binary, so the race detector doesn't work")
-		skip.UnderStress(t.t(), "test takes a long time and downloads release artifacts")
-		if !bazel.BuiltWithBazel() {
-			skip.IgnoreLint(t.t(), "cockroach-go/testserver can only be uzed in bazel builds")
-		}
-		if cfg.NumNodes != 3 {
-			t.Fatal("cockroach-go testserver tests must use 3 nodes")
-		}
-
-		upgradeVersion, err := version.Parse(build.BinaryVersion())
-		if err != nil {
-			t.Fatal(err)
-		}
-		bootstrapVersion, err := release.LatestPredecessor(upgradeVersion)
-		if err != nil {
-			t.Fatal(err)
-		}
-		bootstrapBinaryPath, err := locateCockroachPredecessor(bootstrapVersion)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// Prevent a lint failure "this value is never used" when
-		// bazel.BuiltWithBazel returns false above.
-		_ = bootstrapBinaryPath
-		upgradeBinaryPath, found := bazel.FindBinary("pkg/cmd/cockroach-short/cockroach-short_/", "cockroach-short")
-		if !found {
-			t.Fatal(errors.New("cockroach binary not found"))
-		}
-		t.newTestServerCluster(bootstrapBinaryPath, upgradeBinaryPath)
-	} else {
-		t.newCluster(serverArgs, t.clusterOpts, t.knobOpts, t.toa)
-	}
+	t.newCluster(serverArgs, t.clusterOpts, t.knobOpts, t.toa)
 
 	// Only create the test database on the initial cluster, since cluster restore
 	// expects an empty cluster.
@@ -2470,13 +2279,8 @@ func (t *logicTest) processSubtest(
 			} else {
 				// Parse "query <type-string> <options> <label>"
 				query.colTypes = fields[1]
-				if *Bigtest {
-					// bigtests put each expected value on its own line.
-					query.valsPerLine = 1
-				} else {
-					// Otherwise, expect number of values to match expected type count.
-					query.valsPerLine = len(query.colTypes)
-				}
+				// Expect the number of values on a line to match the type count.
+				query.valsPerLine = len(query.colTypes)
 
 				if len(fields) >= 3 {
 					query.rawOpts = fields[2]
@@ -2927,48 +2731,6 @@ func (t *logicTest) processSubtest(
 				return errors.Errorf("no trace active")
 			}
 			t.traceStop()
-
-		case "upgrade":
-			if len(fields) != 2 {
-				return errors.Errorf("upgrade requires a node num argument, found: %v", fields)
-			}
-			if t.testserverCluster == nil {
-				return errors.Errorf(`could not perform "upgrade", not a cockroach-go/testserver cluster`)
-			}
-			upgradeNode := func(nodeIdx int) {
-				if err := t.testserverCluster.UpgradeNode(nodeIdx); err != nil {
-					t.Fatal(err)
-				}
-				// Wait for each node to be reachable, since UpgradeNode uses `kill`
-				// to terminate nodes, and may introduce temporary unavailability in
-				// the system range.
-				t.waitForAllNodes()
-				// The port may have changed, so we must remove all the cached connections
-				// to this node.
-				for _, m := range t.clients {
-					if c, ok := m[nodeIdx]; ok {
-						_ = c.Close()
-					}
-					delete(m, nodeIdx)
-				}
-				// If we upgraded the node we are currently on, we need to open a new
-				// connection since the previous one might now be invalid.
-				if t.nodeIdx == nodeIdx {
-					t.setSessionUser(t.user, nodeIdx, false /* newSession */)
-				}
-			}
-			nodeStr := fields[1]
-			if nodeStr == "all" {
-				for i := 0; i < t.cfg.NumNodes; i++ {
-					upgradeNode(i)
-				}
-			} else {
-				nodeIdx, err := strconv.Atoi(nodeStr)
-				if err != nil {
-					t.Fatal(err)
-				}
-				upgradeNode(nodeIdx)
-			}
 
 		default:
 			return errors.Errorf("%s:%d: unknown command: %s",
@@ -3728,18 +3490,13 @@ func (t *logicTest) validateAfterTestCompletion() error {
 
 	// Ensure that all of the created descriptors can round-trip through json.
 	{
-		// If `useCockroachGoTestserver` is true and we do an upgrade,
-		// this may fail if we're in between migrations that
-		// upgrade the descriptors.
-		//
-		// We also want to skip this check for mixed-version configurations (which
+		// We want to skip this check for mixed-version configurations (which
 		// have DisableUpgrade=true and an old BootstrapVersion) in case new
 		// fields are added to the descriptor in the newer version. In mixed-version
 		// test configs, nodes are bootstraped with the older version of the system
 		// tables which don't include the new fields in the protobuf, so they will
 		// fail to round-trip.
-		if !t.cfg.UseCockroachGoTestserver &&
-			!(t.cfg.DisableUpgrade && t.cfg.BootstrapVersion != clusterversion.Key(0)) {
+		if !(t.cfg.DisableUpgrade && t.cfg.BootstrapVersion != clusterversion.Key(0)) {
 			rows, err := t.db.Query(
 				`
 SELECT encode(descriptor, 'hex') AS descriptor
@@ -4203,32 +3960,4 @@ func (t *logicTest) printCompletion(path string, config logictestbase.TestCluste
 	}
 	t.outf("--- done: %s with config %s: %d tests, %d failures%s", path, config.Name,
 		t.progress, t.failures, unsupportedMsg)
-}
-
-func locateCockroachPredecessor(version string) (string, error) {
-	if !strings.HasPrefix(version, "v") {
-		version = "v" + version
-	}
-	munge := func(s string) string {
-		return strings.ReplaceAll(
-			strings.ReplaceAll(s, ".", "_"), "-", "_")
-	}
-	configs := map[string]string{
-		"linux_amd64":  "linux-amd64",
-		"linux_arm64":  "linux-arm64",
-		"darwin_amd64": "darwin-10.9-amd64",
-		"darwin_arm64": "darwin-11.0-arm64",
-	}
-	cfg, ok := configs[fmt.Sprintf("%s_%s", runtime.GOOS, runtime.GOARCH)]
-	if !ok {
-		return "", fmt.Errorf("unknown GOOS/GOARCH combination")
-	}
-	where := fmt.Sprintf(
-		"external/cockroach_binary_%s_%s/cockroach-%s.%s/cockroach",
-		munge(version), munge(cfg), version, cfg)
-	path, err := bazel.Runfile(where)
-	if err != nil {
-		return "", err
-	}
-	return path, nil
 }

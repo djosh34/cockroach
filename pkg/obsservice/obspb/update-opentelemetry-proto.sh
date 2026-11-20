@@ -94,4 +94,4 @@ find . -name "*.bak" -type f -delete
 # Apply a final patch customizing the code generation (sprinkle some gogo.nullable=false).
 git apply opentelemetry-proto.patch
 
-echo 'Done. Do not forget to run `./dev generate bazel` and `./dev generate protobuf`'
+echo 'Done. Do not forget to run build/generate.sh proto'

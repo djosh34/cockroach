@@ -217,7 +217,6 @@ DROP FUNCTION f_allcolsel_alias;
 # Dropping a column using CASCADE is ok,
 # although the legacy schema changer has troubles with it,
 # see: https://github.com/cockroachdb/cockroach/issues/97546
-skipif config local-legacy-schema-changer
 statement ok
 ALTER TABLE t_twocol DROP COLUMN b CASCADE;
 
@@ -226,7 +225,6 @@ DROP TABLE t_onecol CASCADE;
 
 # The only remaining function should not reference the tables.
 # NB: remove the skipif directive when #97546 is resolved.
-skipif config local-legacy-schema-changer
 query TTT
 SELECT oid, proname, prosrc
 FROM pg_catalog.pg_proc WHERE proname LIKE 'f\_%' ORDER BY oid;
@@ -234,11 +232,3 @@ FROM pg_catalog.pg_proc WHERE proname LIKE 'f\_%' ORDER BY oid;
 100117  f_exprstar  SELECT word FROM (SELECT (pg_get_keywords()).word, (pg_get_keywords()).catcode, (pg_get_keywords()).catdesc ORDER BY word LIMIT 1) AS foo;
 
 # Remove this when #97546 is resolved.
-onlyif config local-legacy-schema-changer
-query TTT
-SELECT oid, proname, prosrc
-FROM pg_catalog.pg_proc WHERE proname LIKE 'f\_%' ORDER BY oid;
-----
-100111  f_unqualified_twocol  SELECT t_twocol.a, t_twocol.b FROM test.public.t_twocol;
-100112  f_allcolsel           SELECT t_twocol.a, t_twocol.b FROM test.public.t_twocol;
-100117  f_exprstar            SELECT word FROM (SELECT (pg_get_keywords()).word, (pg_get_keywords()).catcode, (pg_get_keywords()).catdesc ORDER BY word LIMIT 1) AS foo;

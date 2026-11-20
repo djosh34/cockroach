@@ -13,9 +13,8 @@ package server
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
+	"net"
 	"net/http"
-	"strings"
 
 	"github.com/NYTimes/gziphandler"
 	"github.com/cockroachdb/cmux"
@@ -25,17 +24,15 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/server/authserver"
 	"github.com/cockroachdb/cockroach/pkg/server/debug"
 	"github.com/cockroachdb/cockroach/pkg/server/privchecker"
-	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
 	"github.com/cockroachdb/cockroach/pkg/server/srverrors"
 	"github.com/cockroachdb/cockroach/pkg/server/status"
 	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/ts"
-	"github.com/cockroachdb/cockroach/pkg/ui"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/log/logcrash"
 	"github.com/cockroachdb/cockroach/pkg/util/netutil"
 	"github.com/cockroachdb/cockroach/pkg/util/stop"
-	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -94,56 +91,6 @@ func (s *httpServer) handleHealth(healthHandler http.Handler) {
 	s.mux.Handle(healthPath, healthHandler)
 }
 
-const virtualClustersPath = "/virtual_clusters"
-
-// virtualClustersResp is the response returned by the virtual clusters
-// endpoint that contains a list of active tenant sessions in the
-// current session cookie. This allows the DB Console to populate a
-// dropdown allowing the user to select a cluster.
-type virtualClustersResp struct {
-	// VirtualClusters is a list of virtual cluster names.
-	VirtualClusters []string `json:"virtual_clusters"`
-}
-
-// virtualClustersHandler parses the session cookie from the request
-// and returns a JSON body with the list of cluster names contained
-// within the session. If the session does not contain any cluster
-// names, it returns an empty list. If the cookie is missing, it
-// returns 200 OK with an empty request body.
-var virtualClustersHandler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-	sessionCookie, err := req.Cookie(authserver.SessionCookieName)
-	if err != nil {
-		if errors.Is(err, http.ErrNoCookie) {
-			w.Header().Add("Content-Type", "application/json")
-			if _, err := w.Write([]byte(`{"virtual_clusters":[]}`)); err != nil {
-				log.Errorf(req.Context(), "unable to write virtual clusters response: %s", err.Error())
-			}
-			return
-		}
-		http.Error(w, "unable to decode session cookie", http.StatusInternalServerError)
-		return
-	}
-	sessionsAndClusters := strings.Split(sessionCookie.Value, ",")
-	resp := &virtualClustersResp{
-		VirtualClusters: make([]string, 0),
-	}
-	for i, c := range sessionsAndClusters {
-		if i%2 == 1 {
-			resp.VirtualClusters = append(resp.VirtualClusters, c)
-		}
-	}
-
-	respBytes, err := json.Marshal(resp)
-	if err != nil {
-		http.Error(w, "unable to marshal virtual clusterse JSON", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Add("Content-Type", "application/json")
-	if _, err := w.Write(respBytes); err != nil {
-		log.Errorf(req.Context(), "unable to write virtual clusters response: %s", err.Error())
-	}
-})
-
 func (s *httpServer) setupRoutes(
 	ctx context.Context,
 	authnServer authserver.Server,
@@ -154,32 +101,8 @@ func (s *httpServer) setupRoutes(
 	handleDebugUnauthenticated http.Handler,
 	handleInspectzUnauthenticated http.Handler,
 	apiServer http.Handler,
-	flags serverpb.FeatureFlags,
 ) error {
-	// Define the http.Handler for UI assets.
-	assetHandler := ui.Handler(ui.Config{
-		Insecure: s.cfg.InsecureWebAccess(),
-		NodeID:   s.cfg.IDContainer,
-		GetUser: func(ctx context.Context) *string {
-			if user, ok := authserver.MaybeUserFromHTTPAuthInfoContext(ctx); ok {
-				ustring := user.Normalized()
-				return &ustring
-			}
-			return nil
-		},
-		Flags:    flags,
-		Settings: s.cfg.Settings,
-	})
-
-	// The authentication mux used here is created in "allow anonymous" mode so that the UI
-	// assets are served up whether or not there is a session. If there is a session, the mux
-	// adds it to the context, and it is templated into index.html so that the UI can show
-	// the username of the currently-logged-in user.
-	authenticatedUIHandler := authserver.NewMux(
-		authnServer, assetHandler, true /* allowAnonymous */)
-	s.mux.Handle("/", authenticatedUIHandler)
-
-	// Add HTTP authentication to the gRPC-gateway endpoints used by the UI,
+	// Add HTTP authentication to the gRPC-gateway endpoints,
 	// if not disabled by configuration.
 	var authenticatedHandler = handleRequestsUnauthenticated
 	if !s.cfg.InsecureWebAccess() {
@@ -190,14 +113,8 @@ func (s *httpServer) setupRoutes(
 	// The /login endpoint is, by definition, available pre-authentication.
 	s.mux.Handle(authserver.LoginPath, handleRequestsUnauthenticated)
 	s.mux.Handle(authserver.LogoutPath, authenticatedHandler)
-	s.mux.Handle(virtualClustersPath, virtualClustersHandler)
-	// The login path for 'cockroach demo', if we're currently running
-	// that.
-	if s.cfg.EnableDemoLoginEndpoint {
-		s.mux.Handle(authserver.DemoLoginPath, http.HandlerFunc(authnServer.DemoLogin))
-	}
 
-	// Admin/Status servers. These are used by the UI via RPC-over-HTTP.
+	// Admin/Status servers, served as JSON over HTTP.
 	s.mux.Handle(apiconstants.StatusPrefix, authenticatedHandler)
 	s.mux.Handle(apiconstants.AdminPrefix, authenticatedHandler)
 
@@ -274,6 +191,16 @@ func startHTTPService(
 	}
 	log.Eventf(ctx, "listening on http port %s", cfg.HTTPAddr)
 
+	// When TLS is on, cmux sniffs each new connection to tell plain HTTP
+	// from TLS, and its Serve waits for every sniff before it returns. A
+	// client that connects but sends nothing would block shutdown, so the
+	// connections are tracked and closed when quiescing.
+	tracker := &connTracker{Listener: httpLn}
+	tracker.mu.conns = map[*trackedConn]struct{}{}
+	if uiTLSConfig != nil {
+		httpLn = tracker
+	}
+
 	// The HTTP listener shutdown worker, which closes everything under
 	// the HTTP port when the stopper indicates we are shutting down.
 	waitQuiesce := func(ctx context.Context) {
@@ -285,6 +212,7 @@ func startHTTPService(
 		if err := httpLn.Close(); err != nil {
 			log.Ops.Warningf(ctx, "%v", err)
 		}
+		tracker.closeConns()
 	}
 	if err := stopper.RunAsyncTask(workersCtx, "wait-quiesce", waitQuiesce); err != nil {
 		waitQuiesce(workersCtx)
@@ -369,4 +297,76 @@ func (s *httpServer) baseHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	s.proxy.nodeProxyHandler(w, r, s.gzMux.ServeHTTP)
+}
+
+// connTracker is a net.Listener that remembers the connections it accepts
+// until they close, so that closeConns can close the ones still open.
+type connTracker struct {
+	net.Listener
+	mu struct {
+		syncutil.Mutex
+		closed bool
+		conns  map[*trackedConn]struct{}
+	}
+}
+
+// Accept implements net.Listener.
+func (l *connTracker) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	tc := &trackedConn{Conn: c, tracker: l}
+	if !l.add(tc) {
+		// The tracker is closed: the server is shutting down.
+		_ = c.Close()
+	}
+	return tc, nil
+}
+
+// add starts tracking c. It returns false if the tracker is closed.
+func (l *connTracker) add(c *trackedConn) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.mu.closed {
+		return false
+	}
+	l.mu.conns[c] = struct{}{}
+	return true
+}
+
+// remove stops tracking c.
+func (l *connTracker) remove(c *trackedConn) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.mu.conns, c)
+}
+
+// closeConns closes every tracked connection and any accepted later.
+func (l *connTracker) closeConns() {
+	for c := range l.takeAll() {
+		_ = c.Conn.Close()
+	}
+}
+
+// takeAll closes the tracker and returns the tracked connections.
+func (l *connTracker) takeAll() map[*trackedConn]struct{} {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.mu.closed = true
+	conns := l.mu.conns
+	l.mu.conns = nil
+	return conns
+}
+
+// trackedConn is a connection accepted by a connTracker.
+type trackedConn struct {
+	net.Conn
+	tracker *connTracker
+}
+
+// Close implements net.Conn.
+func (c *trackedConn) Close() error {
+	c.tracker.remove(c)
+	return c.Conn.Close()
 }

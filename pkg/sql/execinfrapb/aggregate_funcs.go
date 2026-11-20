@@ -45,10 +45,6 @@ const (
 	JSONBObjectAgg          = AggregatorSpec_JSONB_OBJECT_AGG
 	VarPop                  = AggregatorSpec_VAR_POP
 	StddevPop               = AggregatorSpec_STDDEV_POP
-	StMakeline              = AggregatorSpec_ST_MAKELINE
-	StExtent                = AggregatorSpec_ST_EXTENT
-	StUnion                 = AggregatorSpec_ST_UNION
-	StCollect               = AggregatorSpec_ST_COLLECT
 	CovarPop                = AggregatorSpec_COVAR_POP
 	CovarSamp               = AggregatorSpec_COVAR_SAMP
 	RegrIntercept           = AggregatorSpec_REGR_INTERCEPT

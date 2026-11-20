@@ -115,11 +115,6 @@ func TestDatumOrdering(t *testing.T) {
 		{`'2006-01-02 03:04:05.123123':::timestamp`,
 			`'2006-01-02 03:04:05.123122'`, `'2006-01-02 03:04:05.123124'`, `'4714-11-24 00:00:00 BC'`, `'294276-12-31 23:59:59.999999'`},
 
-		// Geospatial types
-		{`'BOX(1 2,3 4)'::box2d`, noPrev, noNext, noMin, noMax},
-		{`'POINT(1.0 1.0)'::geometry`, noPrev, noNext, noMin, noMax},
-		{`'POINT(1.0 1.0)'::geography`, noPrev, noNext, noMin, noMax},
-
 		// Times
 		{`'00:00:00':::time`, valIsMin, `'00:00:00.000001'`,
 			`'00:00:00'`, `'24:00:00'`},
@@ -1339,32 +1334,6 @@ func TestNewDefaultDatum(t *testing.T) {
 			if actual != tc.expected {
 				t.Errorf("expected %s, got %s", tc.expected, actual)
 			}
-		})
-	}
-}
-
-func TestGeospatialSize(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	testCases := []struct {
-		wkt      string
-		expected uintptr
-	}{
-		{"SRID=4004;POINT EMPTY", 73},
-		{"SRID=4326;LINESTRING(0 0, 10 0)", 125},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.wkt, func(t *testing.T) {
-			t.Run("geometry", func(t *testing.T) {
-				g, err := tree.ParseDGeometry(tc.wkt)
-				require.NoError(t, err)
-				require.Equal(t, tc.expected, g.Size())
-			})
-			t.Run("geography", func(t *testing.T) {
-				g, err := tree.ParseDGeography(tc.wkt)
-				require.NoError(t, err)
-				require.Equal(t, tc.expected, g.Size())
-			})
 		})
 	}
 }

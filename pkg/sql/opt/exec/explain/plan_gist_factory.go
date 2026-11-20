@@ -16,7 +16,6 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 
-	"github.com/cockroachdb/cockroach/pkg/geo/geoindex"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/colinfo"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
@@ -694,10 +693,6 @@ func (u *unknownIndex) Span() roachpb.Span {
 
 func (u *unknownIndex) ImplicitColumnCount() int {
 	return 0
-}
-
-func (u *unknownIndex) GeoConfig() geoindex.Config {
-	return geoindex.Config{}
 }
 
 func (u *unknownIndex) Version() descpb.IndexDescriptorVersion {

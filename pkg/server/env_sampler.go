@@ -100,7 +100,6 @@ func startSampleEnvironment(
 	// specified.
 	var heapProfiler *profiler.HeapProfiler
 	var memMonitoringProfiler *profiler.MemoryMonitoringProfiler
-	var nonGoAllocProfiler *profiler.NonGoAllocProfiler
 	var statsProfiler *profiler.StatsProfiler
 	var queryProfiler *profiler.ActiveQueryProfiler
 	var cpuProfiler *profiler.CPUProfiler
@@ -125,10 +124,6 @@ func startSampleEnvironment(
 			memMonitoringProfiler, err = profiler.NewMemoryMonitoringProfiler(ctx, cfg.heapProfileDirName, cfg.st)
 			if err != nil {
 				return errors.Wrap(err, "starting memory monitoring profiler worker")
-			}
-			nonGoAllocProfiler, err = profiler.NewNonGoAllocProfiler(ctx, cfg.heapProfileDirName, cfg.st)
-			if err != nil {
-				return errors.Wrap(err, "starting non-go alloc profiler worker")
 			}
 			statsProfiler, err = profiler.NewStatsProfiler(ctx, cfg.heapProfileDirName, cfg.st)
 			if err != nil {
@@ -196,8 +191,7 @@ func startSampleEnvironment(
 					}
 
 					curStats := goMemStats.Load().(*status.GoMemStats)
-					cgoStats := status.GetCGoMemStats(ctx)
-					cfg.runtime.SampleEnvironment(ctx, curStats, cgoStats)
+					cfg.runtime.SampleEnvironment(ctx, curStats)
 
 					if goroutineDumper != nil {
 						goroutineDumper.MaybeDump(ctx, cfg.st, cfg.runtime.Goroutines.Value())
@@ -205,8 +199,7 @@ func startSampleEnvironment(
 					if heapProfiler != nil {
 						heapProfiler.MaybeTakeProfile(ctx, cfg.runtime.GoAllocBytes.Value())
 						memMonitoringProfiler.MaybeTakeMemoryMonitoringDump(ctx, cfg.runtime.GoAllocBytes.Value(), cfg.rootMemMonitor, cfg.st)
-						nonGoAllocProfiler.MaybeTakeProfile(ctx, cfg.runtime.CgoTotalBytes.Value())
-						statsProfiler.MaybeTakeProfile(ctx, cfg.runtime.RSSBytes.Value(), curStats, cgoStats)
+						statsProfiler.MaybeTakeProfile(ctx, cfg.runtime.RSSBytes.Value(), curStats)
 					}
 					if queryProfiler != nil {
 						queryProfiler.MaybeDumpQueries(ctx, cfg.sessionRegistry, cfg.st)

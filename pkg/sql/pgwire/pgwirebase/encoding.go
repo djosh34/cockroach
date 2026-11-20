@@ -23,10 +23,8 @@ import (
 	"unicode/utf8"
 	"unsafe"
 
-	"github.com/cockroachdb/cockroach/pkg/geo"
 	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
-	"github.com/cockroachdb/cockroach/pkg/sql/oidext"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgrepl/lsn"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
@@ -367,24 +365,6 @@ func DecodeDatum(
 				return nil, tree.MakeParseError(bs, typ, err)
 			}
 			return tree.NewDFloat(tree.DFloat(f)), nil
-		case oidext.T_box2d:
-			d, err := tree.ParseDBox2D(bs)
-			if err != nil {
-				return nil, tree.MakeParseError(bs, typ, err)
-			}
-			return d, nil
-		case oidext.T_geography:
-			d, err := tree.ParseDGeography(bs)
-			if err != nil {
-				return nil, tree.MakeParseError(bs, typ, err)
-			}
-			return d, nil
-		case oidext.T_geometry:
-			d, err := tree.ParseDGeometry(bs)
-			if err != nil {
-				return nil, tree.MakeParseError(bs, typ, err)
-			}
-			return d, nil
 		case oid.T_void:
 			return tree.DVoidDatum, nil
 		case oid.T_numeric:
@@ -767,18 +747,6 @@ func DecodeDatum(
 				return nil, err
 			}
 			return tree.NewDTSVector(ret), nil
-		case oidext.T_geometry:
-			ret, err := geo.ParseGeometryFromEWKB(b)
-			if err != nil {
-				return nil, err
-			}
-			return tree.NewDGeometry(ret), nil
-		case oidext.T_geography:
-			ret, err := geo.ParseGeographyFromEWKB(b)
-			if err != nil {
-				return nil, err
-			}
-			return tree.NewDGeography(ret), nil
 		default:
 			if typ.Family() == types.ArrayFamily {
 				return decodeBinaryArray(ctx, evalCtx, typ.ArrayContents(), b, code)

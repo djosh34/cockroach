@@ -83,7 +83,7 @@ func VolatilityToProto(v tree.RoutineVolatility) (catpb.Function_Volatility, err
 		return catpb.Function_VOLATILE, nil
 	}
 
-	return -1, errors.AssertionFailedf("Unknown function volatility %q", v)
+	return -1, errors.AssertionFailedf("Unknown function volatility %v", v)
 }
 
 // NullInputBehaviorToProto converts sql statement input null input
@@ -100,7 +100,7 @@ func NullInputBehaviorToProto(
 		return catpb.Function_STRICT, nil
 	}
 
-	return -1, errors.AssertionFailedf("Unknown function null input behavior %q", v)
+	return -1, errors.AssertionFailedf("Unknown function null input behavior %v", v)
 }
 
 // FunctionLangToProto converts sql statement input language to protobuf type.
@@ -129,5 +129,5 @@ func ParamClassToProto(v tree.RoutineParamClass) (catpb.Function_Param_Class, er
 		return catpb.Function_Param_VARIADIC, nil
 	}
 
-	return -1, errors.AssertionFailedf("unknown function parameter class %q", v)
+	return -1, errors.AssertionFailedf("unknown function parameter class %v", v)
 }

@@ -118,13 +118,16 @@ func extractPrometheusMetrics(
 	return
 }
 
+// stressSink keeps the work of stressCpu from being optimized away.
+var stressSink int
+
 // does 10ms stress on a single CPU core
 func stressCpu() {
 	startTime := timeutil.Now()
 	for timeutil.Since(startTime) < 10*time.Millisecond {
 		p := 423897
 		p = p * p
-		p++
+		stressSink += p
 	}
 }
 

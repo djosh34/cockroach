@@ -27,7 +27,6 @@ import (
 	"unsafe"
 
 	"github.com/cockroachdb/apd/v3"
-	"github.com/cockroachdb/cockroach/pkg/geo/geopb"
 	"github.com/cockroachdb/cockroach/pkg/keysbase"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/concurrency/isolation"
 	"github.com/cockroachdb/cockroach/pkg/kv/kvserver/concurrency/lock"
@@ -445,30 +444,6 @@ func (v *Value) SetFloat(f float64) {
 	v.setTag(ValueType_FLOAT)
 }
 
-// SetGeo encodes the specified geo value into the bytes field of the
-// receiver, sets the tag and clears the checksum.
-func (v *Value) SetGeo(so geopb.SpatialObject) error {
-	bytes, err := protoutil.Marshal(&so)
-	if err != nil {
-		return err
-	}
-	v.ensureRawBytes(headerSize + len(bytes))
-	copy(v.dataBytes(), bytes)
-	v.setTag(ValueType_GEO)
-	return nil
-}
-
-// SetBox2D encodes the specified Box2D value into the bytes field of the
-// receiver, sets the tag and clears the checksum.
-func (v *Value) SetBox2D(b geopb.BoundingBox) {
-	v.ensureRawBytes(headerSize + 32)
-	encoding.EncodeUint64Ascending(v.RawBytes[headerSize:headerSize], math.Float64bits(b.LoX))
-	encoding.EncodeUint64Ascending(v.RawBytes[headerSize+8:headerSize+8], math.Float64bits(b.HiX))
-	encoding.EncodeUint64Ascending(v.RawBytes[headerSize+16:headerSize+16], math.Float64bits(b.LoY))
-	encoding.EncodeUint64Ascending(v.RawBytes[headerSize+24:headerSize+24], math.Float64bits(b.HiY))
-	v.setTag(ValueType_BOX2D)
-}
-
 // SetBool encodes the specified bool value into the bytes field of the
 // receiver, sets the tag and clears the checksum.
 func (v *Value) SetBool(b bool) {
@@ -593,54 +568,6 @@ func (v Value) GetFloat() (float64, error) {
 		return 0, err
 	}
 	return math.Float64frombits(u), nil
-}
-
-// GetGeo decodes a geo value from the bytes field of the receiver. If the
-// tag is not GEO an error will be returned.
-func (v Value) GetGeo() (geopb.SpatialObject, error) {
-	if tag := v.GetTag(); tag != ValueType_GEO {
-		return geopb.SpatialObject{}, fmt.Errorf("value type is not %s: %s", ValueType_GEO, tag)
-	}
-	var ret geopb.SpatialObject
-	err := protoutil.Unmarshal(v.dataBytes(), &ret)
-	return ret, err
-}
-
-// GetBox2D decodes a geo value from the bytes field of the receiver. If the
-// tag is not BOX2D an error will be returned.
-func (v Value) GetBox2D() (geopb.BoundingBox, error) {
-	box := geopb.BoundingBox{}
-	if tag := v.GetTag(); tag != ValueType_BOX2D {
-		return box, fmt.Errorf("value type is not %s: %s", ValueType_BOX2D, tag)
-	}
-	dataBytes := v.dataBytes()
-	if len(dataBytes) != 32 {
-		return box, fmt.Errorf("float64 value should be exactly 32 bytes: %d", len(dataBytes))
-	}
-	var err error
-	var val uint64
-	dataBytes, val, err = encoding.DecodeUint64Ascending(dataBytes)
-	if err != nil {
-		return box, err
-	}
-	box.LoX = math.Float64frombits(val)
-	dataBytes, val, err = encoding.DecodeUint64Ascending(dataBytes)
-	if err != nil {
-		return box, err
-	}
-	box.HiX = math.Float64frombits(val)
-	dataBytes, val, err = encoding.DecodeUint64Ascending(dataBytes)
-	if err != nil {
-		return box, err
-	}
-	box.LoY = math.Float64frombits(val)
-	_, val, err = encoding.DecodeUint64Ascending(dataBytes)
-	if err != nil {
-		return box, err
-	}
-	box.HiY = math.Float64frombits(val)
-
-	return box, nil
 }
 
 // GetBool decodes a bool value from the bytes field of the receiver. If the

@@ -90,20 +90,6 @@ type CatalogBuiltins interface {
 		performCast CastFunc,
 	) ([]byte, error)
 
-	// NumGeometryInvertedIndexEntries computes the number of inverted index
-	// entries we'd expect to generate from a given geometry value given the
-	// index's configuration.
-	NumGeometryInvertedIndexEntries(
-		ctx context.Context, tableID catid.DescID, indexID catid.IndexID, g *tree.DGeometry,
-	) (int, error)
-
-	// NumGeographyInvertedIndexEntries computes the number of inverted index
-	// entries we'd expect to generate from a given geography value given the
-	// index's configuration.
-	NumGeographyInvertedIndexEntries(
-		ctx context.Context, tableID catid.DescID, indexID catid.IndexID, g *tree.DGeography,
-	) (int, error)
-
 	// PGColumnIsUpdatable returns whether the given column can be updated.
 	PGColumnIsUpdatable(
 		ctx context.Context, oidArg *tree.DOid, attNumArg tree.DInt,

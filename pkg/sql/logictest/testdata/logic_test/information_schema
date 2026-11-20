@@ -2,7 +2,6 @@
 # the tenant table for tenants. Legacy schema changer is also skipped, because
 # some of the queries relating internal state will be impacted in terms of
 # descriptor versions, etc..
-# LogicTest: !3node-tenant-default-configs !local-legacy-schema-changer
 
 # Verify information_schema database handles mutation statements correctly.
 
@@ -78,9 +77,6 @@ information_schema  sql_features                           table  node  NULL
 information_schema  sql_implementation_info                table  node  NULL
 information_schema  sql_parts                              table  node  NULL
 information_schema  sql_sizing                             table  node  NULL
-information_schema  st_geometry_columns                    table  node  NULL
-information_schema  st_spatial_reference_systems           table  node  NULL
-information_schema  st_units_of_measure                    table  node  NULL
 information_schema  statistics                             table  node  NULL
 information_schema  table_constraints                      table  node  NULL
 information_schema  table_constraints_extensions           table  node  NULL
@@ -293,9 +289,6 @@ information_schema  sql_features                           table  node  NULL
 information_schema  sql_implementation_info                table  node  NULL
 information_schema  sql_parts                              table  node  NULL
 information_schema  sql_sizing                             table  node  NULL
-information_schema  st_geometry_columns                    table  node  NULL
-information_schema  st_spatial_reference_systems           table  node  NULL
-information_schema  st_units_of_measure                    table  node  NULL
 information_schema  statistics                             table  node  NULL
 information_schema  table_constraints                      table  node  NULL
 information_schema  table_constraints_extensions           table  node  NULL
@@ -547,9 +540,6 @@ information_schema  sql_features
 information_schema  sql_implementation_info
 information_schema  sql_parts
 information_schema  sql_sizing
-information_schema  st_geometry_columns
-information_schema  st_spatial_reference_systems
-information_schema  st_units_of_measure
 information_schema  statistics
 information_schema  table_constraints
 information_schema  table_constraints_extensions
@@ -702,9 +692,6 @@ pg_catalog          pg_user
 pg_catalog          pg_user_mapping
 pg_catalog          pg_user_mappings
 pg_catalog          pg_views
-pg_extension        geography_columns
-pg_extension        geometry_columns
-pg_extension        spatial_ref_sys
 
 statement ok
 CREATE DATABASE other_db
@@ -896,9 +883,6 @@ sql_features
 sql_implementation_info
 sql_parts
 sql_sizing
-st_geometry_columns
-st_spatial_reference_systems
-st_units_of_measure
 statistics
 table_constraints
 table_constraints_extensions
@@ -1051,9 +1035,6 @@ pg_user
 pg_user_mapping
 pg_user_mappings
 pg_views
-geography_columns
-geometry_columns
-spatial_ref_sys
 xyz
 abc
 
@@ -1129,7 +1110,6 @@ table_constraints
 table_columns
 
 # Check that the metadata is reported properly.
-skipif config local-mixed-23.1
 query TTTTT colnames
 SELECT table_catalog, table_schema, table_name, table_type, is_insertable_into
 FROM system.information_schema.tables ORDER BY table_name, table_schema
@@ -1202,8 +1182,6 @@ system         information_schema  foreign_servers                         SYSTE
 system         information_schema  foreign_table_options                   SYSTEM VIEW  NO
 system         information_schema  foreign_tables                          SYSTEM VIEW  NO
 system         crdb_internal       forward_dependencies                    SYSTEM VIEW  NO
-system         pg_extension        geography_columns                       SYSTEM VIEW  NO
-system         pg_extension        geometry_columns                        SYSTEM VIEW  NO
 system         crdb_internal       gossip_alerts                           SYSTEM VIEW  NO
 system         crdb_internal       gossip_liveness                         SYSTEM VIEW  NO
 system         crdb_internal       gossip_network                          SYSTEM VIEW  NO
@@ -1431,16 +1409,12 @@ system         public              span_stats_buckets                      BASE 
 system         public              span_stats_samples                      BASE TABLE   YES
 system         public              span_stats_tenant_boundaries            BASE TABLE   YES
 system         public              span_stats_unique_keys                  BASE TABLE   YES
-system         pg_extension        spatial_ref_sys                         SYSTEM VIEW  NO
 system         information_schema  sql_features                            SYSTEM VIEW  NO
 system         information_schema  sql_implementation_info                 SYSTEM VIEW  NO
 system         public              sql_instances                           BASE TABLE   YES
 system         information_schema  sql_parts                               SYSTEM VIEW  NO
 system         information_schema  sql_sizing                              SYSTEM VIEW  NO
 system         public              sqlliveness                             BASE TABLE   YES
-system         information_schema  st_geometry_columns                     SYSTEM VIEW  NO
-system         information_schema  st_spatial_reference_systems            SYSTEM VIEW  NO
-system         information_schema  st_units_of_measure                     SYSTEM VIEW  NO
 system         crdb_internal       statement_activity                      SYSTEM VIEW  NO
 system         public              statement_activity                      BASE TABLE   YES
 system         public              statement_bundle_chunks                 BASE TABLE   YES
@@ -1554,7 +1528,6 @@ SET DATABASE = test
 ## information_schema.check_constraints
 ## information_schema.constraint_column_usage
 
-skipif config local-mixed-23.1
 query TTTTTTTTT colnames
 SELECT *
 FROM system.information_schema.table_constraints
@@ -1896,7 +1869,6 @@ NULL                   NULL                  UTF8                UCS            
 NULL                   NULL                  UTF8                UCS                   UTF8         test                     NULL                    NULL
 
 
-skipif config local-mixed-23.1
 query TTTT colnames
 SELECT *
 FROM system.information_schema.check_constraints
@@ -2158,7 +2130,6 @@ system              public             check_crdb_internal_end_time_start_time_s
 system              public             check_sampling_probability                                                                                      ((sampling_probability BETWEEN 0.0:::FLOAT8 AND 1.0:::FLOAT8))
 system              public             check_singleton                                                                                                 ((singleton))
 
-skipif config local-mixed-23.1
 query TTTTTTT colnames
 SELECT *
 FROM system.information_schema.constraint_column_usage
@@ -2384,7 +2355,6 @@ select data_type, column_default from information_schema.columns where table_nam
 data_type  column_default
 smallint   0
 
-skipif config local-mixed-23.1
 query TTTTI colnames
 SELECT table_catalog, table_schema, table_name, column_name, ordinal_position
 FROM system.information_schema.columns
@@ -2416,20 +2386,6 @@ system         public        external_connections             created           
 system         public        external_connections             owner                                                                                                     6
 system         public        external_connections             owner_id                                                                                                  7
 system         public        external_connections             updated                                                                                                   3
-system         pg_extension  geography_columns                coord_dimension                                                                                           5
-system         pg_extension  geography_columns                f_geography_column                                                                                        4
-system         pg_extension  geography_columns                f_table_catalog                                                                                           1
-system         pg_extension  geography_columns                f_table_name                                                                                              3
-system         pg_extension  geography_columns                f_table_schema                                                                                            2
-system         pg_extension  geography_columns                srid                                                                                                      6
-system         pg_extension  geography_columns                type                                                                                                      7
-system         pg_extension  geometry_columns                 coord_dimension                                                                                           5
-system         pg_extension  geometry_columns                 f_geometry_column                                                                                         4
-system         pg_extension  geometry_columns                 f_table_catalog                                                                                           1
-system         pg_extension  geometry_columns                 f_table_name                                                                                              3
-system         pg_extension  geometry_columns                 f_table_schema                                                                                            2
-system         pg_extension  geometry_columns                 srid                                                                                                      6
-system         pg_extension  geometry_columns                 type                                                                                                      7
 system         public        job_info                         info_key                                                                                                  2
 system         public        job_info                         job_id                                                                                                    1
 system         public        job_info                         value                                                                                                     4
@@ -2559,11 +2515,6 @@ system         public        span_stats_tenant_boundaries     boundaries        
 system         public        span_stats_tenant_boundaries     tenant_id                                                                                                 1
 system         public        span_stats_unique_keys           id                                                                                                        1
 system         public        span_stats_unique_keys           key_bytes                                                                                                 2
-system         pg_extension  spatial_ref_sys                  auth_name                                                                                                 2
-system         pg_extension  spatial_ref_sys                  auth_srid                                                                                                 3
-system         pg_extension  spatial_ref_sys                  proj4text                                                                                                 5
-system         pg_extension  spatial_ref_sys                  srid                                                                                                      1
-system         pg_extension  spatial_ref_sys                  srtext                                                                                                    4
 system         public        sql_instances                    addr                                                                                                      2
 system         public        sql_instances                    binary_version                                                                                            7
 system         public        sql_instances                    crdb_region                                                                                               6
@@ -3246,7 +3197,6 @@ root      other_db       public              ALL             YES
 
 ## information_schema.table_privileges and information_schema.role_table_grants
 
-skipif config local-mixed-23.1
 # root can see everything
 query TTTTTTTT colnames,rowsort
 SELECT * FROM system.information_schema.table_privileges ORDER BY table_schema, table_name, table_schema, grantee, privilege_type
@@ -3407,9 +3357,6 @@ NULL     public   system         information_schema  sql_features               
 NULL     public   system         information_schema  sql_implementation_info                 SELECT          NO            YES
 NULL     public   system         information_schema  sql_parts                               SELECT          NO            YES
 NULL     public   system         information_schema  sql_sizing                              SELECT          NO            YES
-NULL     public   system         information_schema  st_geometry_columns                     SELECT          NO            YES
-NULL     public   system         information_schema  st_spatial_reference_systems            SELECT          NO            YES
-NULL     public   system         information_schema  st_units_of_measure                     SELECT          NO            YES
 NULL     public   system         information_schema  statistics                              SELECT          NO            YES
 NULL     public   system         information_schema  table_constraints                       SELECT          NO            YES
 NULL     public   system         information_schema  table_constraints_extensions            SELECT          NO            YES
@@ -3562,9 +3509,6 @@ NULL     public   system         pg_catalog          pg_user                    
 NULL     public   system         pg_catalog          pg_user_mapping                         SELECT          NO            YES
 NULL     public   system         pg_catalog          pg_user_mappings                        SELECT          NO            YES
 NULL     public   system         pg_catalog          pg_views                                SELECT          NO            YES
-NULL     public   system         pg_extension        geography_columns                       SELECT          NO            YES
-NULL     public   system         pg_extension        geometry_columns                        SELECT          NO            YES
-NULL     public   system         pg_extension        spatial_ref_sys                         SELECT          NO            YES
 NULL     admin    system         public              comments                                DELETE          YES           NO
 NULL     admin    system         public              comments                                INSERT          YES           NO
 NULL     admin    system         public              comments                                SELECT          YES           YES
@@ -3939,7 +3883,6 @@ NULL     root     system         public              zones                      
 NULL     root     system         public              zones                                   SELECT          YES           YES
 NULL     root     system         public              zones                                   UPDATE          YES           NO
 
-skipif config local-mixed-23.1
 query TTTTTTTT colnames,rowsort
 SELECT * FROM system.information_schema.role_table_grants
 ----
@@ -4099,9 +4042,6 @@ NULL     public   system         information_schema  sql_features               
 NULL     public   system         information_schema  sql_implementation_info                 SELECT          NO            YES
 NULL     public   system         information_schema  sql_parts                               SELECT          NO            YES
 NULL     public   system         information_schema  sql_sizing                              SELECT          NO            YES
-NULL     public   system         information_schema  st_geometry_columns                     SELECT          NO            YES
-NULL     public   system         information_schema  st_spatial_reference_systems            SELECT          NO            YES
-NULL     public   system         information_schema  st_units_of_measure                     SELECT          NO            YES
 NULL     public   system         information_schema  statistics                              SELECT          NO            YES
 NULL     public   system         information_schema  table_constraints                       SELECT          NO            YES
 NULL     public   system         information_schema  table_constraints_extensions            SELECT          NO            YES
@@ -4254,9 +4194,6 @@ NULL     public   system         pg_catalog          pg_user                    
 NULL     public   system         pg_catalog          pg_user_mapping                         SELECT          NO            YES
 NULL     public   system         pg_catalog          pg_user_mappings                        SELECT          NO            YES
 NULL     public   system         pg_catalog          pg_views                                SELECT          NO            YES
-NULL     public   system         pg_extension        geography_columns                       SELECT          NO            YES
-NULL     public   system         pg_extension        geometry_columns                        SELECT          NO            YES
-NULL     public   system         pg_extension        spatial_ref_sys                         SELECT          NO            YES
 NULL     admin    system         public              descriptor                              SELECT          YES           YES
 NULL     root     system         public              descriptor                              SELECT          YES           YES
 NULL     admin    system         public              users                                   DELETE          YES           NO
@@ -5968,9 +5905,6 @@ grantor  grantee  specific_catalog  specific_schema  specific_name  routine_cata
 NULL     admin    test              pg_catalog       array_agg_1    test             pg_catalog      array_agg     EXECUTE         NO
 NULL     public   test              pg_catalog       array_agg_1    test             pg_catalog      array_agg     EXECUTE         NO
 NULL     root     test              pg_catalog       array_agg_1    test             pg_catalog      array_agg     EXECUTE         NO
-NULL     admin    test              pg_catalog       array_agg_10   test             pg_catalog      array_agg     EXECUTE         NO
-NULL     public   test              pg_catalog       array_agg_10   test             pg_catalog      array_agg     EXECUTE         NO
-NULL     root     test              pg_catalog       array_agg_10   test             pg_catalog      array_agg     EXECUTE         NO
 NULL     admin    test              pg_catalog       array_agg_11   test             pg_catalog      array_agg     EXECUTE         NO
 NULL     public   test              pg_catalog       array_agg_11   test             pg_catalog      array_agg     EXECUTE         NO
 NULL     root     test              pg_catalog       array_agg_11   test             pg_catalog      array_agg     EXECUTE         NO
@@ -5998,9 +5932,6 @@ NULL     root     test              pg_catalog       array_agg_18   test        
 NULL     admin    test              pg_catalog       array_agg_19   test             pg_catalog      array_agg     EXECUTE         NO
 NULL     public   test              pg_catalog       array_agg_19   test             pg_catalog      array_agg     EXECUTE         NO
 NULL     root     test              pg_catalog       array_agg_19   test             pg_catalog      array_agg     EXECUTE         NO
-NULL     admin    test              pg_catalog       array_agg_2    test             pg_catalog      array_agg     EXECUTE         NO
-NULL     public   test              pg_catalog       array_agg_2    test             pg_catalog      array_agg     EXECUTE         NO
-NULL     root     test              pg_catalog       array_agg_2    test             pg_catalog      array_agg     EXECUTE         NO
 NULL     admin    test              pg_catalog       array_agg_20   test             pg_catalog      array_agg     EXECUTE         NO
 NULL     public   test              pg_catalog       array_agg_20   test             pg_catalog      array_agg     EXECUTE         NO
 NULL     root     test              pg_catalog       array_agg_20   test             pg_catalog      array_agg     EXECUTE         NO
@@ -6028,9 +5959,6 @@ NULL     root     test              pg_catalog       array_agg_7    test        
 NULL     admin    test              pg_catalog       array_agg_8    test             pg_catalog      array_agg     EXECUTE         NO
 NULL     public   test              pg_catalog       array_agg_8    test             pg_catalog      array_agg     EXECUTE         NO
 NULL     root     test              pg_catalog       array_agg_8    test             pg_catalog      array_agg     EXECUTE         NO
-NULL     admin    test              pg_catalog       array_agg_9    test             pg_catalog      array_agg     EXECUTE         NO
-NULL     public   test              pg_catalog       array_agg_9    test             pg_catalog      array_agg     EXECUTE         NO
-NULL     root     test              pg_catalog       array_agg_9    test             pg_catalog      array_agg     EXECUTE         NO
 NULL     admin    test              pg_catalog       avg_23         test             pg_catalog      avg           EXECUTE         NO
 NULL     public   test              pg_catalog       avg_23         test             pg_catalog      avg           EXECUTE         NO
 NULL     root     test              pg_catalog       avg_23         test             pg_catalog      avg           EXECUTE         NO

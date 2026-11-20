@@ -104,15 +104,15 @@ func CollectRemoteReplicaInfo(
 			"unsupported cluster info version")
 	}
 	return loqrecoverypb.ClusterReplicaInfo{
-			ClusterID:   metadata.ClusterID,
-			Descriptors: descriptors,
-			LocalInfo:   replInfos,
-			Version:     metadata.Version,
-		}, CollectionStats{
-			Nodes:       len(nodes),
-			Stores:      len(stores),
-			Descriptors: len(descriptors),
-		}, nil
+		ClusterID:   metadata.ClusterID,
+		Descriptors: descriptors,
+		LocalInfo:   replInfos,
+		Version:     metadata.Version,
+	}, CollectionStats{
+		Nodes:       len(nodes),
+		Stores:      len(stores),
+		Descriptors: len(descriptors),
+	}, nil
 }
 
 // CollectStoresReplicaInfo captures states of all replicas in all stores for the sake of quorum recovery.
@@ -159,13 +159,13 @@ func CollectStoresReplicaInfo(
 		}
 	}
 	return loqrecoverypb.ClusterReplicaInfo{
-			ClusterID: clusterUUID.String(),
-			LocalInfo: []loqrecoverypb.NodeReplicaInfo{{Replicas: replicas}},
-			Version:   version.Version,
-		}, CollectionStats{
-			Nodes:  len(nodes),
-			Stores: len(stores),
-		}, nil
+		ClusterID: clusterUUID.String(),
+		LocalInfo: []loqrecoverypb.NodeReplicaInfo{{Replicas: replicas}},
+		Version:   version.Version,
+	}, CollectionStats{
+		Nodes:  len(nodes),
+		Stores: len(stores),
+	}, nil
 }
 
 func visitStoreReplicas(

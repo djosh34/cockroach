@@ -2,14 +2,6 @@ exec-ddl
 CREATE TABLE a (k INT PRIMARY KEY, i INT, f FLOAT, s STRING, j JSON, d DATE)
 ----
 
-exec-ddl
-CREATE TABLE geom_geog (
-  geom GEOMETRY,
-  geog GEOGRAPHY,
-  val FLOAT
-)
-----
-
 # --------------------------------------------------
 # CommuteVarInequality
 # --------------------------------------------------
@@ -242,7 +234,6 @@ values
  ├── key: ()
  ├── fd: ()-->(1)
  └── (NULL,)
-
 
 # --------------------------------------------------
 # NormalizeCmpConstMinus
@@ -938,49 +929,6 @@ project
  │    └── columns: b:2
  └── projections
       └── NOT b:2 [as="?column?":5, outer=(2)]
-
-exec-ddl
-CREATE INVERTED INDEX ON geom_geog(geom)
-----
-
-# Regression test for #65684.
-# We use opt here to show that the inverted index is used.
-opt expect=FoldEqTrue
-SELECT count(*) FROM geom_geog WHERE (geom && st_geomfromewkt('SRID=4326;POLYGON((0 0,0 100,100 100,100 0,0 0))'))=TRUE;
-----
-scalar-group-by
- ├── columns: count:8!null
- ├── cardinality: [1 - 1]
- ├── immutable
- ├── key: ()
- ├── fd: ()-->(8)
- ├── select
- │    ├── columns: geom:1!null
- │    ├── immutable
- │    ├── index-join geom_geog
- │    │    ├── columns: geom:1
- │    │    └── inverted-filter
- │    │         ├── columns: rowid:4!null
- │    │         ├── inverted expression: /7
- │    │         │    ├── tight: false, unique: false
- │    │         │    └── union spans
- │    │         │         ├── ["B\x89", "B\xfd \x00\x00\x00\x00\x00\x00\x00")
- │    │         │         └── ["B\xfd\xff\xff\xff\xff\xff\xff\xff\xff", "B\xfd\xff\xff\xff\xff\xff\xff\xff\xff"]
- │    │         ├── pre-filterer expression
- │    │         │    └── st_intersects('0103000020E610000001000000050000000000000000000000000000000000000000000000000000000000000000005940000000000000594000000000000059400000000000005940000000000000000000000000000000000000000000000000', geom:1)
- │    │         ├── key: (4)
- │    │         └── scan geom_geog@geom_geog_geom_idx
- │    │              ├── columns: rowid:4!null geom_inverted_key:7!null
- │    │              ├── inverted constraint: /7/4
- │    │              │    └── spans
- │    │              │         ├── ["B\x89", "B\xfd \x00\x00\x00\x00\x00\x00\x00")
- │    │              │         └── ["B\xfd\xff\xff\xff\xff\xff\xff\xff\xff", "B\xfd\xff\xff\xff\xff\xff\xff\xff\xff"]
- │    │              ├── key: (4)
- │    │              └── fd: (4)-->(7)
- │    └── filters
- │         └── geom:1 && '0103000020E610000001000000050000000000000000000000000000000000000000000000000000000000000000005940000000000000594000000000000059400000000000005940000000000000000000000000000000000000000000000000' [outer=(1), immutable, constraints=(/1: (/NULL - ])]
- └── aggregations
-      └── count-rows [as=count_rows:8]
 
 # --------------------------------------------------
 # FoldNeTrue + FoldNeFalse

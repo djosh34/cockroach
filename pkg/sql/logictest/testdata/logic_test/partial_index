@@ -2043,7 +2043,6 @@ CREATE TABLE t96924 (a INT NOT NULL)
 statement ok
 CREATE INDEX t96924_idx_1 ON t96924(a) WHERE (rowid > 0);
 
-skipif config local-legacy-schema-changer
 statement error column "rowid" cannot be dropped because it is referenced by partial index "t96924_idx_1"
 ALTER TABLE t96924 ALTER PRIMARY KEY USING COLUMNS (a);
 

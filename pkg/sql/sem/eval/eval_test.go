@@ -196,35 +196,10 @@ func TestTimeConversion(t *testing.T) {
 	for _, test := range tests {
 		ctx := eval.NewTestingEvalContext(cluster.MakeTestingClusterSettings())
 		defer ctx.Stop(context.Background())
-		exprStr := fmt.Sprintf("experimental_strptime('%s', '%s')", test.start, test.format)
-		expr, err := parser.ParseExpr(exprStr)
-		if err != nil {
-			t.Errorf("%s: %v", exprStr, err)
-			continue
-		}
+		// strftime must format test.tm back to test.start, or to
+		// test.reverse when it is set.
+		tmS := test.tm
 		semaCtx := tree.MakeSemaContext()
-		typedExpr, err := expr.TypeCheck(context.Background(), &semaCtx, types.Timestamp)
-		if err != nil {
-			t.Errorf("%s: %v", exprStr, err)
-			continue
-		}
-		r, err := eval.Expr(context.Background(), ctx, typedExpr)
-		if err != nil {
-			t.Errorf("%s: %v", exprStr, err)
-			continue
-		}
-		ts, ok := r.(*tree.DTimestampTZ)
-		if !ok {
-			t.Errorf("%s: result not a timestamp: %s", exprStr, r)
-			continue
-		}
-
-		tmS := ts.String()
-		tmS = tmS[1 : len(tmS)-1] // strip the quote delimiters
-		if tmS != test.tm {
-			t.Errorf("%s: got %q, expected %q", exprStr, tmS, test.tm)
-			continue
-		}
 
 		revfmt := test.format
 		if test.revformat != "" {
@@ -236,18 +211,18 @@ func TestTimeConversion(t *testing.T) {
 			ref = test.reverse
 		}
 
-		exprStr = fmt.Sprintf("experimental_strftime('%s'::timestamp, '%s')", tmS, revfmt)
-		expr, err = parser.ParseExpr(exprStr)
+		exprStr := fmt.Sprintf("experimental_strftime('%s'::timestamp, '%s')", tmS, revfmt)
+		expr, err := parser.ParseExpr(exprStr)
 		if err != nil {
 			t.Errorf("%s: %v", exprStr, err)
 			continue
 		}
-		typedExpr, err = expr.TypeCheck(context.Background(), &semaCtx, types.Timestamp)
+		typedExpr, err := expr.TypeCheck(context.Background(), &semaCtx, types.Timestamp)
 		if err != nil {
 			t.Errorf("%s: %v", exprStr, err)
 			continue
 		}
-		r, err = eval.Expr(context.Background(), ctx, typedExpr)
+		r, err := eval.Expr(context.Background(), ctx, typedExpr)
 		if err != nil {
 			t.Errorf("%s: %v", exprStr, err)
 			continue

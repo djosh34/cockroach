@@ -1,0 +1,98 @@
+# Runs on every pull request and every push to main. All jobs run in
+# parallel; ci-ok is the one required check and passes only if every other
+# job passed.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CGO_ENABLED: "0"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+      - name: Build without cgo
+        run: GOARCH=${{ matrix.goarch }} go build ./...
+
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+      - run: build/generate.sh
+      - name: Fail on any difference
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"
+
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # The whole-tree tools each need several GB of memory, so every part
+        # gets its own runner. See build/ci/lint.sh.
+        part: [vet, roachvet-0-2, roachvet-1-2, staticcheck-0-2, staticcheck-1-2, returncheck, rest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+      - run: build/ci/lint.sh ${{ matrix.part }}
+
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+      - run: build/ci/test.sh test ${{ matrix.shard }} 11
+
+  logic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+      - run: build/ci/test.sh logic ${{ matrix.shard }} 4
+
+  ci-ok:
+    if: always()
+    needs: [build, generate, lint, test, logic]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check that every job passed
+        run: |
+          for result in ${{ join(needs.*.result, ' ') }}; do
+            if [ "$result" != success ]; then
+              echo "a job ended with: $result"
+              exit 1
+            fi
+          done

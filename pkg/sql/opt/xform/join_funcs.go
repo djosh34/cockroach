@@ -23,7 +23,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/props/physical"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
-	"github.com/cockroachdb/cockroach/pkg/util/intsets"
 	"github.com/cockroachdb/errors"
 )
 
@@ -1277,24 +1276,6 @@ func (c *CustomFuncs) EmptyFiltersExpr() memo.FiltersExpr {
 	return memo.EmptyFiltersExpr
 }
 
-// splitValues splits the given slice of Datums into local and remote slices
-// by putting the Datums at positions identified by localValOrds into the local
-// slice, and the remaining Datums into the remote slice.
-func (c *CustomFuncs) splitValues(
-	values tree.Datums, localValOrds intsets.Fast,
-) (localVals, remoteVals tree.Datums) {
-	localVals = make(tree.Datums, 0, localValOrds.Len())
-	remoteVals = make(tree.Datums, 0, len(values)-len(localVals))
-	for i, val := range values {
-		if localValOrds.Contains(i) {
-			localVals = append(localVals, val)
-		} else {
-			remoteVals = append(remoteVals, val)
-		}
-	}
-	return localVals, remoteVals
-}
-
 // splitDisjunctionForJoin finds the first disjunction in the ON clause that can
 // be split into a pair of predicates. It returns the pair of predicates and the
 // Filters item they were a part of. If a disjunction is not found, ok=false is
@@ -1660,54 +1641,4 @@ func (c *CustomFuncs) findDisjunctionPairForJoin(
 	}
 
 	return c.constructOr(leftExprs), c.constructOr(rightExprs), true
-}
-
-// mapInputSideOfLookupJoin copies a lookupJoinExpr having a `ScanExpr` as input
-// or a Select from a `ScanExpr` and replaces that input with `newInputRel`.
-// `newInputScan` is expected to be duplicated from the original input scan. All
-// references to column IDs in the lookup join expression belonging to the
-// original scan are mapped to column IDs of the duplicated scan.
-func (c *CustomFuncs) mapInputSideOfLookupJoin(
-	lookupJoinExpr *memo.LookupJoinExpr, newInputScan *memo.ScanExpr, newInputRel memo.RelExpr,
-) (mappedLookupJoinExpr *memo.LookupJoinExpr) {
-	origInputRel := lookupJoinExpr.Input
-	if origSelectExpr, ok := origInputRel.(*memo.SelectExpr); ok {
-		origInputRel = origSelectExpr.Input
-	}
-	inputScan, ok := origInputRel.(*memo.ScanExpr)
-	if !ok {
-		panic(errors.AssertionFailedf("expected input of lookup join to be a scan"))
-	}
-	colMap := c.makeColMap(&inputScan.ScanPrivate, &newInputScan.ScanPrivate)
-	newJP := c.DuplicateJoinPrivate(&lookupJoinExpr.JoinPrivate)
-	mappedLookupJoinExpr =
-		&memo.LookupJoinExpr{
-			Input: newInputRel,
-		}
-	mappedLookupJoinExpr.JoinType = lookupJoinExpr.JoinType
-	on := c.e.f.RemapCols(&lookupJoinExpr.On, colMap).(*memo.FiltersExpr)
-	mappedLookupJoinExpr.On = *on
-	mappedLookupJoinExpr.JoinPrivate = *newJP
-	mappedLookupJoinExpr.JoinType = lookupJoinExpr.JoinType
-	mappedLookupJoinExpr.Table = lookupJoinExpr.Table
-	mappedLookupJoinExpr.Index = lookupJoinExpr.Index
-	mappedLookupJoinExpr.KeyCols = lookupJoinExpr.KeyCols.CopyAndMaybeRemapColumns(colMap)
-	mappedLookupJoinExpr.DerivedEquivCols = lookupJoinExpr.DerivedEquivCols.CopyAndMaybeRemap(colMap)
-
-	c.e.f.DisableOptimizationsTemporarily(func() {
-		// Disable normalization rules when remapping the lookup expressions so
-		// that they do not get normalized into non-canonical lookup
-		// expressions.
-		lookupExpr := c.e.f.RemapCols(&lookupJoinExpr.LookupExpr, colMap).(*memo.FiltersExpr)
-		mappedLookupJoinExpr.LookupExpr = *lookupExpr
-	})
-	mappedLookupJoinExpr.Cols = lookupJoinExpr.Cols.Copy().Difference(inputScan.Cols).Union(newInputScan.Cols)
-	mappedLookupJoinExpr.LookupColsAreTableKey = lookupJoinExpr.LookupColsAreTableKey
-	mappedLookupJoinExpr.IsFirstJoinInPairedJoiner = lookupJoinExpr.IsFirstJoinInPairedJoiner
-	mappedLookupJoinExpr.IsSecondJoinInPairedJoiner = lookupJoinExpr.IsSecondJoinInPairedJoiner
-	mappedLookupJoinExpr.ContinuationCol = lookupJoinExpr.ContinuationCol
-	allLookupFilters := c.e.f.RemapCols(&lookupJoinExpr.AllLookupFilters, colMap).(*memo.FiltersExpr)
-	mappedLookupJoinExpr.AllLookupFilters = *allLookupFilters
-	mappedLookupJoinExpr.Locking = lookupJoinExpr.Locking
-	return mappedLookupJoinExpr
 }

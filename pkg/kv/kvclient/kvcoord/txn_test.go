@@ -836,7 +836,7 @@ func TestTxnRestartedSerializableTimestampRegression(t *testing.T) {
 			count++
 			// Use a low priority for the transaction so that it can be pushed.
 			if err := txn.SetUserPriority(roachpb.MinUserPriority); err != nil {
-				t.Fatal(err)
+				return err
 			}
 
 			// Put transactional value.

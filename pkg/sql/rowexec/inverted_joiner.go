@@ -109,7 +109,6 @@ type invertedJoiner struct {
 	input                execinfra.RowSource
 	inputTypes           []*types.T
 	datumsToInvertedExpr invertedexpr.DatumsToInvertedExpr
-	canPreFilter         bool
 	// Batch size for fetches. Not a constant so we can lower for testing.
 	batchSize int
 
@@ -278,15 +277,11 @@ func newInvertedJoiner(
 			return nil, err
 		}
 		ij.datumsToInvertedExpr, err = invertedidx.NewDatumsToInvertedExpr(
-			ctx, ij.EvalCtx, onExprColTypes, invertedExprHelper.Expr, ij.fetchSpec.GeoConfig,
+			ctx, ij.EvalCtx, onExprColTypes, invertedExprHelper.Expr,
 		)
 		if err != nil {
 			return nil, err
 		}
-	}
-	ij.canPreFilter = ij.datumsToInvertedExpr.CanPreFilter()
-	if ij.canPreFilter {
-		ij.batchedExprEval.filterer = ij.datumsToInvertedExpr
 	}
 
 	var fetcher row.Fetcher
@@ -418,7 +413,7 @@ func (ij *invertedJoiner) readInput() (invertedJoinerState, *execinfrapb.Produce
 			break
 		}
 
-		expr, preFilterState, err := ij.datumsToInvertedExpr.Convert(ij.Ctx(), row)
+		expr, err := ij.datumsToInvertedExpr.Convert(ij.Ctx(), row)
 		if err != nil {
 			ij.MoveToDraining(err)
 			return ijStateUnknown, ij.DrainHelper()
@@ -437,14 +432,8 @@ func (ij *invertedJoiner) readInput() (invertedJoinerState, *execinfrapb.Produce
 			// The nil serves as a marker that will result in an empty set as the
 			// evaluation result.
 			ij.batchedExprEval.exprs = append(ij.batchedExprEval.exprs, nil)
-			if ij.canPreFilter {
-				ij.batchedExprEval.preFilterState = append(ij.batchedExprEval.preFilterState, nil)
-			}
 		} else {
 			ij.batchedExprEval.exprs = append(ij.batchedExprEval.exprs, expr)
-			if ij.canPreFilter {
-				ij.batchedExprEval.preFilterState = append(ij.batchedExprEval.preFilterState, preFilterState)
-			}
 		}
 		if len(ij.prefixEqualityCols) > 0 {
 			if expr == nil {
@@ -553,22 +542,16 @@ func (ij *invertedJoiner) performScan() (invertedJoinerState, *execinfrapb.Produ
 			// rowenc.appendEncDatumsToKey.
 			encFullVal = append(ij.prefixKey, encInvertedVal...)
 		}
-		shouldAdd, err := ij.batchedExprEval.prepareAddIndexRow(encInvertedVal, encFullVal)
+		if err := ij.batchedExprEval.prepareAddIndexRow(encInvertedVal, encFullVal); err != nil {
+			ij.MoveToDraining(err)
+			return ijStateUnknown, ij.DrainHelper()
+		}
+		rowIdx, err := ij.indexRows.AddRow(ij.Ctx(), fetchedRow)
 		if err != nil {
 			ij.MoveToDraining(err)
 			return ijStateUnknown, ij.DrainHelper()
 		}
-		if shouldAdd {
-			rowIdx, err := ij.indexRows.AddRow(ij.Ctx(), fetchedRow)
-			if err != nil {
-				ij.MoveToDraining(err)
-				return ijStateUnknown, ij.DrainHelper()
-			}
-			if err = ij.batchedExprEval.addIndexRow(rowIdx); err != nil {
-				ij.MoveToDraining(err)
-				return ijStateUnknown, ij.DrainHelper()
-			}
-		}
+		ij.batchedExprEval.addIndexRow(rowIdx)
 	}
 	ij.joinedRowIdx = ij.batchedExprEval.evaluate()
 	ij.indexRows.SetupForRead(ij.Ctx(), ij.joinedRowIdx)

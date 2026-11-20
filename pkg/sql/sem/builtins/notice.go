@@ -36,11 +36,3 @@ func crdbInternalBufferNotice(
 	)
 	return tree.NewDInt(0), nil
 }
-
-// crdbInternalSendNotice immediately flushes a notice to the client.
-func crdbInternalSendNotice(ctx context.Context, evalCtx *eval.Context, err error) error {
-	if evalCtx.ClientNoticeSender == nil {
-		return errors.AssertionFailedf("notice sender not set")
-	}
-	return evalCtx.ClientNoticeSender.SendClientNotice(ctx, pgnotice.Notice(err))
-}

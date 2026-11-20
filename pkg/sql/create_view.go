@@ -89,7 +89,7 @@ func (n *createViewNode) startExec(params runParams) error {
 					pgerror.Newf(pgcode.FeatureNotSupported,
 						"the view cannot refer to other databases; (see the '%s' cluster setting)",
 						allowCrossDatabaseViewsSetting),
-					crossDBReferenceDeprecationHint(),
+					"%s", crossDBReferenceDeprecationHint(),
 				)
 			}
 		}

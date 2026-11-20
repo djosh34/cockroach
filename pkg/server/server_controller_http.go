@@ -65,13 +65,12 @@ func (c *serverController) httpMux(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// The Login/Logout fanout is currently **always** executed regardless of the
 	// tenant selection in the request. This simplifies the flows in cases where a
-	// user is already logged-in and issues a login request manually, or when a
-	// user clicks on a login link from cockroach demo. These situations
+	// user is already logged-in and issues a login request manually. These situations
 	// previously would result in odd outcomes because a login request could get
 	// routed to a specific node and skip the fanout, creating inconsistent
 	// outcomes that were path-dependent on the user's existing cookies.
 	switch r.URL.Path {
-	case authserver.LoginPath, authserver.DemoLoginPath:
+	case authserver.LoginPath:
 		c.attemptLoginToAllTenants().ServeHTTP(w, r)
 		return
 	case authserver.LogoutPath:
@@ -180,8 +179,6 @@ func (c *serverController) attemptLoginToAllTenants() http.Handler {
 		}
 		defer r.Body.Close()
 
-		redirect := false
-		redirectLocation := "/" // default to home page
 		collectedErrors := make([]string, len(tenantNames))
 		for i, name := range tenantNames {
 			server, _, err := c.getServer(ctx, name)
@@ -216,16 +213,6 @@ func (c *serverController) attemptLoginToAllTenants() http.Handler {
 					string(name),
 					setCookieHeader,
 				))
-				// In the case of /demologin, we want to redirect to the provided location
-				// in the header. If we get back a cookie along with an
-				// http.StatusTemporaryRedirect code, be sure to transfer the response code
-				// along with the Location into the ResponseWriter later.
-				if sw.code == http.StatusTemporaryRedirect {
-					redirect = true
-					if locationHeader, ok := sw.Header()["Location"]; ok && len(locationHeader) > 0 {
-						redirectLocation = locationHeader[0]
-					}
-				}
 			}
 		}
 		// If the map has entries, the method to create the aggregated session should
@@ -272,11 +259,7 @@ func (c *serverController) attemptLoginToAllTenants() http.Handler {
 					return
 				}
 			}
-			if redirect {
-				http.Redirect(w, r, redirectLocation, http.StatusTemporaryRedirect)
-			} else {
-				w.WriteHeader(http.StatusOK)
-			}
+			w.WriteHeader(http.StatusOK)
 		} else {
 			w.WriteHeader(http.StatusUnauthorized)
 			_, err := w.Write([]byte(strings.Join(collectedErrors, "\n")))

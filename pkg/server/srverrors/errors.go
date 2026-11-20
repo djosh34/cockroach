@@ -31,7 +31,7 @@ func ServerError(ctx context.Context, err error) error {
 	errCode := pgerror.GetPGCode(err).String()
 	if errCode != pgcode.Uncategorized.String() {
 		errMessage := fmt.Sprintf("%s Error Code: %s", ErrAPIInternalErrorString, errCode)
-		return grpcstatus.Errorf(codes.Internal, errMessage)
+		return grpcstatus.Errorf(codes.Internal, "%s", errMessage)
 	}
 
 	// The error is already grpcstatus formatted error.
@@ -58,7 +58,7 @@ var ErrAPIInternalErrorString = "An internal server error has occurred. Please c
 // ErrAPIInternalError is the gRPC status error returned when an internal error was encountered.
 var ErrAPIInternalError = grpcstatus.Errorf(
 	codes.Internal,
-	ErrAPIInternalErrorString,
+	"%s", ErrAPIInternalErrorString,
 )
 
 // APIInternalError should be used to wrap server-side errors during API

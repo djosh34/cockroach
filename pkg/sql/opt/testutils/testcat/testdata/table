@@ -103,9 +103,7 @@ CREATE TABLE inv (
   k INT PRIMARY KEY,
   a INT,
   j JSONB,
-  g GEOMETRY,
-  INVERTED INDEX(j),
-  INVERTED INDEX(g)
+  INVERTED INDEX(j)
 )
 ----
 
@@ -116,18 +114,13 @@ TABLE inv
  ├── k int not null
  ├── a int
  ├── j jsonb
- ├── g geometry
  ├── crdb_internal_mvcc_timestamp decimal [hidden] [system]
  ├── tableoid oid [hidden] [system]
  ├── j_inverted_key encodedkey not null [inverted]
- ├── g_inverted_key encodedkey not null [inverted]
  ├── PRIMARY INDEX inv_pkey
  │    └── k int not null
- ├── INVERTED INDEX inv_j_idx
- │    ├── j_inverted_key encodedkey not null [inverted]
- │    └── k int not null
- └── INVERTED INDEX inv_g_idx
-      ├── g_inverted_key encodedkey not null [inverted]
+ └── INVERTED INDEX inv_j_idx
+      ├── j_inverted_key encodedkey not null [inverted]
       └── k int not null
 
 # Table with inverted indexes and implicit primary index.
@@ -135,9 +128,7 @@ exec-ddl
 CREATE TABLE inv2 (
   a INT,
   j JSONB,
-  g GEOMETRY,
-  INVERTED INDEX(j),
-  INVERTED INDEX(g)
+  INVERTED INDEX(j)
 )
 ----
 
@@ -147,19 +138,14 @@ SHOW CREATE inv2
 TABLE inv2
  ├── a int
  ├── j jsonb
- ├── g geometry
  ├── rowid int not null default (unique_rowid()) [hidden]
  ├── crdb_internal_mvcc_timestamp decimal [hidden] [system]
  ├── tableoid oid [hidden] [system]
  ├── j_inverted_key encodedkey not null [inverted]
- ├── g_inverted_key encodedkey not null [inverted]
  ├── PRIMARY INDEX inv2_pkey
  │    └── rowid int not null default (unique_rowid()) [hidden]
- ├── INVERTED INDEX inv2_j_idx
- │    ├── j_inverted_key encodedkey not null [inverted]
- │    └── rowid int not null default (unique_rowid()) [hidden]
- └── INVERTED INDEX inv2_g_idx
-      ├── g_inverted_key encodedkey not null [inverted]
+ └── INVERTED INDEX inv2_j_idx
+      ├── j_inverted_key encodedkey not null [inverted]
       └── rowid int not null default (unique_rowid()) [hidden]
 
 # Table with unique constraints.

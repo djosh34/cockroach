@@ -689,6 +689,24 @@ func validateMutation(m *descpb.DescriptorMutation) error {
 	return nil
 }
 
+// validateNoSpatial returns an error if a column or an index of the table uses
+// the removed spatial types. Only tables from upstream CockroachDB can.
+func (desc *wrapper) validateNoSpatial() error {
+	for _, col := range desc.AllColumns() {
+		if typ := col.GetType(); typ != nil && typ.ContainsRemovedSpatialType() {
+			return errors.Newf("column %q has type %s: spatial types are unsupported",
+				col.GetName(), typ.Family().Name())
+		}
+	}
+	for _, idx := range desc.AllIndexes() {
+		if cfg := idx.IndexDesc().GeoConfig; cfg.S2Geography != nil || cfg.S2Geometry != nil {
+			return errors.Newf("index %q is a spatial index: spatial indexes are unsupported",
+				idx.GetName())
+		}
+	}
+	return nil
+}
+
 // ValidateSelf validates that the table descriptor is well formed. Checks
 // include validating the table, column and index names, verifying that column
 // names and index names are unique and verifying that column IDs and index IDs
@@ -740,6 +758,8 @@ func (desc *wrapper) ValidateSelf(vea catalog.ValidationErrorAccumulator) {
 				ref.ColumnIDs))
 		}
 	}
+
+	vea.Report(desc.validateNoSpatial())
 
 	if !desc.IsView() {
 		if len(desc.DependsOn) > 0 {

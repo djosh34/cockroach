@@ -10,10 +10,7 @@
 
 package tree
 
-import (
-	"github.com/cockroachdb/cockroach/pkg/geo/geopb"
-	"github.com/cockroachdb/cockroach/pkg/util"
-)
+import "github.com/cockroachdb/cockroach/pkg/util"
 
 // DatumAlloc provides batch allocation of datum pointers, amortizing the cost
 // of the allocations.
@@ -34,9 +31,6 @@ type DatumAlloc struct {
 	ddecimalAlloc     []DDecimal
 	ddateAlloc        []DDate
 	denumAlloc        []DEnum
-	dbox2dAlloc       []DBox2D
-	dgeometryAlloc    []DGeometry
-	dgeographyAlloc   []DGeography
 	dtimeAlloc        []DTime
 	dtimetzAlloc      []DTimeTZ
 	dtimestampAlloc   []DTimestamp
@@ -52,17 +46,10 @@ type DatumAlloc struct {
 	// stringAlloc is used by all datum types that are strings (DBytes, DString, DEncodedKey).
 	stringAlloc []string
 	env         CollationEnvironment
-
-	// Allocations for geopb.SpatialObject.EWKB
-	ewkbAlloc               []byte
-	curEWKBAllocSize        int
-	lastEWKBBeyondAllocSize bool
 }
 
-const defaultDatumAllocSize = 16  // Arbitrary, could be tuned.
-const datumAllocMultiplier = 4    // Arbitrary, could be tuned.
-const defaultEWKBAllocSize = 4096 // Arbitrary, could be tuned.
-const maxEWKBAllocSize = 16384    // Arbitrary, could be tuned.
+const defaultDatumAllocSize = 16 // Arbitrary, could be tuned.
+const datumAllocMultiplier = 4   // Arbitrary, could be tuned.
 
 // NewDatums allocates Datums of the specified size.
 func (a *DatumAlloc) NewDatums(num int) Datums {
@@ -236,36 +223,6 @@ func (a *DatumAlloc) NewDEnum(v DEnum) *DEnum {
 	return r
 }
 
-// NewDBox2D allocates a DBox2D.
-func (a *DatumAlloc) NewDBox2D(v DBox2D) *DBox2D {
-	if a.AllocSize == 0 {
-		a.AllocSize = defaultDatumAllocSize
-	}
-	buf := &a.dbox2dAlloc
-	if len(*buf) == 0 {
-		*buf = make([]DBox2D, a.AllocSize)
-	}
-	r := &(*buf)[0]
-	*r = v
-	*buf = (*buf)[1:]
-	return r
-}
-
-// NewDGeography allocates a DGeography.
-func (a *DatumAlloc) NewDGeography(v DGeography) *DGeography {
-	if a.AllocSize == 0 {
-		a.AllocSize = defaultDatumAllocSize
-	}
-	buf := &a.dgeographyAlloc
-	if len(*buf) == 0 {
-		*buf = make([]DGeography, a.AllocSize)
-	}
-	r := &(*buf)[0]
-	*r = v
-	*buf = (*buf)[1:]
-	return r
-}
-
 // NewDVoid allocates a new DVoid.
 func (a *DatumAlloc) NewDVoid() *DVoid {
 	if a.AllocSize == 0 {
@@ -278,68 +235,6 @@ func (a *DatumAlloc) NewDVoid() *DVoid {
 	r := &(*buf)[0]
 	*buf = (*buf)[1:]
 	return r
-}
-
-// NewDGeographyEmpty allocates a new empty DGeography for unmarshalling.
-// After unmarshalling, DoneInitNewDGeo must be called to return unused
-// pre-allocated space to the DatumAlloc.
-func (a *DatumAlloc) NewDGeographyEmpty() *DGeography {
-	r := a.NewDGeography(DGeography{})
-	a.giveBytesToEWKB(r.SpatialObjectRef())
-	return r
-}
-
-// DoneInitNewDGeo is called after unmarshalling a SpatialObject allocated via
-// NewDGeographyEmpty/NewDGeometryEmpty, to return space to the DatumAlloc.
-func (a *DatumAlloc) DoneInitNewDGeo(so *geopb.SpatialObject) {
-	// Don't allocate next time if the allocation was wasted and there is no way
-	// to pre-allocate enough. This is just a crude heuristic to avoid wasting
-	// allocations if the EWKBs are very large.
-	a.lastEWKBBeyondAllocSize = len(so.EWKB) > maxEWKBAllocSize
-	c := cap(so.EWKB)
-	l := len(so.EWKB)
-	if (c - l) > l {
-		a.ewkbAlloc = so.EWKB[l:l:c]
-		so.EWKB = so.EWKB[:l:l]
-	}
-}
-
-// NewDGeometry allocates a DGeometry.
-func (a *DatumAlloc) NewDGeometry(v DGeometry) *DGeometry {
-	if a.AllocSize == 0 {
-		a.AllocSize = defaultDatumAllocSize
-	}
-	buf := &a.dgeometryAlloc
-	if len(*buf) == 0 {
-		*buf = make([]DGeometry, a.AllocSize)
-	}
-	r := &(*buf)[0]
-	*r = v
-	*buf = (*buf)[1:]
-	return r
-}
-
-// NewDGeometryEmpty allocates a new empty DGeometry for unmarshalling. After
-// unmarshalling, DoneInitNewDGeo must be called to return unused
-// pre-allocated space to the DatumAlloc.
-func (a *DatumAlloc) NewDGeometryEmpty() *DGeometry {
-	r := a.NewDGeometry(DGeometry{})
-	a.giveBytesToEWKB(r.SpatialObjectRef())
-	return r
-}
-
-func (a *DatumAlloc) giveBytesToEWKB(so *geopb.SpatialObject) {
-	if a.ewkbAlloc == nil && !a.lastEWKBBeyondAllocSize {
-		if a.curEWKBAllocSize == 0 {
-			a.curEWKBAllocSize = defaultEWKBAllocSize
-		} else if a.curEWKBAllocSize < maxEWKBAllocSize {
-			a.curEWKBAllocSize *= 2
-		}
-		so.EWKB = make([]byte, 0, a.curEWKBAllocSize)
-	} else {
-		so.EWKB = a.ewkbAlloc
-		a.ewkbAlloc = nil
-	}
 }
 
 // NewDTime allocates a DTime.

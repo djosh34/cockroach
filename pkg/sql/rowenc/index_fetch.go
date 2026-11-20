@@ -45,7 +45,6 @@ func InitIndexFetchSpec(
 		IsUniqueIndex:       index.IsUnique(),
 		EncodingType:        index.GetEncodingType(),
 		NumKeySuffixColumns: uint32(index.NumKeySuffixColumns()),
-		GeoConfig:           index.GetGeoConfig(),
 	}
 
 	maxKeysPerRow := table.IndexKeysPerRow(index)

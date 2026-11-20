@@ -11,12 +11,10 @@
 package indexrec
 
 import (
-	"github.com/cockroachdb/cockroach/pkg/geo/geoindex"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/opt/cat"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
-	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/cockroach/pkg/util/intsets"
 	"github.com/cockroachdb/errors"
 )
@@ -206,20 +204,6 @@ func (hi *hypotheticalIndex) Ordinal() cat.IndexOrdinal {
 // ImplicitColumnCount is part of the cat.Index interface.
 func (hi *hypotheticalIndex) ImplicitColumnCount() int {
 	return 0
-}
-
-// GeoConfig is part of the cat.Index interface.
-func (hi *hypotheticalIndex) GeoConfig() geoindex.Config {
-	if hi.IsInverted() {
-		srcCol := hi.tab.Column(hi.InvertedColumn().InvertedSourceColumnOrdinal())
-		switch srcCol.DatumType().Family() {
-		case types.GeometryFamily:
-			return *geoindex.DefaultGeometryIndexConfig()
-		case types.GeographyFamily:
-			return *geoindex.DefaultGeographyIndexConfig()
-		}
-	}
-	return geoindex.Config{}
 }
 
 // Version is part of the cat.Index interface.

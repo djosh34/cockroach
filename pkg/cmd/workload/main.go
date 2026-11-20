@@ -19,7 +19,6 @@ import (
 	_ "github.com/cockroachdb/cockroach/pkg/workload/connectionlatency" // registers workloads
 	_ "github.com/cockroachdb/cockroach/pkg/workload/debug"             // registers workloads
 	_ "github.com/cockroachdb/cockroach/pkg/workload/examples"          // registers workloads
-	_ "github.com/cockroachdb/cockroach/pkg/workload/geospatial"        // registers workloads
 	_ "github.com/cockroachdb/cockroach/pkg/workload/indexes"           // registers workloads
 	_ "github.com/cockroachdb/cockroach/pkg/workload/insights"          // registers workloads
 	_ "github.com/cockroachdb/cockroach/pkg/workload/jsonload"          // registers workloads

@@ -72,10 +72,7 @@ func TestCopyFromNullInfNaN(t *testing.T) {
 			e DECIMAL NULL,
 			u UUID NULL,
 			ip INET NULL,
-			tz TIMESTAMPTZ NULL,
-			geography GEOGRAPHY NULL,
-			geometry GEOMETRY NULL,
-			box2d BOX2D NULL
+			tz TIMESTAMPTZ NULL
 		);
 	`); err != nil {
 		t.Fatal(err)
@@ -88,16 +85,16 @@ func TestCopyFromNullInfNaN(t *testing.T) {
 
 	stmt, err := txn.Prepare(pq.CopyIn(
 		"t", "i", "f", "s", "b", "d", "t", "ttz",
-		"ts", "n", "o", "e", "u", "ip", "tz", "geography", "geometry", "box2d"))
+		"ts", "n", "o", "e", "u", "ip", "tz"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	input := [][]interface{}{
-		{nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil},
-		{nil, math.Inf(1), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil},
-		{nil, math.Inf(-1), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil},
-		{nil, math.NaN(), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil},
+		{nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil},
+		{nil, math.Inf(1), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil},
+		{nil, math.Inf(-1), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil},
+		{nil, math.NaN(), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil},
 	}
 
 	for _, in := range input {
@@ -174,10 +171,7 @@ func TestCopyFromRandom(t *testing.T) {
 			b BYTES,
 			u UUID,
 			ip INET,
-			tz TIMESTAMPTZ,
-			geography GEOGRAPHY NULL,
-			geometry GEOMETRY NULL,
-			box2d BOX2D NULL
+			tz TIMESTAMPTZ
 		);
 		SET extra_float_digits = 3; -- to preserve floats entirely
 	`); err != nil {
@@ -189,7 +183,7 @@ func TestCopyFromRandom(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stmt, err := txn.Prepare(pq.CopyInSchema("d", "t", "id", "n", "cs", "o", "i", "i2", "i4", "f", "e", "t", "ttz", "ts", "s", "b", "u", "ip", "tz", "geography", "geometry", "box2d"))
+	stmt, err := txn.Prepare(pq.CopyInSchema("d", "t", "id", "n", "cs", "o", "i", "i2", "i4", "f", "e", "t", "ttz", "ts", "s", "b", "u", "ip", "tz"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,9 +207,6 @@ func TestCopyFromRandom(t *testing.T) {
 		types.Uuid,
 		types.INet,
 		types.TimestampTZ,
-		types.Geography,
-		types.Geometry,
-		types.Box2D,
 	}
 
 	var inputs [][]interface{}

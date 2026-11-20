@@ -122,7 +122,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/startup"
 	"github.com/cockroachdb/cockroach/pkg/util/stop"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
-	"github.com/cockroachdb/cockroach/pkg/util/timeutil/ptp"
 	"github.com/cockroachdb/cockroach/pkg/util/tracing"
 	"github.com/cockroachdb/cockroach/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
@@ -1317,13 +1316,7 @@ func newClockFromConfig(ctx context.Context, cfg BaseConfig) (*hlc.Clock, error)
 	maxOffset := time.Duration(cfg.MaxOffset)
 	toleratedOffset := cfg.ToleratedOffset()
 	var clock *hlc.Clock
-	if cfg.ClockDevicePath != "" {
-		ptpClock, err := ptp.MakeClock(ctx, cfg.ClockDevicePath)
-		if err != nil {
-			return nil, errors.Wrap(err, "instantiating clock source")
-		}
-		clock = hlc.NewClock(ptpClock, maxOffset, toleratedOffset)
-	} else if cfg.TestingKnobs.Server != nil &&
+	if cfg.TestingKnobs.Server != nil &&
 		cfg.TestingKnobs.Server.(*TestingKnobs).WallClock != nil {
 		clock = hlc.NewClock(cfg.TestingKnobs.Server.(*TestingKnobs).WallClock,
 			maxOffset, toleratedOffset)
@@ -2014,10 +2007,6 @@ func (s *topLevelServer) PreStart(ctx context.Context) error {
 			sqlServer:        s.sqlServer,
 			db:               s.db,
 		}), /* apiServer */
-		serverpb.FeatureFlags{
-			CanViewKvMetricDashboards:   s.rpcContext.TenantID.Equal(roachpb.SystemTenantID),
-			DisableKvLevelAdvancedDebug: false,
-		},
 	); err != nil {
 		return err
 	}

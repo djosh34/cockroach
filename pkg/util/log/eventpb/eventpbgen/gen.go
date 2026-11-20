@@ -368,8 +368,9 @@ func readInput(
 				return errors.Newf("field definition must not span multiple lines: %q", line)
 			}
 
-			// Skip reserved fields.
+			// Skip reserved fields, with the comment about them.
 			if reservedDefRe.MatchString(line) {
+				comment = ""
 				continue
 			}
 

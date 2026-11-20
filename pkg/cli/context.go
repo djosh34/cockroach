@@ -497,9 +497,6 @@ var startCtx struct {
 	// when it is ready.
 	pidFile string
 
-	// geoLibsDir is used to specify locations of the GEOS library.
-	geoLibsDir string
-
 	// These configuration handles are flag.Value instances that allow
 	// configuring other variables using either a percentage or a
 	// humanized size value.
@@ -527,7 +524,6 @@ func setStartContextDefaults() {
 	startCtx.listeningURLFile = ""
 	startCtx.pidFile = ""
 	startCtx.inBackground = false
-	startCtx.geoLibsDir = "/usr/local/lib/cockroach"
 	startCtx.cacheSizeValue = makeBytesOrPercentageValue(&serverCfg.CacheSize, memoryPercentResolver)
 	startCtx.sqlSizeValue = makeBytesOrPercentageValue(&serverCfg.MemoryPoolSize, memoryPercentResolver)
 	startCtx.goMemLimitValue = makeBytesOrPercentageValue(&goMemLimit, memoryPercentResolver)

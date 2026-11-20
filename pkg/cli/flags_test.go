@@ -149,7 +149,7 @@ func TestMemoryPoolFlagValues(t *testing.T) {
 					t.Fatal(err)
 				}
 				if c.expected != *tc.config {
-					t.Errorf("expected %d, but got %d", c.expected, tc.config)
+					t.Errorf("expected %d, but got %d", c.expected, *tc.config)
 				}
 			}
 

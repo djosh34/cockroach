@@ -16,6 +16,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -24,11 +25,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"testing/fstest"
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
-	"github.com/cockroachdb/cockroach/pkg/build"
 	"github.com/cockroachdb/cockroach/pkg/cli/exit"
 	"github.com/cockroachdb/cockroach/pkg/config/zonepb"
 	"github.com/cockroachdb/cockroach/pkg/keys"
@@ -47,7 +46,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/storage"
 	"github.com/cockroachdb/cockroach/pkg/testutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/serverutils"
-	"github.com/cockroachdb/cockroach/pkg/ui"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
 	"github.com/cockroachdb/cockroach/pkg/util/httputil"
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
@@ -284,6 +282,29 @@ func TestSecureHTTPRedirect(t *testing.T) {
 		} else if a, e := redirectURL.String(), expURL.String(); a != e {
 			t.Errorf("expected location %s; got %s", e, a)
 		}
+	}
+}
+
+// TestStopWithSilentHTTPClient checks that a client that opens a connection
+// to the HTTP port and sends nothing does not block server shutdown.
+func TestStopWithSilentHTTPClient(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	defer log.Scope(t).Close(t)
+	srv := serverutils.StartServerOnly(t, base.TestServerArgs{})
+
+	conn, err := net.Dial("tcp", srv.HTTPAddr())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	stopped := make(chan struct{})
+	go func() {
+		srv.Stopper().Stop(context.Background())
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+	case <-time.After(time.Minute):
+		t.Fatal("server did not stop while a silent client was connected")
 	}
 }
 
@@ -672,239 +693,6 @@ func TestPersistHLCUpperBound(t *testing.T) {
 			a.True(fatal)
 		})
 	}
-}
-
-func TestServeIndexHTML(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	defer log.Scope(t).Close(t)
-
-	const htmlTemplate = `<!DOCTYPE html>
-<html>
-	<head>
-		<title>Cockroach Console</title>
-		<meta charset="UTF-8">
-		<link href="favicon.ico" rel="shortcut icon">
-	</head>
-	<body>
-		<div id="react-layout"></div>
-		<script src="bundle.js" type="text/javascript"></script>
-	</body>
-</html>
-`
-
-	ctx := context.Background()
-
-	linkInFakeUI := func() {
-		ui.HaveUI = true
-	}
-	unlinkFakeUI := func() {
-		ui.HaveUI = false
-	}
-
-	t.Run("Insecure mode", func(t *testing.T) {
-		srv := serverutils.StartServerOnly(t, base.TestServerArgs{
-			Insecure: true,
-		})
-		defer srv.Stopper().Stop(ctx)
-		s := srv.ApplicationLayer()
-
-		client, err := s.GetUnauthenticatedHTTPClient()
-		require.NoError(t, err)
-
-		t.Run("short build", func(t *testing.T) {
-			resp, err := client.Get(s.AdminURL().String())
-			require.NoError(t, err)
-			defer resp.Body.Close()
-			require.Equal(t, 200, resp.StatusCode)
-
-			respBytes, err := io.ReadAll(resp.Body)
-			require.NoError(t, err)
-
-			respString := string(respBytes)
-			buildInfo := build.GetInfo().Short()
-			expected := fmt.Sprintf(`<!DOCTYPE html>
-<title>CockroachDB</title>
-Binary built without web UI.
-<hr>
-<em>%s</em>`, buildInfo)
-			require.Equal(t, expected, respString)
-		})
-
-		t.Run("non-short build", func(t *testing.T) {
-			linkInFakeUI()
-			defer unlinkFakeUI()
-			resp, err := client.Get(s.AdminURL().String())
-			require.NoError(t, err)
-			defer resp.Body.Close()
-			require.Equal(t, 200, resp.StatusCode)
-
-			respBytes, err := io.ReadAll(resp.Body)
-			require.NoError(t, err)
-
-			respString := string(respBytes)
-			require.Equal(t, htmlTemplate, respString)
-
-			resp, err = client.Get(s.AdminURL().WithPath("/uiconfig").String())
-			require.NoError(t, err)
-			defer resp.Body.Close()
-			require.Equal(t, 200, resp.StatusCode)
-
-			respBytes, err = io.ReadAll(resp.Body)
-			require.NoError(t, err)
-			expected := fmt.Sprintf(
-				`{"Insecure":true,"LoggedInUser":null,"Tag":"%s","Version":"%s","NodeID":"%d","FeatureFlags":{"can_view_kv_metric_dashboards":true}}`,
-				build.GetInfo().Tag,
-				build.BinaryVersionPrefix(),
-				1,
-			)
-			require.Equal(t, expected, string(respBytes))
-		})
-	})
-
-	t.Run("Secure mode", func(t *testing.T) {
-		linkInFakeUI()
-		defer unlinkFakeUI()
-		srv := serverutils.StartServerOnly(t, base.TestServerArgs{})
-		defer srv.Stopper().Stop(ctx)
-		s := srv.ApplicationLayer()
-
-		loggedInClient, err := s.GetAdminHTTPClient()
-		require.NoError(t, err)
-		loggedOutClient, err := s.GetUnauthenticatedHTTPClient()
-		require.NoError(t, err)
-
-		cases := []struct {
-			client http.Client
-			json   string
-		}{
-			{
-				loggedInClient,
-				fmt.Sprintf(
-					`{"Insecure":false,"LoggedInUser":"authentic_user","Tag":"%s","Version":"%s","NodeID":"%d","FeatureFlags":{"can_view_kv_metric_dashboards":true}}`,
-					build.GetInfo().Tag,
-					build.BinaryVersionPrefix(),
-					1,
-				),
-			},
-			{
-				loggedOutClient,
-				fmt.Sprintf(
-					`{"Insecure":false,"LoggedInUser":null,"Tag":"%s","Version":"%s","NodeID":"%d","FeatureFlags":{"can_view_kv_metric_dashboards":true}}`,
-					build.GetInfo().Tag,
-					build.BinaryVersionPrefix(),
-					1,
-				),
-			},
-		}
-
-		for i, testCase := range cases {
-			t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-				req, err := http.NewRequestWithContext(ctx, "GET", s.AdminURL().String(), nil)
-				require.NoError(t, err)
-
-				resp, err := testCase.client.Do(req)
-				require.NoError(t, err)
-				defer resp.Body.Close()
-				require.Equal(t, 200, resp.StatusCode)
-
-				respBytes, err := io.ReadAll(resp.Body)
-				require.NoError(t, err)
-
-				respString := string(respBytes)
-				require.Equal(t, htmlTemplate, respString)
-
-				req, err = http.NewRequestWithContext(ctx, "GET", s.AdminURL().WithPath("/uiconfig").String(), nil)
-				require.NoError(t, err)
-
-				resp, err = testCase.client.Do(req)
-				require.NoError(t, err)
-				defer resp.Body.Close()
-				require.Equal(t, 200, resp.StatusCode)
-
-				respBytes, err = io.ReadAll(resp.Body)
-				require.NoError(t, err)
-				require.Equal(t, testCase.json, string(respBytes))
-			})
-		}
-	})
-
-	t.Run("Client-side caching", func(t *testing.T) {
-		linkInFakeUI()
-		defer unlinkFakeUI()
-
-		// Set up fake asset FS
-		mapfs := fstest.MapFS{
-			"bundle.js": &fstest.MapFile{
-				Data: []byte("console.log('hello world');"),
-			},
-		}
-		fsys, err := mapfs.Sub(".")
-		require.NoError(t, err)
-		ui.Assets = fsys
-
-		// Clear fake asset FS when we're done
-		defer func() {
-			ui.Assets = nil
-		}()
-
-		srv := serverutils.StartServerOnly(t, base.TestServerArgs{})
-		defer srv.Stopper().Stop(ctx)
-		s := srv.ApplicationLayer()
-
-		loggedInClient, err := s.GetAdminHTTPClient()
-		require.NoError(t, err)
-		loggedOutClient, err := s.GetUnauthenticatedHTTPClient()
-		require.NoError(t, err)
-
-		cases := []struct {
-			desc   string
-			client http.Client
-		}{
-			{
-				desc:   "unauthenticated user",
-				client: loggedOutClient,
-			},
-			{
-				desc:   "authenticated user",
-				client: loggedInClient,
-			},
-		}
-
-		for _, testCase := range cases {
-			t.Run(fmt.Sprintf("bundle caching for %s", testCase.desc), func(t *testing.T) {
-				// Request bundle.js without an If-None-Match header first, to simulate the initial load
-				uncachedReq, err := http.NewRequestWithContext(ctx, "GET", s.AdminURL().WithPath("/bundle.js").String(), nil)
-				require.NoError(t, err)
-
-				uncachedResp, err := testCase.client.Do(uncachedReq)
-				require.NoError(t, err)
-				defer uncachedResp.Body.Close()
-				require.Equal(t, 200, uncachedResp.StatusCode)
-
-				etag := uncachedResp.Header.Get("ETag")
-				require.NotEmpty(t, etag, "Server must provide ETag response header with asset responses")
-
-				// Use that ETag header on the next request to simulate a client reload
-				cachedReq, err := http.NewRequestWithContext(ctx, "GET", s.AdminURL().WithPath("/bundle.js").String(), nil)
-				require.NoError(t, err)
-				cachedReq.Header.Add("If-None-Match", etag)
-
-				cachedResp, err := testCase.client.Do(cachedReq)
-				require.NoError(t, err)
-				defer cachedResp.Body.Close()
-				require.Equal(t, 304, cachedResp.StatusCode)
-
-				respBytes, err := io.ReadAll(cachedResp.Body)
-				require.NoError(t, err)
-				require.Empty(t, respBytes, "Server must provide empty body for cached response")
-
-				etagFromEmptyResp := cachedResp.Header.Get("ETag")
-				require.NotEmpty(t, etag, "Server must provide ETag response header with asset responses")
-
-				require.Equal(t, etag, etagFromEmptyResp, "Server must provide consistent ETag response headers")
-			})
-		}
-	})
 }
 
 func TestGWRuntimeMarshalProto(t *testing.T) {
