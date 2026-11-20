@@ -23,7 +23,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/errors"
-	"go.etcd.io/raft/v3/raftpb"
 )
 
 // splitPreApply is called when the raft command is applied. Any
@@ -68,17 +67,14 @@ func splitPreApply(
 		// To apply the split, we need to "throw away" the data that would belong to
 		// the RHS, i.e. we clear the user data the RHS would have inherited from
 		// the LHS due to the split and additionally clear all of the range ID local
-		// state that the split trigger writes into the RHS. At the time of writing,
-		// unfortunately that means that we'll also delete any data that might
-		// already be present in the RHS: the HardState and RaftReplicaID. It is
-		// important to preserve the HardState because we might however have already
-		// voted at a higher term. In general this shouldn't happen because we add
-		// learners and then promote them only after they apply a snapshot but we're
-		// going to be extra careful in case future versions of cockroach somehow
-		// promote replicas without ensuring that a snapshot has been received. So
-		// we write it back (and the RaftReplicaID too, since it's an invariant that
-		// it's always present).
-		var hs raftpb.HardState
+		// replicated state that the split trigger writes into the RHS.
+		//
+		// The unreplicated range ID local state, such as the HardState and the
+		// RaftReplicaID, belongs to the newer replica (or the tombstone of a
+		// removed one) and is left alone: the split batch writes none of it.
+		// Clearing it and writing back the HardState read here could roll back
+		// the HardState of the newer replica, which may vote or learn a higher
+		// term after raftMu is released and before this batch is applied.
 		if rightRepl != nil {
 			rightRepl.raftMu.Lock()
 			defer rightRepl.raftMu.Unlock()
@@ -88,11 +84,6 @@ func splitPreApply(
 			if rightRepl.IsInitialized() {
 				log.Fatalf(ctx, "unexpectedly found initialized newer RHS of split: %v", rightRepl.Desc())
 			}
-			var err error
-			hs, err = rightRepl.raftMu.stateLoader.LoadHardState(ctx, readWriter)
-			if err != nil {
-				log.Fatalf(ctx, "failed to load hard state for removed rhs: %v", err)
-			}
 		}
 		if err := kvstorage.ClearRangeData(split.RightDesc.RangeID, readWriter, readWriter, kvstorage.ClearRangeDataOptions{
 			// We know there isn't anything in these two replicated spans below in the
@@ -101,36 +92,8 @@ func splitPreApply(
 			// staged in this batch, which is what we're after.
 			ClearReplicatedBySpan:    split.RightDesc.RSpan(),
 			ClearReplicatedByRangeID: true,
-			// See the HardState write-back dance above and below.
-			//
-			// TODO(tbg): we don't actually want to touch the raft state of the right
-			// hand side replica since it's absent or a more recent replica than the
-			// split. Now that we have a boolean targeting the unreplicated
-			// RangeID-based keyspace, we can set this to false and remove the
-			// HardState+ReplicaID write-back. (The WriteBatch does not contain
-			// any writes to the unreplicated RangeID keyspace for the RHS, see
-			// splitTriggerHelper[^1]).
-			//
-			// [^1]: https://github.com/cockroachdb/cockroach/blob/f263a765d750e41f2701da0a923a6e92d09159fa/pkg/kv/kvserver/batcheval/cmd_end_transaction.go#L1109-L1149
-			//
-			// See also:
-			//
-			// https://github.com/cockroachdb/cockroach/issues/94933
-			ClearUnreplicatedByRangeID: true,
 		}); err != nil {
 			log.Fatalf(ctx, "failed to clear range data for removed rhs: %v", err)
-		}
-		if rightRepl != nil {
-			// Cleared the HardState and RaftReplicaID, so rewrite them to the current
-			// values. NB: rightRepl.raftMu is still locked since HardState was read,
-			// so it can't have been rewritten in the meantime (fixed in #75918).
-			if err := rightRepl.raftMu.stateLoader.SetHardState(ctx, readWriter, hs); err != nil {
-				log.Fatalf(ctx, "failed to set hard state with 0 commit index for removed rhs: %v", err)
-			}
-			if err := rightRepl.raftMu.stateLoader.SetRaftReplicaID(
-				ctx, readWriter, rightRepl.ReplicaID()); err != nil {
-				log.Fatalf(ctx, "failed to set RaftReplicaID for removed rhs: %v", err)
-			}
 		}
 		return
 	}
