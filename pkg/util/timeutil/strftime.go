@@ -30,7 +30,6 @@ import (
 //	%D, %x   date as %m/%d/%y
 //	%f       microseconds, six digits
 //	%F       date as %Y-%m-%d
-//	%g, %G   ISO 8601 week-based year, two and four digits
 //	%H, %k   hour (00-23), zero- and space-padded
 //	%I, %l   hour (01-12), zero- and space-padded
 //	%j       day of the year, three digits
@@ -45,16 +44,17 @@ import (
 //	%T, %X   time as %H:%M:%S
 //	%u       weekday, 1 (Monday) to 7
 //	%U       week of the year, weeks starting on Sunday (00-53)
-//	%V       ISO 8601 week number (01-53)
 //	%w       weekday, 0 (Sunday) to 6
 //	%W       week of the year, weeks starting on Monday (00-53)
 //	%y       year, two digits
-//	%Y       year
+//	%Y       year, at least two digits
 //	%z       UTC offset as +hhmm
 //	%Z       time zone abbreviation
 //	%%       a literal %
 //
-// Any other conversion specification is an error.
+// Any other conversion specification is an error, and a % at the end of
+// format is dropped. These details match the strftime of
+// github.com/knz/strtime, which this function replaces.
 func Strftime(t time.Time, format string) (string, error) {
 	var b strings.Builder
 	for i := 0; i < len(format); i++ {
@@ -65,7 +65,7 @@ func Strftime(t time.Time, format string) (string, error) {
 		}
 		i++
 		if i == len(format) {
-			return "", errors.Newf("strftime format %q ends with %%", format)
+			break
 		}
 		if err := strftimeConversion(&b, t, format[i]); err != nil {
 			return "", err
@@ -108,12 +108,6 @@ func strftimeConversion(b *strings.Builder, t time.Time, c byte) error {
 		pad(b, int(t.Month()), 2, '0')
 		b.WriteByte('-')
 		pad(b, t.Day(), 2, '0')
-	case 'g':
-		year, _ := t.ISOWeek()
-		pad(b, year%100, 2, '0')
-	case 'G':
-		year, _ := t.ISOWeek()
-		pad(b, year, 4, '0')
 	case 'H':
 		pad(b, t.Hour(), 2, '0')
 	case 'k':
@@ -171,9 +165,6 @@ func strftimeConversion(b *strings.Builder, t time.Time, c byte) error {
 		b.WriteString(strconv.Itoa(wd))
 	case 'U':
 		pad(b, (t.YearDay()-1+7-int(t.Weekday()))/7, 2, '0')
-	case 'V':
-		_, week := t.ISOWeek()
-		pad(b, week, 2, '0')
 	case 'w':
 		b.WriteString(strconv.Itoa(int(t.Weekday())))
 	case 'W':
@@ -181,7 +172,7 @@ func strftimeConversion(b *strings.Builder, t time.Time, c byte) error {
 	case 'y':
 		pad(b, t.Year()%100, 2, '0')
 	case 'Y':
-		pad(b, t.Year(), 4, '0')
+		pad(b, t.Year(), 2, '0')
 	case 'z':
 		_, offset := t.Zone()
 		sign := byte('+')
@@ -198,7 +189,7 @@ func strftimeConversion(b *strings.Builder, t time.Time, c byte) error {
 	case '%':
 		b.WriteByte('%')
 	default:
-		return errors.Newf("unsupported strftime conversion %%%c", c)
+		return errors.Newf("invalid format code: %c", c)
 	}
 	return nil
 }

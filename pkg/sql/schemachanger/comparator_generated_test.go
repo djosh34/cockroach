@@ -403,6 +403,16 @@ func TestSchemaChangeComparator_distsql_automatic_stats(t *testing.T) {
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/distsql_automatic_stats"
 	runSchemaChangeComparatorTest(t, logicTestFile)
 }
+func TestSchemaChangeComparator_distsql_builtin(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/distsql_builtin"
+	runSchemaChangeComparatorTest(t, logicTestFile)
+}
+func TestSchemaChangeComparator_distsql_datetime(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/distsql_datetime"
+	runSchemaChangeComparatorTest(t, logicTestFile)
+}
 func TestSchemaChangeComparator_distsql_event_log(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/distsql_event_log"
@@ -421,6 +431,11 @@ func TestSchemaChangeComparator_distsql_join(t *testing.T) {
 func TestSchemaChangeComparator_distsql_srfs(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/distsql_srfs"
+	runSchemaChangeComparatorTest(t, logicTestFile)
+}
+func TestSchemaChangeComparator_distsql_subquery(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/distsql_subquery"
 	runSchemaChangeComparatorTest(t, logicTestFile)
 }
 func TestSchemaChangeComparator_drop_database(t *testing.T) {
@@ -673,6 +688,11 @@ func TestSchemaChangeComparator_hash_join(t *testing.T) {
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/hash_join"
 	runSchemaChangeComparatorTest(t, logicTestFile)
 }
+func TestSchemaChangeComparator_hash_join_dist(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/hash_join_dist"
+	runSchemaChangeComparatorTest(t, logicTestFile)
+}
 func TestSchemaChangeComparator_hash_sharded_index(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/hash_sharded_index"
@@ -846,6 +866,11 @@ func TestSchemaChangeComparator_materialized_view(t *testing.T) {
 func TestSchemaChangeComparator_merge_join(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/merge_join"
+	runSchemaChangeComparatorTest(t, logicTestFile)
+}
+func TestSchemaChangeComparator_merge_join_dist(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	var logicTestFile = "pkg/sql/logictest/testdata/logic_test/merge_join_dist"
 	runSchemaChangeComparatorTest(t, logicTestFile)
 }
 func TestSchemaChangeComparator_multi_statement(t *testing.T) {

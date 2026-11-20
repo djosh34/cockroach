@@ -47,16 +47,19 @@ func TestStrftime(t *testing.T) {
 		{evening, `%r`, `11:02:03 PM`},
 		{evening, `%R`, `23:02`},
 		{evening, `%T %X`, `23:02:03 23:02:03`},
-		{time.Unix(1491920586, 0).UTC(), `%s`, `1491920586`},
+		{Unix(1491920586, 0), `%s`, `1491920586`},
 		{time.Date(2018, 3, 15, 0, 0, 0, 0, time.UTC), `%Y %U %u %w`, `2018 10 4 4`},
 		{time.Date(2018, 3, 8, 0, 0, 0, 0, time.UTC), `%Y %W %w`, `2018 10 4`},
 		{time.Date(2018, 3, 11, 0, 0, 0, 0, time.UTC), `%u %w %U %W`, `7 0 10 10`},
-		{time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC), `%G %g %V`, `2020 20 53`},
 		{time.Date(2068, 1, 1, 0, 0, 0, 0, time.UTC), `%y%m%d`, `680101`},
-		{time.Date(900, 1, 1, 0, 0, 0, 0, time.UTC), `%Y`, `0900`},
+		{time.Date(900, 1, 1, 0, 0, 0, 0, time.UTC), `%Y %F`, `900 0900-01-01`},
+		{time.Date(5, 1, 1, 0, 0, 0, 0, time.UTC), `%Y`, `05`},
+		{time.Date(-44, 1, 1, 0, 0, 0, 0, time.UTC), `%Y`, `-44`},
 		{time.Date(2016, 1, 1, 6, 5, 0, 0, time.UTC), `%Y%m%d %H:%M %z`, `20160101 06:05 +0000`},
 		{time.Date(2016, 1, 1, 6, 5, 0, 0, zone), `%z %Z`, `-0655 ZZZ`},
 		{wed, `100%%`, `100%`},
+		// A % at the end is dropped.
+		{wed, `abc%`, `abc`},
 	} {
 		t.Run(tc.format, func(t *testing.T) {
 			s, err := Strftime(tc.t, tc.format)
@@ -65,8 +68,8 @@ func TestStrftime(t *testing.T) {
 		})
 	}
 
-	for _, format := range []string{`%Q`, `%Ey`, `abc%`} {
+	for _, format := range []string{`%Q`, `%Ey`, `%G`, `%g`, `%V`} {
 		_, err := Strftime(wed, format)
-		require.Error(t, err, format)
+		require.EqualError(t, err, "invalid format code: "+format[1:2], format)
 	}
 }
