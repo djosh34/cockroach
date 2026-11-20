@@ -75,7 +75,6 @@ proto_include() {
   ln -s "$(module_dir go.etcd.io/raft/v3)" "$inc/raft/v3"
   ln -s "$(module_dir github.com/gogo/googleapis)/google/api" "$inc/google/api"
   ln -s "$(module_dir github.com/prometheus/client_model)/io/prometheus/client" "$inc/io/prometheus/client"
-
 }
 
 gen_proto() {

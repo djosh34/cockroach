@@ -74,7 +74,7 @@ func isGeneratedFile(path string) bool {
 // vetJSONCmd runs go vet with the given arguments and -json. It reports each
 // diagnostic as "file:line:col: message", unless analyzers.json excludes the
 // file for the analyzer that reported it, and passes the lines through
-// filters. Output on stderr, such as build errors, is reported as well.
+// filters. It fails the test if go vet fails.
 func vetJSONCmd(
 	t *testing.T,
 	dir string,
@@ -87,11 +87,10 @@ func vetJSONCmd(
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	// With -json, go vet reports findings with exit status 0, so any other
+	// exit status means that vet itself failed, for example on a build error.
 	if err := cmd.Run(); err != nil {
-		var exitErr *exec.ExitError
-		if !errors.As(err, &exitErr) {
-			t.Fatal(err)
-		}
+		t.Fatalf("go vet failed: %v\n%s", err, stderr.String())
 	}
 
 	var lines []string
@@ -2323,16 +2322,10 @@ func TestLint(t *testing.T) {
 		printfuncs := analyzerFlags["analyzer_flags"].(map[string]any)["funcs"].(string)
 		nakedGoroutineExceptions := `(` + strings.Join([]string{
 			`pkg/.*_test\.go`,
-			`pkg/acceptance/.*\.go`,
 			`pkg/cli/syncbench/.*\.go`,
-			`pkg/cli/systembench/.*\.go`,
-			`pkg/cmd/allocsim/.*\.go`,
 			`pkg/cmd/cmp-protocol/.*\.go`,
 			`pkg/cmd/cr2pg/.*\.go`,
 			`pkg/cmd/reduce/.*\.go`,
-			`pkg/cmd/smithtest/.*\.go`,
-			`pkg/cmd/urlcheck/.*\.go`,
-			`pkg/cmd/zerosum/.*\.go`,
 			`pkg/testutils/.*\.go`,
 			`pkg/workload/.*\.go`,
 		}, "|") + `)`
@@ -2345,10 +2338,6 @@ func TestLint(t *testing.T) {
 
 			// Ignore types that can change by system.
 			stream.GrepNot(`pkg/util/sysutil/sysutil_unix.go:`),
-
-			// Ignore jemalloc issues warnings.
-			stream.GrepNot(`In file included from.*(start|runtime)_jemalloc\.go`),
-			stream.GrepNot(`include/jemalloc/jemalloc\.h`),
 
 			// Allow shadowing for variables named err, pErr (proto-errors in kv) and
 			// ctx. For these variables, these names are very common and having too

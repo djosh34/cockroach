@@ -437,9 +437,6 @@ import (
 // -d <glob>  selects all files matching <glob>. This can mix and
 //            match wildcards (*/?) or groups like {a,b,c}.
 //
-// -bigtest   enable the long-running SqlLiteLogic test, which uses files from
-//            CockroachDB's fork of Sqllogictest.
-//
 // Configuration:
 //
 // -config name[,name2,...]   customizes the test cluster configuration for test
@@ -495,7 +492,7 @@ import (
 //
 // Suggested use:
 //
-// - For validation testing: just -d or -bigtest.
+// - For validation testing: just -d.
 // - For compatibility testing: add -allow-prepare-fail -flex-types.
 // - For troubleshooting / analysis: add -v -show-sql -error-summary.
 
@@ -507,9 +504,6 @@ var (
 	orderRE     = regexp.MustCompile(`(?i)ORDER\s+BY`)
 	explainRE   = regexp.MustCompile(`(?i)EXPLAIN\W+`)
 	showTraceRE = regexp.MustCompile(`(?i)SHOW\s+(KV\s+)?TRACE`)
-
-	// Bigtest is a flag which should be set if the long-running sqlite logic tests should be run.
-	Bigtest = flag.Bool("bigtest", false, "enable the long-running SqlLiteLogic test")
 
 	// Testing mode
 	maxErrs = flag.Int(
@@ -1534,13 +1528,8 @@ func (t *logicTest) newCluster(
 	var randomWorkmem int
 	if t.rng.Float64() < 0.5 && !serverArgs.DisableWorkmemRandomization {
 		// Randomize sql.distsql.temp_storage.workmem cluster setting in
-		// [10KiB, 100KiB) range for normal tests and even bigger for sqlite
-		// tests.
-		if *Bigtest {
-			randomWorkmem = 100<<10 + t.rng.Intn(90<<10)
-		} else {
-			randomWorkmem = 10<<10 + t.rng.Intn(90<<10)
-		}
+		// [10KiB, 100KiB) range.
+		randomWorkmem = 10<<10 + t.rng.Intn(90<<10)
 	}
 
 	// Set cluster settings.
@@ -2290,13 +2279,8 @@ func (t *logicTest) processSubtest(
 			} else {
 				// Parse "query <type-string> <options> <label>"
 				query.colTypes = fields[1]
-				if *Bigtest {
-					// bigtests put each expected value on its own line.
-					query.valsPerLine = 1
-				} else {
-					// Otherwise, expect number of values to match expected type count.
-					query.valsPerLine = len(query.colTypes)
-				}
+				// Expect the number of values on a line to match the type count.
+				query.valsPerLine = len(query.colTypes)
 
 				if len(fields) >= 3 {
 					query.rawOpts = fields[2]

@@ -83,7 +83,6 @@ require (
 	github.com/kisielk/gotool v1.0.0
 	github.com/klauspost/compress v1.17.4
 	github.com/knz/bubbline v0.0.0-20230422210153-e176cdfe1c43
-	github.com/knz/strtime v0.0.0-20200318182718-be999391ffa9
 	github.com/kr/pretty v0.3.1
 	github.com/kr/text v0.2.0
 	github.com/kylelemons/godebug v1.1.0

@@ -15,7 +15,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"net/url"
 	"path"
 	"sort"
 	"strconv"
@@ -430,7 +429,7 @@ func importPlanHook(
 			files = filenamePatterns
 		} else {
 			for _, file := range filenamePatterns {
-				uri, err := url.Parse(file)
+				uri, err := cloud.ParseURI(file)
 				if err != nil {
 					return err
 				}
@@ -894,7 +893,7 @@ func importPlanHook(
 
 		// Record telemetry for userfile being used as the import target.
 		for _, file := range files {
-			uri, err := url.Parse(file)
+			uri, err := cloud.ParseURI(file)
 			// This should never be true as we have parsed these file names in an
 			// earlier step of import.
 			if err != nil {

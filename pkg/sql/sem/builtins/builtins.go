@@ -102,7 +102,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/redact"
-	"github.com/knz/strtime"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -8400,7 +8399,7 @@ func strftimeImpl() builtinDefinition {
 			Fn: func(_ context.Context, _ *eval.Context, args tree.Datums) (tree.Datum, error) {
 				fromTime := args[0].(*tree.DTimestamp).Time
 				format := string(tree.MustBeDString(args[1]))
-				t, err := strtime.Strftime(fromTime, format)
+				t, err := timeutil.Strftime(fromTime, format)
 				if err != nil {
 					return nil, err
 				}
@@ -8419,7 +8418,7 @@ func strftimeImpl() builtinDefinition {
 					return nil, err
 				}
 				format := string(tree.MustBeDString(args[1]))
-				t, err := strtime.Strftime(fromTime, format)
+				t, err := timeutil.Strftime(fromTime, format)
 				if err != nil {
 					return nil, err
 				}
@@ -8435,7 +8434,7 @@ func strftimeImpl() builtinDefinition {
 			Fn: func(_ context.Context, _ *eval.Context, args tree.Datums) (tree.Datum, error) {
 				fromTime := args[0].(*tree.DTimestampTZ).Time
 				format := string(tree.MustBeDString(args[1]))
-				t, err := strtime.Strftime(fromTime, format)
+				t, err := timeutil.Strftime(fromTime, format)
 				if err != nil {
 					return nil, err
 				}

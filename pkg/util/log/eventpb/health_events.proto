@@ -46,7 +46,9 @@ message RuntimeStats {
   uint64 heap_reserved_bytes = 9 [(gogoproto.jsontag) = ",omitempty"];
   // The amount of heap released. Expressed as bytes.
   uint64 heap_released_bytes = 10 [(gogoproto.jsontag) = ",omitempty"];
-  // Fields 11 and 12 were the memory allocated by jemalloc, which is removed.
+  // Fields 11 and 12 held the memory allocated by jemalloc, which is removed.
+  reserved 11;
+  reserved 12;
   // The total number of calls outside of Go over time. Expressed as operations per second.
   float cgo_call_rate = 13 [(gogoproto.customname) = "CGoCallRate", (gogoproto.jsontag) = ",omitempty"];
   // The user CPU percentage.
