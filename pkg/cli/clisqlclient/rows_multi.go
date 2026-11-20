@@ -15,14 +15,14 @@ import (
 	"io"
 
 	"github.com/cockroachdb/errors"
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgtype"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type sqlRowsMultiResultSet struct {
 	rows     *pgconn.MultiResultReader
-	connInfo *pgtype.ConnInfo
+	typeMap  *pgtype.Map
 	conn     *sqlConn
 	colNames []string
 }
@@ -39,7 +39,7 @@ func (r *sqlRowsMultiResultSet) Columns() []string {
 		fields := rr.FieldDescriptions()
 		r.colNames = make([]string, len(fields))
 		for i, fd := range fields {
-			r.colNames[i] = string(fd.Name)
+			r.colNames[i] = fd.Name
 		}
 	}
 	return r.colNames
@@ -50,7 +50,7 @@ func (r *sqlRowsMultiResultSet) Tag() (CommandTag, error) {
 		// ResultReader may be nil if an empty query was executed.
 		return r.rows.ResultReader().Close()
 	}
-	return pgconn.CommandTag(""), nil
+	return pgconn.CommandTag{}, nil
 }
 
 func (r *sqlRowsMultiResultSet) Close() (retErr error) {
@@ -105,9 +105,9 @@ func (r *sqlRowsMultiResultSet) Next(values []driver.Value) error {
 		// By scanning the value into a string, pgconn will use the pgwire
 		// text format to represent the value.
 		var s string
-		err := r.connInfo.Scan(fieldOID, fieldFormat, rowVal, &s)
+		err := r.typeMap.Scan(fieldOID, fieldFormat, rowVal, &s)
 		if err != nil {
-			return pgx.ScanArgError{ColumnIndex: i, Err: err}
+			return pgx.ScanArgError{ColumnIndex: i, FieldName: rd.FieldDescriptions()[i].Name, Err: err}
 		}
 		values[i] = s
 	}
@@ -137,5 +137,5 @@ func (r *sqlRowsMultiResultSet) NextResultSet() (bool, error) {
 func (r *sqlRowsMultiResultSet) ColumnTypeDatabaseTypeName(index int) string {
 	rd := r.rows.ResultReader()
 	fieldOID := rd.FieldDescriptions()[index].DataTypeOID
-	return databaseTypeName(r.connInfo, fieldOID)
+	return databaseTypeName(r.typeMap, fieldOID)
 }

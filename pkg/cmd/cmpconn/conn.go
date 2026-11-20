@@ -21,7 +21,7 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/sql/randgen"
 	"github.com/cockroachdb/errors"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/lib/pq"
 )
 
@@ -61,18 +61,18 @@ func (c *conn) PGX() *pgx.Conn {
 // Values executes prep and exec and returns the results of exec.
 func (c *conn) Values(ctx context.Context, prep, exec string) (rows pgx.Rows, err error) {
 	if prep != "" {
-		rows, err = c.pgx.Query(ctx, prep, pgx.QuerySimpleProtocol(true))
+		rows, err = c.pgx.Query(ctx, prep, pgx.QueryExecModeSimpleProtocol)
 		if err != nil {
 			return nil, err
 		}
 		rows.Close()
 	}
-	return c.pgx.Query(ctx, exec, pgx.QuerySimpleProtocol(true))
+	return c.pgx.Query(ctx, exec, pgx.QueryExecModeSimpleProtocol)
 }
 
 // Exec executes s.
 func (c *conn) Exec(ctx context.Context, s string) error {
-	_, err := c.pgx.Exec(ctx, s, pgx.QuerySimpleProtocol(true))
+	_, err := c.pgx.Exec(ctx, s, pgx.QueryExecModeSimpleProtocol)
 	return errors.Wrap(err, "exec")
 }
 

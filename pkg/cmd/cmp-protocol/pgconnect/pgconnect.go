@@ -19,7 +19,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgwirebase"
 	"github.com/cockroachdb/cockroach/pkg/util/ctxgroup"
 	"github.com/cockroachdb/errors"
-	"github.com/jackc/pgproto3/v2"
+	"github.com/jackc/pgx/v5/pgproto3"
 )
 
 // Connect connects to the postgres-compatible server at addr with specified
@@ -39,7 +39,7 @@ func Connect(
 	}
 	defer conn.Close()
 
-	fe := pgproto3.NewFrontend(pgproto3.NewChunkReader(conn), conn)
+	fe := pgproto3.NewFrontend(conn, conn)
 
 	send := make(chan pgproto3.FrontendMessage)
 	recv := make(chan pgproto3.BackendMessage)
@@ -56,8 +56,8 @@ func Connect(
 			case <-ctx.Done():
 				return ctx.Err()
 			case msg := <-send:
-				err := fe.Send(msg)
-				if err != nil {
+				fe.Send(msg)
+				if err := fe.Flush(); err != nil {
 					return errors.Wrap(err, "send")
 				}
 			}

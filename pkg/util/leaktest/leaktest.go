@@ -57,9 +57,7 @@ func interestingGoroutines() map[int64]string {
 			// Ignore the opensensus worker, which is created by the event exporter.
 			strings.Contains(stack, "go.opencensus.io/stats/view.(*worker).start") ||
 			// Ignore pgconn which creates a goroutine to do an async cleanup.
-			strings.Contains(stack, "github.com/jackc/pgconn.(*PgConn).asyncClose.func1") ||
-			// Ignore pgconn which creates a goroutine to watch context cancellation.
-			strings.Contains(stack, "github.com/jackc/pgconn/internal/ctxwatch.(*ContextWatcher).Watch.func1") ||
+			strings.Contains(stack, "github.com/jackc/pgx/v5/pgconn.(*PgConn).asyncClose.func1") ||
 			// Ignore pq goroutine that watches for context cancellation.
 			strings.Contains(stack, "github.com/lib/pq.(*conn).watchCancel") ||
 			// Seems to be gccgo specific.

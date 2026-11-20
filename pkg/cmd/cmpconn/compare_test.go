@@ -16,7 +16,7 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/apd/v3"
-	"github.com/jackc/pgtype"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func TestCompareVals(t *testing.T) {
@@ -70,18 +70,18 @@ func TestCompareVals(t *testing.T) {
 			equal: true,
 			a: []interface{}{
 				pgtype.Numeric{
-					Int:    big1,
-					Exp:    -19,
-					Status: pgtype.Present,
-					NaN:    false,
+					Int:   big1,
+					Exp:   -19,
+					Valid: true,
+					NaN:   false,
 				},
 			},
 			b: []interface{}{
 				pgtype.Numeric{
-					Int:    big2,
-					Exp:    -16,
-					Status: pgtype.Present,
-					NaN:    false,
+					Int:   big2,
+					Exp:   -16,
+					Valid: true,
+					NaN:   false,
 				},
 			},
 		},
@@ -89,18 +89,18 @@ func TestCompareVals(t *testing.T) {
 			equal: true,
 			a: []interface{}{
 				pgtype.Numeric{
-					Int:    big.NewInt(0),
-					Exp:    -1,
-					Status: pgtype.Present,
-					NaN:    false,
+					Int:   big.NewInt(0),
+					Exp:   -1,
+					Valid: true,
+					NaN:   false,
 				},
 			},
 			b: []interface{}{
 				pgtype.Numeric{
-					Int:    big.NewInt(0),
-					Exp:    6,
-					Status: pgtype.Present,
-					NaN:    false,
+					Int:   big.NewInt(0),
+					Exp:   6,
+					Valid: true,
+					NaN:   false,
 				},
 			},
 		},
@@ -108,14 +108,14 @@ func TestCompareVals(t *testing.T) {
 			equal: true,
 			a: []interface{}{
 				pgtype.Numeric{
-					Status: pgtype.Present,
-					NaN:    true,
+					Valid: true,
+					NaN:   true,
 				},
 			},
 			b: []interface{}{
 				pgtype.Numeric{
-					Status: pgtype.Present,
-					NaN:    true,
+					Valid: true,
+					NaN:   true,
 				},
 			},
 		},

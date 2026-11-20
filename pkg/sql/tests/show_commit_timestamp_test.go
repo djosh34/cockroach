@@ -14,11 +14,10 @@ import (
 	"context"
 	gosql "database/sql"
 	"fmt"
-	"math/big"
 	"testing"
 
 	"github.com/cockroachdb/cockroach-go/v2/crdb"
-	"github.com/cockroachdb/cockroach-go/v2/crdb/crdbpgx"
+	crdbpgx "github.com/cockroachdb/cockroach-go/v2/crdb/crdbpgxv5"
 	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/testutils"
@@ -27,8 +26,8 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/errors"
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 )
 
@@ -81,7 +80,9 @@ CREATE TABLE foo (i INT PRIMARY KEY)`)
 		defer cleanup()
 		conf, err := pgx.ParseConfig(pgURL.String())
 		require.NoError(t, err)
-		conf.PreferSimpleProtocol = simple
+		if simple {
+			conf.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+		}
 		conn, err := pgx.ConnectConfig(ctx, conf)
 		require.NoError(t, err)
 		defer func() { require.NoError(t, conn.Close(ctx)) }()
@@ -116,11 +117,9 @@ CREATE TABLE foo (i INT PRIMARY KEY)`)
 				_, err = res.Exec()
 				require.NoError(t, err)
 			} else {
-				// Support for scanning numerics into strings was not added until
-				// a later version of pgx than was in use at the time of writing.
-				var r big.Rat
-				require.NoError(t, res.QueryRow().Scan(&r))
-				commitTimestamps = append(commitTimestamps, r.FloatString(10))
+				var ts string
+				require.NoError(t, res.QueryRow().Scan(&ts))
+				commitTimestamps = append(commitTimestamps, ts)
 			}
 		}
 		require.NoError(t, res.Close())
@@ -133,7 +132,9 @@ CREATE TABLE foo (i INT PRIMARY KEY)`)
 		defer cleanup()
 		conf, err := pgx.ParseConfig(pgURL.String())
 		require.NoError(t, err)
-		conf.PreferSimpleProtocol = simple
+		if simple {
+			conf.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+		}
 		conn, err := pgx.ConnectConfig(ctx, conf)
 		require.NoError(t, err)
 		defer func() { require.NoError(t, conn.Close(ctx)) }()
@@ -154,11 +155,7 @@ CREATE TABLE foo (i INT PRIMARY KEY)`)
 			require.NoError(t, err)
 		}
 		var ts string
-		{
-			var tsRat big.Rat
-			require.NoError(t, conn.QueryRow(ctx, showCommitTimestamp).Scan(&tsRat))
-			ts = tsRat.FloatString(10)
-		}
+		require.NoError(t, conn.QueryRow(ctx, showCommitTimestamp).Scan(&ts))
 		checkResults(t, []string{ts}, 0)
 		var txTs string
 		require.NoError(t, crdbpgx.ExecuteTx(ctx, conn, pgx.TxOptions{}, func(tx pgx.Tx) (err error) {
@@ -168,12 +165,7 @@ CREATE TABLE foo (i INT PRIMARY KEY)`)
 			if _, err = tx.Exec(ctx, "insert into foo values (3)"); err != nil {
 				return err
 			}
-			var tsRat big.Rat
-			if err = tx.QueryRow(ctx, showCommitTimestamp).Scan(&tsRat); err != nil {
-				return err
-			}
-			txTs = tsRat.FloatString(10)
-			return nil
+			return tx.QueryRow(ctx, showCommitTimestamp).Scan(&txTs)
 		}))
 
 		checkResults(t, []string{ts, txTs}, 0, 1, 1, 1)

@@ -39,8 +39,8 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/errors"
-	pgproto3 "github.com/jackc/pgproto3/v2"
-	pgx "github.com/jackc/pgx/v4"
+	pgx "github.com/jackc/pgx/v5"
+	pgproto3 "github.com/jackc/pgx/v5/pgproto3"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 )
@@ -1707,7 +1707,6 @@ func TestSessionParameters(t *testing.T) {
 	)
 	require.NoError(t, err)
 	connCfg.TLSConfig = nil
-	connCfg.Logger = pgxTestLogger{}
 
 	testData := []struct {
 		varName        string
@@ -1794,17 +1793,6 @@ func TestSessionParameters(t *testing.T) {
 	}
 }
 
-type pgxTestLogger struct{}
-
-func (l pgxTestLogger) Log(
-	ctx context.Context, level pgx.LogLevel, msg string, data map[string]interface{},
-) {
-	log.Infof(ctx, "pgx log [%s] %s - %s", level, msg, data)
-}
-
-// pgxTestLogger implements pgx.Logger.
-var _ pgx.Logger = pgxTestLogger{}
-
 func TestCancelRequest(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	defer log.Scope(t).Close(t)
@@ -1826,12 +1814,13 @@ func TestCancelRequest(t *testing.T) {
 		// Reset telemetry so we get a deterministic count below.
 		_ = telemetry.GetFeatureCounts(telemetry.Raw, telemetry.ResetCounts)
 
-		fe := pgproto3.NewFrontend(pgproto3.NewChunkReader(conn), conn)
+		fe := pgproto3.NewFrontend(conn, conn)
 		// versionCancel is the special code sent as header for cancel requests.
 		// See: https://www.postgresql.org/docs/current/protocol-message-formats.html
 		// and the explanation in server.go.
 		const versionCancel = 80877102
-		if err := fe.Send(&pgproto3.StartupMessage{ProtocolVersion: versionCancel}); err != nil {
+		fe.Send(&pgproto3.StartupMessage{ProtocolVersion: versionCancel})
+		if err := fe.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := fe.Receive(); !errors.Is(err, io.ErrUnexpectedEOF) {
@@ -1864,12 +1853,13 @@ func TestUnsupportedGSSEnc(t *testing.T) {
 		// Reset telemetry so we get a deterministic count below.
 		_ = telemetry.GetFeatureCounts(telemetry.Raw, telemetry.ResetCounts)
 
-		fe := pgproto3.NewFrontend(pgproto3.NewChunkReader(conn), conn)
+		fe := pgproto3.NewFrontend(conn, conn)
 		// versionCancel is the special code sent as header for cancel requests.
 		// See: https://www.postgresql.org/docs/current/protocol-message-formats.html
 		// and the explanation in server.go.
 		const versionGSSENC = 80877104
-		if err := fe.Send(&pgproto3.StartupMessage{ProtocolVersion: versionGSSENC}); err != nil {
+		fe.Send(&pgproto3.StartupMessage{ProtocolVersion: versionGSSENC})
+		if err := fe.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		msg, err := fe.Receive()

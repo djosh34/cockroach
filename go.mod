@@ -69,11 +69,10 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
 	github.com/guptarohit/asciigraph v0.5.5
-	github.com/jackc/pgconn v1.14.0
-	github.com/jackc/pgproto3/v2 v2.3.2
-	github.com/jackc/pgtype v1.14.0
-	github.com/jackc/pgx/v4 v4.18.1
-	github.com/jackc/pgx/v5 v5.4.2
+	// pgx 5.11 and later parse URLs like libpq: they reject "=" inside a
+	// parameter such as options=-ccluster=x and read "+" as itself, which
+	// breaks the URLs that CockroachDB documents.
+	github.com/jackc/pgx/v5 v5.10.0
 	github.com/jordanlewis/gcassert v0.0.0-20230505190637-fed79d91cd5f
 	github.com/kisielk/errcheck v1.9.0
 	github.com/kisielk/gotool v1.0.0
@@ -207,12 +206,9 @@ require (
 	github.com/ianlancetaylor/demangle v0.0.0-20200824232613-28f6c0f3b639 // indirect
 	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
-	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
-	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
-	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
-	github.com/jackc/puddle v1.3.0 // indirect
-	github.com/jackc/puddle/v2 v2.2.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/puddle/v2 v2.2.3 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/klauspost/asmfmt v1.3.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect

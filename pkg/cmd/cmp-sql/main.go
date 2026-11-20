@@ -36,8 +36,8 @@ import (
 
 	"github.com/cockroachdb/apd/v3"
 	"github.com/cockroachdb/cockroach/pkg/util/randutil"
-	"github.com/jackc/pgtype"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 var (
@@ -104,11 +104,12 @@ func main() {
 							panic(fmt.Errorf("expected 1 val, got %v", vals))
 						} else {
 							switch v := vals[0].(type) {
-							case *pgtype.Numeric:
-								b, err := v.EncodeText(nil, nil)
+							case pgtype.Numeric:
+								dv, err := v.Value()
 								if err != nil {
 									panic(err)
 								}
+								b, _ := dv.(string)
 								// Use a decimal so we can Reduce away the extra zeros. Needed because
 								// pg and cr return equivalent but not identical decimal results.
 								var d apd.Decimal

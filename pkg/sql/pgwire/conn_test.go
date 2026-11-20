@@ -54,10 +54,9 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/mon"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/errors"
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgproto3/v2"
-	"github.com/jackc/pgx/v4"
-	pgx5 "github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 )
@@ -152,7 +151,6 @@ func TestConn(t *testing.T) {
 	expectDescribeStmt(ctx, t, "p1", pgwirebase.PrepareStatement, &rd, conn)
 	expectSync(ctx, t, &rd)
 	expectBindStmt(ctx, t, "p1", &rd, conn)
-	expectDescribeStmt(ctx, t, "", pgwirebase.PreparePortal, &rd, conn)
 	expectExecPortal(ctx, t, "", &rd, conn)
 	// Check that a query string with multiple queries sent using the simple
 	// protocol is broken up.
@@ -213,7 +211,7 @@ func TestPipelineMetric(t *testing.T) {
 	defer cancelConn()
 	connectGroup := ctxgroup.WithContext(ctx)
 
-	var pgxConn *pgx5.Conn
+	var pgxConn *pgx.Conn
 	connectGroup.GoCtx(func(ctx context.Context) error {
 		host, ports, err := net.SplitHostPort(serverAddr.String())
 		if err != nil {
@@ -223,7 +221,7 @@ func TestPipelineMetric(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		pgxConn, err = pgx5.Connect(
+		pgxConn, err = pgx.Connect(
 			ctx,
 			fmt.Sprintf("postgresql://%s@%s:%d/system?sslmode=disable", username.RootUser, host, port),
 		)
@@ -266,7 +264,7 @@ func TestPipelineMetric(t *testing.T) {
 	typeMap := pgxConn.TypeMap()
 	pipeline := pgxConn.PgConn().StartPipeline(ctx)
 
-	eqb := pgx5.ExtendedQueryBuilder{}
+	eqb := pgx.ExtendedQueryBuilder{}
 	err = eqb.Build(typeMap, nil, []any{1, 2})
 	require.NoError(t, err)
 	pipeline.SendQueryParams(`select $1::int + $2::int`, eqb.ParamValues, nil, eqb.ParamFormats, eqb.ResultFormats)
@@ -330,8 +328,10 @@ func TestPipelineMetric(t *testing.T) {
 	expectSync(ctx, t, &rd)
 	require.EqualValues(t, 0, serverSideConn.stmtBuf.PipelineCount.Value())
 
+	// The server never sends results, so pgx reports them as missing when it
+	// closes the pipeline. The test checks only the statement buffer.
 	err = pipeline.Close()
-	require.NoError(t, err)
+	require.ErrorContains(t, err, "unexpected message type")
 	err = pgxConn.Close(ctx)
 	require.NoError(t, err)
 	err = serveGroup.Wait()
@@ -627,11 +627,10 @@ func client(ctx context.Context, serverAddr net.Addr, wg *sync.WaitGroup) error 
 	if err != nil {
 		return err
 	}
-	cfg.Logger = pgxTestLogger{}
 	// Setting this so that the queries sent by pgx to initialize the
 	// connection are not using prepared statements. That simplifies the
 	// scaffolding of the test.
-	cfg.PreferSimpleProtocol = true
+	cfg.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 	conn, err := pgx.ConnectConfig(ctx, cfg)
 	if err != nil {
 		return err
@@ -646,12 +645,8 @@ func client(ctx context.Context, serverAddr net.Addr, wg *sync.WaitGroup) error 
 	if _, err := conn.Prepare(ctx, "p1", "select 'p1'"); err != nil {
 		return err
 	}
-	if _, err := conn.Exec(
-		ctx, "p1",
-		// We set these options because apparently that's how I tell pgx that it
-		// should check whether "p1" is a prepared statement.
-		pgx.QuerySimpleProtocol(false),
-	); err != nil {
+	// pgx runs "p1" as the prepared statement of that name.
+	if _, err := conn.Exec(ctx, "p1"); err != nil {
 		return err
 	}
 
@@ -1054,17 +1049,6 @@ func finishQuery(t finishType, c *conn) error {
 	return nil
 }
 
-type pgxTestLogger struct{}
-
-func (l pgxTestLogger) Log(
-	ctx context.Context, level pgx.LogLevel, msg string, data map[string]interface{},
-) {
-	log.Infof(ctx, "pgx log [%s] %s - %s", level, msg, data)
-}
-
-// pgxTestLogger implements pgx.Logger.
-var _ pgx.Logger = pgxTestLogger{}
-
 // Test that closing a pgwire connection causes transactions to be rolled back
 // and release their locks.
 func TestConnCloseReleasesLocks(t *testing.T) {
@@ -1462,8 +1446,9 @@ func TestConnCloseCancelsAuth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fe := pgproto3.NewFrontend(pgproto3.NewChunkReader(conn), conn)
-	if err := fe.Send(&pgproto3.StartupMessage{ProtocolVersion: version30}); err != nil {
+	fe := pgproto3.NewFrontend(conn, conn)
+	fe.Send(&pgproto3.StartupMessage{ProtocolVersion: version30})
+	if err := fe.Flush(); err != nil {
 		t.Fatal(err)
 	}
 

@@ -42,8 +42,8 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/protoutil"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/errors"
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgtype"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/spf13/cobra"
 )
 
@@ -256,11 +256,12 @@ FROM system.descriptor ORDER BY id`
 		if vals[2] == nil {
 			row.ModTime = hlc.Timestamp{WallTime: timeutil.Now().UnixNano()}
 		} else if mt, ok := vals[2].(pgtype.Numeric); ok {
-			buf, err := mt.EncodeText(nil, nil)
+			text, err := mt.Value()
 			if err != nil {
 				return err
 			}
-			decimal, _, err := apd.NewFromString(string(buf))
+			str, _ := text.(string)
+			decimal, _, err := apd.NewFromString(str)
 			if err != nil {
 				return err
 			}
