@@ -22,6 +22,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/isql"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
+	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
 	"github.com/cockroachdb/cockroach/pkg/sql/syntheticprivilege"
@@ -123,10 +124,14 @@ func CheckUsage(ctx context.Context, txn isql.Txn, user username.SQLUsername, na
 		return nil
 	}
 	path := (&syntheticprivilege.ExternalConnectionPrivilege{ConnectionName: name}).GetPath()
-	// The query runs as node because the user may not read system.privileges.
-	// CASE keeps pg_has_role away from public, which is not a stored role.
-	row, err := txn.QueryRowEx(ctx, "check-external-connection-usage", txn.KV(),
-		sessiondata.NodeUserSessionDataOverride, `
+	// The query runs as node because the user may not read system.privileges,
+	// and in a database because pg_has_role reads pg_roles. CASE keeps
+	// pg_has_role away from public, which is not a stored role.
+	override := sessiondata.InternalExecutorOverride{
+		User:     username.NodeUserName(),
+		Database: catconstants.SystemDatabaseName,
+	}
+	row, err := txn.QueryRowEx(ctx, "check-external-connection-usage", txn.KV(), override, `
 SELECT pg_has_role($1::STRING, 'admin', 'MEMBER') OR EXISTS (
   SELECT 1 FROM system.privileges
   WHERE path = $2::STRING

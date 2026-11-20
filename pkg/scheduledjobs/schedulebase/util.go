@@ -12,12 +12,10 @@ package schedulebase
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
-	"github.com/cockroachdb/cockroach/pkg/scheduledjobs"
 	"github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
@@ -26,7 +24,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
-	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
 	"github.com/cockroachdb/errors"
 	cron "github.com/robfig/cron/v3"
 )
@@ -68,22 +65,6 @@ func ComputeScheduleRecurrence(now time.Time, rec *string) (*ScheduleRecurrence,
 	}
 
 	return &ScheduleRecurrence{cronStr, frequency}, nil
-}
-
-// CheckScheduleAlreadyExists returns true if a schedule with the same label
-// already exists.
-func CheckScheduleAlreadyExists(
-	ctx context.Context, p sql.PlanHookState, scheduleLabel string,
-) (bool, error) {
-	row, err := p.InternalSQLTxn().QueryRowEx(ctx, "check-sched",
-		p.Txn(), sessiondata.RootUserSessionDataOverride,
-		fmt.Sprintf("SELECT count(schedule_name) FROM %s WHERE schedule_name = '%s'",
-			scheduledjobs.ProdJobSchedulerEnv.ScheduledJobsTableName(), scheduleLabel))
-
-	if err != nil {
-		return false, err
-	}
-	return int64(tree.MustBeDInt(row[0])) != 0, nil
 }
 
 // ParseOnError parses schedule option optOnExecFailure into
