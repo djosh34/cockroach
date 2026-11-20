@@ -163,14 +163,14 @@ func makeDummyBooleanSessionVar(
 	}
 }
 
-// varGen is the main definition array for all session variables.
-// Note to maintainers: try to keep this sorted in the source code.
 // isolationLevelNames are the isolation levels a session can ask for. Every
 // one of them runs SERIALIZABLE.
 var isolationLevelNames = []string{
 	"serializable", "snapshot", "repeatable read", "read committed", "read uncommitted",
 }
 
+// varGen is the main definition array for all session variables.
+// Note to maintainers: try to keep this sorted in the source code.
 var varGen = map[string]sessionVar{
 	// Set by clients to improve query logging.
 	// See https://www.postgresql.org/docs/10/static/runtime-config-logging.html#GUC-APPLICATION-NAME
