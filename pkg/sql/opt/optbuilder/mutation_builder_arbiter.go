@@ -278,10 +278,7 @@ func (mb *mutationBuilder) inferArbitersFromConflictOrds(
 //   - pred is the partial index or constraint predicate. If the arbiter is
 //     not a partial index or constraint, pred is nil.
 func (mb *mutationBuilder) buildAntiJoinForDoNothingArbiter(
-	inScope *scope,
-	texpr tree.TableExpr,
-	conflictOrds intsets.Fast,
-	pred tree.Expr,
+	inScope *scope, texpr tree.TableExpr, conflictOrds intsets.Fast, pred tree.Expr,
 ) {
 	var indexFlags *tree.IndexFlags
 	if source, ok := texpr.(*tree.AliasedTableExpr); ok {
@@ -369,10 +366,7 @@ func (mb *mutationBuilder) buildAntiJoinForDoNothingArbiter(
 //     only de-duplicate insert rows that satisfy the partial index predicate.
 //     If the arbiter is not a partial index, partialIndexDistinctCol is nil.
 func (mb *mutationBuilder) buildLeftJoinForUpsertArbiter(
-	inScope *scope,
-	texpr tree.TableExpr,
-	conflictOrds intsets.Fast,
-	pred tree.Expr,
+	inScope *scope, texpr tree.TableExpr, conflictOrds intsets.Fast, pred tree.Expr,
 ) {
 	var indexFlags *tree.IndexFlags
 	if source, ok := texpr.(*tree.AliasedTableExpr); ok {
