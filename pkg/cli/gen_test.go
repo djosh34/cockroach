@@ -62,7 +62,7 @@ func TestGenAutocomplete(t *testing.T) {
 		{shell: "bash"},
 		{shell: "fish"},
 		{shell: "zsh"},
-		{shell: "bad", expErr: `invalid argument "bad" for "cockroach gen autocomplete"`},
+		{shell: "bad", expErr: `invalid argument "bad" for "patchroaddb gen autocomplete"`},
 	} {
 		t.Run("shell="+tc.shell, func(t *testing.T) {
 			const minsize = 1000

@@ -70,7 +70,7 @@ func TestJunkPositionalArguments(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%d: %v", i, err)
 		}
-		exp := fmt.Sprintf("%s\nERROR: unknown command %q for \"cockroach %s\"\n", line, junk, test)
+		exp := fmt.Sprintf("%s\nERROR: unknown command %q for \"patchroaddb %s\"\n", line, junk, test)
 		if exp != out {
 			t.Errorf("%d: expected:\n%s\ngot:\n%s", i, exp, out)
 		}
