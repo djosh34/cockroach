@@ -8,7 +8,7 @@ arm64, without cgo.
 ## Build
 
 ```
-CGO_ENABLED=0 go build -o cockroach ./pkg/cmd/cockroach-oss
+CGO_ENABLED=0 go build -o patchroaddb ./pkg/cmd/patchroaddb
 ```
 
 ## Generated code
@@ -62,6 +62,18 @@ packages), `returncheck` or `rest`.
 `.github/workflows/nightly.yml` runs the same shards with the race detector,
 every night and on manual start.
 
-## Docker image
+## Release
 
-`build/deploy` holds the Dockerfile of the release image.
+The version is in `pkg/build/version.txt`. `build/release.sh <tag> <out dir>`
+builds the release files into a directory that must not exist yet: a
+`patchroaddb-<tag>.linux-<arch>.tgz` for amd64 and arm64 with the binary and
+the license files, `SHA256SUMS`, and the build context of the image. The tag
+must equal `version.txt`.
+
+`.github/workflows/release.yml` runs it. On a pushed `v*` tag it puts the
+tarballs and `SHA256SUMS` on a GitHub release and pushes the multi-arch image
+`ghcr.io/djosh34/patchroaddb` tagged with the tag and `latest`. Only its
+`publish` job has write permissions. Started by hand, it builds and checks
+everything and publishes nothing.
+
+`build/deploy` holds the Dockerfile of the image and its entry point script.

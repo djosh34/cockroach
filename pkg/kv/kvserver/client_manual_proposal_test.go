@@ -1,12 +1,12 @@
 // Copyright 2023 The Cockroach Authors.
 //
-// Use of this software is governed by the Business Source License
-// included in the file licenses/BSL.txt.
-//
-// As of the Change Date specified in that file, in accordance with
-// the Business Source License, use of this software will be governed
-// by the Apache License, Version 2.0, included in the file
-// licenses/APL.txt.
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+// file except in compliance with the License. You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software distributed under
+// the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+// ANY KIND, either express or implied. See the License for the specific language
+// governing permissions and limitations under the License.
 
 package kvserver_test
 
@@ -69,9 +69,9 @@ func TestCreateManyUnappliedProbes(t *testing.T) {
 	//    const entsPerBatch = 100000
 	//    const batches = 1000
 	//
-	//   go build -o cockroach ./pkg/cmd/cockroach-oss && rm -rf cockroach-data && timeout 10 ./cockroach start-single-node --logtostderr --insecure ; \
+	//   go build -o patchroaddb ./pkg/cmd/patchroaddb && rm -rf cockroach-data && timeout 10 ./patchroaddb start-single-node --logtostderr --insecure ; \
 	//   go test ./pkg/kv/kvserver/ -v --run TestCreateManyUnappliedProbes && sleep 3 && \
-	//   (./cockroach start-single-node --logtostderr=INFO --insecure | grep -F r10/)
+	//   (./patchroaddb start-single-node --logtostderr=INFO --insecure | grep -F r10/)
 	//
 	// Then wait and watch the `raft.commandsapplied` metric to see r10 apply the entries.
 	p := filepath.Join(t.TempDir(), "cockroach-data")

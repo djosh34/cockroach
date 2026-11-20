@@ -1,12 +1,12 @@
 // Copyright 2015 The Cockroach Authors.
 //
-// Use of this software is governed by the Business Source License
-// included in the file licenses/BSL.txt.
-//
-// As of the Change Date specified in that file, in accordance with
-// the Business Source License, use of this software will be governed
-// by the Apache License, Version 2.0, included in the file
-// licenses/APL.txt.
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+// file except in compliance with the License. You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software distributed under
+// the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+// ANY KIND, either express or implied. See the License for the specific language
+// governing permissions and limitations under the License.
 
 package cli
 
@@ -93,7 +93,7 @@ var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "start a node in a multi-node cluster",
 	Long: `
-Start a CockroachDB node, which will export data from one or more
+Start a patchroaddb node, which will export data from one or more
 storage devices, specified via --store flags.
 
 Specify the --join flag to point to another node or nodes that are
@@ -101,9 +101,9 @@ part of the same cluster. The other nodes do not need to be started
 yet, and if the address of the other nodes to be added are not yet
 known it is legal for the first node to join itself.
 
-To initialize the cluster, use 'cockroach init'.
+To initialize the cluster, use 'patchroaddb init'.
 `,
-	Example: `  cockroach start --insecure --store=attrs=ssd,path=/mnt/ssd1 --join=host:port,[host:port]`,
+	Example: `  patchroaddb start --insecure --store=attrs=ssd,path=/mnt/ssd1 --join=host:port,[host:port]`,
 	Args:    cobra.NoArgs,
 	RunE:    clierrorplus.MaybeShoutError(clierrorplus.MaybeDecorateError(runStartJoin)),
 }
@@ -113,12 +113,12 @@ var startSingleNodeCmd = &cobra.Command{
 	Use:   "start-single-node",
 	Short: "start a single-node cluster",
 	Long: `
-Start a CockroachDB node, which will export data from one or more
+Start a patchroaddb node, which will export data from one or more
 storage devices, specified via --store flags.
 The cluster will also be automatically initialized with
 replication disabled (replication factor = 1).
 `,
-	Example: `  cockroach start-single-node --insecure --store=attrs=ssd,path=/mnt/ssd1`,
+	Example: `  patchroaddb start-single-node --insecure --store=attrs=ssd,path=/mnt/ssd1`,
 	Args:    cobra.NoArgs,
 	RunE:    clierrorplus.MaybeShoutError(clierrorplus.MaybeDecorateError(runStartSingleNode)),
 }
@@ -176,7 +176,7 @@ func initTraceDir(ctx context.Context, dir string) {
 		// to the current directory (.). If running the process
 		// from a directory which is not writable, we won't
 		// be able to create a sub-directory here.
-		err = errors.WithHint(err, "Try changing the CWD of the cockroach process to a writable directory.")
+		err = errors.WithHint(err, "Try changing the CWD of the patchroaddb process to a writable directory.")
 		log.Warningf(ctx, "cannot create trace dir; traces will not be dumped: %v", err)
 		return
 	}
@@ -295,7 +295,7 @@ func initTempStorageConfig(
 
 type newServerFn func(ctx context.Context, serverCfg server.Config, stopper *stop.Stopper) (serverctl.ServerStartupInterface, error)
 
-var errCannotUseJoin = errors.New("cannot use --join with 'cockroach start-single-node' -- use 'cockroach start' instead")
+var errCannotUseJoin = errors.New("cannot use --join with 'patchroaddb start-single-node' -- use 'patchroaddb start' instead")
 
 func runStartSingleNode(cmd *cobra.Command, args []string) error {
 	joinFlag := cliflagcfg.FlagSetForCmd(cmd).Lookup(cliflags.Join.Name)
@@ -471,8 +471,8 @@ func runStartInternal(
 	// Check the --join flag.
 	if fl := cliflagcfg.FlagSetForCmd(cmd).Lookup(cliflags.Join.Name); fl != nil && !fl.Changed {
 		err := errors.WithHint(
-			errors.New("no --join flags provided to 'cockroach start'"),
-			"Consider using 'cockroach init' or 'cockroach start-single-node' instead")
+			errors.New("no --join flags provided to 'patchroaddb start'"),
+			"Consider using 'patchroaddb init' or 'patchroaddb start-single-node' instead")
 		return err
 	}
 
@@ -567,7 +567,7 @@ func runStartInternal(
 
 - starting the other nodes, if you haven't already;
 - double-checking that the '--join' and '--listen'/'--advertise' flags are set up correctly;
-- running the 'cockroach init' command if you are trying to initialize a new cluster.
+- running the 'patchroaddb init' command if you are trying to initialize a new cluster.
 
 If problems persist, please see %s.`
 		docLink := docs.URL("cluster-setup-troubleshooting.html")
@@ -706,7 +706,7 @@ func createAndStartServerAsync(
 	var s serverctl.ServerStartupInterface
 	shutdownReqC := make(chan serverctl.ShutdownRequest, 1)
 
-	log.Ops.Infof(ctx, "starting cockroach %s", serverType)
+	log.Ops.Infof(ctx, "starting patchroaddb %s", serverType)
 
 	go func() {
 		// Ensure that the log files see the startup messages immediately.
@@ -756,7 +756,7 @@ func createAndStartServerAsync(
 					}
 				}
 
-				return errors.Wrap(err, "cockroach server exited with error")
+				return errors.Wrap(err, "patchroaddb server exited with error")
 			}
 			// Server started, notify the shutdown monitor running concurrently.
 			if shutdownInProgress := serverStatusMu.setStarted(s, stopper); shutdownInProgress {
@@ -1110,9 +1110,9 @@ func reportServerInfo(
 ) error {
 	var buf redact.StringBuilder
 	info := build.GetInfo()
-	buf.Printf("CockroachDB %s starting at %s (took %0.1fs)\n", serverType, timeutil.Now(), timeutil.Since(startTime).Seconds())
-	buf.Printf("build:\t%s %s @ %s (%s)\n",
-		redact.Safe(info.Distribution), redact.Safe(info.Tag), redact.Safe(info.Time), redact.Safe(info.GoVersion))
+	buf.Printf("patchroaddb %s starting at %s (took %0.1fs)\n", serverType, timeutil.Now(), timeutil.Since(startTime).Seconds())
+	buf.Printf("build:\t%s @ %s (%s)\n",
+		redact.Safe(info.Tag), redact.Safe(info.Time), redact.Safe(info.GoVersion))
 	buf.Printf("webui:\t%s\n", log.SafeManaged(serverCfg.AdminURL()))
 
 	// (Re-)compute the client connection URL. We cannot do this
@@ -1223,7 +1223,7 @@ func hintServerCmdFlags(ctx context.Context, cmd *cobra.Command) {
 	if !sqlAddrSpecified {
 		log.Ops.Shoutf(ctx, severity.WARNING,
 			"Running a server without --sql-addr, with a combined RPC/SQL listener, is deprecated.\n"+
-				"This feature will be removed in a later version of CockroachDB.")
+				"This feature will be removed in a later version of patchroaddb.")
 	}
 
 	changed := func(flagName string) bool {
@@ -1447,7 +1447,7 @@ func reportReadinessExternally(ctx context.Context, cmd *cobra.Command, waitForI
 	if waitForInit {
 		log.Ops.Shout(ctx, severity.INFO,
 			"initial startup completed.\n"+
-				"Node will now attempt to join a running cluster, or wait for `cockroach init`.\n"+
+				"Node will now attempt to join a running cluster, or wait for `patchroaddb init`.\n"+
 				"Client connections will be accepted after this completes successfully.\n"+
 				"Check the log file(s) for progress. ")
 	}

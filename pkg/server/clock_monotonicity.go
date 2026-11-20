@@ -1,12 +1,12 @@
 // Copyright 2022 The Cockroach Authors.
 //
-// Use of this software is governed by the Business Source License
-// included in the file licenses/BSL.txt.
-//
-// As of the Change Date specified in that file, in accordance with
-// the Business Source License, use of this software will be governed
-// by the Apache License, Version 2.0, included in the file
-// licenses/APL.txt.
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+// file except in compliance with the License. You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software distributed under
+// the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+// ANY KIND, either express or implied. See the License for the specific language
+// governing permissions and limitations under the License.
 
 package server
 
@@ -36,7 +36,7 @@ var (
 		"server.clock.persist_upper_bound_interval",
 		"the interval between persisting the wall time upper bound of the clock. The clock "+
 			"does not generate a wall time greater than the persisted timestamp and will panic if "+
-			"it sees a wall time greater than this value. When cockroach starts, it waits for the "+
+			"it sees a wall time greater than this value. When patchroaddb starts, it waits for the "+
 			"wall time to catch-up till this persisted timestamp. This guarantees monotonic wall "+
 			"time across server restarts. Not setting this or setting a value of 0 disables this "+
 			"feature.",

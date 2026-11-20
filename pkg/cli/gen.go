@@ -1,12 +1,12 @@
 // Copyright 2016 The Cockroach Authors.
 //
-// Use of this software is governed by the Business Source License
-// included in the file licenses/BSL.txt.
-//
-// As of the Change Date specified in that file, in accordance with
-// the Business Source License, use of this software will be governed
-// by the Apache License, Version 2.0, included in the file
-// licenses/APL.txt.
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+// file except in compliance with the License. You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software distributed under
+// the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+// ANY KIND, either express or implied. See the License for the specific language
+// governing permissions and limitations under the License.
 
 package cli
 
@@ -44,8 +44,8 @@ var manPath string
 
 var genManCmd = &cobra.Command{
 	Use:   "man",
-	Short: "generate man pages for CockroachDB",
-	Long: `This command generates man pages for CockroachDB.
+	Short: "generate man pages for patchroaddb",
+	Long: `This command generates man pages for patchroaddb.
 
 By default, this places man pages into the "man/man1" directory under the
 current directory. Use "--path=PATH" to override the output directory. For
@@ -60,8 +60,8 @@ func runGenManCmd(cmd *cobra.Command, args []string) error {
 	info := build.GetInfo()
 	header := &doc.GenManHeader{
 		Section: "1",
-		Manual:  "CockroachDB Manual",
-		Source:  fmt.Sprintf("CockroachDB %s", info.Tag),
+		Manual:  "patchroaddb Manual",
+		Source:  fmt.Sprintf("patchroaddb %s", info.Tag),
 	}
 
 	if !strings.HasSuffix(manPath, string(os.PathSeparator)) {
@@ -86,7 +86,7 @@ func runGenManCmd(cmd *cobra.Command, args []string) error {
 	// one has to notice the "See Also" section at the bottom of the page to know which commands
 	// are supported. I'd like to make this better somehow.
 
-	fmt.Println("Generated CockroachDB man pages in", manPath)
+	fmt.Println("Generated patchroaddb man pages in", manPath)
 	return nil
 }
 
@@ -94,13 +94,13 @@ var autoCompletePath string
 
 var genAutocompleteCmd = &cobra.Command{
 	Use:   "autocomplete [shell]",
-	Short: "generate autocompletion script for CockroachDB",
-	Long: `Generate autocompletion script for CockroachDB.
+	Short: "generate autocompletion script for patchroaddb",
+	Long: `Generate autocompletion script for patchroaddb.
 
 If no arguments are passed, or if 'bash' is passed, a bash completion file is
-written to ./cockroach.bash. If 'fish' is passed, a fish completion file
-is written to ./cockroach.fish. If 'zsh' is passed, a zsh completion file is written
-to ./_cockroach. Use "--out=/path/to/file" to override the output file location.
+written to ./patchroaddb.bash. If 'fish' is passed, a fish completion file
+is written to ./patchroaddb.fish. If 'zsh' is passed, a zsh completion file is written
+to ./_patchroaddb. Use "--out=/path/to/file" to override the output file location.
 
 Note that for the generated file to work on OS X with bash, you'll need to install
 Homebrew's bash-completion package (or an equivalent) and follow the post-install
@@ -123,17 +123,17 @@ func runGenAutocompleteCmd(cmd *cobra.Command, args []string) error {
 	switch shell {
 	case "bash":
 		if autoCompletePath == "" {
-			autoCompletePath = "cockroach.bash"
+			autoCompletePath = "patchroaddb.bash"
 		}
 		err = cmd.Root().GenBashCompletionFile(autoCompletePath)
 	case "fish":
 		if autoCompletePath == "" {
-			autoCompletePath = "cockroach.fish"
+			autoCompletePath = "patchroaddb.fish"
 		}
 		err = cmd.Root().GenFishCompletionFile(autoCompletePath, true /* include description */)
 	case "zsh":
 		if autoCompletePath == "" {
-			autoCompletePath = "_cockroach"
+			autoCompletePath = "_patchroaddb"
 		}
 		err = cmd.Root().GenZshCompletionFile(autoCompletePath)
 	}

@@ -1,12 +1,12 @@
 // Copyright 2020 The Cockroach Authors.
 //
-// Use of this software is governed by the Business Source License
-// included in the file licenses/BSL.txt.
-//
-// As of the Change Date specified in that file, in accordance with
-// the Business Source License, use of this software will be governed
-// by the Apache License, Version 2.0, included in the file
-// licenses/APL.txt.
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+// file except in compliance with the License. You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software distributed under
+// the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+// ANY KIND, either express or implied. See the License for the specific language
+// governing permissions and limitations under the License.
 
 package cli
 
@@ -49,9 +49,9 @@ import (
 
 var debugDoctorCmd = &cobra.Command{
 	Use:   "doctor [command]",
-	Short: "run a cockroach doctor tool command",
+	Short: "run a patchroaddb doctor tool command",
 	Long: `
-Run the doctor tool to recreate or examine cockroach system table contents.
+Run the doctor tool to recreate or examine patchroaddb system table contents.
 System tables are queried either from a live cluster or from an unzipped
 debug.zip.
 `,
@@ -115,7 +115,7 @@ that may not exist on downlevel versions.
 func makeClusterCommand(fn doctorFn) *cobra.Command {
 	return &cobra.Command{
 		Use:   "cluster --url=<cluster connection string>",
-		Short: "run doctor tool on live cockroach cluster",
+		Short: "run doctor tool on live patchroaddb cluster",
 		Long: `
 Run the doctor tool system data from a live cluster specified by --url.
 `,

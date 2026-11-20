@@ -1,12 +1,12 @@
 // Copyright 2015 The Cockroach Authors.
 //
-// Use of this software is governed by the Business Source License
-// included in the file licenses/BSL.txt.
-//
-// As of the Change Date specified in that file, in accordance with
-// the Business Source License, use of this software will be governed
-// by the Apache License, Version 2.0, included in the file
-// licenses/APL.txt.
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+// file except in compliance with the License. You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software distributed under
+// the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+// ANY KIND, either express or implied. See the License for the specific language
+// governing permissions and limitations under the License.
 
 package cli
 
@@ -1247,9 +1247,9 @@ func TestFlagUsage(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	defer log.Scope(t).Close(t)
 
-	commandPrefix := "CockroachDB command-line interface and server.\n\n"
+	commandPrefix := "patchroaddb command-line interface and server.\n\n"
 	expUsage := `Usage:
-  cockroach [command]
+  patchroaddb [command]
 
 Available Commands:
   start             start a node in a multi-node cluster
@@ -1274,13 +1274,13 @@ Available Commands:
   help              Help about any command
 
 Flags:
-  -h, --help                               help for cockroach
+  -h, --help                               help for patchroaddb
       --log <string>                       
                                             Logging configuration, expressed using YAML syntax. For example, you can
                                             change the default logging directory with: --log='file-defaults: {dir: ...}'.
                                             See the documentation for more options and details.  To preview how the log
                                             configuration is applied, or preview the default configuration, you can use
-                                            the 'cockroach debug check-log-config' sub-command.
+                                            the 'patchroaddb debug check-log-config' sub-command.
                                            
       --log-config-file <file>             
                                             File name to read the logging configuration from. This has the same effect as
@@ -1302,16 +1302,16 @@ Flags:
                                             --redactable-logs=XXX is an alias for --log='file-defaults: {redactable:
                                             XXX}}'.
                                            
-      --version                            version for cockroach
+      --version                            version for patchroaddb
 
-Use "cockroach [command] --help" for more information about a command.
+Use "patchroaddb [command] --help" for more information about a command.
 `
 	// Due to a bug in spf13/cobra, 'cockroach help' does not include the --version
 	// flag *the first time the test runs*.
 	// (But it does if the test is run a second time.)
 	// Strangely, 'cockroach --help' does, as well as usage error messages.
 	helpExpected1 := commandPrefix + expUsage
-	helpExpected2 := strings.ReplaceAll(helpExpected1, "      --version                            version for cockroach\n", "")
+	helpExpected2 := strings.ReplaceAll(helpExpected1, "      --version                            version for patchroaddb\n", "")
 	badFlagExpected := fmt.Sprintf("%s\nError: unknown flag: --foo\n", expUsage)
 
 	testCases := []struct {

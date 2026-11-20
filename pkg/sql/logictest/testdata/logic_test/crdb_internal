@@ -310,7 +310,15 @@ query TT colnames
 SELECT field, value FROM crdb_internal.node_build_info WHERE field ILIKE 'name'
 ----
 field value
-Name  CockroachDB
+Name  patchroaddb
+
+# Build info shows only the patchroaddb version.
+query TB rowsort
+SELECT field, value ~ '^(patchroaddb )?v\d+\.\d+\.\d+' AND strpos(value, 'CockroachDB') = 0
+FROM crdb_internal.node_build_info WHERE field IN ('Build', 'Version')
+----
+Build    true
+Version  true
 
 query T rowsort
 SELECT field FROM crdb_internal.node_build_info

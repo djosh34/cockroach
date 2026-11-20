@@ -1,12 +1,12 @@
 // Copyright 2020 The Cockroach Authors.
 //
-// Use of this software is governed by the Business Source License
-// included in the file licenses/BSL.txt.
-//
-// As of the Change Date specified in that file, in accordance with
-// the Business Source License, use of this software will be governed
-// by the Apache License, Version 2.0, included in the file
-// licenses/APL.txt.
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+// file except in compliance with the License. You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software distributed under
+// the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+// ANY KIND, either express or implied. See the License for the specific language
+// governing permissions and limitations under the License.
 
 package cli
 
@@ -23,7 +23,7 @@ import (
 // mtCreateTenantCACertCmd generates a tenant CA certificate and stores it
 // in the cert directory.
 var mtCreateTenantCACertCmd = &cobra.Command{
-	Use:   "create-tenant-client-ca --certs-dir=<path to cockroach certs dir> --ca-key=<path>",
+	Use:   "create-tenant-client-ca --certs-dir=<path to patchroaddb certs dir> --ca-key=<path>",
 	Short: "create tenant client CA certificate and key",
 	Long: `
 Generate a tenant client CA certificate "<certs-dir>/ca-client-tenant.crt" and CA key "<path>".
@@ -49,7 +49,7 @@ If the CA certificate exists and --overwrite is true, the new CA certificate is 
 // A createClientCert command generates a client certificate and stores it
 // in the cert directory under <username>.crt and key under <username>.key.
 var mtCreateTenantCertCmd = &cobra.Command{
-	Use:   "create-tenant-client --certs-dir=<path to cockroach certs dir> --ca-key=<path-to-ca-key> <tenant-id> <host 1> <host 2> ... <host N>",
+	Use:   "create-tenant-client --certs-dir=<path to patchroaddb certs dir> --ca-key=<path-to-ca-key> <tenant-id> <host 1> <host 2> ... <host N>",
 	Short: "create tenant client certificate and key",
 	Long: `
 Generate a tenant client certificate "<certs-dir>/client-tenant.<tenant-id>.crt" and key
@@ -115,7 +115,7 @@ If no server addresses are passed, then a default list containing 127.0.0.1, ::1
 // certificate and stores it in the cert directory under
 // tenant-signing.<ID>.crt and key under tenant-signing.<ID>.key.
 var mtCreateTenantSigningCertCmd = &cobra.Command{
-	Use:   "create-tenant-signing --certs-dir=<path to cockroach certs dir> <tenant-id>",
+	Use:   "create-tenant-signing --certs-dir=<path to patchroaddb certs dir> <tenant-id>",
 	Short: "create tenant signing certificate and key",
 	Long: `
 Generate a tenant signing certificate "<certs-dir>/tenant-signing.<tenant-id>.crt" and signing key

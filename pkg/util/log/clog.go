@@ -1,13 +1,13 @@
 // Copyright 2013 Google Inc. All Rights Reserved.
 // Copyright 2017 The Cockroach Authors.
 //
-// Use of this software is governed by the Business Source License
-// included in the file licenses/BSL.txt.
-//
-// As of the Change Date specified in that file, in accordance with
-// the Business Source License, use of this software will be governed
-// by the Apache License, Version 2.0, included in the file
-// licenses/APL.txt.
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+// file except in compliance with the License. You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software distributed under
+// the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+// ANY KIND, either express or implied. See the License for the specific language
+// governing permissions and limitations under the License.
 
 // This code originated in the github.com/golang/glog package.
 
@@ -451,17 +451,8 @@ This node experienced a fatal error (printed above), and as a result the
 process is terminating.
 
 Fatal errors can occur due to faulty hardware (disks, memory, clocks) or a
-problem in CockroachDB. With your help, the support team at Cockroach Labs
-will try to determine the root cause, recommend next steps, and we can
-improve CockroachDB based on your report.
+problem in patchroaddb. To report a problem in patchroaddb, open an issue
+with the error above here:
 
-Please submit a crash report by following the instructions here:
-
-    https://github.com/cockroachdb/cockroach/issues/new/choose
-
-If you would rather not post publicly, please contact us directly at:
-
-    support@cockroachlabs.com
-
-The Cockroach Labs team appreciates your feedback.
+    https://github.com/djosh34/patchroaddb/issues
 `

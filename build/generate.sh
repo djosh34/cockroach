@@ -463,14 +463,14 @@ gen_docs() {
   proto_include
   build_tool protoc-gen-doc github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc
   build_tool docgen ./pkg/cmd/docgen
-  go build -o "$bin/cockroach" ./pkg/cmd/cockroach-oss
+  go build -o "$bin/patchroaddb" ./pkg/cmd/patchroaddb
 
   local d=docs/generated
-  cockroach gen settings-list --show-class --format=rawhtml --class-header-label 'Supported Deployments' \
+  patchroaddb gen settings-list --show-class --format=rawhtml --class-header-label 'Supported Deployments' \
     --class-labels 'Dedicated/Self-Hosted,Serverless/Dedicated/Self-Hosted (read-only),Serverless/Dedicated/Self-Hosted' \
     >$d/settings/settings.html
-  cockroach gen settings-list --show-class --without-system-only >$d/settings/settings-for-tenants.txt
-  cockroach gen metric-list --format=unnumbered-html --logtostderr=NONE >$d/metrics/metrics.html
+  patchroaddb gen settings-list --show-class --without-system-only >$d/settings/settings-for-tenants.txt
+  patchroaddb gen metric-list --format=unnumbered-html --logtostderr=NONE >$d/metrics/metrics.html
 
   docgen functions $d/sql --quiet
   rm -f $d/sql/bnf/*.bnf

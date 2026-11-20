@@ -5,7 +5,7 @@
 # records every connect, sendto and sendmsg call, so a blocked attempt is
 # seen too.
 #
-# Usage: build/ci/no-outbound.sh <cockroach binary>
+# Usage: build/ci/no-outbound.sh <patchroaddb binary>
 # Needs root, unshare, ip, hostname, strace and curl.
 set -euo pipefail
 

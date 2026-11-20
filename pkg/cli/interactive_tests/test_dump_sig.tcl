@@ -9,7 +9,7 @@ eexpect ":/# "
 
 start_test "Check that the server emits a goroutine dump upon receiving signal"
 send "$argv start-single-node --insecure --pid-file=server_pid --store=path=logs/db --logtostderr\r"
-eexpect "CockroachDB node starting"
+eexpect "patchroaddb node starting"
 
 system "kill -QUIT `cat server_pid`"
 eexpect "\nI*stack traces:"

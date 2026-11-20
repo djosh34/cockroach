@@ -1,12 +1,12 @@
 // Copyright 2015 The Cockroach Authors.
 //
-// Use of this software is governed by the Business Source License
-// included in the file licenses/BSL.txt.
-//
-// As of the Change Date specified in that file, in accordance with
-// the Business Source License, use of this software will be governed
-// by the Apache License, Version 2.0, included in the file
-// licenses/APL.txt.
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+// file except in compliance with the License. You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software distributed under
+// the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+// ANY KIND, either express or implied. See the License for the specific language
+// governing permissions and limitations under the License.
 
 package build
 
@@ -31,11 +31,10 @@ const TimeFormat = "2006/01/02 15:04:05"
 var (
 	// These variables are initialized via the linker -X flag when compiling
 	// release binaries.
-	utcTime          string // Build time in UTC (year/month/day hour:min:sec)
-	rev              string // SHA-1 of this build (git rev-parse)
-	buildTagOverride string
-	cgoTargetTriple  string
-	platform         = fmt.Sprintf("%s %s", runtime.GOOS, runtime.GOARCH)
+	utcTime         string // Build time in UTC (year/month/day hour:min:sec)
+	rev             string // SHA-1 of this build (git rev-parse)
+	cgoTargetTriple string
+	platform        = fmt.Sprintf("%s %s", runtime.GOOS, runtime.GOARCH)
 	// Distribution is always "OSS".
 	Distribution      = "OSS"
 	typ               string // Type of this build: <empty>, "development", or "release"
@@ -64,9 +63,6 @@ func SeemsOfficial() bool {
 }
 
 func computeBinaryVersion(versionTxt, revision string) string {
-	if buildTagOverride != "" {
-		return buildTagOverride
-	}
 	txt := strings.TrimSuffix(versionTxt, "\n")
 	v, err := version.Parse(txt)
 	if err != nil {
@@ -86,17 +82,12 @@ func BinaryVersion() string {
 	return binaryVersion
 }
 
-// BinaryVersionPrefix returns the version prefix of the current build.
-func BinaryVersionPrefix() string {
-	v, err := version.Parse(binaryVersion)
-	if err != nil {
-		return "dev"
-	}
-	return fmt.Sprintf("v%d.%d", v.Major(), v.Minor())
-}
-
 func init() {
-	// Allow tests to override the version.txt contents.
+	// Allow tests to override the version.txt contents. Only test builds
+	// read this variable, so a release shows only its own version.
+	if !buildutil.CrdbTestBuild {
+		return
+	}
 	if versionOverride := envutil.EnvOrDefaultString(
 		"COCKROACH_TESTING_VERSION_OVERRIDE", ""); versionOverride != "" {
 		TestingOverrideVersion(versionOverride)
@@ -109,17 +100,17 @@ func (b Info) Short() string {
 	if b.CgoTargetTriple != "" {
 		plat = b.CgoTargetTriple
 	}
-	return fmt.Sprintf("CockroachDB %s %s (%s, built %s, %s)",
-		b.Distribution, b.Tag, plat, b.Time, b.GoVersion)
+	return fmt.Sprintf("patchroaddb %s (%s, built %s, %s)",
+		b.Tag, plat, b.Time, b.GoVersion)
 }
 
 // Long returns a pretty printed build summary
 func (b Info) Long() string {
 	var buf bytes.Buffer
 	tw := tabwriter.NewWriter(&buf, 2, 1, 2, ' ', 0)
+	fmt.Fprintf(tw, "patchroaddb %s\n", b.Tag)
 	fmt.Fprintf(tw, "Build Tag:        %s\n", b.Tag)
 	fmt.Fprintf(tw, "Build Time:       %s\n", b.Time)
-	fmt.Fprintf(tw, "Distribution:     %s\n", b.Distribution)
 	fmt.Fprintf(tw, "Platform:         %s", b.Platform)
 	if b.CgoTargetTriple != "" {
 		fmt.Fprintf(tw, " (%s)", b.CgoTargetTriple)
@@ -173,14 +164,15 @@ func GetInfo() Info {
 }
 
 // TestingOverrideVersion allows tests to override the binary version
-// reported by cockroach.
+// reported by patchroaddb.
 func TestingOverrideVersion(v string) func() {
 	prevBinaryVersion := binaryVersion
 	binaryVersion = v
 	return func() { binaryVersion = prevBinaryVersion }
 }
 
-// MakeIssueURL produces a URL to a CockroachDB issue.
+// MakeIssueURL produces a URL to a CockroachDB issue. patchroaddb is a fork of
+// CockroachDB v23.2, so the link names that version.
 func MakeIssueURL(issue int) string {
-	return fmt.Sprintf("https://go.crdb.dev/issue-v/%d/%s", issue, BinaryVersionPrefix())
+	return fmt.Sprintf("https://go.crdb.dev/issue-v/%d/v23.2", issue)
 }

@@ -2,20 +2,20 @@
 #
 # Copyright 2021 The Cockroach Authors.
 #
-# Use of this software is governed by the Business Source License
-# included in the file licenses/BSL.txt.
-#
-# As of the Change Date specified in that file, in accordance with
-# the Business Source License, use of this software will be governed
-# by the Apache License, Version 2.0, included in the file
-# licenses/APL.txt.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+# file except in compliance with the License. You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software distributed under
+# the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+# ANY KIND, either express or implied. See the License for the specific language
+# governing permissions and limitations under the License.
 
 # set -e: If the command returns a non-zero exit status, exit the shell.
 # set -u: errors if an variable is referenced before being set
 # set -m: enable job control.
 set -eum
 
-cockroach_entrypoint=${COCKROACH:-"/cockroach/cockroach"}
+cockroach_entrypoint=${COCKROACH:-"/cockroach/patchroaddb"}
 
 certs_dir="certs"
 url=
@@ -146,14 +146,14 @@ start_init_node() {
   timeout 3000 cat server_fifo>server.url
   exit_status=$?
   if [[ $exit_status -eq 124 ]]; then
-    echo >&2 "error: timeout for cockroach init process"
+    echo >&2 "error: timeout for patchroaddb init process"
     exit 1
   fi
   echo >&2 "init node successfully started"
 }
 
 # setup_db is to create a default database, create a default user (with password
-# if applicable), and grant privileges to this user by running `cockroach sql`
+# if applicable), and grant privileges to this user by running `patchroaddb sql`
 # queries.
 setup_db() {
   create_defaultdb
@@ -279,7 +279,7 @@ run_single_node() {
 
 _main() {
   # If there's no argument passed in, return an error.
-  mode=${1:?"error: mode unset, can be shell, bash, or cockroach command \
+  mode=${1:?"error: mode unset, can be shell, bash, or patchroaddb command \
   (start-single-node, sql, etc.)"}
   shift
   case $mode in

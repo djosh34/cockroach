@@ -1,12 +1,12 @@
 // Copyright 2021 The Cockroach Authors.
 //
-// Use of this software is governed by the Business Source License
-// included in the file licenses/BSL.txt.
-//
-// As of the Change Date specified in that file, in accordance with
-// the Business Source License, use of this software will be governed
-// by the Apache License, Version 2.0, included in the file
-// licenses/APL.txt.
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+// file except in compliance with the License. You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software distributed under
+// the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+// ANY KIND, either express or implied. See the License for the specific language
+// governing permissions and limitations under the License.
 
 package cli
 
@@ -144,11 +144,11 @@ complete the recovery.
 To perform recovery using half-online approach one should perform this sequence
 of actions:
 
-1. Run 'cockroach debug recover make-plan' in a half-online mode to collect
+1. Run 'patchroaddb debug recover make-plan' in a half-online mode to collect
 replica information from surviving nodes of a cluster and decide which
 replicas should survive and up-replicate.
 
-2. Run 'cockroach debug recover apply-plan' in half online mode to distribute
+2. Run 'patchroaddb debug recover apply-plan' in half online mode to distribute
 plan to surviving cluster nodes for application. At this point plan is staged
 and can't be reverted.
 
@@ -156,7 +156,7 @@ and can't be reverted.
 that need to update their storage. Restart should be done using appropriate
 automation that used to run the cluster.
 
-4. Optionally use 'cockroach debug recover verify' to check recovery progress
+4. Optionally use 'patchroaddb debug recover verify' to check recovery progress
 and resulting range health.
 
 If it was possible to produce distribute and apply the plan, then cluster should
@@ -176,15 +176,15 @@ is back online after recovery.
 
 1. Stop the cluster
 
-2. Run 'cockroach debug recover collect-info' on every node to collect
+2. Run 'patchroaddb debug recover collect-info' on every node to collect
 replication state from all surviving nodes. Outputs of these invocations
 should be collected and made locally available for the next step.
 
-3. Run 'cockroach debug recover make-plan' providing all files generated
+3. Run 'patchroaddb debug recover make-plan' providing all files generated
 on step 1. Planner will decide which replicas should survive and
 up-replicate.
 
-4. Run 'cockroach debug recover apply-plan' on every node using plan
+4. Run 'patchroaddb debug recover apply-plan' on every node using plan
 generated on the previous step. Each node will pick relevant portion of
 the plan and update local replicas accordingly to restore quorum.
 
@@ -201,17 +201,17 @@ has two stores and they are numbered as 1,2 on node 1; 3,4 on node 2 etc.
 Recovery commands to recover unavailable ranges would be (most command output
 is omitted for brevity):
 
-[cockroach@admin ~]$ cockroach debug recover make-plan --host cockroach-1.cockroachlabs.com --certs-dir=root_certs -o recovery-plan.json
+[patchroaddb@admin ~]$ patchroaddb debug recover make-plan --host node1.example.com --certs-dir=root_certs -o recovery-plan.json
 
-[cockroach@admin ~]$ cockroach debug recover apply-plan --host cockroach-1.cockroachlabs.com --certs-dir=root_certs recovery-plan.json
+[patchroaddb@admin ~]$ patchroaddb debug recover apply-plan --host node1.example.com --certs-dir=root_certs recovery-plan.json
 
 Proceed with staging plan [y/N] y
 
 Plan staged. To complete recovery restart nodes n2, n3.
 
-[cockroach@admin ~]$ # restart-nodes 2 3 as instructed by apply-plan.
+[patchroaddb@admin ~]$ # restart-nodes 2 3 as instructed by apply-plan.
 
-[cockroach@admin ~]$ cockroach debug recover verify --host cockroach-1.cockroachlabs.com --certs-dir=root_certs recovery-plan.json
+[patchroaddb@admin ~]$ patchroaddb debug recover verify --host node1.example.com --certs-dir=root_certs recovery-plan.json
 
 Loss of quorum recovery is complete.
 
@@ -223,28 +223,28 @@ Recovery commands to recover unavailable ranges would be:
 
 Decommission dead nodes and stop the cluster.
 
-[cockroach@node1 ~]$ cockroach debug recover collect-info --store=/mnt/cockroach-data-1 --store=/mnt/cockroach-data-2 >info-node1.json
-[cockroach@node2 ~]$ cockroach debug recover collect-info --store=/mnt/cockroach-data-1 --store=/mnt/cockroach-data-2 >info-node2.json
-[cockroach@node5 ~]$ cockroach debug recover collect-info --store=/mnt/cockroach-data-1 --store=/mnt/cockroach-data-2 >info-node5.json
+[patchroaddb@node1 ~]$ patchroaddb debug recover collect-info --store=/mnt/cockroach-data-1 --store=/mnt/cockroach-data-2 >info-node1.json
+[patchroaddb@node2 ~]$ patchroaddb debug recover collect-info --store=/mnt/cockroach-data-1 --store=/mnt/cockroach-data-2 >info-node2.json
+[patchroaddb@node5 ~]$ patchroaddb debug recover collect-info --store=/mnt/cockroach-data-1 --store=/mnt/cockroach-data-2 >info-node5.json
 
-[cockroach@base ~]$ scp cockroach@node1:info-node1.json .
-[cockroach@base ~]$ scp cockroach@node2:info-node1.json .
-[cockroach@base ~]$ scp cockroach@node5:info-node1.json .
+[patchroaddb@base ~]$ scp patchroaddb@node1:info-node1.json .
+[patchroaddb@base ~]$ scp patchroaddb@node2:info-node1.json .
+[patchroaddb@base ~]$ scp patchroaddb@node5:info-node1.json .
 
-[cockroach@base ~]$ cockroach debug recover make-plan --dead-store-ids=5,6,7,8 info-node1.json info-node2.json info-node5.json >recover-plan.json
+[patchroaddb@base ~]$ patchroaddb debug recover make-plan --dead-store-ids=5,6,7,8 info-node1.json info-node2.json info-node5.json >recover-plan.json
 
-[cockroach@base ~]$ scp recover-plan.json cockroach@node1:
-[cockroach@base ~]$ scp recover-plan.json cockroach@node2:
-[cockroach@base ~]$ scp recover-plan.json cockroach@node5:
+[patchroaddb@base ~]$ scp recover-plan.json patchroaddb@node1:
+[patchroaddb@base ~]$ scp recover-plan.json patchroaddb@node2:
+[patchroaddb@base ~]$ scp recover-plan.json patchroaddb@node5:
 
-[cockroach@node1 ~]$ cockroach debug recover apply-plan --store=/mnt/cockroach-data-1 --store=/mnt/cockroach-data-2 recover-plan.json
+[patchroaddb@node1 ~]$ patchroaddb debug recover apply-plan --store=/mnt/cockroach-data-1 --store=/mnt/cockroach-data-2 recover-plan.json
 Info:
   updating replica for r1
 Proceed with above changes [y/N]y
 Info:
   updated store s2
-[cockroach@node2 ~]$ cockroach debug recover apply-plan --store=/mnt/cockroach-data-1 --store=/mnt/cockroach-data-2 recover-plan.json
-[cockroach@node5 ~]$ cockroach debug recover apply-plan --store=/mnt/cockroach-data-1 --store=/mnt/cockroach-data-2 recover-plan.json
+[patchroaddb@node2 ~]$ patchroaddb debug recover apply-plan --store=/mnt/cockroach-data-1 --store=/mnt/cockroach-data-2 recover-plan.json
+[patchroaddb@node5 ~]$ patchroaddb debug recover apply-plan --store=/mnt/cockroach-data-1 --store=/mnt/cockroach-data-2 recover-plan.json
 
 Now the cluster could be started again.
 `,
@@ -279,7 +279,7 @@ using the --host flag. This designated node will handle collection of data from
 all surviving nodes.
 
 In the second case data is read directly from local stores on each node.
-CockroachDB must not be running on any node. The location of each store must be
+patchroaddb must not be running on any node. The location of each store must be
 provided using the --store flag. The command must be executed for all surviving
 stores.
 
@@ -588,7 +588,7 @@ Discarded live replicas: %d
 		_, _ = fmt.Fprintf(stderr, `Plan created.
 To stage recovery application in half-online mode invoke:
 
-cockroach debug recover apply-plan %s %s
+patchroaddb debug recover apply-plan %s %s
 
 Alternatively distribute plan to below nodes and invoke 'debug recover apply-plan --store=<store-dir> %s' on:
 `, remoteArgs, planFile, planFile)
@@ -797,7 +797,7 @@ func stageRecoveryOntoCluster(
 
 To verify recovery status invoke:
 
-cockroach debug recover verify %s %s
+patchroaddb debug recover verify %s %s
 `, strutil.JoinIDs("n", sortedKeys(nodeSet)), remoteArgs, planFile)
 	return nil
 }

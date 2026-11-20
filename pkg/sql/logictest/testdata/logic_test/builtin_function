@@ -1626,10 +1626,11 @@ select 1::decimal >= 1.0, 1.0 >= 1::decimal, 1.0 >= 2::decimal, 1::decimal >= 2.
 ----
 true true false false
 
-query I
-SELECT strpos(version(), 'CockroachDB')
+# version() shows only the patchroaddb version.
+query BB
+SELECT version() ~ '^patchroaddb v\d+\.\d+\.\d+', strpos(version(), 'CockroachDB') = 0
 ----
-1
+true true
 
 # Don't panic during incorrect use of * (#7727)
 query error pq: cos\(\): cannot use "\*" in this context

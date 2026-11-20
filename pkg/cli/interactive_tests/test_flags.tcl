@@ -81,14 +81,14 @@ end_test
 
 start_test {Check that the "failed running SUBCOMMAND" message handles missing subcommands}
 send "$argv --vmodule=*=2 --garbage\r"
-eexpect {Failed running "cockroach"}
+eexpect {Failed running "patchroaddb"}
 eexpect ":/# "
 end_test
 
 start_test "Check that start without --join errors out"
 send "$argv start --insecure\r"
-eexpect "ERROR: no --join flags provided to 'cockroach start'"
-eexpect "HINT: Consider using 'cockroach init' or 'cockroach start-single-node' instead"
+eexpect "ERROR: no --join flags provided to 'patchroaddb start'"
+eexpect "HINT: Consider using 'patchroaddb init' or 'patchroaddb start-single-node' instead"
 eexpect {Failed running "start"}
 end_test
 

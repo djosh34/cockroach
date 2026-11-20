@@ -1,0 +1,11 @@
+patchroaddb
+Copyright The Cockroach Authors and the patchroaddb contributors.
+
+patchroaddb is a fork of CockroachDB v23.2.15 (upstream commit 3497fb02),
+copyright The Cockroach Authors. That release was licensed under the Business
+Source License 1.1, with a Change Date of 2026-10-01 and the Apache License,
+Version 2.0, as its Change License. On the Change Date the code became
+Apache 2.0. The code under the CockroachDB Community License was removed before
+the first commit of this repository and is not part of patchroaddb.
+
+Third-party code keeps its own license and notices; see the licenses folder.

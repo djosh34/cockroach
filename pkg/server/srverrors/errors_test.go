@@ -1,12 +1,12 @@
 // Copyright 2023 The Cockroach Authors.
 //
-// Use of this software is governed by the Business Source License
-// included in the file licenses/BSL.txt.
-//
-// As of the Change Date specified in that file, in accordance with
-// the Business Source License, use of this software will be governed
-// by the Apache License, Version 2.0, included in the file
-// licenses/APL.txt.
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+// file except in compliance with the License. You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software distributed under
+// the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+// ANY KIND, either express or implied. See the License for the specific language
+// governing permissions and limitations under the License.
 
 package srverrors_test
 
@@ -29,12 +29,12 @@ func TestServerError(t *testing.T) {
 	ctx := context.Background()
 	pgError := pgerror.New(pgcode.OutOfMemory, "TestServerError.OutOfMemory")
 	err := srverrors.ServerError(ctx, pgError)
-	require.Equal(t, "rpc error: code = Internal desc = An internal server error has occurred. Please check your CockroachDB logs for more details. Error Code: 53200", err.Error())
+	require.Equal(t, "rpc error: code = Internal desc = An internal server error has occurred. Please check your patchroaddb logs for more details. Error Code: 53200", err.Error())
 
 	err = srverrors.ServerError(ctx, err)
-	require.Equal(t, "rpc error: code = Internal desc = An internal server error has occurred. Please check your CockroachDB logs for more details. Error Code: 53200", err.Error())
+	require.Equal(t, "rpc error: code = Internal desc = An internal server error has occurred. Please check your patchroaddb logs for more details. Error Code: 53200", err.Error())
 
 	err = fmt.Errorf("random error that is not pgerror or grpcstatus")
 	err = srverrors.ServerError(ctx, err)
-	require.Equal(t, "rpc error: code = Internal desc = An internal server error has occurred. Please check your CockroachDB logs for more details.", err.Error())
+	require.Equal(t, "rpc error: code = Internal desc = An internal server error has occurred. Please check your patchroaddb logs for more details.", err.Error())
 }

@@ -1,12 +1,12 @@
 // Copyright 2016 The Cockroach Authors.
 //
-// Use of this software is governed by the Business Source License
-// included in the file licenses/BSL.txt.
-//
-// As of the Change Date specified in that file, in accordance with
-// the Business Source License, use of this software will be governed
-// by the Apache License, Version 2.0, included in the file
-// licenses/APL.txt.
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+// file except in compliance with the License. You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software distributed under
+// the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+// ANY KIND, either express or implied. See the License for the specific language
+// governing permissions and limitations under the License.
 
 package cli
 
@@ -600,7 +600,7 @@ timestamp or user keys used in range descriptors, range keys etc.
 Key encoding type could be changed using encoding flag.
 For example:
 
-	$ cockroach debug decode-key BB89F902ADB43000151C2D1ED07DE6C009
+	$ patchroaddb debug decode-key BB89F902ADB43000151C2D1ED07DE6C009
 	/Table/51/1/44938288/1521140384.514565824,0
 `,
 	Args: cobra.ArbitraryArgs,
@@ -699,7 +699,7 @@ decoded and, if that's unsuccessful, is echoed as is.
 The default value for --schema is 'cockroach.sql.sqlbase.Descriptor'.
 For example:
 
-$ cat debug/system.descriptor.txt | cockroach debug decode-proto
+$ cat debug/system.descriptor.txt | patchroaddb debug decode-proto
 id	descriptor	hex_descriptor
 1	\022!\012\006system\020\001\032\025\012\011\012\005admin\0200\012\010\012\004root\0200	{"database": {"id": 1, "modificationTime": {}, "name": "system", "privileges": {"users": [{"privileges": 48, "user": "admin"}, {"privileges": 48, "user": "root"}]}}}
 ...
@@ -709,7 +709,7 @@ Tools from HTTP network requests ("Copy as cURL"). Chrome captures these as
 UTF8-encoded raw bytes, which are then rendered as C-escaped strings. The UTF8
 encoding breaks the proto encoding, so the curl command doesn't work as Chrome
 presents it. To rectify that, take the string argument passed to "curl --data" and pass it to
-"cockroach decode-proto --single --binary --out=<file>". Then, to replay the HTTP
+"patchroaddb decode-proto --single --binary --out=<file>". Then, to replay the HTTP
 request, do something like:
 $ curl -X POST  'http://localhost:8080/ts/query' \
   -H 'Accept: application/json' \
