@@ -69,9 +69,9 @@ func TestCreateManyUnappliedProbes(t *testing.T) {
 	//    const entsPerBatch = 100000
 	//    const batches = 1000
 	//
-	//   go build -o patchroaddb ./pkg/cmd/patchroaddb && rm -rf cockroach-data && timeout 10 ./cockroach start-single-node --logtostderr --insecure ; \
+	//   go build -o patchroaddb ./pkg/cmd/patchroaddb && rm -rf cockroach-data && timeout 10 ./patchroaddb start-single-node --logtostderr --insecure ; \
 	//   go test ./pkg/kv/kvserver/ -v --run TestCreateManyUnappliedProbes && sleep 3 && \
-	//   (./cockroach start-single-node --logtostderr=INFO --insecure | grep -F r10/)
+	//   (./patchroaddb start-single-node --logtostderr=INFO --insecure | grep -F r10/)
 	//
 	// Then wait and watch the `raft.commandsapplied` metric to see r10 apply the entries.
 	p := filepath.Join(t.TempDir(), "cockroach-data")

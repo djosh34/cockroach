@@ -24,7 +24,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/ctxgroup"
 	"github.com/cockroachdb/cockroach/pkg/util/errorutil"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
-	"github.com/cockroachdb/cockroach/pkg/util/version"
 	"github.com/cockroachdb/cockroach/pkg/workload"
 	"github.com/cockroachdb/errors"
 	"golang.org/x/time/rate"
@@ -70,39 +69,8 @@ func Setup(
 	return bytes, nil
 }
 
-// maybeDisableMergeQueue disables the merge queue for versions prior to
-// 19.2.
-func maybeDisableMergeQueue(db *gosql.DB) error {
-	var ok bool
-	if err := db.QueryRow(
-		`SELECT count(*) > 0 FROM [ SHOW ALL CLUSTER SETTINGS ] AS _ (v) WHERE v = 'kv.range_merge.queue.enabled'`,
-	).Scan(&ok); err != nil || !ok {
-		return err
-	}
-	var versionStr string
-	err := db.QueryRow(
-		`SELECT value FROM crdb_internal.node_build_info WHERE field = 'Version'`,
-	).Scan(&versionStr)
-	if err != nil {
-		return err
-	}
-	v, err := version.Parse(versionStr)
-	// If we can't parse the error then we'll assume that we should disable the
-	// queue. This happens in testing.
-	if err == nil && (v.Major() > 19 || (v.Major() == 19 && v.Minor() >= 2)) {
-		return nil
-	}
-	_, err = db.Exec("SET CLUSTER SETTING kv.range_merge.queue.enabled = false")
-	return err
-}
-
 // Split creates the range splits defined by the given table.
 func Split(ctx context.Context, db *gosql.DB, table workload.Table, concurrency int) error {
-	// Prevent the merge queue from immediately discarding our splits.
-	if err := maybeDisableMergeQueue(db); err != nil {
-		return err
-	}
-
 	// Check to see if we're allowed to perform any splits - if we're in a tenant,
 	// we can't perform splits.
 	_, err := db.Exec("SHOW RANGES FROM TABLE system.descriptor")

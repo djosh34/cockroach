@@ -1111,8 +1111,8 @@ func reportServerInfo(
 	var buf redact.StringBuilder
 	info := build.GetInfo()
 	buf.Printf("patchroaddb %s starting at %s (took %0.1fs)\n", serverType, timeutil.Now(), timeutil.Since(startTime).Seconds())
-	buf.Printf("build:\t%s %s @ %s (%s)\n",
-		redact.Safe(info.Distribution), redact.Safe(info.Tag), redact.Safe(info.Time), redact.Safe(info.GoVersion))
+	buf.Printf("build:\t%s @ %s (%s)\n",
+		redact.Safe(info.Tag), redact.Safe(info.Time), redact.Safe(info.GoVersion))
 	buf.Printf("webui:\t%s\n", log.SafeManaged(serverCfg.AdminURL()))
 
 	// (Re-)compute the client connection URL. We cannot do this
