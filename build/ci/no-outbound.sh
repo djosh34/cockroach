@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Starts a node in a network namespace that has only loopback, uses it for a
-# minute, and fails if the node tried to connect anywhere but loopback or
-# tried a DNS lookup. strace records every connect, sendto and sendmsg call,
+# Starts a node with default addresses in a network namespace that has only
+# loopback, uses it for a minute, and fails if the node or the SQL client
+# tried to connect anywhere but loopback or tried a DNS lookup. strace records every connect, sendto and sendmsg call,
 # so a blocked attempt is seen too.
 #
 # Usage: build/ci/no-outbound.sh <cockroach binary>
@@ -24,9 +24,10 @@ addr=127.0.0.1:26257
 trace() { strace -f -qq -e trace=connect,sendto,sendmsg -o "$@"; }
 sql() { "$bin" sql --insecure --host="$addr" -e "$1"; }
 
+# No listen or advertise address: the node listens on every interface and
+# advertises the machine's host name, as a default start does.
 trace "$work/node.trace" "$bin" start-single-node --insecure \
-  --store="$work/store" --log-dir="$work/logs" --pid-file="$work/pid" \
-  --listen-addr="$addr" --http-addr=127.0.0.1:8080 &
+  --store="$work/store" --log-dir="$work/logs" --pid-file="$work/pid" &
 strace_pid=$!
 
 for _ in $(seq 60); do
@@ -76,10 +77,11 @@ fi
 matches() { grep -E "$@" || [[ $? -eq 1 ]]; }
 calls=$(matches "$ip_calls" "$work/node.trace")
 echo "$(printf '%s' "$calls" | grep -c . || true) IP connection attempts by the node"
+calls+=$'\n'$(matches "$ip_calls" "$work/client.trace")
 bad=$(printf '%s\n' "$calls" | matches -v "$loopback" | matches .)
-dns=$(matches 'htons\(53\)' "$work/node.trace")
+dns=$(matches 'htons\(53\)' "$work/node.trace" "$work/client.trace")
 if [[ -n $bad || -n $dns ]]; then
-  echo "the node tried to reach the network:" >&2
+  echo "the node or the client tried to reach the network:" >&2
   printf '%s\n' "$bad" "$dns" | sort -u >&2
   exit 1
 fi

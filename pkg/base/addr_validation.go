@@ -125,17 +125,12 @@ func validateAdvertiseAddr(
 			// "listen on all addresses"), use that.
 			advHost = listenHost
 		} else {
-			// No specific listen address, use the canonical host name.
+			// No specific listen address, use the canonical host name. It is
+			// not looked up here: a node makes no DNS query the operator did
+			// not ask for, and the name comes from the machine, so it has no
+			// typo to catch.
 			var err error
 			advHost, err = os.Hostname()
-			if err != nil {
-				return "", "", err
-			}
-
-			// As a sanity check, verify that the canonical host name
-			// properly resolves. It's not the full story (it could resolve
-			// locally but not elsewhere) but at least it prevents typos.
-			_, err = net.DefaultResolver.LookupIPAddr(ctx, advHost)
 			if err != nil {
 				return "", "", err
 			}

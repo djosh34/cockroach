@@ -206,7 +206,10 @@ func makeGCSStorage(
 		return nil, errors.Wrapf(err, "failed to create http client")
 	}
 
-	g, err := gcs.NewClient(ctx, option.WithHTTPClient(httpClient))
+	// The credentials go to NewClient too. With only an HTTP client, NewClient
+	// looks for default credentials itself, which probes the GCE metadata
+	// server even when the operator gave a key or a token.
+	g, err := gcs.NewClient(ctx, append(opts, option.WithHTTPClient(httpClient))...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create google cloud client")
 	}
