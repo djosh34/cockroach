@@ -75,7 +75,7 @@ type Server interface {
 	// PostgreSQL.)
 	VerifyPasswordDBConsole(
 		ctx context.Context, userName username.SQLUsername, passwordStr string,
-	) (valid bool, expired bool, err error)
+	) (valid bool, err error)
 }
 
 type SQLServerInterface interface {
