@@ -470,6 +470,7 @@ func (s *s3Storage) newClient(ctx context.Context) (s3Client, string, error) {
 		accessKey:             s.opts.accessKey,
 		secret:                s.opts.secret,
 		tempToken:             s.opts.tempToken,
+		region:                s.opts.region,
 		assumeRoleProvider:    s.opts.assumeRoleProvider,
 		delegateRoleProviders: s.opts.delegateRoleProviders,
 		httpClient:            httpClient,

@@ -33,8 +33,10 @@ import (
 // awsConfigParams holds what loadAWSConfig needs from an S3 or KMS URI.
 type awsConfigParams struct {
 	auth, accessKey, secret, tempToken string
-	assumeRoleProvider                 roleProvider
-	delegateRoleProviders              []roleProvider
+	// region, if set, is the region from the URI.
+	region                string
+	assumeRoleProvider    roleProvider
+	delegateRoleProviders []roleProvider
 	// httpClient, if set, replaces the SDK's HTTP client.
 	httpClient *http.Client
 	verbose    bool
@@ -55,6 +57,13 @@ func loadAWSConfig(ctx context.Context, p awsConfigParams) (aws.Config, error) {
 			Retryer: newRetryer,
 			Logger:  newLogAdapter(ctx),
 		}
+		// The region of the environment is still used, as by the first SDK;
+		// reading it reads no AWS files.
+		env, err := config.NewEnvConfig()
+		if err != nil {
+			return aws.Config{}, errors.Wrap(err, "loading aws config")
+		}
+		cfg.Region = env.Region
 		if p.httpClient != nil {
 			cfg.HTTPClient = p.httpClient
 		}
@@ -79,6 +88,11 @@ func loadAWSConfig(ctx context.Context, p awsConfigParams) (aws.Config, error) {
 		}
 	default:
 		return aws.Config{}, errors.Errorf("unsupported value %s for %s", p.auth, cloud.AuthParam)
+	}
+	// The region is set before the roles are assumed, so that STS is called
+	// in it.
+	if p.region != "" {
+		cfg.Region = p.region
 	}
 	if p.assumeRoleProvider.roleARN != "" {
 		// Each role in the chain gets its credentials from the one before.

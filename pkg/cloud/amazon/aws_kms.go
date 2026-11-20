@@ -184,6 +184,7 @@ func MakeAWSKMS(ctx context.Context, uri string, env cloud.KMSEnv) (cloud.KMS, e
 		accessKey:             kmsURIParams.accessKey,
 		secret:                kmsURIParams.secret,
 		tempToken:             kmsURIParams.tempToken,
+		region:                region,
 		assumeRoleProvider:    kmsURIParams.roleProvider,
 		delegateRoleProviders: kmsURIParams.delegateRoleProviders,
 		httpClient:            httpClient,
