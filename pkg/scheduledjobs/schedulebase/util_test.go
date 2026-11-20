@@ -180,5 +180,3 @@ func TestParseWaitBehavior(t *testing.T) {
 		}
 	})
 }
-
-// CheckScheduleAlreadyExists is tested in scheduled_changefeed_test.go

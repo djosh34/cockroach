@@ -24,6 +24,10 @@ import (
 	"github.com/pierrec/lz4/v4"
 )
 
+// maxDecompressedSize bounds the output of decompress(). A small crafted input
+// could otherwise expand into enough memory to crash the node.
+const maxDecompressedSize = 128 << 20
+
 type codec interface {
 	compress(uncompressedData []byte) ([]byte, error)
 	decompress(compressedData []byte) ([]byte, error)
@@ -124,7 +128,9 @@ func (c zstdCodec) decompress(compressedData []byte) ([]byte, error) {
 	return decompressUsing(
 		compressedData,
 		func(buf io.Reader) (io.ReadCloser, error) {
-			r, err := zstd.NewReader(buf)
+			// The window, and so the decoder's memory, stays within the
+			// output limit.
+			r, err := zstd.NewReader(buf, zstd.WithDecoderMaxMemory(maxDecompressedSize))
 			if err != nil {
 				return nil, err
 			}
@@ -172,7 +178,9 @@ func compressUsing(
 func decompressUsing(
 	compressedData []byte, getImpl func(buf io.Reader) (io.ReadCloser, error),
 ) (_ []byte, err error) {
-	r, err := getImpl(bytes.NewBuffer(compressedData))
+	// A bytes.Reader, unlike a bytes.Buffer, keeps the zstd decoder from
+	// decoding the whole input in memory before the limit below applies.
+	r, err := getImpl(bytes.NewReader(compressedData))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decompress")
 	}
@@ -181,9 +189,13 @@ func decompressUsing(
 		err = errors.CombineErrors(err, r.Close())
 	}()
 
-	decompressedBytes, err := io.ReadAll(r)
+	decompressedBytes, err := io.ReadAll(io.LimitReader(r, maxDecompressedSize+1))
 	if err != nil {
 		return nil, err
+	}
+	if len(decompressedBytes) > maxDecompressedSize {
+		return nil, pgerror.Newf(pgcode.ProgramLimitExceeded,
+			"decompressed data exceeds the limit of %d bytes", maxDecompressedSize)
 	}
 	return decompressedBytes, nil
 }

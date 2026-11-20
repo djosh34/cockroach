@@ -20,6 +20,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/privilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
+	"github.com/cockroachdb/cockroach/pkg/sql/syntheticprivilege"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
 )
 
@@ -37,6 +38,7 @@ func (b *Builder) buildAlterTableSplit(split *tree.Split, inScope *scope) (outSc
 	if err := b.catalog.CheckPrivilege(b.ctx, table, privilege.INSERT); err != nil {
 		panic(err)
 	}
+	b.checkRangeTopologyPrivilege()
 
 	b.DisableMemoReuse = true
 
@@ -101,6 +103,7 @@ func (b *Builder) buildAlterTableUnsplit(unsplit *tree.Unsplit, inScope *scope) 
 	if err := b.catalog.CheckPrivilege(b.ctx, table, privilege.INSERT); err != nil {
 		panic(err)
 	}
+	b.checkRangeTopologyPrivilege()
 
 	b.DisableMemoReuse = true
 
@@ -151,6 +154,7 @@ func (b *Builder) buildAlterTableRelocate(
 	if err := b.catalog.CheckPrivilege(b.ctx, table, privilege.INSERT); err != nil {
 		panic(err)
 	}
+	b.checkRangeTopologyPrivilege()
 
 	b.DisableMemoReuse = true
 
@@ -227,5 +231,15 @@ func checkInputColumns(
 				context, i+1, colNames[i], colTypes[i], inputScope.cols[i].typ,
 			))
 		}
+	}
+}
+
+// checkRangeTopologyPrivilege checks that the user may move range boundaries
+// and replicas, which affects the whole cluster and not only one table.
+func (b *Builder) checkRangeTopologyPrivilege() {
+	if err := b.catalog.CheckPrivilege(
+		b.ctx, syntheticprivilege.GlobalPrivilegeObject, privilege.REPAIRCLUSTERMETADATA,
+	); err != nil {
+		panic(err)
 	}
 }

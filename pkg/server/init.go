@@ -481,6 +481,7 @@ func (s *initServer) attemptJoinTo(
 	if err != nil {
 		return nil, err
 	}
+	//lint:ignore SA1019 deprecated but supported throughout gRPC 1.x; grpc.NewClient changes how connections are made
 	conn, err := grpc.DialContext(ctx, addr, dialOpts...)
 	if err != nil {
 		return nil, err

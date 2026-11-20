@@ -705,14 +705,22 @@ func (b *Builder) resolveDataSourceRef(
 // dependency to the metadata, so that the privileges can be re-checked on reuse
 // of the memo.
 func (b *Builder) checkPrivilege(name opt.MDDepName, ds cat.DataSource, priv privilege.Kind) {
-	if !(priv == privilege.SELECT && b.skipSelectPrivilegeChecks) {
-		err := b.catalog.CheckPrivilege(b.ctx, ds, priv)
-		if err != nil {
-			panic(err)
-		}
-	} else {
+	switch {
+	case priv == privilege.SELECT && b.skipSelectPrivilegeChecks:
 		// The check is skipped, so don't recheck when dependencies are checked.
 		priv = 0
+	case priv == privilege.SELECT && b.privilegeView != nil:
+		if err := b.catalog.CheckViewOwnerPrivilege(b.ctx, b.privilegeView, ds, priv); err != nil {
+			panic(err)
+		}
+		// The check is for the view owner, so it is recorded to be rechecked for
+		// the owner, not for the current user, when dependencies are checked.
+		b.factory.Metadata().AddViewOwnerPrivilege(b.privilegeView, ds, priv)
+		priv = 0
+	default:
+		if err := b.catalog.CheckPrivilege(b.ctx, ds, priv); err != nil {
+			panic(err)
+		}
 	}
 
 	// Add dependency on this object to the metadata, so that the metadata can be

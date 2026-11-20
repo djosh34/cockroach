@@ -614,6 +614,11 @@ func addSequenceOwner(
 	if err != nil {
 		return err
 	}
+	// As in Postgres, a sequence may only be owned by a table that the user
+	// owns. Otherwise a user could tie a sequence to anyone's table.
+	if err := p.checkOwnershipOrAdmin(ctx, tableDesc, "table"); err != nil {
+		return err
+	}
 
 	col.ColumnDesc().OwnsSequenceIds = append(col.ColumnDesc().OwnsSequenceIds, sequenceID)
 

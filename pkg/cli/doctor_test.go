@@ -12,12 +12,15 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/cockroachdb/cockroach/pkg/testutils/datapathutils"
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
 	"github.com/cockroachdb/datadriven"
+	"github.com/stretchr/testify/require"
 )
 
 func descriptorWithFKMutation(isDropped bool) string {
@@ -263,6 +266,27 @@ func TestDoctorZipDir(t *testing.T) {
 		datadriven.RunTest(t, datapathutils.TestDataPath(t, "doctor", "test_examine_zipdir"), func(t *testing.T, td *datadriven.TestData) string {
 			return out
 		})
+	})
+
+	// Unredacted zips leave out the payloads of jobs that may hold URIs.
+	// Doctor skips those jobs.
+	t.Run("examine with a payload left out", func(t *testing.T) {
+		dir := t.TempDir()
+		for _, name := range []string{"system.descriptor.txt", "system.namespace.txt", "crdb_internal.system_jobs.txt"} {
+			contents, err := os.ReadFile(datapathutils.TestDataPath(t, "doctor", "debugzip", name))
+			require.NoError(t, err)
+			if name == "crdb_internal.system_jobs.txt" {
+				lines := strings.Split(string(contents), "\n")
+				fields := strings.Split(lines[1], "\t")
+				fields[3] = fmt.Sprintf("\\x%x", "<redacted>")
+				lines[1] = strings.Join(fields, "\t")
+				contents = []byte(strings.Join(lines, "\n"))
+			}
+			require.NoError(t, os.WriteFile(filepath.Join(dir, name), contents, 0644))
+		}
+		out, err := c.RunWithCapture("debug doctor examine zipdir " + dir + " 21.1-52")
+		require.NoError(t, err)
+		require.Contains(t, out, "Examining 53 jobs...")
 	})
 
 	// Regression test (for #104347) to ensure that quoted table names get properly parsed in system.namespace.

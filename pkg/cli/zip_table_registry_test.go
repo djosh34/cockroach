@@ -212,3 +212,80 @@ func TestNonSensitiveColumns(t *testing.T) {
 	executeSelectOnNonSensitiveColumns(t, sqlDB, zipInternalTablesPerNode)
 	executeSelectOnNonSensitiveColumns(t, sqlDB, zipSystemTables)
 }
+
+// TestUnredactedZipKeepsSecrets checks that the table dumps of a debug zip
+// collected without --redact leave out the values of sensitive settings,
+// placeholder values, external connection details and statement constants.
+func TestUnredactedZipKeepsSecrets(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	defer log.Scope(t).Close(t)
+
+	cluster := serverutils.StartCluster(t, 1 /* numNodes */, base.TestClusterArgs{
+		ServerArgs: base.TestServerArgs{
+			DefaultTestTenant: base.TestIsSpecificToStorageLayerAndNeedsASystemTenant,
+			ExternalIODir:     t.TempDir(),
+		},
+	})
+	defer cluster.Stopper().Stop(context.Background())
+	sqlDB := sqlutils.MakeSQLRunner(cluster.ServerConn(0 /* idx */))
+
+	sqlDB.Exec(t, `SET CLUSTER SETTING cloudstorage.http.custom_ca = 'SECRETCA'`)
+	sqlDB.Exec(t, `CREATE EXTERNAL CONNECTION conn AS 'nodelocal://1/SECRETPATH'`)
+	// Events written before sensitive values were left out of the event log.
+	sqlDB.Exec(t, `INSERT INTO system.eventlog (timestamp, "eventType", "targetID", "reportingID", info)
+		VALUES (now(), 'set_cluster_setting', 0, 1,
+			'{"Statement": "SET CLUSTER SETTING cloudstorage.http.custom_ca = ''SECRETOLD''", "SettingName": "cloudstorage.http.custom_ca", "Value": "SECRETOLD"}'),
+		(now(), 'create_role', 0, 1, '{"Statement": "CREATE ROLE r WITH PASSWORD $1", "PlaceholderValues": ["''SECRETPH''"]}')`)
+	// The payloads of schema change jobs hold no URIs and stay in the zip.
+	sqlDB.Exec(t, `CREATE TABLE import_target (a INT8)`)
+	sqlDB.Exec(t, `ALTER TABLE import_target ADD COLUMN b INT8`)
+	query, err := zipInternalTablesPerCluster.QueryForTable("crdb_internal.system_jobs", false /* redact */)
+	require.NoError(t, err)
+	var kept int
+	sqlDB.QueryRow(t, `SELECT count(*) FROM (`+query+`) WHERE hex_payload != '<redacted>'`).Scan(&kept)
+	require.NotZero(t, kept)
+	// The job fails, but its record keeps the URI with the password.
+	_, err = sqlDB.DB.ExecContext(context.Background(),
+		`IMPORT INTO import_target CSV DATA ('http://u:SECRETJOB@127.0.0.1:1/x.csv')`)
+	require.Error(t, err)
+	var withSecret int
+	sqlDB.QueryRow(t, `SELECT count(*) FROM system.job_info
+		WHERE info_key = 'legacy_payload' AND encode(value, 'escape') LIKE '%SECRETJOB%'`).Scan(&withSecret)
+	require.NotZero(t, withSecret)
+	// Jobs from before 23.1 keep their payload in system.jobs.
+	sqlDB.Exec(t, `UPDATE system.jobs SET payload = (SELECT value FROM system.job_info
+		WHERE job_id = jobs.id AND info_key = 'legacy_payload') WHERE job_type = 'IMPORT'`)
+	// Statements stored with bundles before they left out secrets.
+	sqlDB.Exec(t, `INSERT INTO system.statement_diagnostics (statement_fingerprint, statement, collected_at)
+		VALUES ('CREATE ROLE _ WITH PASSWORD _', 'CREATE ROLE r WITH PASSWORD ''SECRETDIAG''', now())`)
+
+	for _, table := range []string{
+		"crdb_internal.cluster_settings",
+		"system.settings",
+		"system.eventlog",
+		"system.external_connections",
+		"crdb_internal.jobs",
+		"crdb_internal.system_jobs",
+		"system.jobs",
+		"system.job_info",
+		"system.statement_diagnostics",
+	} {
+		reg := zipSystemTables
+		if strings.HasPrefix(table, "crdb_internal.") {
+			reg = zipInternalTablesPerCluster
+		}
+		query, err := reg.QueryForTable(table, false /* redact */)
+		require.NoError(t, err)
+		for _, row := range sqlDB.QueryStr(t, query) {
+			for _, secret := range []string{
+				"SECRETCA", "SECRETPATH", "SECRETOLD", "SECRETPH", "SECRETJOB", "SECRETDIAG",
+			} {
+				// Byte columns are also exported in hex.
+				for _, s := range []string{secret, fmt.Sprintf("%x", secret)} {
+					assert.NotContains(t, strings.ToLower(strings.Join(row, " ")), strings.ToLower(s),
+						"table %s", table)
+				}
+			}
+		}
+	}
+}

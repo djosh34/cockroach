@@ -246,6 +246,9 @@ func importJobDescription(
 		val := importOptionExpectValues[k] == exprutil.KVStringOptRequireValue
 		val = val || (importOptionExpectValues[k] == exprutil.KVStringOptAny && len(v) > 0)
 		if val {
+			if k == avroSchemaURI {
+				v = sanitizedURI(v)
+			}
 			opt.Value = tree.NewDString(v)
 		}
 		stmt.Options = append(stmt.Options, opt)
@@ -255,6 +258,16 @@ func importJobDescription(
 	return tree.AsStringWithFlags(
 		&stmt, tree.FmtAlwaysQualifyTableNames|tree.FmtShowFullURIs, tree.FmtAnnotations(ann),
 	), nil
+}
+
+// sanitizedURI returns uri with its credentials redacted, for messages and job
+// descriptions.
+func sanitizedURI(uri string) string {
+	clean, err := cloud.SanitizeExternalStorageURI(uri, nil /* extraParams */)
+	if err != nil {
+		return "<unparsable URI>"
+	}
+	return clean
 }
 
 func logSanitizedImportDestination(ctx context.Context, destination string) {
@@ -414,6 +427,14 @@ func importPlanHook(
 			return nil, nil, nil, false, err
 		}
 	}
+	// The Avro schema is read from external storage too, so it needs the same
+	// privileges as the data files. Without this check a user could make the
+	// node read a local file or call a URL.
+	if uri, ok := opts[avroSchemaURI]; ok {
+		if err := cloudprivilege.CheckDestinationPrivileges(ctx, p, []string{uri}); err != nil {
+			return nil, nil, nil, false, err
+		}
+	}
 
 	fn := func(ctx context.Context, _ []sql.PlanNode, resultsCh chan<- tree.Datums) error {
 		// TODO(dan): Move this span into sql.
@@ -457,7 +478,7 @@ func importPlanHook(
 						return err
 					}
 					if len(expandedFiles) < 1 {
-						return errors.Errorf(`no files matched %q in prefix %q in uri provided: %q`, pattern, prefix, file)
+						return errors.Errorf(`no files matched %q in prefix %q in uri provided: %q`, pattern, prefix, sanitizedURI(file))
 					}
 					files = append(files, expandedFiles...)
 				} else {

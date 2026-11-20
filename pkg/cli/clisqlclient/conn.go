@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cockroachdb/cockroach-go/v2/crdb"
 	"github.com/cockroachdb/cockroach/pkg/build"
@@ -28,8 +29,9 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
 	"github.com/cockroachdb/cockroach/pkg/util/version"
 	"github.com/cockroachdb/errors"
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type sqlConn struct {
@@ -219,6 +221,13 @@ func (c *sqlConn) EnsureConn(ctx context.Context) error {
 		// Not a password auth error, or password already set. Simply fail.
 		return wrapConnError(err)
 	}
+	// Show TIMESTAMPTZ values in UTC, as the client did before pgx v5, not in
+	// the local time zone.
+	conn.TypeMap().RegisterType(&pgtype.Type{
+		Name:  "timestamptz",
+		OID:   pgtype.TimestamptzOID,
+		Codec: &pgtype.TimestamptzCodec{ScanLocation: time.UTC},
+	})
 	if c.reconnecting && c.dbName != "" {
 		// Attempt to reset the current database.
 		if _, err := conn.Exec(ctx, `SET DATABASE = $1`, c.dbName); err != nil {
@@ -651,7 +660,7 @@ func (c *sqlConn) Query(ctx context.Context, query string, args ...interface{}) 
 		if err != nil {
 			return nil, err
 		}
-		return &sqlRows{rows: rows, connInfo: c.conn.ConnInfo(), conn: c}, nil
+		return &sqlRows{rows: rows, typeMap: c.conn.TypeMap(), conn: c}, nil
 	}
 
 	// Otherwise, we use pgconn. This allows us to add support for multiple
@@ -663,9 +672,9 @@ func (c *sqlConn) Query(ctx context.Context, query string, args ...interface{}) 
 		return nil, MarkWithConnectionClosed(multiResultReader.Close())
 	}
 	rs := &sqlRowsMultiResultSet{
-		rows:     multiResultReader,
-		connInfo: c.conn.ConnInfo(),
-		conn:     c,
+		rows:    multiResultReader,
+		typeMap: c.conn.TypeMap(),
+		conn:    c,
 	}
 	if _, err := rs.NextResultSet(); err != nil {
 		return nil, err

@@ -1232,7 +1232,7 @@ func (s *crdbSpan) getRecordingNoChildrenLocked(
 		}
 		for _, kv := range s.mu.tags {
 			// We encode the tag values as strings.
-			rs.EnsureTagGroup(tracingpb.AnonymousTagGroupName).AddTag(string(kv.Key), kv.Value.Emit())
+			rs.EnsureTagGroup(tracingpb.AnonymousTagGroupName).AddTag(string(kv.Key), kv.Value.String())
 		}
 		for _, tg := range s.getLazyTagGroupsLocked() {
 			if tg.Name == tracingpb.AnonymousTagGroupName {
@@ -1303,7 +1303,7 @@ func (s *crdbSpan) getLazyTagGroupsLocked() []*tracingpb.TagGroup {
 				tagGroup.Tags = append(tagGroup.Tags,
 					tracingpb.Tag{
 						Key:   string(tag.Key),
-						Value: tag.Value.Emit(),
+						Value: tag.Value.String(),
 					},
 				)
 			}

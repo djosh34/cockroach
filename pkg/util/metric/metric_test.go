@@ -14,17 +14,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
-	"reflect"
 	"sort"
 	"sync"
 	"testing"
 	"time"
 
 	_ "github.com/cockroachdb/cockroach/pkg/util/log" // for flags
-	"github.com/kr/pretty"
 	"github.com/prometheus/client_golang/prometheus"
 	prometheusgo "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/require"
+	gproto "google.golang.org/protobuf/proto"
 )
 
 func testMarshal(t *testing.T, m json.Marshaler, exp string) {
@@ -165,8 +164,8 @@ func TestHistogram(t *testing.T) {
 		expSum += float64(m)
 	}
 
-	act := *h.ToPrometheusMetric().Histogram
-	exp := prometheusgo.Histogram{
+	act := h.ToPrometheusMetric().Histogram
+	exp := &prometheusgo.Histogram{
 		SampleCount: u(len(measurements)),
 		SampleSum:   &expSum,
 		Bucket: []*prometheusgo.Bucket{
@@ -180,9 +179,7 @@ func TestHistogram(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(act, exp) {
-		t.Fatalf("expected differs from actual: %s", pretty.Diff(exp, act))
-	}
+	requireHistogram(t, exp, act)
 
 	histWindow := h.WindowedSnapshot()
 	require.Equal(t, 0.0, histWindow.ValueAtQuantile(0))
@@ -254,8 +251,8 @@ func TestManualWindowHistogram(t *testing.T) {
 	require.NoError(t, histogram.Write(pMetric))
 	h.Update(histogram, pMetric.Histogram)
 
-	act := *h.ToPrometheusMetric().Histogram
-	exp := prometheusgo.Histogram{
+	act := h.ToPrometheusMetric().Histogram
+	exp := &prometheusgo.Histogram{
 		SampleCount: u(len(measurements)),
 		SampleSum:   &expSum,
 		Bucket: []*prometheusgo.Bucket{
@@ -269,9 +266,7 @@ func TestManualWindowHistogram(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(act, exp) {
-		t.Fatalf("expected differs from actual: %s", pretty.Diff(exp, act))
-	}
+	requireHistogram(t, exp, act)
 
 	// Rotate and RecordValue are not supported when using Update. See comment on
 	// NewManualWindowHistogram.
@@ -303,8 +298,8 @@ func TestManualWindowHistogram(t *testing.T) {
 	histogram.Observe(5)
 	histogram.Observe(5)
 
-	act = *h.WindowedSnapshot().h
-	exp = prometheusgo.Histogram{
+	act = h.WindowedSnapshot().h
+	exp = &prometheusgo.Histogram{
 		SampleCount: u(len(measurements) + len(measurements2)),
 		SampleSum:   &expSum,
 		Bucket: []*prometheusgo.Bucket{
@@ -316,9 +311,7 @@ func TestManualWindowHistogram(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(act, exp) {
-		t.Fatalf("expected differs from actual: %s", pretty.Diff(exp, act))
-	}
+	requireHistogram(t, exp, act)
 }
 
 func TestManualWindowHistogramTicker(t *testing.T) {
@@ -566,5 +559,15 @@ func TestMergeWindowedHistogram(t *testing.T) {
 		} else if *bucket.UpperBound > float64(measurements[0]) {
 			require.Equal(t, uint64(1), *bucket.CumulativeCount)
 		}
+	}
+}
+
+// requireHistogram checks the count, sum and buckets of act against exp.
+// Other fields, such as the creation time, are not compared.
+func requireHistogram(t *testing.T, exp, act *prometheusgo.Histogram) {
+	t.Helper()
+	act = &prometheusgo.Histogram{SampleCount: act.SampleCount, SampleSum: act.SampleSum, Bucket: act.Bucket}
+	if !gproto.Equal(exp, act) {
+		t.Fatalf("expected differs from actual:\nexpected: %v\nactual:   %v", exp, act)
 	}
 }

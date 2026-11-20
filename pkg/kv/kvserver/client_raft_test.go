@@ -56,6 +56,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util"
 	"github.com/cockroachdb/cockroach/pkg/util/circuit"
 	"github.com/cockroachdb/cockroach/pkg/util/ctxgroup"
+	"github.com/cockroachdb/cockroach/pkg/util/grpcutil"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
 	"github.com/cockroachdb/cockroach/pkg/util/humanizeutil"
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
@@ -4618,8 +4619,10 @@ func TestStoreRangeWaitForApplication(t *testing.T) {
 			RangeID:            desc.RangeID,
 			LeaseIndex:         math.MaxInt64,
 		})
-		if exp := "context deadline exceeded"; !testutils.IsError(err, exp) {
-			t.Fatalf("expected %q error, but got %v", exp, err)
+		// gRPC reports the deadline either as the context's error or as a
+		// DeadlineExceeded status when the stream is reset first.
+		if !grpcutil.IsTimeout(err) {
+			t.Fatalf("expected a deadline error, but got %v", err)
 		}
 	}
 }
@@ -4660,8 +4663,10 @@ func TestStoreWaitForReplicaInit(t *testing.T) {
 			StoreRequestHeader: storeHeader,
 			RangeID:            roachpb.RangeID(999),
 		})
-		if exp := "context deadline exceeded"; !testutils.IsError(err, exp) {
-			t.Fatalf("expected %q error, but got %v", exp, err)
+		// gRPC reports the deadline either as the context's error or as a
+		// DeadlineExceeded status when the stream is reset first.
+		if !grpcutil.IsTimeout(err) {
+			t.Fatalf("expected a deadline error, but got %v", err)
 		}
 	}
 
@@ -4695,8 +4700,10 @@ func TestStoreWaitForReplicaInit(t *testing.T) {
 			StoreRequestHeader: storeHeader,
 			RangeID:            roachpb.RangeID(unusedRangeID),
 		})
-		if exp := "context deadline exceeded"; !testutils.IsError(err, exp) {
-			t.Fatalf("expected %q error, but got %v", exp, err)
+		// gRPC reports the deadline either as the context's error or as a
+		// DeadlineExceeded status when the stream is reset first.
+		if !grpcutil.IsTimeout(err) {
+			t.Fatalf("expected a deadline error, but got %v", err)
 		}
 	}
 }

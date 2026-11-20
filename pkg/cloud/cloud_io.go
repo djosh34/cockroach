@@ -46,7 +46,8 @@ var httpCustomCA = settings.RegisterStringSetting(
 	"cloudstorage.http.custom_ca",
 	"custom root CA (appended to system's default CAs) for verifying certificates when interacting with HTTPS storage",
 	"",
-	settings.WithPublic)
+	settings.WithPublic,
+	settings.Sensitive)
 
 // WriteChunkSize is used to control the size of each chunk that is buffered and
 // uploaded by the cloud storage client.
@@ -113,7 +114,8 @@ func MakeTransport(
 			return nil, errors.Wrap(err, "could not load system root CA pool")
 		}
 		if !roots.AppendCertsFromPEM([]byte(pem)) {
-			return nil, errors.Errorf("failed to parse root CA certificate from %q", pem)
+			// The value is not shown: it is a sensitive setting.
+			return nil, errors.Errorf("failed to parse root CA certificate from %s", httpCustomCA.Name())
 		}
 		tlsConf = &tls.Config{RootCAs: roots}
 	}

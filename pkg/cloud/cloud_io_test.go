@@ -18,7 +18,9 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/util/ioctx"
+	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
 	"github.com/cockroachdb/errors"
 	"github.com/stretchr/testify/require"
 )
@@ -257,4 +259,15 @@ func (p *nErrorsProducer) maybeProduceErr() error {
 		return errors.Wrapf(p.err, "produced test error %d out of %d", p.attempts, p.numErrors)
 	}
 	return nil
+}
+
+// TestCustomCAErrorHidesValue checks that a custom CA that does not parse is
+// not echoed in the error: the setting is sensitive.
+func TestCustomCAErrorHidesValue(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	st := cluster.MakeTestingClusterSettings()
+	httpCustomCA.Override(context.Background(), &st.SV, "SECRETCA is not a certificate")
+	_, err := MakeTransport(st, nil /* metrics */, "test", "bucket", "client")
+	require.ErrorContains(t, err, "failed to parse root CA certificate")
+	require.NotContains(t, err.Error(), "SECRETCA")
 }

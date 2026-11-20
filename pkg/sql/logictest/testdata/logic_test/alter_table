@@ -707,6 +707,50 @@ a            INT8       false        NULL            ·                      {fo
 b            INT8       true         NULL            ·                      {foo,privs_pkey}  false
 c            INT8       true         NULL            ·                      {privs_pkey}      false
 
+# Moving range boundaries and replicas affects the whole cluster, so INSERT on
+# the table is not enough.
+user root
+
+statement ok
+GRANT INSERT ON privs TO testuser
+
+user testuser
+
+statement error user testuser does not have REPAIRCLUSTERMETADATA system privilege
+ALTER TABLE privs SPLIT AT VALUES (42)
+
+statement error user testuser does not have REPAIRCLUSTERMETADATA system privilege
+ALTER TABLE privs UNSPLIT AT VALUES (42)
+
+statement error user testuser does not have REPAIRCLUSTERMETADATA system privilege
+ALTER TABLE privs UNSPLIT ALL
+
+statement error user testuser does not have REPAIRCLUSTERMETADATA system privilege
+ALTER TABLE privs SCATTER
+
+statement error user testuser does not have REPAIRCLUSTERMETADATA system privilege
+ALTER TABLE privs EXPERIMENTAL_RELOCATE VALUES (ARRAY[1], 1)
+
+user root
+
+statement ok
+GRANT SYSTEM REPAIRCLUSTERMETADATA TO testuser
+
+user testuser
+
+statement ok
+ALTER TABLE privs SPLIT AT VALUES (42)
+
+statement ok
+ALTER TABLE privs UNSPLIT AT VALUES (42)
+
+user root
+
+statement ok
+REVOKE SYSTEM REPAIRCLUSTERMETADATA FROM testuser
+
+user testuser
+
 statement error pgcode 42P01 relation "nonexistent" does not exist
 ALTER TABLE nonexistent SPLIT AT VALUES (42)
 
@@ -3498,5 +3542,52 @@ create table t_124546(a int);
 # Regression Test for https://github.com/cockroachdb/cockroach/issues/124546
 statement error pgcode 42601 variable sub-expressions are not allowed in EXPRESSION INDEX ELEMENT
 ALTER TABLE t_124546 ADD CONSTRAINT ident UNIQUE ( ( EXISTS ( TABLE error FOR READ ONLY ) ) DESC ) STORING ( ident , ident );
+
+subtest end
+
+# The owner of a schema may drop a table in it, but changing a table needs
+# ownership of the table or the CREATE privilege on it. A sequence may only be
+# owned by a table that the user owns.
+subtest schema_owner_cannot_alter_table
+
+statement ok
+CREATE SCHEMA sc_owned_by_testuser AUTHORIZATION testuser
+
+statement ok
+CREATE TABLE sc_owned_by_testuser.t_owned_by_root (a INT PRIMARY KEY)
+
+statement ok
+CREATE TABLE t_seq_owner_root (a INT PRIMARY KEY);
+GRANT CREATE ON DATABASE test TO testuser
+
+user testuser
+
+statement error pq: .*CREATE privilege
+ALTER TABLE sc_owned_by_testuser.t_owned_by_root ADD COLUMN b INT
+
+statement error pq: .*CREATE privilege
+CREATE INDEX ON sc_owned_by_testuser.t_owned_by_root (a)
+
+statement error must be owner of table t_seq_owner_root
+CREATE SEQUENCE sc_owned_by_testuser.s1 OWNED BY public.t_seq_owner_root.a
+
+statement ok
+CREATE SEQUENCE sc_owned_by_testuser.s2
+
+statement error must be owner of table t_seq_owner_root
+ALTER SEQUENCE sc_owned_by_testuser.s2 OWNED BY public.t_seq_owner_root.a
+
+statement ok
+DROP TABLE sc_owned_by_testuser.t_owned_by_root
+
+statement ok
+DROP SEQUENCE sc_owned_by_testuser.s2
+
+user root
+
+statement ok
+DROP SCHEMA sc_owned_by_testuser;
+DROP TABLE t_seq_owner_root;
+REVOKE CREATE ON DATABASE test FROM testuser
 
 subtest end

@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/errors"
-	"github.com/jackc/pgproto3/v2"
+	"github.com/jackc/pgx/v5/pgproto3"
 )
 
 // PGTest can be used to send and receive arbitrary pgwire messages on
@@ -47,8 +47,8 @@ func NewPGTest(ctx context.Context, addr, user string) (*PGTest, error) {
 			conn.Close()
 		}
 	}()
-	fe := pgproto3.NewFrontend(pgproto3.NewChunkReader(conn), conn)
-	if err := fe.Send(&pgproto3.StartupMessage{
+	fe := pgproto3.NewFrontend(conn, conn)
+	if err := send(fe, &pgproto3.StartupMessage{
 		ProtocolVersion: 196608, // Version 3.0
 		Parameters: map[string]string{
 			"user": user,
@@ -89,7 +89,7 @@ func NewPGTest(ctx context.Context, addr, user string) (*PGTest, error) {
 }
 
 func checkPGBackendPID(p *PGTest, backendKeyData *pgproto3.BackendKeyData) error {
-	if err := p.fe.Send(&pgproto3.Query{
+	if err := send(p.fe, &pgproto3.Query{
 		String: "SELECT pg_backend_pid();",
 	}); err != nil {
 		return errors.Wrap(err, "fetching pg_backend_pid")
@@ -120,7 +120,7 @@ func checkPGBackendPID(p *PGTest, backendKeyData *pgproto3.BackendKeyData) error
 // Close sends a Terminate message and closes the connection.
 func (p *PGTest) Close() error {
 	defer p.conn.Close()
-	return p.fe.Send(&pgproto3.Terminate{})
+	return send(p.fe, &pgproto3.Terminate{})
 }
 
 // SendOneLine sends a single msg to the server represented as a single string
@@ -158,7 +158,13 @@ func (p *PGTest) Send(msg pgproto3.FrontendMessage) error {
 	if testing.Verbose() {
 		fmt.Printf("SEND %T: %+[1]v\n", msg)
 	}
-	return p.fe.Send(msg)
+	return send(p.fe, msg)
+}
+
+// send writes msg to the server at once.
+func send(fe *pgproto3.Frontend, msg pgproto3.FrontendMessage) error {
+	fe.Send(msg)
+	return fe.Flush()
 }
 
 // Receive reads messages until messages of the given types have been found

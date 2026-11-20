@@ -14,6 +14,7 @@ import (
 	"context"
 	"net/url"
 	"path"
+	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/cloud"
 	"github.com/cockroachdb/cockroach/pkg/cloud/cloudpb"
@@ -35,6 +36,14 @@ func makeExternalConnectionConfig(
 	}
 	if args.CurrentUser.Undefined() {
 		return externalConnCfg, errors.Errorf("user creating the external connection storage must be specified")
+	}
+	// The path is joined to the base path of the connection. A ".." segment
+	// would reach above that base path.
+	for _, segment := range strings.Split(uri.Path, "/") {
+		if segment == ".." {
+			return externalConnCfg, errors.Newf(
+				"path of an external URI must not contain \"..\": %s", uri.Path)
+		}
 	}
 	normUser := args.CurrentUser.Normalized()
 	externalConnCfg.User = normUser
@@ -61,12 +70,14 @@ func makeExternalConnectionStorage(
 		return nil, errors.New("invalid ExternalConnectionConfig with an empty name")
 	}
 
-	// TODO(adityamaru): Use the `user` in `cfg` to perform privilege checks on
-	// the external connection object we are about to retrieve.
-
-	// Retrieve the external connection object from the system table.
+	// Retrieve the external connection object from the system table, once the
+	// user is known to hold USAGE on it.
 	var ec ExternalConnection
 	if err := args.DB.Txn(ctx, func(ctx context.Context, txn isql.Txn) error {
+		user := username.MakeSQLUsernameFromPreNormalizedString(cfg.User)
+		if err := CheckUsage(ctx, txn, user, cfg.Name); err != nil {
+			return err
+		}
 		var err error
 		ec, err = LoadExternalConnection(ctx, cfg.Name, txn)
 		return err

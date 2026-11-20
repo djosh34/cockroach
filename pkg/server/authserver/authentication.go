@@ -36,6 +36,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/grpcutil"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/protoutil"
+	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
 	"github.com/cockroachdb/errors"
 	gwruntime "github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"google.golang.org/grpc"
@@ -68,6 +69,16 @@ var WebSessionTimeout = settings.RegisterDurationSetting(
 type authenticationServer struct {
 	cfg       *base.Config
 	sqlServer SQLServerInterface
+
+	// dummyHash is the hash of a random password. A login with no stored
+	// hash to check, such as for a user who doesn't exist, is checked against
+	// it, so that the reply takes about as long as for a real user.
+	dummyHash struct {
+		syncutil.Mutex
+		method password.HashMethod
+		cost   int
+		hash   password.PasswordHash
+	}
 }
 
 // RegisterService registers the GRPC service.
@@ -106,16 +117,9 @@ func (s *authenticationServer) UserLogin(
 	username, _ := username.MakeSQLUsernameFromUserInput(req.Username, username.PurposeValidation)
 
 	// Verify the provided username/password pair.
-	verified, expired, err := s.VerifyPasswordDBConsole(ctx, username, req.Password)
+	verified, err := s.VerifyPasswordDBConsole(ctx, username, req.Password)
 	if err != nil {
 		return nil, srverrors.APIInternalError(ctx, err)
-	}
-	if expired {
-		return nil, status.Errorf(
-			codes.Unauthenticated,
-			"the password for %s has expired",
-			username,
-		)
 	}
 	if !verified {
 		return nil, errWebAuthenticationFailure
@@ -274,7 +278,7 @@ WHERE id = $1`
 // (CockroachDB has case-insensitive usernames, unlike PostgreSQL.)
 func (s *authenticationServer) VerifyPasswordDBConsole(
 	ctx context.Context, userName username.SQLUsername, passwordStr string,
-) (valid bool, expired bool, err error) {
+) (valid bool, err error) {
 	exists, _, canLoginDBConsole, _, _, _, pwRetrieveFn, err := sql.GetUserSessionInitInfo(
 		ctx,
 		s.sqlServer.ExecutorConfig(),
@@ -282,24 +286,35 @@ func (s *authenticationServer) VerifyPasswordDBConsole(
 		"", /* databaseName */
 	)
 	if err != nil {
-		return false, false, err
+		return false, err
 	}
-	if !exists || !canLoginDBConsole {
-		return false, false, nil
+	// A user who doesn't exist, may not log in, has no password or whose
+	// password expired fails like a wrong password, after the same work, so
+	// that the reply doesn't tell which users exist.
+	canLogin := exists && canLoginDBConsole
+	hashedPassword := password.MissingPasswordHash
+	if canLogin {
+		var expired bool
+		expired, hashedPassword, err = pwRetrieveFn(ctx)
+		if err != nil {
+			return false, err
+		}
+		canLogin = !expired && hashedPassword.Method() != password.HashMissingPassword
 	}
-	expired, hashedPassword, err := pwRetrieveFn(ctx)
-	if err != nil {
-		return false, false, err
-	}
-
-	if expired {
-		return false, true, nil
+	if !canLogin {
+		hashedPassword, err = s.getDummyHash(ctx)
+		if err != nil {
+			return false, err
+		}
 	}
 
 	ok, err := password.CompareHashAndCleartextPassword(
 		ctx, hashedPassword, passwordStr, security.GetExpensiveHashComputeSem(ctx),
 	)
-	if ok && err == nil {
+	if err != nil || !canLogin {
+		return false, err
+	}
+	if ok {
 		// Password authentication succeeded using cleartext.  If the
 		// stored hash was encoded using crdb-bcrypt, we might want to
 		// upgrade it to SCRAM instead.
@@ -312,7 +327,34 @@ func (s *authenticationServer) VerifyPasswordDBConsole(
 			userName,
 			passwordStr, hashedPassword)
 	}
-	return ok, false, err
+	return ok, nil
+}
+
+// getDummyHash returns the hash of a random password, made with the
+// configured hash method and cost.
+func (s *authenticationServer) getDummyHash(ctx context.Context) (password.PasswordHash, error) {
+	sv := &s.sqlServer.ExecutorConfig().Settings.SV
+	method := security.GetConfiguredPasswordHashMethod(sv)
+	cost, err := security.GetConfiguredPasswordCost(ctx, sv, method)
+	if err != nil {
+		return nil, err
+	}
+	d := &s.dummyHash
+	d.Lock()
+	defer d.Unlock()
+	if d.hash == nil || d.method != method || d.cost != cost {
+		var random [16]byte
+		if _, err := rand.Read(random[:]); err != nil {
+			return nil, err
+		}
+		hash, err := password.HashPassword(ctx, cost, method,
+			base64.StdEncoding.EncodeToString(random[:]), security.GetExpensiveHashComputeSem(ctx))
+		if err != nil {
+			return nil, err
+		}
+		d.method, d.cost, d.hash = method, cost, password.LoadPasswordHash(ctx, hash)
+	}
+	return d.hash, nil
 }
 
 // CreateAuthSecret creates a secret, hash pair to populate a session auth token.

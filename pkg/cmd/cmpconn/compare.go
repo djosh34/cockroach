@@ -20,7 +20,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/jackc/pgtype"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // CompareVals returns an error if a and b differ, specifying what the
@@ -48,60 +48,12 @@ var (
 			out := make([]interface{}, len(x))
 			for i, v := range x {
 				switch t := v.(type) {
-				case pgtype.TextArray:
-					if t.Status == pgtype.Present && len(t.Elements) == 0 {
-						v = ""
+				case pgtype.Bits:
+					if t.Valid {
+						v = bitString(t)
 					}
-				case pgtype.BPCharArray:
-					if t.Status == pgtype.Present && len(t.Elements) == 0 {
-						v = ""
-					}
-				case pgtype.VarcharArray:
-					if t.Status == pgtype.Present && len(t.Elements) == 0 {
-						v = ""
-					}
-				case pgtype.Int8Array:
-					if t.Status == pgtype.Present && len(t.Elements) == 0 {
-						v = &pgtype.Int8Array{}
-					}
-				case pgtype.Float8Array:
-					if t.Status == pgtype.Present && len(t.Elements) == 0 {
-						v = &pgtype.Float8Array{}
-					}
-				case pgtype.UUIDArray:
-					if t.Status == pgtype.Present && len(t.Elements) == 0 {
-						v = &pgtype.UUIDArray{}
-					}
-				case pgtype.ByteaArray:
-					if t.Status == pgtype.Present && len(t.Elements) == 0 {
-						v = &pgtype.ByteaArray{}
-					}
-				case pgtype.InetArray:
-					if t.Status == pgtype.Present && len(t.Elements) == 0 {
-						v = &pgtype.InetArray{}
-					}
-				case pgtype.TimestampArray:
-					if t.Status == pgtype.Present && len(t.Elements) == 0 {
-						v = &pgtype.TimestampArray{}
-					}
-				case pgtype.BoolArray:
-					if t.Status == pgtype.Present && len(t.Elements) == 0 {
-						v = &pgtype.BoolArray{}
-					}
-				case pgtype.DateArray:
-					if t.Status == pgtype.Present && len(t.Elements) == 0 {
-						v = &pgtype.BoolArray{}
-					}
-				case pgtype.Varbit:
-					if t.Status == pgtype.Present {
-						s, _ := t.EncodeText(nil, nil)
-						v = string(s)
-					}
-				case pgtype.Bit:
-					vb := pgtype.Varbit(t)
-					v = &vb
 				case pgtype.Interval:
-					if t.Status == pgtype.Present {
+					if t.Valid {
 						v = duration.DecodeDuration(int64(t.Months), int64(t.Days), t.Microseconds*1000)
 					}
 				case string:
@@ -114,7 +66,7 @@ var (
 					// See https://github.com/cockroachdb/cockroach/issues/41563
 					v = strings.Replace(t, ":00+00:00", ":00+00", 1)
 				case pgtype.Numeric:
-					if t.Status == pgtype.Present {
+					if t.Valid {
 						if t.NaN {
 							v = &apd.Decimal{Form: apd.NaN}
 						} else {
@@ -158,3 +110,16 @@ var (
 	}
 	decimalCloseness = apd.New(1, -6)
 )
+
+// bitString returns the bits of b as a string of 0s and 1s.
+func bitString(b pgtype.Bits) string {
+	var sb strings.Builder
+	for i := int32(0); i < b.Len; i++ {
+		if b.Bytes[i/8]&(0x80>>(i%8)) != 0 {
+			sb.WriteByte('1')
+		} else {
+			sb.WriteByte('0')
+		}
+	}
+	return sb.String()
+}

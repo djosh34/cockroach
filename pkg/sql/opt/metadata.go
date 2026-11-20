@@ -140,8 +140,21 @@ type Metadata struct {
 	// as a builtin function.
 	builtinRefsByName map[tree.UnresolvedName]struct{}
 
+	// viewOwnerPrivileges stores the privileges that the owner of a view needs
+	// on the data sources the view reads. They are rechecked for the owner when
+	// a cached memo is reused, since the owner may have lost a role membership
+	// without any descriptor changing.
+	viewOwnerPrivileges []viewOwnerPrivilege
+
 	// NOTE! When adding fields here, update Init (if reusing allocated
 	// data structures is desired), CopyFrom and TestMetadata.
+}
+
+// viewOwnerPrivilege is a privilege that the owner of view needs on ds.
+type viewOwnerPrivilege struct {
+	view cat.View
+	ds   cat.DataSource
+	priv privilege.Kind
 }
 
 // Init prepares the metadata for use (or reuse).
@@ -213,6 +226,11 @@ func (md *Metadata) Init() {
 		delete(md.builtinRefsByName, name)
 	}
 
+	viewOwnerPrivileges := md.viewOwnerPrivileges
+	for i := range viewOwnerPrivileges {
+		viewOwnerPrivileges[i] = viewOwnerPrivilege{}
+	}
+
 	// This initialization pattern ensures that fields are not unwittingly
 	// reused. Field reuse must be explicit.
 	*md = Metadata{}
@@ -226,6 +244,7 @@ func (md *Metadata) Init() {
 	md.objectRefsByName = objectRefsByName
 	md.privileges = privileges
 	md.builtinRefsByName = builtinRefsByName
+	md.viewOwnerPrivileges = viewOwnerPrivileges[:0]
 }
 
 // CopyFrom initializes the metadata with a copy of the provided metadata.
@@ -241,7 +260,7 @@ func (md *Metadata) CopyFrom(from *Metadata, copyScalarFn func(Expr) Expr) {
 		len(md.sequences) != 0 || len(md.views) != 0 || len(md.userDefinedTypes) != 0 ||
 		len(md.userDefinedTypesSlice) != 0 || len(md.dataSourceDeps) != 0 ||
 		len(md.udfDeps) != 0 || len(md.objectRefsByName) != 0 || len(md.privileges) != 0 ||
-		len(md.builtinRefsByName) != 0 {
+		len(md.builtinRefsByName) != 0 || len(md.viewOwnerPrivileges) != 0 {
 		panic(errors.AssertionFailedf("CopyFrom requires empty destination"))
 	}
 	md.schemas = append(md.schemas, from.schemas...)
@@ -305,6 +324,7 @@ func (md *Metadata) CopyFrom(from *Metadata, copyScalarFn func(Expr) Expr) {
 		md.builtinRefsByName[name] = struct{}{}
 	}
 
+	md.viewOwnerPrivileges = append(md.viewOwnerPrivileges, from.viewOwnerPrivileges...)
 	md.sequences = append(md.sequences, from.sequences...)
 	md.views = append(md.views, from.views...)
 	md.currUniqueID = from.currUniqueID
@@ -349,6 +369,13 @@ func (md *Metadata) AddDependency(name MDDepName, ds cat.DataSource, priv privil
 		// This data source was referenced by name.
 		md.objectRefsByName[id] = append(md.objectRefsByName[id], name.byName.ToUnresolvedObjectName())
 	}
+}
+
+// AddViewOwnerPrivilege records that the owner of view needs priv on ds, so
+// that CheckDependencies rechecks it for the owner.
+func (md *Metadata) AddViewOwnerPrivilege(view cat.View, ds cat.DataSource, priv privilege.Kind) {
+	md.viewOwnerPrivileges = append(md.viewOwnerPrivileges,
+		viewOwnerPrivilege{view: view, ds: ds, priv: priv})
 }
 
 // CheckDependencies resolves (again) each database object on which this
@@ -469,6 +496,11 @@ func (md *Metadata) CheckDependencies(
 	}
 	for _, overload := range md.udfDeps {
 		if err := optCatalog.CheckExecutionPrivilege(ctx, overload.Oid); err != nil {
+			return false, err
+		}
+	}
+	for _, p := range md.viewOwnerPrivileges {
+		if err := optCatalog.CheckViewOwnerPrivilege(ctx, p.view, p.ds, p.priv); err != nil {
 			return false, err
 		}
 	}
@@ -1128,6 +1160,12 @@ func (md *Metadata) TestingUDFDeps() map[cat.StableID]*tree.Overload {
 // TestingObjectRefsByName exposes the objectRefsByName for testing.
 func (md *Metadata) TestingObjectRefsByName() map[cat.StableID][]*tree.UnresolvedObjectName {
 	return md.objectRefsByName
+}
+
+// TestingViewOwnerPrivileges returns the number of view owner privileges, for
+// testing.
+func (md *Metadata) TestingViewOwnerPrivileges() int {
+	return len(md.viewOwnerPrivileges)
 }
 
 // TestingPrivileges exposes the privileges for testing.

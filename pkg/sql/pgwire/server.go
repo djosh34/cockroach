@@ -1115,6 +1115,10 @@ func (s *Server) serveImpl(
 		// sqlServer == nil means we are in a local test. In this case
 		// we only need the minimum to make pgx happy.
 		defer reserved.Clear(ctx)
+		// pgx expects AuthenticationOk before the parameters.
+		if err := c.authOKMessage(); err != nil {
+			return
+		}
 		var err error
 		for param, value := range testingStatusReportParams {
 			err = c.bufferParamStatus(param, value)

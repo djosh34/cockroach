@@ -81,8 +81,8 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/errors"
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/linkedin/goavro/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -6725,7 +6725,7 @@ func TestImportClientDisconnect(t *testing.T) {
 		assert.NoError(t, err)
 		defer func() { _ = db.Close(ctx) }()
 		_, err = db.Exec(ctxToCancel, `IMPORT INTO foo CSV DATA ($1)`, srv.URL)
-		assert.Equal(t, context.Canceled, errors.Unwrap(err))
+		assert.True(t, errors.Is(err, context.Canceled), "%v", err)
 	}()
 
 	// Wait for the import job to start.

@@ -14,7 +14,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/metric"
 	"github.com/gogo/protobuf/proto"
 )
@@ -66,7 +65,7 @@ func createAndRegisterUnavailableRangesRule(
 	recommendedHoldDuration := 10 * time.Minute
 	help := "This check detects when the number of ranges with less than quorum replicas live are non-zero for too long"
 
-	rule, err := metric.NewAlertingRule(
+	rule := metric.NewAlertingRule(
 		unavailableRangesRuleName,
 		expr,
 		annotations,
@@ -75,7 +74,7 @@ func createAndRegisterUnavailableRangesRule(
 		help,
 		true,
 	)
-	MaybeAddRuleToRegistry(ctx, err, unavailableRangesRuleName, rule, ruleRegistry)
+	ruleRegistry.AddRule(rule)
 }
 
 func createAndRegisterTrippedReplicaCircuitBreakersRule(
@@ -90,7 +89,7 @@ func createAndRegisterTrippedReplicaCircuitBreakersRule(
 	recommendedHoldDuration := 10 * time.Minute
 	help := "This check detects when Replicas have stopped serving traffic as a result of KV health issues"
 
-	rule, err := metric.NewAlertingRule(
+	rule := metric.NewAlertingRule(
 		trippedReplicaCircuitBreakersRuleName,
 		expr,
 		annotations,
@@ -99,7 +98,7 @@ func createAndRegisterTrippedReplicaCircuitBreakersRule(
 		help,
 		true,
 	)
-	MaybeAddRuleToRegistry(ctx, err, trippedReplicaCircuitBreakersRuleName, rule, ruleRegistry)
+	ruleRegistry.AddRule(rule)
 }
 
 func createAndRegisterUnderReplicatedRangesRule(
@@ -114,7 +113,7 @@ func createAndRegisterUnderReplicatedRangesRule(
 	recommendedHoldDuration := time.Hour
 	help := "This check detects when the number of ranges with less than desired replicas live is non-zero for too long."
 
-	underreplicatedRanges, err := metric.NewAlertingRule(
+	underreplicatedRanges := metric.NewAlertingRule(
 		underreplicatedRangesRuleName,
 		expr,
 		annotations,
@@ -123,7 +122,7 @@ func createAndRegisterUnderReplicatedRangesRule(
 		help,
 		true,
 	)
-	MaybeAddRuleToRegistry(ctx, err, underreplicatedRangesRuleName, underreplicatedRanges, ruleRegistry)
+	ruleRegistry.AddRule(underreplicatedRanges)
 }
 
 func createAndRegisterRequestsStuckInRaftRule(
@@ -138,7 +137,7 @@ func createAndRegisterRequestsStuckInRaftRule(
 	recommendedHoldDuration := 10 * time.Minute
 	help := "This check detects when requests are taking a very long time in replication."
 
-	requestsStuckInRaft, err := metric.NewAlertingRule(
+	requestsStuckInRaft := metric.NewAlertingRule(
 		requestsStuckInRaftRuleName,
 		expr,
 		annotations,
@@ -147,7 +146,7 @@ func createAndRegisterRequestsStuckInRaftRule(
 		help,
 		true,
 	)
-	MaybeAddRuleToRegistry(ctx, err, requestsStuckInRaftRuleName, requestsStuckInRaft, ruleRegistry)
+	ruleRegistry.AddRule(requestsStuckInRaft)
 }
 
 func createAndRegisterHighOpenFDCountRule(ctx context.Context, ruleRegistry *metric.RuleRegistry) {
@@ -160,7 +159,7 @@ func createAndRegisterHighOpenFDCountRule(ctx context.Context, ruleRegistry *met
 	recommendedHoldDuration := 10 * time.Minute
 	help := "This check detects when a cluster is getting close to the open file descriptor limit"
 
-	highOpenFDCount, err := metric.NewAlertingRule(
+	highOpenFDCount := metric.NewAlertingRule(
 		highOpenFDCountRuleName,
 		expr,
 		annotations,
@@ -169,34 +168,34 @@ func createAndRegisterHighOpenFDCountRule(ctx context.Context, ruleRegistry *met
 		help,
 		true,
 	)
-	MaybeAddRuleToRegistry(ctx, err, highOpenFDCountRuleName, highOpenFDCount, ruleRegistry)
+	ruleRegistry.AddRule(highOpenFDCount)
 }
 
 func createAndRegisterNodeCapacityRule(ctx context.Context, ruleRegistry *metric.RuleRegistry) {
 	expr := "sum without(store) (capacity)"
 	help := "Aggregation expression to compute node capacity."
-	nodeCapacity, err := metric.NewAggregationRule(
+	nodeCapacity := metric.NewAggregationRule(
 		nodeCapacityRuleName,
 		expr,
 		nil,
 		help,
 		true,
 	)
-	MaybeAddRuleToRegistry(ctx, err, nodeCapacityRuleName, nodeCapacity, ruleRegistry)
+	ruleRegistry.AddRule(nodeCapacity)
 }
 
 func createAndRegisterClusterCapacityRule(ctx context.Context, ruleRegistry *metric.RuleRegistry) {
 	expr := "sum without(instance) (node:capacity)"
 	help := "Aggregation expression to compute cluster capacity."
 
-	clusterCapacity, err := metric.NewAggregationRule(
+	clusterCapacity := metric.NewAggregationRule(
 		clusterCapacityRuleName,
 		expr,
 		nil,
 		help,
 		true,
 	)
-	MaybeAddRuleToRegistry(ctx, err, clusterCapacityRuleName, clusterCapacity, ruleRegistry)
+	ruleRegistry.AddRule(clusterCapacity)
 }
 
 func createAndRegisterNodeCapacityAvailableRule(
@@ -205,15 +204,14 @@ func createAndRegisterNodeCapacityAvailableRule(
 	expr := "sum without(store) (capacity_available)"
 	help := "Aggregation expression to compute available capacity for a node."
 
-	var err error
-	nodeCapacityAvailable, err := metric.NewAggregationRule(
+	nodeCapacityAvailable := metric.NewAggregationRule(
 		nodeCapacityAvailableRuleName,
 		expr,
 		nil,
 		help,
 		true,
 	)
-	MaybeAddRuleToRegistry(ctx, err, nodeCapacityAvailableRuleName, nodeCapacityAvailable, ruleRegistry)
+	ruleRegistry.AddRule(nodeCapacityAvailable)
 }
 
 func createAndRegisterClusterCapacityAvailableRule(
@@ -222,14 +220,14 @@ func createAndRegisterClusterCapacityAvailableRule(
 	expr := "sum without(instance) (node:capacity_available)"
 	help := "Aggregation expression to compute available capacity for a cluster."
 
-	clusterCapacityAvailable, err := metric.NewAggregationRule(
+	clusterCapacityAvailable := metric.NewAggregationRule(
 		clusterCapacityAvailableRuleName,
 		expr,
 		nil,
 		help,
 		true,
 	)
-	MaybeAddRuleToRegistry(ctx, err, clusterCapacityAvailableRuleName, clusterCapacityAvailable, ruleRegistry)
+	ruleRegistry.AddRule(clusterCapacityAvailable)
 }
 
 func createAndRegisterCapacityAvailableRatioRule(
@@ -238,14 +236,14 @@ func createAndRegisterCapacityAvailableRatioRule(
 	expr := "capacity_available / capacity"
 	help := "Aggregation expression to compute available capacity ratio."
 
-	capacityAvailableRatio, err := metric.NewAggregationRule(
+	capacityAvailableRatio := metric.NewAggregationRule(
 		capacityAvailableRatioRuleName,
 		expr,
 		nil,
 		help,
 		true,
 	)
-	MaybeAddRuleToRegistry(ctx, err, capacityAvailableRatioRuleName, capacityAvailableRatio, ruleRegistry)
+	ruleRegistry.AddRule(capacityAvailableRatio)
 }
 
 func createAndRegisterNodeCapacityAvailableRatioRule(
@@ -254,14 +252,14 @@ func createAndRegisterNodeCapacityAvailableRatioRule(
 	expr := "node:capacity_available / node:capacity"
 	help := "Aggregation expression to compute available capacity ratio for a node."
 
-	nodeCapacityAvailableRatio, err := metric.NewAggregationRule(
+	nodeCapacityAvailableRatio := metric.NewAggregationRule(
 		nodeCapacityAvailableRatioRuleName,
 		expr,
 		nil,
 		help,
 		true,
 	)
-	MaybeAddRuleToRegistry(ctx, err, nodeCapacityAvailableRatioRuleName, nodeCapacityAvailableRatio, ruleRegistry)
+	ruleRegistry.AddRule(nodeCapacityAvailableRatio)
 }
 
 func createAndRegisterClusterCapacityAvailableRatioRule(
@@ -270,14 +268,14 @@ func createAndRegisterClusterCapacityAvailableRatioRule(
 	expr := "cluster:capacity_available/cluster:capacity"
 	help := "Aggregation expression to compute available capacity ratio for a cluster."
 
-	clusterCapacityAvailableRatio, err := metric.NewAggregationRule(
+	clusterCapacityAvailableRatio := metric.NewAggregationRule(
 		clusterCapacityAvailableRatioRuleName,
 		expr,
 		nil,
 		help,
 		true,
 	)
-	MaybeAddRuleToRegistry(ctx, err, clusterCapacityAvailableRatioRuleName, clusterCapacityAvailableRatio, ruleRegistry)
+	ruleRegistry.AddRule(clusterCapacityAvailableRatio)
 }
 
 func createAndRegisterNodeCapacityLowRule(ctx context.Context, ruleRegistry *metric.RuleRegistry) {
@@ -287,19 +285,6 @@ func createAndRegisterNodeCapacityLowRule(ctx context.Context, ruleRegistry *met
 		Name:  proto.String("summary"),
 		Value: proto.String("Store {{ $labels.store }} on node {{ $labels.instance }} at {{ $value}} available disk fraction"),
 	}}
-	nodeCapacityLowRule, err := metric.NewAlertingRule(nodeCapacityLowRuleName, expr, annotations, nil, time.Duration(0), help, true)
-	MaybeAddRuleToRegistry(ctx, err, nodeCapacityLowRuleName, nodeCapacityLowRule, ruleRegistry)
-}
-
-// MaybeAddRuleToRegistry validates a rule and adds it to the rule registry.
-func MaybeAddRuleToRegistry(
-	ctx context.Context, err error, name string, rule metric.Rule, ruleRegistry *metric.RuleRegistry,
-) {
-	if err != nil {
-		log.Warningf(ctx, "unable to create kv rule %s: %s", name, err.Error())
-	}
-	if ruleRegistry == nil {
-		log.Warningf(ctx, "unable to add kv rule %s: rule registry uninitialized", name)
-	}
-	ruleRegistry.AddRule(rule)
+	nodeCapacityLowRule := metric.NewAlertingRule(nodeCapacityLowRuleName, expr, annotations, nil, time.Duration(0), help, true)
+	ruleRegistry.AddRule(nodeCapacityLowRule)
 }

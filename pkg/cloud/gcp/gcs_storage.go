@@ -13,6 +13,7 @@ package gcp
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"io"
 	"net/url"
 	"os"
@@ -244,8 +245,39 @@ func createAuthOptionFromServiceAccountKey(encodedKey string) (option.ClientOpti
 	if err != nil {
 		return nil, err
 	}
+	if err := checkServiceAccountKey(credentialsJSON); err != nil {
+		return nil, err
+	}
+	return option.WithAuthCredentialsJSON(option.ServiceAccount, credentialsJSON), nil
+}
 
-	return option.WithCredentialsJSON(credentialsJSON), nil
+// googleTokenURIs are the token endpoints that Google writes into service
+// account keys.
+var googleTokenURIs = map[string]bool{
+	"":                                    true,
+	"https://oauth2.googleapis.com/token": true,
+	"https://accounts.google.com/o/oauth2/token": true,
+}
+
+// checkServiceAccountKey accepts only a service account key that gets its
+// token from Google. Other credential types make the node read local files or
+// call URLs named in the JSON, and a SQL user who is not an admin may supply
+// this JSON.
+func checkServiceAccountKey(credentialsJSON []byte) error {
+	var key struct {
+		Type     string `json:"type"`
+		TokenURI string `json:"token_uri"`
+	}
+	if err := json.Unmarshal(credentialsJSON, &key); err != nil {
+		return errors.Wrap(err, "parsing credentials")
+	}
+	if key.Type != "service_account" {
+		return errors.Newf("credentials must be a service account key, not type %q", key.Type)
+	}
+	if !googleTokenURIs[key.TokenURI] {
+		return errors.Newf("credentials name an unknown token_uri %q", key.TokenURI)
+	}
+	return nil
 }
 
 // createAuthOptionFromBearerToken creates an option.ClientOption for

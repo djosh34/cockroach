@@ -104,6 +104,7 @@ func TestMetadata(t *testing.T) {
 	if err == nil || depsUpToDate {
 		t.Fatalf("expected table privilege to be revoked")
 	}
+	md.AddViewOwnerPrivilege(&testcat.View{ViewID: 101}, tab, privilege.SELECT)
 
 	udfName := tree.MakeQualifiedRoutineName("t", "public", "udf")
 	md.AddUserDefinedFunction(
@@ -198,6 +199,10 @@ func TestMetadata(t *testing.T) {
 		if newPrivileges[id] != privileges {
 			t.Fatalf("expected privileges to be copied")
 		}
+	}
+
+	if mdNew.TestingViewOwnerPrivileges() != md.TestingViewOwnerPrivileges() {
+		t.Fatalf("expected view owner privileges to be copied")
 	}
 
 	depsUpToDate, err = md.CheckDependencies(context.Background(), &evalCtx, testCat)

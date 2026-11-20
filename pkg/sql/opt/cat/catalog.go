@@ -173,6 +173,11 @@ type Catalog interface {
 	// the given catalog object. If not, then CheckAnyPrivilege returns an error.
 	CheckAnyPrivilege(ctx context.Context, o Object) error
 
+	// CheckViewOwnerPrivilege verifies that the owner of the given view has the
+	// given privilege on the given catalog object. If not, then it returns an
+	// error.
+	CheckViewOwnerPrivilege(ctx context.Context, view View, o Object, priv privilege.Kind) error
+
 	// CheckExecutionPrivilege verifies that the current user has execution
 	// privileges for the UDF with the given OID. If not, then CheckPrivilege
 	// returns an error.

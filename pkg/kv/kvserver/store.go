@@ -3376,7 +3376,7 @@ func (s *Store) ComputeMetricsPeriodically(
 		// between the two points in time. Since the prometheus.Histogram does not
 		// expose any of the data it collects, the current metrics need to be
 		// written to an intermediate struct to facilitate the calculation.
-		prevFsync := prevMetrics.WALFsyncLatency
+		prevFsync := &prevMetrics.WALFsyncLatency
 		windowFsyncLatency := &prometheusgo.Metric{}
 		err := m.LogWriter.FsyncLatency.Write(windowFsyncLatency)
 		if err != nil {

@@ -42,8 +42,8 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/protoutil"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/errors"
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgtype"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/spf13/cobra"
 )
 
@@ -256,11 +256,12 @@ FROM system.descriptor ORDER BY id`
 		if vals[2] == nil {
 			row.ModTime = hlc.Timestamp{WallTime: timeutil.Now().UnixNano()}
 		} else if mt, ok := vals[2].(pgtype.Numeric); ok {
-			buf, err := mt.EncodeText(nil, nil)
+			text, err := mt.Value()
 			if err != nil {
 				return err
 			}
-			decimal, _, err := apd.NewFromString(string(buf))
+			str, _ := text.(string)
+			decimal, _, err := apd.NewFromString(str)
 			if err != nil {
 				return err
 			}
@@ -524,6 +525,10 @@ func fromZipDir(
 			if !ok {
 				return errors.Newf("job %d: failed to decode hex payload", id)
 			}
+			// Skip payloads that the zip left out.
+			if string(payloadBytes) == redactedJobPayload {
+				return nil
+			}
 			md.Payload = &jobspb.Payload{}
 			if err := protoutil.Unmarshal(payloadBytes, md.Payload); err != nil {
 				return errors.Wrap(err, "failed unmarshalling job payload")
@@ -566,8 +571,8 @@ func fromZipDir(
 				return nil, nil, nil, errors.Wrapf(err, "failed to decode job ID %v", job)
 			}
 			row.ID = jobspb.JobID(id)
-			// Skip NULL job payloads.
-			if job.Payload == "NULL" {
+			// Skip NULL job payloads and payloads that the zip left out.
+			if job.Payload == "NULL" || job.Payload == redactedJobPayload {
 				continue
 			}
 			payloadBytes, err := hx.DecodeString(job.Payload)
@@ -593,6 +598,10 @@ func fromZipDir(
 	}
 	return descTable, namespaceTable, jobsTable, nil
 }
+
+// redactedJobPayload is what debug zips export in place of a job payload
+// that they leave out.
+const redactedJobPayload = "<redacted>"
 
 func checkIfFileExists(zipDirPath string, fileName string) bool {
 	_, err := os.Stat(path.Join(zipDirPath, fileName))

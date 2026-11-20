@@ -115,6 +115,36 @@ func (p *planner) AlterRoleNode(
 	}, nil
 }
 
+// roleOptionPrivileges maps each role option that grants a privilege to that
+// privilege.
+var roleOptionPrivileges = map[roleoption.Option]privilege.Kind{
+	roleoption.CREATEROLE:           privilege.CREATEROLE,
+	roleoption.CREATELOGIN:          privilege.CREATELOGIN,
+	roleoption.CREATEDB:             privilege.CREATEDB,
+	roleoption.CONTROLJOB:           privilege.CONTROLJOB,
+	roleoption.CANCELQUERY:          privilege.CANCELQUERY,
+	roleoption.VIEWACTIVITY:         privilege.VIEWACTIVITY,
+	roleoption.VIEWACTIVITYREDACTED: privilege.VIEWACTIVITYREDACTED,
+	roleoption.VIEWCLUSTERSETTING:   privilege.VIEWCLUSTERSETTING,
+	roleoption.MODIFYCLUSTERSETTING: privilege.MODIFYCLUSTERSETTING,
+	roleoption.REPLICATION:          privilege.REPLICATION,
+}
+
+// checkGrantedRoleOptions checks that the current user holds each privilege
+// that roleOptions grant, as a role option, a system privilege or through the
+// admin role. Otherwise a user with CREATEROLE could create a role with more
+// privileges than its own and then become a member of it.
+func (p *planner) checkGrantedRoleOptions(ctx context.Context, roleOptions roleoption.List) error {
+	for _, ro := range roleOptions {
+		if priv, ok := roleOptionPrivileges[ro.Option]; ok {
+			if err := p.CheckGlobalPrivilegeOrRoleOption(ctx, priv); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (p *planner) checkPasswordOptionConstraints(
 	ctx context.Context, roleOptions roleoption.List, newUser bool,
 ) error {
@@ -183,6 +213,9 @@ func (n *alterRoleNode) startExec(params runParams) error {
 		// Check that the requested combination of password options is
 		// compatible with the user's own CREATELOGIN privilege.
 		if err := params.p.checkPasswordOptionConstraints(params.ctx, n.roleOptions, false /* newUser */); err != nil {
+			return err
+		}
+		if err := params.p.checkGrantedRoleOptions(params.ctx, n.roleOptions); err != nil {
 			return err
 		}
 	}

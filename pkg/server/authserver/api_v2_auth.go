@@ -152,13 +152,9 @@ func (a *authenticationV2Server) login(w http.ResponseWriter, r *http.Request) {
 	username, _ := username.MakeSQLUsernameFromUserInput(r.Form.Get("username"), username.PurposeValidation)
 
 	// Verify the provided username/password pair.
-	verified, expired, err := a.authServer.VerifyPasswordDBConsole(a.ctx, username, r.Form.Get("password"))
+	verified, err := a.authServer.VerifyPasswordDBConsole(r.Context(), username, r.Form.Get("password"))
 	if err != nil {
 		srverrors.APIV2InternalError(r.Context(), err, w)
-		return
-	}
-	if expired {
-		http.Error(w, "the password has expired", http.StatusUnauthorized)
 		return
 	}
 	if !verified {

@@ -225,7 +225,7 @@ func NewMultiConnPool(
 				minConns = numConns
 			}
 			poolCfg.MinConns = int32(minConns)
-			poolCfg.BeforeAcquire = func(ctx context.Context, conn *pgx.Conn) bool {
+			poolCfg.PrepareConn = func(ctx context.Context, conn *pgx.Conn) (bool, error) {
 				m.mu.RLock()
 				defer m.mu.RUnlock()
 				for name, sql := range m.mu.preparedStatements {
@@ -234,10 +234,11 @@ func NewMultiConnPool(
 					// communication to the server.
 					if _, err := conn.Prepare(ctx, name, sql); err != nil {
 						log.Warningf(ctx, "error preparing statement. name=%s sql=%s %v", name, sql, err)
-						return false
+						// Destroy the connection and retry on a new one.
+						return false, nil
 					}
 				}
-				return true
+				return true, nil
 			}
 
 			connCfg := poolCfg.ConnConfig

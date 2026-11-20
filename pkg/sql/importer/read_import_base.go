@@ -257,7 +257,7 @@ func readInputFiles(
 								pgcode.DataCorrupted,
 								"too many parsing errors (%d) encountered for file %s",
 								countRejected,
-								dataFile,
+								sanitizedURI(dataFile),
 							)
 						}
 						buf = append(buf, s...)
@@ -295,11 +295,11 @@ func readInputFiles(
 				})
 
 				if err := grp.Wait(); err != nil {
-					return errors.Wrapf(err, "%s", dataFile)
+					return errors.Wrapf(err, "%s", sanitizedURI(dataFile))
 				}
 			} else {
 				if err := fileFunc(ctx, src, dataFileIndex, resumePos[dataFileIndex], nil /* rejected */); err != nil {
-					return errors.Wrapf(err, "%s", dataFile)
+					return errors.Wrapf(err, "%s", sanitizedURI(dataFile))
 				}
 			}
 			return nil
@@ -479,8 +479,14 @@ func handleCorruptRow(ctx context.Context, fileCtx *importFileContext, err error
 	log.Errorf(ctx, "%+v", err)
 
 	if rowErr := (*importRowError)(nil); errors.As(err, &rowErr) && fileCtx.rejected != nil {
-		fileCtx.rejected <- rowErr.row + "\n"
-		return nil
+		// The reader of rejected rows stops after too many of them and cancels
+		// ctx; without the select this send would then block forever.
+		select {
+		case fileCtx.rejected <- rowErr.row + "\n":
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 
 	return err

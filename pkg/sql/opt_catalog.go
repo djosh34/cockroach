@@ -420,6 +420,21 @@ func (oc *optCatalog) CheckAnyPrivilege(ctx context.Context, o cat.Object) error
 	return oc.planner.CheckAnyPrivilege(ctx, desc)
 }
 
+// CheckViewOwnerPrivilege is part of the cat.Catalog interface.
+func (oc *optCatalog) CheckViewOwnerPrivilege(
+	ctx context.Context, view cat.View, o cat.Object, priv privilege.Kind,
+) error {
+	viewDesc, err := getDescFromCatalogObjectForPermissions(view)
+	if err != nil {
+		return err
+	}
+	desc, err := getDescFromCatalogObjectForPermissions(o)
+	if err != nil {
+		return err
+	}
+	return oc.planner.CheckPrivilegeForUser(ctx, desc, priv, viewDesc.GetPrivileges().Owner())
+}
+
 // CheckExecutionPrivilege is part of the cat.Catalog interface.
 func (oc *optCatalog) CheckExecutionPrivilege(ctx context.Context, oid oid.Oid) error {
 	// If the required cluster version is not active, revert to pre-23.2

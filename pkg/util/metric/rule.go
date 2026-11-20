@@ -10,11 +10,7 @@
 
 package metric
 
-import (
-	"time"
-
-	"github.com/prometheus/prometheus/promql/parser"
-)
+import "time"
 
 // Rule interface exposes an API for alerting and aggregation rules to be
 // consumed.
@@ -73,8 +69,7 @@ type AggregationRule struct {
 var _ Rule = &AlertingRule{}
 var _ Rule = &AggregationRule{}
 
-// NewAlertingRule creates a new AlertingRule. This returns an error if the expr parameter
-// is not a valid PromQL expression.
+// NewAlertingRule creates a new AlertingRule. expr is a PromQL expression.
 func NewAlertingRule(
 	name string,
 	expr string,
@@ -83,10 +78,7 @@ func NewAlertingRule(
 	recommendedHoldDuration time.Duration,
 	help string,
 	isKV bool,
-) (*AlertingRule, error) {
-	if _, err := parser.ParseExpr(expr); err != nil {
-		return nil, err
-	}
+) *AlertingRule {
 	rule := AlertingRule{
 		name:                    name,
 		expr:                    expr,
@@ -96,17 +88,14 @@ func NewAlertingRule(
 		help:                    help,
 		isKV:                    isKV,
 	}
-	return &rule, nil
+	return &rule
 }
 
-// NewAggregationRule creates a new AggregationRule. This returns an error if the expr parameter
-// is not a valid PromQL expression.
+// NewAggregationRule creates a new AggregationRule. expr is a PromQL
+// expression.
 func NewAggregationRule(
 	name string, expr string, labels []LabelPair, help string, isKV bool,
-) (*AggregationRule, error) {
-	if _, err := parser.ParseExpr(expr); err != nil {
-		return nil, err
-	}
+) *AggregationRule {
 	rule := AggregationRule{
 		name:   name,
 		expr:   expr,
@@ -114,7 +103,7 @@ func NewAggregationRule(
 		help:   help,
 		isKV:   isKV,
 	}
-	return &rule, nil
+	return &rule
 }
 
 // Name implements the Rule interface.

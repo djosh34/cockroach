@@ -907,3 +907,63 @@ func TestUsernameUserfileInteraction(t *testing.T) {
 		}
 	})
 }
+
+// TestUserfileGetStaysInDestination checks that `userfile get` refuses a stored
+// file name that would write outside the destination directory. Any SQL user
+// with write access to the file table can choose such a name.
+func TestUserfileGetStaysInDestination(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+
+	c := NewCLITest(TestCLIParams{T: t})
+	c.omitArgs = true
+	defer c.Cleanup()
+
+	dir := t.TempDir()
+	localFilePath := filepath.Join(dir, "test.csv")
+	require.NoError(t, os.WriteFile(localFilePath, []byte("a"), 0666))
+	// The server reads "/../escaped.csv" as "/escaped.csv", so that file must
+	// exist for the planted name to download.
+	for _, file := range []string{"a/one.csv", "a/two.csv", "escaped.csv"} {
+		_, err := c.RunWithCapture(fmt.Sprintf("userfile upload %s %s", localFilePath, file))
+		require.NoError(t, err)
+	}
+	out, err := c.RunWithCaptureArgs([]string{"sql", "-e",
+		`UPDATE defaultdb.public.userfiles_root_upload_files SET filename = '/../escaped.csv' WHERE filename LIKE '%two.csv' RETURNING filename`})
+	require.NoError(t, err)
+	require.Contains(t, out, "../escaped.csv")
+
+	out, err = c.RunWithCaptureArgs([]string{"userfile", "get", "/", filepath.Join(dir, "dest")})
+	require.NoError(t, err)
+	_, err = os.Stat(filepath.Join(dir, "escaped.csv"))
+	require.True(t, errors.Is(err, os.ErrNotExist), "file written outside the destination: %v", err)
+	require.Contains(t, out, "leaves the destination directory")
+}
+
+// TestUserfileGetDoesNotFollowSymlinks checks that `userfile get` does not
+// write through a symlink in the destination to a directory outside it.
+func TestUserfileGetDoesNotFollowSymlinks(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+
+	c := NewCLITest(TestCLIParams{T: t})
+	c.omitArgs = true
+	defer c.Cleanup()
+
+	dir := t.TempDir()
+	localFilePath := filepath.Join(dir, "test.csv")
+	require.NoError(t, os.WriteFile(localFilePath, []byte("a"), 0666))
+	for _, file := range []string{"a/one.csv", "b.csv"} {
+		_, err := c.RunWithCapture(fmt.Sprintf("userfile upload %s %s", localFilePath, file))
+		require.NoError(t, err)
+	}
+	dest := filepath.Join(dir, "dest")
+	outside := filepath.Join(dir, "outside")
+	require.NoError(t, os.MkdirAll(dest, 0755))
+	require.NoError(t, os.MkdirAll(outside, 0755))
+	require.NoError(t, os.Symlink(outside, filepath.Join(dest, "a")))
+
+	out, err := c.RunWithCaptureArgs([]string{"userfile", "get", "/", dest})
+	require.NoError(t, err)
+	_, err = os.Stat(filepath.Join(outside, "one.csv"))
+	require.True(t, errors.Is(err, os.ErrNotExist), "file written outside the destination: %v", err)
+	require.Contains(t, out, "ERROR")
+}

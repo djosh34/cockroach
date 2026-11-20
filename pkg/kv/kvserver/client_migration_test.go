@@ -30,6 +30,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/testutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/testcluster"
 	"github.com/cockroachdb/cockroach/pkg/util/ctxgroup"
+	"github.com/cockroachdb/cockroach/pkg/util/grpcutil"
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/errors"
@@ -206,7 +207,9 @@ func TestMigrateWithInflightSnapshot(t *testing.T) {
 		defer cancel()
 
 		err := tc.Server(n1).DB().Migrate(cCtx, desc.StartKey, desc.EndKey, migrationVersion)
-		require.True(t, testutils.IsError(err, context.DeadlineExceeded.Error()), err)
+		// gRPC reports the deadline either as the context's error or as a
+		// DeadlineExceeded status when the stream is reset first.
+		require.True(t, grpcutil.IsTimeout(err), err)
 	}()
 
 	// Unblock the snapshot and let the learner get promoted to a voter.
@@ -295,7 +298,9 @@ func TestMigrateWaitsForApplication(t *testing.T) {
 		defer cancel()
 
 		err := tc.Server(n1).DB().Migrate(cCtx, desc.StartKey, desc.EndKey, endV)
-		require.True(t, testutils.IsError(err, context.DeadlineExceeded.Error()), err)
+		// gRPC reports the deadline either as the context's error or as a
+		// DeadlineExceeded status when the stream is reset first.
+		require.True(t, grpcutil.IsTimeout(err), err)
 	}()
 
 	close(blockApplicationCh)

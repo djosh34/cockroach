@@ -22,7 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/cloud"
 	"github.com/cockroachdb/cockroach/pkg/cloud/cloudtestutils"
@@ -47,7 +46,7 @@ func TestEncryptDecryptAWS(t *testing.T) {
 	// If environment credentials are not present, we want to
 	// skip all AWS KMS tests, including auth-implicit, even though
 	// it is not used in auth-implicit.
-	_, err := credentials.NewEnvCredentials().Get()
+	_, err := envCredentials()
 	if err != nil {
 		skip.IgnoreLint(t, "Test only works with AWS credentials")
 	}
@@ -101,8 +100,7 @@ func TestEncryptDecryptAWS(t *testing.T) {
 		// in the AWS console, then set it up locally.
 		// https://docs.aws.com/cli/latest/userguide/cli-configure-role.html
 		// We only run this test if default role exists.
-		credentialsProvider := credentials.SharedCredentialsProvider{}
-		_, err := credentialsProvider.Retrieve()
+		err := sharedCredentials(context.Background())
 		if err != nil {
 			skip.IgnoreLint(t, err)
 		}
@@ -136,7 +134,7 @@ func TestEncryptDecryptAWSAssumeRole(t *testing.T) {
 	// If environment credentials are not present, we want to
 	// skip all AWS KMS tests, including auth-implicit, even though
 	// it is not used in auth-implicit.
-	_, err := credentials.NewEnvCredentials().Get()
+	_, err := envCredentials()
 	if err != nil {
 		skip.IgnoreLint(t, "Test only works with AWS credentials")
 	}
@@ -178,8 +176,7 @@ func TestEncryptDecryptAWSAssumeRole(t *testing.T) {
 		// in the AWS console, then set it up locally.
 		// https://docs.aws.com/cli/latest/userguide/cli-configure-role.html
 		// We only run this test if default role exists.
-		credentialsProvider := credentials.SharedCredentialsProvider{}
-		_, err := credentialsProvider.Retrieve()
+		err := sharedCredentials(context.Background())
 		if err != nil {
 			skip.IgnoreLint(t, err)
 		}

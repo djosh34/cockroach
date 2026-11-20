@@ -42,7 +42,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/randutil"
 	"github.com/cockroachdb/cockroach/pkg/util/timeofday"
 	"github.com/cockroachdb/cockroach/pkg/util/timetz"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -336,7 +336,7 @@ func TestCopyFromBinary(t *testing.T) {
 		int64(1),
 		float64(1),
 		"s",
-		"b",
+		[]byte("b"),
 	}}
 	if _, err = conn.CopyFrom(
 		ctx,
@@ -352,6 +352,8 @@ func TestCopyFromBinary(t *testing.T) {
 		for i, v := range input[0] {
 			if v == nil {
 				row[i] = "NULL"
+			} else if b, ok := v.([]byte); ok {
+				row[i] = string(b)
 			} else {
 				row[i] = fmt.Sprintf("%v", v)
 			}

@@ -902,12 +902,20 @@ func (b *builderState) resolveRelation(
 	if rel.IsTemporary() {
 		panic(scerrors.NotImplementedErrorf(nil /* n */, "dropping a temporary table"))
 	}
-	// If we own the schema then we can manipulate the underlying relation.
+	// The owner of a schema may drop the relations in it, as in Postgres. Any
+	// other change needs ownership of the relation or the required privilege
+	// on it.
 	b.ensureDescriptor(rel.GetID())
 	c := b.descCache[rel.GetID()]
-	b.ensureDescriptor(rel.GetParentSchemaID())
-	if b.descCache[rel.GetParentSchemaID()].hasOwnership {
-		c.hasOwnership = true
+	if p.RequiredPrivilege == privilege.DROP {
+		b.ensureDescriptor(rel.GetParentSchemaID())
+		if b.descCache[rel.GetParentSchemaID()].hasOwnership {
+			c.hasOwnership = true
+			return c
+		}
+	}
+	if p.RequireOwnership {
+		b.mustOwn(rel.GetID())
 		return c
 	}
 	err, found := c.privileges[p.RequiredPrivilege]

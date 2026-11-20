@@ -34,10 +34,7 @@ func TestPrometheusRuleExporter(t *testing.T) {
 }
 
 func getRulesAndExpectedYAML(t *testing.T) (rules []Rule, expectedYAML string) {
-	aggRule, err := NewAggregationRule("test_aggregation_rule_1", "sum without(store) (capacity_available)", nil, "", false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	aggRule := NewAggregationRule("test_aggregation_rule_1", "sum without(store) (capacity_available)", nil, "", false)
 	rules = append(rules, aggRule)
 	var annotations []LabelPair
 	description := "description"
@@ -47,10 +44,7 @@ func getRulesAndExpectedYAML(t *testing.T) (rules []Rule, expectedYAML string) {
 		Value: &value,
 	}
 	annotations = append(annotations, annotation)
-	alertRule, err := NewAlertingRule("test_alert_rule", "resets(sys_uptime[10m]) > 0 and resets(sys_uptime[10m]) < 5", annotations, nil, time.Minute, "", false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	alertRule := NewAlertingRule("test_alert_rule", "resets(sys_uptime[10m]) > 0 and resets(sys_uptime[10m]) < 5", annotations, nil, time.Minute, "", false)
 	rules = append(rules, alertRule)
 	expectedYAML = "rules/alerts:\n    rules:\n        - alert: test_alert_rule\n          " +
 		"expr: resets(sys_uptime[10m]) > 0 and resets(sys_uptime[10m]) < 5\n          for: 1m0s\n          " +

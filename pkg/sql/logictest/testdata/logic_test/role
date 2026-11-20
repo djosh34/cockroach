@@ -1891,3 +1891,43 @@ statement ok
 USE defaultdb;
 
 subtest end
+
+# A user with CREATEROLE may grant a role option only if it holds the same
+# privilege. Otherwise it could create a role with more privileges than its
+# own and become a member of it.
+subtest createrole_grants_only_held_options
+
+user root
+
+statement ok
+ALTER USER testuser CREATEROLE NOCONTROLJOB NOMODIFYCLUSTERSETTING
+
+user testuser
+
+statement error pq: user testuser does not have MODIFYCLUSTERSETTING privilege
+CREATE ROLE role_with_more WITH MODIFYCLUSTERSETTING
+
+statement ok
+CREATE ROLE role_with_less WITH CREATEROLE
+
+statement error pq: user testuser does not have CONTROLJOB privilege
+ALTER ROLE role_with_less WITH CONTROLJOB
+
+user root
+
+statement ok
+GRANT SYSTEM CONTROLJOB TO testuser
+
+user testuser
+
+statement ok
+ALTER ROLE role_with_less WITH CONTROLJOB
+
+user root
+
+statement ok
+REVOKE SYSTEM CONTROLJOB FROM testuser;
+DROP ROLE role_with_less;
+ALTER USER testuser NOCREATEROLE
+
+subtest end

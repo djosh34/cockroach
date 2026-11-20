@@ -33,12 +33,13 @@ func makeExternalConnectionKMS(
 	}
 	externalConnectionName := kmsURI.Host
 
-	// TODO(adityamaru): Use the `user` in `cfg` to perform privilege checks on
-	// the external connection object we are about to retrieve.
-
-	// Retrieve the external connection object from the system table.
+	// Retrieve the external connection object from the system table, once the
+	// user is known to hold USAGE on it.
 	var ec ExternalConnection
 	if err := env.DBHandle().Txn(ctx, func(ctx context.Context, txn isql.Txn) error {
+		if err := CheckUsage(ctx, txn, env.User(), externalConnectionName); err != nil {
+			return err
+		}
 		var err error
 		ec, err = LoadExternalConnection(ctx, externalConnectionName, txn)
 		return err

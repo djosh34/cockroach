@@ -16,6 +16,7 @@ import (
 	"io"
 	"net/url"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -210,6 +211,11 @@ type azureStorage struct {
 
 var _ cloud.ExternalStorage = &azureStorage{}
 
+// hostLabel matches a single DNS label. Account and vault names become the
+// first label of the host that the client calls. Anything else, such as a dot,
+// slash or "@", could make the node call a host of the user's choice.
+var hostLabel = regexp.MustCompile(`^[a-zA-Z0-9-]{1,63}$`)
+
 func makeAzureStorage(
 	_ context.Context, args cloud.ExternalStorageContext, dest cloudpb.ExternalStorage,
 ) (cloud.ExternalStorage, error) {
@@ -221,6 +227,9 @@ func makeAzureStorage(
 	env, err := azure.EnvironmentFromName(conf.Environment)
 	if err != nil {
 		return nil, errors.Wrap(err, "azure environment")
+	}
+	if !hostLabel.MatchString(conf.AccountName) {
+		return nil, errors.Newf("azure: account name %q is not valid", conf.AccountName)
 	}
 	u, err := url.Parse(fmt.Sprintf("https://%s.blob.%s", conf.AccountName, env.StorageEndpointSuffix))
 	if err != nil {

@@ -459,7 +459,7 @@ func LookupForReportingByKey(key InternalKey, forSystemTenant bool) (Setting, bo
 		return nil, false
 	}
 	if !s.isReportable() {
-		return &MaskedSetting{setting: s}, true
+		return &MaskedSetting{setting: s, forReporting: true}, true
 	}
 	return s, true
 }
@@ -499,6 +499,26 @@ func LookupForDisplayByKey(
 		return &MaskedSetting{setting: s}, true
 	}
 	return s, true
+}
+
+// IsSensitive reports whether the setting with the given key holds a secret,
+// whose value must stay out of logs and diagnostics. An unknown key counts as
+// sensitive, since nothing is known about its value.
+func IsSensitive(key InternalKey) bool {
+	s, ok := registry[key]
+	return !ok || s.isSensitive()
+}
+
+// SensitiveKeys returns the keys of the settings marked sensitive, sorted.
+func SensitiveKeys() []InternalKey {
+	var keys []InternalKey
+	for k, s := range registry {
+		if s.isSensitive() {
+			keys = append(keys, k)
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	return keys
 }
 
 // ForSystemTenant can be passed to Lookup for code that runs only on the system

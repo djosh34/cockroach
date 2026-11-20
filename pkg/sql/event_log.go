@@ -185,11 +185,72 @@ var defaultRedactionOptions = redactionOptions{
 	omitSQLNameRedaction: false,
 }
 
+// statementMayCarrySecret reports whether stmt can hold a password, a
+// credential in a URI or the value of a sensitive setting. Event logs and
+// statement bundles leave out the constants and placeholder values of such
+// statements.
+func statementMayCarrySecret(stmt tree.Statement) bool {
+	switch s := stmt.(type) {
+	case *tree.CreateRole, *tree.AlterRole, *tree.Import, *tree.Export,
+		*tree.CreateExternalConnection:
+		return true
+	case *tree.SetClusterSetting:
+		return settingIsSensitive(s.Name)
+	case *tree.AlterTenantSetClusterSetting:
+		return settingIsSensitive(s.Name)
+	}
+	return false
+}
+
+// withoutSecretSettingValue returns stmt with the value of a sensitive setting
+// replaced by a string constant. A value given as a bare name is not a
+// constant, so redacting constants alone would keep it.
+func withoutSecretSettingValue(stmt tree.Statement) tree.Statement {
+	hide := func(s tree.SetClusterSetting) (tree.SetClusterSetting, bool) {
+		if s.Value == nil || !settingIsSensitive(s.Name) {
+			return s, false
+		}
+		if _, isDefault := s.Value.(tree.DefaultVal); isDefault {
+			return s, false
+		}
+		s.Value = tree.NewStrVal("_")
+		return s, true
+	}
+	switch s := stmt.(type) {
+	case *tree.SetClusterSetting:
+		if c, ok := hide(*s); ok {
+			return &c
+		}
+	case *tree.AlterTenantSetClusterSetting:
+		if c, ok := hide(s.SetClusterSetting); ok {
+			return &tree.AlterTenantSetClusterSetting{SetClusterSetting: c, TenantSpec: s.TenantSpec}
+		}
+	}
+	return stmt
+}
+
+// settingIsSensitive reports whether the setting called name is sensitive.
+// An unknown name counts as sensitive.
+func settingIsSensitive(name string) bool {
+	key, ok, _ := settings.NameToKey(settings.SettingName(strings.ToLower(name)))
+	return !ok || settings.IsSensitive(key)
+}
+
 func (p *planner) getCommonSQLEventDetails(opt redactionOptions) eventpb.CommonSQLEventDetails {
+	flags := opt.toFlags()
+	mayCarrySecret := statementMayCarrySecret(p.stmt.AST)
+	if mayCarrySecret {
+		// Only the constants are marked as unsafe, so that replacing the unsafe
+		// parts below hides the values and keeps the names.
+		flags = tree.FmtOmitNameRedaction
+	}
 	redactableStmt := formatStmtKeyAsRedactableString(
-		p.extendedEvalCtx.VirtualSchemas, p.stmt.AST,
-		p.extendedEvalCtx.Context.Annotations, opt.toFlags(), p,
+		p.extendedEvalCtx.VirtualSchemas, withoutSecretSettingValue(p.stmt.AST),
+		p.extendedEvalCtx.Context.Annotations, flags, p,
 	)
+	if mayCarrySecret {
+		redactableStmt = redactableStmt.Redact()
+	}
 	commonSQLEventDetails := eventpb.CommonSQLEventDetails{
 		Statement:       redactableStmt,
 		Tag:             p.stmt.AST.StatementTag(),
@@ -199,7 +260,11 @@ func (p *planner) getCommonSQLEventDetails(opt redactionOptions) eventpb.CommonS
 	if pls := p.extendedEvalCtx.Context.Placeholders.Values; len(pls) > 0 {
 		commonSQLEventDetails.PlaceholderValues = make([]string, len(pls))
 		for idx, val := range pls {
-			commonSQLEventDetails.PlaceholderValues[idx] = val.String()
+			if mayCarrySecret {
+				commonSQLEventDetails.PlaceholderValues[idx] = "*****"
+			} else {
+				commonSQLEventDetails.PlaceholderValues[idx] = val.String()
+			}
 		}
 	}
 	return commonSQLEventDetails

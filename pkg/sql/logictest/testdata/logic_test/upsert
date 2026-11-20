@@ -1398,3 +1398,32 @@ query III
 SELECT * FROM arbiter_index
 ----
 1  2  10
+
+# UPSERT into a table with a BOOL primary key and a partial index whose
+# predicate is that column must not panic.
+subtest upsert_bool_pk_partial_index
+
+statement ok
+CREATE TABLE upsert_bool_pk (b BOOL PRIMARY KEY, v INT, INDEX (v) WHERE b)
+
+statement ok
+UPSERT INTO upsert_bool_pk VALUES (true, 1), (false, 2)
+
+statement ok
+UPSERT INTO upsert_bool_pk VALUES (true, 3), (false, 4)
+
+statement ok
+INSERT INTO upsert_bool_pk VALUES (true, 5) ON CONFLICT (b) DO UPDATE SET v = excluded.v
+
+query BI rowsort
+SELECT * FROM upsert_bool_pk
+----
+false  4
+true   5
+
+query I
+SELECT v FROM upsert_bool_pk@upsert_bool_pk_v_idx WHERE b
+----
+5
+
+subtest end

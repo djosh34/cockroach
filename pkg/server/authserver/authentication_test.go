@@ -308,7 +308,7 @@ func TestVerifyPasswordDBConsole(t *testing.T) {
 		t.Run(tc.testName, func(t *testing.T) {
 			username := username.MakeSQLUsernameFromPreNormalizedString(tc.username)
 			authServer := ts.HTTPAuthServer().(authserver.Server)
-			valid, expired, err := authServer.VerifyPasswordDBConsole(context.Background(), username, tc.password)
+			valid, err := authServer.VerifyPasswordDBConsole(context.Background(), username, tc.password)
 			if err != nil {
 				t.Errorf(
 					"credentials %s/%s failed with error %s, wanted no error",
@@ -317,7 +317,7 @@ func TestVerifyPasswordDBConsole(t *testing.T) {
 					err,
 				)
 			}
-			if valid && !expired != tc.shouldAuthenticate {
+			if valid != tc.shouldAuthenticate {
 				t.Errorf(
 					"credentials %s/%s valid = %t, wanted %t",
 					tc.username,
@@ -888,6 +888,7 @@ func TestGRPCAuthentication(t *testing.T) {
 		}, false},
 	}
 
+	//lint:ignore SA1019 deprecated but supported throughout gRPC 1.x; grpc.NewClient changes how connections are made
 	conn, err := grpc.DialContext(ctx, ts.RPCAddr(),
 		grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
 			InsecureSkipVerify: true,
@@ -919,6 +920,7 @@ func TestGRPCAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//lint:ignore SA1019 deprecated but supported throughout gRPC 1.x; grpc.NewClient changes how connections are made
 	conn, err = grpc.DialContext(ctx, ts.RPCAddr(),
 		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	if err != nil {

@@ -1014,6 +1014,22 @@ func (p *planner) checkCanAlterToNewOwner(
 	return pgerror.Newf(pgcode.InsufficientPrivilege, "must be member of role %q", newOwner)
 }
 
+// checkOwnershipOrAdmin returns an error unless the current user owns desc,
+// directly or through a role, or is an admin. kind names the object type in
+// the error, for example "table".
+func (p *planner) checkOwnershipOrAdmin(
+	ctx context.Context, desc catalog.Descriptor, kind string,
+) error {
+	if isAdmin, err := p.HasAdminRole(ctx); err != nil || isAdmin {
+		return err
+	}
+	if owns, err := p.HasOwnership(ctx, desc); err != nil || owns {
+		return err
+	}
+	return pgerror.Newf(pgcode.InsufficientPrivilege,
+		"must be owner of %s %s", kind, tree.Name(desc.GetName()))
+}
+
 // HasOwnershipOnSchema checks if the current user has ownership on the schema.
 // For schemas, we cannot always use HasOwnership as not every schema has a
 // descriptor.

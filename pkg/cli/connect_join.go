@@ -48,6 +48,7 @@ func requestPeerCA(
 ) (*x509.CertPool, error) {
 	dialOpts := rpc.GetAddJoinDialOptions(ctx, nil)
 
+	//lint:ignore SA1019 deprecated but supported throughout gRPC 1.x; grpc.NewClient changes how connections are made
 	conn, err := grpc.DialContext(ctx, peer, dialOpts...)
 	if err != nil {
 		return nil, err
@@ -93,6 +94,7 @@ func requestCertBundle(
 ) (*server.CertificateBundle, error) {
 	dialOpts := rpc.GetAddJoinDialOptions(ctx, certPool)
 
+	//lint:ignore SA1019 deprecated but supported throughout gRPC 1.x; grpc.NewClient changes how connections are made
 	conn, err := grpc.DialContext(ctx, peerAddr, dialOpts...)
 	if err != nil {
 		return nil, err

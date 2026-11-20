@@ -92,6 +92,9 @@ func (p *planner) CreateRoleNode(
 	if err := p.checkPasswordOptionConstraints(ctx, roleOptions, true /* newUser */); err != nil {
 		return nil, err
 	}
+	if err := p.checkGrantedRoleOptions(ctx, roleOptions); err != nil {
+		return nil, err
+	}
 
 	roleName, err := decodeusername.FromRoleSpec(
 		p.SessionData(), username.PurposeCreation, roleSpec,

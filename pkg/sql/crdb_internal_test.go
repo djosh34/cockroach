@@ -76,7 +76,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/uint128"
 	"github.com/cockroachdb/cockroach/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
-	"github.com/jackc/pgtype"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -294,14 +294,14 @@ SELECT column_name, character_maximum_length, numeric_precision, numeric_precisi
 		}
 		switch colName {
 		case "k":
-			if charMaxLength.Status != pgtype.Null {
-				t.Fatalf("x character_maximum_length: expected null, got %d", charMaxLength.Int)
+			if charMaxLength.Valid {
+				t.Fatalf("x character_maximum_length: expected null, got %d", charMaxLength.Int64)
 			}
-			if numPrec.Int != 64 {
-				t.Fatalf("x numeric_precision: expected 64, got %v", numPrec.Get())
+			if numPrec.Int64 != 64 {
+				t.Fatalf("x numeric_precision: expected 64, got %v", numPrec.Int64)
 			}
-			if numPrecRadix.Int != 2 {
-				t.Fatalf("x numeric_precision_radix: expected 64, got %v", numPrecRadix.Get())
+			if numPrecRadix.Int64 != 2 {
+				t.Fatalf("x numeric_precision_radix: expected 64, got %v", numPrecRadix.Int64)
 			}
 			if sqlType != "INT8" {
 				t.Fatalf("x crdb_sql_type: expected INT8, got %q", sqlType)

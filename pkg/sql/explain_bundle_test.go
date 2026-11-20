@@ -644,3 +644,57 @@ func TestExplainBundleEnv(t *testing.T) {
 		}
 	}
 }
+
+// TestExplainBundleKeepsSecrets checks that a statement bundle collected
+// without REDACT still leaves out passwords, placeholder values of statements
+// that may carry secrets, and the values of sensitive settings.
+func TestExplainBundleKeepsSecrets(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	defer log.Scope(t).Close(t)
+
+	ctx := context.Background()
+	srv, godb, _ := serverutils.StartServer(t, base.TestServerArgs{})
+	defer srv.Stopper().Stop(ctx)
+	r := sqlutils.MakeSQLRunner(godb)
+	r.Exec(t, "SET CLUSTER SETTING cloudstorage.http.custom_ca = 'SECRETCA'")
+
+	httpClient, err := srv.ApplicationLayer().GetAdminHTTPClient()
+	require.NoError(t, err)
+	reg := regexp.MustCompile("https?://[a-zA-Z0-9.:]*/_admin/v1/stmtbundle/[0-9]*")
+	for _, stmt := range []string{
+		"EXPLAIN ANALYZE (DEBUG) CREATE USER bundle_user1 WITH PASSWORD 'SECRETPW'",
+		"EXPLAIN ANALYZE (DEBUG) SET CLUSTER SETTING cloudstorage.http.custom_ca = 'SECRETCA'",
+		"EXPLAIN ANALYZE (DEBUG) SET CLUSTER SETTING cloudstorage.http.custom_ca = secretident",
+		"EXPLAIN ANALYZE (DEBUG) SELECT 1",
+	} {
+		t.Run(stmt, func(t *testing.T) {
+			rows := r.QueryStr(t, stmt)
+			url := reg.FindString(fmt.Sprint(rows))
+			require.NotEmpty(t, url, "no bundle URL in %v", rows)
+			resp, err := httpClient.Get(url)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			unzip, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+			require.NoError(t, err)
+			require.NotEmpty(t, unzip.File)
+			for _, f := range unzip.File {
+				rc, err := f.Open()
+				require.NoError(t, err)
+				contents, err := io.ReadAll(rc)
+				require.NoError(t, err)
+				require.NoError(t, rc.Close())
+				for _, secret := range []string{"SECRETCA", "SECRETPW", "secretident"} {
+					require.NotContains(t, string(contents), secret, "file %s", f.Name)
+				}
+			}
+		})
+	}
+	// The statement stored with the bundle leaves out the password too.
+	for _, row := range r.QueryStr(t, "SELECT statement FROM system.statement_diagnostics") {
+		for _, secret := range []string{"SECRETCA", "SECRETPW", "secretident"} {
+			require.NotContains(t, row[0], secret)
+		}
+	}
+}

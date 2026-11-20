@@ -806,6 +806,7 @@ func (sc *SchemaChanger) validateConstraints(
 				if ck := c.AsCheck(); ck != nil {
 					if err := validateCheckInTxn(
 						ctx, txn, &semaCtx, evalCtx.SessionData(), desc, ck,
+						checkValidationUser(ck, sc.job.Payload().UsernameProto.Decode()),
 					); err != nil {
 						return err
 					}
@@ -1540,6 +1541,18 @@ func (e InvalidIndexesError) Error() string {
 	return fmt.Sprintf("found %d invalid indexes", len(e.Indexes))
 }
 
+// checkValidationUser returns the user that validates ck: root for a NOT NULL
+// constraint, whose expression is fixed, and otherwise user, the user running
+// the schema change, because the expression may call functions.
+func checkValidationUser(
+	ck catalog.CheckConstraint, user username.SQLUsername,
+) username.SQLUsername {
+	if ck.IsNotNullColumnConstraint() {
+		return username.RootUserName()
+	}
+	return user
+}
+
 // ValidateConstraint validates the constraint against all rows
 // in `tbl`.
 func ValidateConstraint(
@@ -1578,7 +1591,7 @@ func ValidateConstraint(
 						return err
 					}
 					violatingRow, formattedCkExpr, err := validateCheckExpr(ctx, &semaCtx, txn, sessionData, ck.GetExpr(),
-						tableDesc.(*tabledesc.Mutable), indexIDForValidation)
+						tableDesc.(*tabledesc.Mutable), indexIDForValidation, execOverride.User)
 					if err != nil {
 						return err
 					}
@@ -2543,6 +2556,7 @@ func runSchemaChangesInTxn(
 			if check.GetConstraintValidity() == descpb.ConstraintValidity_Validating {
 				if err := validateCheckInTxn(
 					ctx, planner.InternalSQLTxn(), &planner.semaCtx, planner.SessionData(), tableDesc, check,
+					checkValidationUser(check, planner.User()),
 				); err != nil {
 					return err
 				}
@@ -2643,6 +2657,7 @@ func validateCheckInTxn(
 	sessionData *sessiondata.SessionData,
 	tableDesc *tabledesc.Mutable,
 	checkToValidate catalog.CheckConstraint,
+	user username.SQLUsername,
 ) error {
 	var syntheticDescs []catalog.Descriptor
 	if tableDesc.Version > tableDesc.ClusterVersion().Version {
@@ -2653,7 +2668,7 @@ func validateCheckInTxn(
 		syntheticDescs,
 		func() error {
 			violatingRow, formattedCkExpr, err := validateCheckExpr(ctx, semaCtx, txn, sessionData,
-				checkToValidate.GetExpr(), tableDesc, 0 /* indexIDForValidation */)
+				checkToValidate.GetExpr(), tableDesc, 0 /* indexIDForValidation */, user)
 			if err != nil {
 				return err
 			}

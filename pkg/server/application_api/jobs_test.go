@@ -447,7 +447,7 @@ func TestJobStatusResponse(t *testing.T) {
 						},
 					},
 				},
-				URIs: []string{"a", "b"},
+				URIs: []string{"s3://bucket/a?AWS_SECRET_ACCESS_KEY=SECRETKEY", "b"},
 			},
 			Progress:      jobspb.ImportProgress{},
 			DescriptorIDs: []descpb.ID{1, 2, 3},
@@ -463,6 +463,12 @@ func TestJobStatusResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	require.Equal(t, job.ID(), response.Job.Id)
-	require.Equal(t, job.Payload(), *response.Job.Payload)
-	require.Equal(t, job.Progress(), *response.Job.Progress)
+	// The details can hold credentials, so the response leaves them out.
+	expectedPayload := job.Payload()
+	expectedPayload.Details = nil
+	require.Equal(t, expectedPayload, *response.Job.Payload)
+	expectedProgress := job.Progress()
+	expectedProgress.Details = nil
+	require.Equal(t, expectedProgress, *response.Job.Progress)
+	require.NotContains(t, response.String(), "SECRETKEY")
 }
