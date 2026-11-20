@@ -94,9 +94,20 @@ jobs:
       - run: go build -o bin/cockroach ./pkg/cmd/cockroach-oss
       - run: sudo build/ci/no-outbound.sh bin/cockroach
 
+  # Fails on any known vulnerability in a package that this module or its
+  # tests import, from a module or from the Go standard library. This is
+  # stricter than checking only reachable functions.
+  vuln:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 -test -scan package ./...
+
   ci-ok:
     if: always()
-    needs: [build, generate, lint, test, logic, no-outbound]
+    needs: [build, generate, lint, test, logic, no-outbound, vuln]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
