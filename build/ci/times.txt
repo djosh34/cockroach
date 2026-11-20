@@ -410,7 +410,6 @@ pkg/upgrade/upgrades 234
 pkg/util 1
 pkg/util/admission 27
 pkg/util/admission/admissionpb 1
-pkg/util/binfetcher 1
 pkg/util/bitarray 1
 pkg/util/bitmap 1
 pkg/util/buildutil 1
