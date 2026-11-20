@@ -113,7 +113,7 @@ func main() {
 								// Use a decimal so we can Reduce away the extra zeros. Needed because
 								// pg and cr return equivalent but not identical decimal results.
 								var d apd.Decimal
-								if _, _, err := d.SetString(string(b)); err != nil {
+								if _, _, err := d.SetString(b); err != nil {
 									panic(err)
 								}
 								d.Reduce(&d)

@@ -6725,7 +6725,7 @@ func TestImportClientDisconnect(t *testing.T) {
 		assert.NoError(t, err)
 		defer func() { _ = db.Close(ctx) }()
 		_, err = db.Exec(ctxToCancel, `IMPORT INTO foo CSV DATA ($1)`, srv.URL)
-		assert.Equal(t, context.Canceled, errors.Unwrap(err))
+		assert.True(t, errors.Is(err, context.Canceled), "%v", err)
 	}()
 
 	// Wait for the import job to start.
