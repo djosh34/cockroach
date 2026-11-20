@@ -65,9 +65,10 @@ every night and on manual start.
 ## Release
 
 The version is in `pkg/build/version.txt`. `build/release.sh <tag> <out dir>`
-builds the release files: a `patchroaddb-<tag>.linux-<arch>.tgz` for amd64
-and arm64 with the binary and the license files, `SHA256SUMS`, and the build
-context of the image. The tag must equal `version.txt`.
+builds the release files into a directory that must not exist yet: a
+`patchroaddb-<tag>.linux-<arch>.tgz` for amd64 and arm64 with the binary and
+the license files, `SHA256SUMS`, and the build context of the image. The tag
+must equal `version.txt`.
 
 `.github/workflows/release.yml` runs it. On a pushed `v*` tag it puts the
 tarballs and `SHA256SUMS` on a GitHub release and pushes the multi-arch image

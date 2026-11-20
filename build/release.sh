@@ -35,7 +35,7 @@ if [ -e "$out" ]; then
   echo "$out already exists; give a new directory" >&2
   exit 1
 fi
-mkdir -p "$out/image"
+mkdir "$out" "$out/image"
 for arch in amd64 arm64; do
   name=patchroaddb-$tag.linux-$arch
   mkdir "$out/$name"

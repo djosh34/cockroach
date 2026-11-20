@@ -8,8 +8,6 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
-  # Temporary, to test the build job on the PR. Removed before merge.
-  pull_request:
 
 permissions:
   contents: read
