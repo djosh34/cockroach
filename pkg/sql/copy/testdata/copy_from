@@ -759,3 +759,28 @@ CPut /Table/<>/1/2/0 -> /TUPLE/2:2:Bytes/succeed
 CPut /Table/<>/1/2/1/1 -> /INT/1
 InitPut /Table/<>/2/"running"/1/0 -> /BYTES/
 InitPut /Table/<>/2/"running"/1/1/1 -> /TUPLE/3:3:Int/3
+
+# With expect_and_ignore_not_visible_columns_in_copy, COPY into a table with
+# hidden columns and an expression index must not panic.
+exec-ddl
+CREATE TABLE hidden_expr (a INT, b INT NOT VISIBLE, INDEX ((a + 1)))
+----
+
+exec-ddl
+SET expect_and_ignore_not_visible_columns_in_copy = true
+----
+
+copy-from
+COPY hidden_expr FROM STDIN
+1	2	3
+----
+1
+
+query
+SELECT a FROM hidden_expr
+----
+1
+
+exec-ddl
+RESET expect_and_ignore_not_visible_columns_in_copy
+----

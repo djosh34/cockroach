@@ -482,7 +482,12 @@ func (b *Builder) buildUpsert(ups *memo.UpsertExpr) (execPlan, error) {
 	colList = appendColsWhenPresent(colList, ups.InsertCols)
 	colList = appendColsWhenPresent(colList, ups.FetchCols)
 	colList = appendColsWhenPresent(colList, ups.UpdateCols)
+	// The canary column's place is fixed. Its column can appear again later,
+	// for example as a partial index column when the index predicate is the
+	// column itself, so its ordinal is not looked up by column.
+	canaryCol := exec.NodeColumnOrdinal(-1)
 	if ups.CanaryCol != 0 {
+		canaryCol = exec.NodeColumnOrdinal(len(colList))
 		colList = append(colList, ups.CanaryCol)
 	}
 	colList = appendColsWhenPresent(colList, ups.CheckCols)
@@ -497,13 +502,6 @@ func (b *Builder) buildUpsert(ups *memo.UpsertExpr) (execPlan, error) {
 	// Construct the Upsert node.
 	md := b.mem.Metadata()
 	tab := md.Table(ups.Table)
-	canaryCol := exec.NodeColumnOrdinal(-1)
-	if ups.CanaryCol != 0 {
-		canaryCol, err = input.getNodeColumnOrdinal(ups.CanaryCol)
-		if err != nil {
-			return execPlan{}, err
-		}
-	}
 	insertColOrds := ordinalSetFromColList(ups.InsertCols)
 	fetchColOrds := ordinalSetFromColList(ups.FetchCols)
 	updateColOrds := ordinalSetFromColList(ups.UpdateCols)

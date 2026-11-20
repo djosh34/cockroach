@@ -335,8 +335,10 @@ func newCopyMachine(
 	// If there are no column specifiers and we expect non-visible columns
 	// to have field data then we have to populate the expectedHiddenColumnIdxs
 	// field with the columns indexes we expect to be hidden.
+	// The data holds the accessible columns only: an inaccessible column,
+	// such as the one behind an expression index, has no field.
 	if c.p.SessionData().ExpectAndIgnoreNotVisibleColumnsInCopy && len(n.Columns) == 0 {
-		for i, col := range tableDesc.PublicColumns() {
+		for i, col := range tableDesc.AccessibleColumns() {
 			if col.IsHidden() {
 				c.expectedHiddenColumnIdxs = append(c.expectedHiddenColumnIdxs, i)
 			}
