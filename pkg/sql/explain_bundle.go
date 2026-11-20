@@ -961,9 +961,6 @@ func (c *stmtEnvCollector) PrintClusterSettings(w io.Writer, all bool) error {
 		if ok1 && ok2 && ok3 && ok4 {
 			// The value of a sensitive setting stays out of the bundle.
 			if settings.IsSensitive(settings.InternalKey(*key)) {
-				if *value != *def {
-					fmt.Fprintf(w, "-- %s differs from its default; its value is sensitive\n", *setting)
-				}
 				continue
 			}
 			var skip bool

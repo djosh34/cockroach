@@ -16,6 +16,9 @@ import "context"
 // for reporting (see SetReportable and LookupForReportingByKey).
 type MaskedSetting struct {
 	setting NonMaskedSetting
+	// forReporting is set when the setting was retrieved for reporting. Its
+	// value is then always hidden, even for a sensitive setting.
+	forReporting bool
 }
 
 var _ Setting = &MaskedSetting{}
@@ -44,8 +47,9 @@ func (s *MaskedSetting) String(sv *Values) string {
 	}
 	sensitiveRedactionEnabled := redactSensitiveSettingsEnabled.Get(sv)
 	// Non-reportable settings are always redacted. Sensitive settings are
-	// redacted if the redaction cluster setting is enabled.
-	if !isSensitive || sensitiveRedactionEnabled {
+	// redacted if the redaction cluster setting is enabled, and always when
+	// they are reported.
+	if !isSensitive || sensitiveRedactionEnabled || s.forReporting {
 		return "<redacted>"
 	}
 	return s.setting.String(sv)

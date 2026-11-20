@@ -10,9 +10,7 @@
 
 package metric
 
-import (
-	"time"
-)
+import "time"
 
 // Rule interface exposes an API for alerting and aggregation rules to be
 // consumed.

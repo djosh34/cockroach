@@ -190,12 +190,23 @@ var defaultRedactionOptions = redactionOptions{
 // statement bundles leave out the constants and placeholder values of such
 // statements.
 func statementMayCarrySecret(stmt tree.Statement) bool {
-	switch stmt.(type) {
+	switch s := stmt.(type) {
 	case *tree.CreateRole, *tree.AlterRole, *tree.Import, *tree.Export,
-		*tree.CreateExternalConnection, *tree.SetClusterSetting, *tree.AlterTenantSetClusterSetting:
+		*tree.CreateExternalConnection:
 		return true
+	case *tree.SetClusterSetting:
+		return settingIsSensitive(s.Name)
+	case *tree.AlterTenantSetClusterSetting:
+		return settingIsSensitive(s.Name)
 	}
 	return false
+}
+
+// settingIsSensitive reports whether the setting called name is sensitive.
+// An unknown name counts as sensitive.
+func settingIsSensitive(name string) bool {
+	key, ok, _ := settings.NameToKey(settings.SettingName(strings.ToLower(name)))
+	return !ok || settings.IsSensitive(key)
 }
 
 func (p *planner) getCommonSQLEventDetails(opt redactionOptions) eventpb.CommonSQLEventDetails {

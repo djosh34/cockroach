@@ -459,7 +459,7 @@ func LookupForReportingByKey(key InternalKey, forSystemTenant bool) (Setting, bo
 		return nil, false
 	}
 	if !s.isReportable() {
-		return &MaskedSetting{setting: s}, true
+		return &MaskedSetting{setting: s, forReporting: true}, true
 	}
 	return s, true
 }

@@ -268,11 +268,13 @@ func (tc *Catalog) CheckPrivilege(ctx context.Context, o cat.Object, priv privil
 	return tc.CheckAnyPrivilege(ctx, o)
 }
 
-// CheckViewOwnerPrivilege is part of the cat.Catalog interface.
+// CheckViewOwnerPrivilege is part of the cat.Catalog interface. The test
+// catalog has no owners; Revoked describes the current user only, so the owner
+// of a view always has access.
 func (tc *Catalog) CheckViewOwnerPrivilege(
 	ctx context.Context, view cat.View, o cat.Object, priv privilege.Kind,
 ) error {
-	return tc.CheckAnyPrivilege(ctx, o)
+	return nil
 }
 
 // CheckAnyPrivilege is part of the cat.Catalog interface.

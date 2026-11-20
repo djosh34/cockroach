@@ -15,12 +15,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/stretchr/testify/require"
 )
 
 // TestToJaegerJSON checks the fields that Jaeger reads from the trace.
 func TestToJaegerJSON(t *testing.T) {
-	start := time.Unix(10, 0)
+	start := timeutil.Unix(10, 0)
 	rec := Recording{
 		{TraceID: 7, SpanID: 1, Operation: "root", StartTime: start, Duration: time.Second},
 		{TraceID: 7, SpanID: 2, ParentSpanID: 1, Operation: "child", StartTime: start, Duration: time.Millisecond, GoroutineID: 3},

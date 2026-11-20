@@ -562,12 +562,11 @@ func TestMergeWindowedHistogram(t *testing.T) {
 	}
 }
 
-// requireHistogram checks the count, sum and buckets of act against exp. The
-// creation time of act is not compared.
+// requireHistogram checks the count, sum and buckets of act against exp.
+// Other fields, such as the creation time, are not compared.
 func requireHistogram(t *testing.T, exp, act *prometheusgo.Histogram) {
 	t.Helper()
-	act = gproto.Clone(act).(*prometheusgo.Histogram)
-	act.CreatedTimestamp = nil
+	act = &prometheusgo.Histogram{SampleCount: act.SampleCount, SampleSum: act.SampleSum, Bucket: act.Bucket}
 	if !gproto.Equal(exp, act) {
 		t.Fatalf("expected differs from actual:\nexpected: %v\nactual:   %v", exp, act)
 	}
