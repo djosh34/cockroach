@@ -634,8 +634,10 @@ func (expr *StrVal) ResolveAsType(
 		if typ.Oid() == oid.T_bpchar {
 			// Trailing spaces are not significant in CHAR values, and CHAR
 			// values never keep them. Without this, 'f'::CHAR = 'f ' is false.
-			expr.resString = DString(strings.TrimRight(expr.s, " "))
-			return &expr.resString, nil
+			// The result is not cached in resString: a later resolution of the
+			// same constant as another string type, as BETWEEN does when it
+			// compares its bounds, would put the spaces back.
+			return NewDString(strings.TrimRight(expr.s, " ")), nil
 		}
 		expr.resString = DString(expr.s)
 		return &expr.resString, nil

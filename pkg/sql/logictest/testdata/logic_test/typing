@@ -319,6 +319,23 @@ SELECT 'f'::CHAR = 'f ', 'f '::CHAR(2) = 'f  ', 'f  ' = 'f'::CHAR, 'f'::CHAR(1) 
 ----
 true  true  true  false
 
+# BETWEEN compares its bounds with each other too, which types them a second
+# time.
+query BBB
+SELECT 'f'::CHAR BETWEEN 'f ' AND 'f ', 'f'::CHAR BETWEEN SYMMETRIC 'g ' AND 'f ',
+  'f'::CHAR NOT BETWEEN 'f ' AND 'f '
+----
+true  true  false
+
+statement ok
+CREATE TABLE char_between (c CHAR PRIMARY KEY);
+INSERT INTO char_between VALUES ('f')
+
+query T
+SELECT c FROM char_between WHERE c BETWEEN 'f ' AND 'f '
+----
+f
+
 # Patterns keep their trailing spaces, as in Postgres.
 query BB
 SELECT 'f'::CHAR LIKE 'f ', 'f'::CHAR ~ 'f '
