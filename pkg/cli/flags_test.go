@@ -12,6 +12,7 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"flag"
 	"fmt"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/cli/cliflags"
+	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/status"
 	"github.com/cockroachdb/cockroach/pkg/testutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/skip"
@@ -378,8 +380,9 @@ func TestClientURLFlagEquivalence(t *testing.T) {
 	// command-line argument parsing.
 	capture := func(cmd *cobra.Command) capturedFlags {
 		return capturedFlags{
-			insecure:     baseCfg.Insecure,
-			connUser:     cliCtx.clientOpts.User,
+			insecure: baseCfg.Insecure,
+			// An empty user means root.
+			connUser:     cmp.Or(cliCtx.clientOpts.User, username.RootUser),
 			connDatabase: cliCtx.clientOpts.Database,
 			connHost:     cliCtx.clientOpts.ServerHost,
 			connPort:     cliCtx.clientOpts.ServerPort,
@@ -696,7 +699,8 @@ func TestServerConnSettings(t *testing.T) {
 	for i, td := range testData {
 		t.Run(strings.Join(td.args, " "), func(t *testing.T) {
 			initCLIDefaults()
-			if err := f.Parse(td.args); err != nil {
+			// --insecure, so that the test needs no --config.
+			if err := f.Parse(append(td.args, "--insecure")); err != nil {
 				t.Fatalf("Parse(%#v) got unexpected error: %v", td.args, err)
 			}
 
