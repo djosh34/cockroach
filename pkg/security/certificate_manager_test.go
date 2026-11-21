@@ -14,6 +14,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"net"
 	"os"
 	"path/filepath"
@@ -346,19 +347,41 @@ func TestReload(t *testing.T) {
 	require.NoError(t, sErr)
 	writeFile(t, cfg.NodeCA, p.nodeRoot.CertPEM)
 
-	// So does a CA bundle whose first root is cut off.
+	// A node CA bundle with two roots, then a reload where the second root
+	// is complete PEM but not a certificate: both old roots stay trusted.
+	secondRoot := p.clientCA
+	writeFile(t, cfg.NodeCA, append(append([]byte(nil), p.nodeRoot.CertPEM...), secondRoot.CertPEM...))
+	secondRootNode := certChain(t, secondRoot.NodeCert(nodeID))
+	testutils.SucceedsSoon(t, func() error {
+		return cm.VerifyNode(secondRootNode, x509.ExtKeyUsageClientAuth)
+	})
 	before = failures()
-	writeFile(t, cfg.NodeCA, append(append([]byte(nil), p.nodeRoot.CertPEM[:100]...), p.clientCA.CertPEM...))
+	broken := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("not DER")})
+	writeFile(t, cfg.NodeCA, append(append([]byte(nil), p.nodeRoot.CertPEM...), broken...))
 	testutils.SucceedsSoon(t, func() error {
 		if failures() == before {
 			return errors.New("no failed reload yet")
 		}
 		return nil
 	})
+	require.NoError(t, cm.VerifyNode(secondRootNode, x509.ExtKeyUsageClientAuth), "the second root is still trusted")
 	cErr, sErr = handshake(t, clientCfg, rpcServer)
-	require.NoError(t, cErr, "the old CA still verifies")
+	require.NoError(t, cErr, "the first root still verifies")
 	require.NoError(t, sErr)
 	writeFile(t, cfg.NodeCA, p.nodeRoot.CertPEM)
+
+	// A cert chain whose intermediate is complete PEM but not a certificate
+	// keeps the old node cert.
+	before = failures()
+	writeFile(t, cfg.Cert, append(append([]byte(nil), certs[2].CertPEM...), broken...))
+	testutils.SucceedsSoon(t, func() error {
+		if failures() == before {
+			return errors.New("no failed reload yet")
+		}
+		return nil
+	})
+	require.True(t, cm.NodeCert().Equal(certChain(t, certs[2])[0]), "old cert kept")
+	writeFile(t, cfg.Cert, certs[2].CertPEM)
 
 	// So does a broken rules file.
 	before = failures()

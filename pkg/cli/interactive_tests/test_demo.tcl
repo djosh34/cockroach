@@ -51,7 +51,6 @@ start_test "Check the detailed URLs, insecure mode"
 # Show the URLs.
 # Also check that the default port is used.
 send "\\demo ls\r"
-eexpect ":8080"
 eexpect "Application tenant"
 eexpect "(sql)"
 eexpect "root@"

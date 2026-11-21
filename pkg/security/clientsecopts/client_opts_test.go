@@ -32,4 +32,5 @@ func TestUsesConfigClientCert(t *testing.T) {
 	require.False(t, clientsecopts.UsesConfigClientCert(false, parse("postgresql://h:26257?sslmode=disable")))
 	require.False(t, clientsecopts.UsesConfigClientCert(false,
 		parse("postgresql://h:26257?sslmode=verify-full&sslcert=c.crt&sslkey=c.key")))
+	require.False(t, clientsecopts.UsesConfigClientCert(false, parse("postgresql://root@/defaultdb?host=/tmp&port=26257")))
 }

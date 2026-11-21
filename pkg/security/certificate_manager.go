@@ -259,8 +259,8 @@ func loadKeyPair(certPath, keyPath string) (*tls.Certificate, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	// tls.X509KeyPair ignores a broken block after the leaf.
-	if _, err := PEMToCertificates(certPEM); err != nil {
+	// tls.X509KeyPair parses only the leaf; check the whole chain.
+	if _, err := PEMContentsToX509(certPEM); err != nil {
 		return nil, nil, errors.Wrapf(err, "parsing %s", certPath)
 	}
 	keyPEM, err := readKeyFile(keyPath)
@@ -417,8 +417,12 @@ func (cm *CertificateManager) VerifyNode(certs []*x509.Certificate, usage x509.E
 	if err := cm.verifyPeer(certs, s.nodeCAs, usage); err != nil {
 		return errors.Wrap(err, "verifying node certificate")
 	}
-	// A node serves and dials, so its chain must allow both uses. The leaf
-	// or a CA above it may restrict either.
+	// A node serves and dials, so the leaf must name both uses, and its
+	// chain must allow both: a CA above it may restrict either.
+	if !hasExtKeyUsage(certs[0], x509.ExtKeyUsageServerAuth) || !hasExtKeyUsage(certs[0], x509.ExtKeyUsageClientAuth) {
+		return errors.Errorf("certificate %s needs both server and client extended key usage to be a node",
+			certconfig.DescribeCert(certs[0]))
+	}
 	other := x509.ExtKeyUsageServerAuth
 	if usage == x509.ExtKeyUsageServerAuth {
 		other = x509.ExtKeyUsageClientAuth
