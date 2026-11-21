@@ -57,6 +57,9 @@ func TestStmtProblems(t *testing.T) {
 	isMyFunc := func(n tree.RoutineName) bool {
 		return n.Object() == "my_func" && (!n.ExplicitSchema || n.Schema() == "public")
 	}
+	isMyGeometry := func(n *tree.UnresolvedObjectName) bool {
+		return n.NumParts > 1 && n.Object() == "geometry" && n.Schema() == "my"
+	}
 	for _, tc := range []struct {
 		stmts string
 		want  []string
@@ -78,11 +81,14 @@ func TestStmtProblems(t *testing.T) {
 		{"SELECT st_x(a::BOX2D) FROM t", []string{
 			"calls the removed function st_x", "uses the removed type BOX2D"}},
 		{"SELECT a::INT8, b::@100105, c::myschema.mytype FROM t", nil},
-		// User-defined types named like the spatial types need their schema.
+		// A spatial type name is removed unless it names a user-defined type.
 		{"SELECT 1 FROM t JOIN u ON t.w::my.geometry IS NOT NULL WHERE t.w IS OF (defaultdb.my.geometry)", nil},
+		{"SELECT 1 FROM t JOIN u ON t.w::public.geometry IS NOT NULL WHERE t.w IS OF (defaultdb.public.geography)",
+			[]string{"uses the removed types GEOGRAPHY, GEOMETRY"}},
+		{"SELECT a::pg_catalog.box2d, b::other.geometry FROM t", []string{"uses the removed types BOX2D, GEOMETRY"}},
 	} {
 		t.Run(tc.stmts, func(t *testing.T) {
-			require.Equal(t, tc.want, stmtProblems(tc.stmts, isMyFunc))
+			require.Equal(t, tc.want, stmtProblems(tc.stmts, isMyFunc, isMyGeometry))
 		})
 	}
 }
@@ -194,6 +200,21 @@ func TestCatalogProblems(t *testing.T) {
 		FunctionBody: "SELECT fips_ready() OR other.my_func() > 0 OR my_func() > 0;",
 	}).BuildImmutable())
 
+	// A user-defined type named geometry, in schema my.
+	mc.UpsertDescriptor(schemadesc.NewBuilder(&descpb.SchemaDescriptor{
+		ID: 116, Name: "my", ParentID: 100,
+	}).BuildImmutable())
+	mc.UpsertDescriptor(typedesc.NewBuilder(&descpb.TypeDescriptor{
+		ID: 117, Name: "geometry", ParentID: 100, ParentSchemaID: 116, Kind: descpb.TypeDescriptor_ENUM,
+	}).BuildImmutable())
+	mc.UpsertDescriptor(tabledesc.NewBuilder(&descpb.TableDescriptor{
+		ID: 118, Name: "casts", ParentID: 100, UnexposedParentSchemaID: 101,
+		Columns:      []descpb.ColumnDescriptor{{ID: 1, Name: "a", Type: types.Int}},
+		PrimaryIndex: primary,
+		ViewQuery: "SELECT 1 AS a FROM shop.public.customers AS c JOIN shop.public.customers AS d " +
+			"ON 'x'::my.geometry IS NOT NULL AND 'y'::shop.my.geometry IS NOT NULL AND 'z'::public.geometry IS NULL",
+	}).BuildImmutable())
+
 	require.Equal(t, []string{
 		`table shop.public.places: has a multi-region locality`,
 		`table shop.public.places: column "geom" has type GEOMETRY`,
@@ -212,6 +233,7 @@ func TestCatalogProblems(t *testing.T) {
 		`type world.public.crdb_internal_region: is a multi-region enum`,
 		`view shop.public.checks: the query calls the removed function fips_ready`,
 		`function shop.public.calls_other: the body calls the removed functions fips_ready, my_func, other.my_func`,
+		`view shop.public.casts: the query uses the removed type GEOMETRY`,
 	}, catalogProblems(mc.Catalog))
 }
 

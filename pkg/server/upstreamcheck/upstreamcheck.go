@@ -135,6 +135,16 @@ func scheduleProblems(ctx context.Context, txn descs.Txn) ([]string, error) {
 // catalogProblems lists the descriptors in c that use cut features. It reads
 // them without validation, because validation rejects some of them.
 func catalogProblems(c nstree.Catalog) []string {
+	// User-defined types that views and routines may name like a spatial
+	// type.
+	var spatialNamed []catalog.Descriptor
+	_ = c.ForEachDescriptor(func(d catalog.Descriptor) error {
+		if d.DescriptorType() == catalog.Type && removedTypes[d.GetName()] {
+			spatialNamed = append(spatialNamed, d)
+		}
+		return nil
+	})
+	udt := udtMatcher(c, spatialNamed)
 	var found []string
 	_ = c.ForEachDescriptor(func(d catalog.Descriptor) error {
 		var problems []string
@@ -151,12 +161,12 @@ func catalogProblems(c nstree.Catalog) []string {
 					calls = append(calls, fn)
 				}
 			}
-			problems = tableProblems(d, udfMatcher(c, calls))
+			problems = tableProblems(d, udfMatcher(c, calls), udt)
 		case catalog.TypeDescriptor:
 			problems = typeProblems(d)
 		case catalog.FunctionDescriptor:
 			// CockroachDB v23.2 lets no routine call a user-defined function.
-			problems = functionProblems(d, noUDFs)
+			problems = functionProblems(d, noUDFs, udt)
 		}
 		if len(problems) == 0 {
 			return nil
@@ -197,7 +207,33 @@ func udfMatcher(c nstree.Catalog, fns []catalog.Descriptor) isUDF {
 	}
 }
 
-func tableProblems(t catalog.TableDescriptor, udf isUDF) []string {
+// isUDT reports whether a type name that an expression or statement uses
+// names a user-defined type.
+type isUDT func(*tree.UnresolvedObjectName) bool
+
+// noUDTs is the isUDT of stored expressions, which refer to user-defined
+// types by OID instead of by name.
+func noUDTs(*tree.UnresolvedObjectName) bool { return false }
+
+// udtMatcher returns an isUDT that matches the types typs. In CockroachDB
+// v23.2 an unqualified geometry, geography or box2d is the spatial type, a
+// keyword of the grammar, so only a name with a schema can match.
+func udtMatcher(c nstree.Catalog, typs []catalog.Descriptor) isUDT {
+	return func(n *tree.UnresolvedObjectName) bool {
+		if n.NumParts == 1 {
+			return false
+		}
+		for _, typ := range typs {
+			if typ.GetName() == n.Object() && schemaName(c, typ) == n.Schema() &&
+				(n.NumParts < 3 || dbName(c, typ) == n.Catalog()) {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+func tableProblems(t catalog.TableDescriptor, udf isUDF, udt isUDT) []string {
 	var problems []string
 	add := func(format string, args ...interface{}) {
 		problems = append(problems, fmt.Sprintf(format, args...))
@@ -250,7 +286,7 @@ func tableProblems(t catalog.TableDescriptor, udf isUDF) []string {
 		}
 	}
 	if t.IsView() {
-		for _, p := range stmtProblems(t.GetViewQuery(), udf) {
+		for _, p := range stmtProblems(t.GetViewQuery(), udf, udt) {
 			add("the query %s", p)
 		}
 	}
@@ -274,7 +310,7 @@ func typeProblems(t catalog.TypeDescriptor) []string {
 	return problems
 }
 
-func functionProblems(fn catalog.FunctionDescriptor, udf isUDF) []string {
+func functionProblems(fn catalog.FunctionDescriptor, udf isUDF, udt isUDT) []string {
 	var problems []string
 	if fn.GetLanguage() == catpb.Function_PLPGSQL {
 		// The body is PL/pgSQL, which patchroaddb cannot parse.
@@ -288,7 +324,7 @@ func functionProblems(fn catalog.FunctionDescriptor, udf isUDF) []string {
 	if typ := fn.GetReturnType().Type; typ != nil && typ.ContainsRemovedSpatialType() {
 		problems = append(problems, fmt.Sprintf("returns type %s", typ.SQLString()))
 	}
-	for _, p := range stmtProblems(fn.GetFunctionBody(), udf) {
+	for _, p := range stmtProblems(fn.GetFunctionBody(), udf, udt) {
 		problems = append(problems, "the body "+p)
 	}
 	return problems
@@ -304,12 +340,12 @@ func exprProblems(s string) []string {
 	if err != nil {
 		return []string{fmt.Sprintf("cannot be parsed: %v", err)}
 	}
-	return callProblems(expr, noUDFs)
+	return callProblems(expr, noUDFs, noUDTs)
 }
 
 // stmtProblems is exprProblems for the statements of a view query or a
 // routine body.
-func stmtProblems(s string, udf isUDF) []string {
+func stmtProblems(s string, udf isUDF, udt isUDT) []string {
 	stmts, err := parser.Parse(s)
 	if err != nil {
 		return []string{fmt.Sprintf("cannot be parsed: %v", err)}
@@ -318,7 +354,7 @@ func stmtProblems(s string, udf isUDF) []string {
 	for i, stmt := range stmts {
 		asts[i] = stmt.AST
 	}
-	return callProblems(asts, udf)
+	return callProblems(asts, udf, udt)
 }
 
 // removedTypes are the names of the removed spatial types.
@@ -327,7 +363,7 @@ var removedTypes = map[string]bool{"geometry": true, "geography": true, "box2d":
 // callProblems describes the functions that the syntax tree node calls and
 // that are neither builtins nor user-defined functions, and the removed types
 // that it casts to.
-func callProblems(node interface{}, udf isUDF) []string {
+func callProblems(node interface{}, udf isUDF, udt isUDT) []string {
 	calls, typeRefs := walkSyntax(node)
 	removed := make(map[string]bool)
 	for _, f := range calls {
@@ -352,9 +388,8 @@ func callProblems(node interface{}, udf isUDF) []string {
 	if len(removed) > 0 {
 		problems = append(problems, describe("calls the removed function", removed))
 	}
-	// In CockroachDB v23.2 an unqualified geometry, geography or box2d is the
-	// spatial type, a keyword of the grammar. A user-defined type of that
-	// name needs its schema.
+	// A spatial type name is a removed type unless it names a user-defined
+	// type.
 	removed = make(map[string]bool)
 	for _, ref := range typeRefs {
 		for {
@@ -366,7 +401,7 @@ func callProblems(node interface{}, udf isUDF) []string {
 		}
 		switch t := ref.(type) {
 		case *tree.UnresolvedObjectName:
-			if name := strings.ToLower(t.Object()); t.NumParts == 1 && removedTypes[name] {
+			if name := strings.ToLower(t.Object()); removedTypes[name] && !udt(t) {
 				removed[strings.ToUpper(name)] = true
 			}
 		case *types.T:
