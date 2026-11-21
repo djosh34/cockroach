@@ -230,7 +230,7 @@ func TestLoadChecks(t *testing.T) {
 	// A CA bundle whose second root is cut off does not load.
 	writeFile(t, cfg.NodeCA, append(append([]byte(nil), p.nodeRoot.CertPEM...), p.clientCA.CertPEM[:100]...))
 	_, err = security.NewCertificateManager(cfg, security.ClusterTLSSettings(cluster.MakeTestingClusterSettings()))
-	require.ErrorContains(t, err, "not a complete PEM block")
+	require.ErrorContains(t, err, "PEM blocks are not complete")
 	writeFile(t, cfg.NodeCA, p.nodeRoot.CertPEM)
 
 	// The key file must not be readable by others.
@@ -336,6 +336,20 @@ func TestReload(t *testing.T) {
 	rpcServer, err := cm.RPCServerTLSConfig()
 	require.NoError(t, err)
 	cErr, sErr := handshake(t, clientCfg, rpcServer)
+	require.NoError(t, cErr, "the old CA still verifies")
+	require.NoError(t, sErr)
+	writeFile(t, cfg.NodeCA, p.nodeRoot.CertPEM)
+
+	// So does a CA bundle whose first root is cut off.
+	before = failures()
+	writeFile(t, cfg.NodeCA, append(append([]byte(nil), p.nodeRoot.CertPEM[:100]...), p.clientCA.CertPEM...))
+	testutils.SucceedsSoon(t, func() error {
+		if failures() == before {
+			return errors.New("no failed reload yet")
+		}
+		return nil
+	})
+	cErr, sErr = handshake(t, clientCfg, rpcServer)
 	require.NoError(t, cErr, "the old CA still verifies")
 	require.NoError(t, sErr)
 	writeFile(t, cfg.NodeCA, p.nodeRoot.CertPEM)

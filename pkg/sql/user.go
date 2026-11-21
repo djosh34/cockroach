@@ -14,7 +14,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/cockroachdb/cockroach/pkg/security/password"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
@@ -47,25 +46,13 @@ import (
 // system database) as follows:
 //
 //   - if the user is root, the user is reported to exist immediately
-//     without querying system.users at all. The password retrieval
-//     is delayed until actually needed by the authentication method.
-//     This way, if the client presents a valid TLS certificate
-//     the password is not even needed at all. This is useful for e.g.
-//     `cockroach node status`.
-//
-//     If root is forced to use a password (e.g. logging in onto the UI)
-//     then a user login timeout greater than 5 seconds is also
-//     ignored. This ensures that root has a modicum of comfort
-//     logging into an unavailable cluster.
-//
-//     TODO(knz): this does not yet quite work because even if the pw
-//     auth on the UI succeeds writing to system.web_sessions will still
-//     stall on an unavailable cluster and prevent root from logging in.
+//     without querying system.users at all. This is useful for e.g.
+//     `patchroaddb node status` on an unavailable cluster.
 //
 //   - if the user is another user than root, then the function fails
 //     after a timeout instead of blocking. The timeout is configurable
 //     via the cluster setting server.user_login.timeout. Note that this
-//     is a single timeout for looking up the password, role options, and
+//     is a single timeout for looking up the user, role options, and
 //     default session variable settings.
 //
 //   - there is a cache for the the information from system.users,
@@ -81,34 +68,14 @@ func GetUserSessionInitInfo(
 	canUseReplicationMode bool,
 	isSuperuser bool,
 	defaultSettings []sessioninit.SettingsCacheEntry,
-	pwRetrieveFn func(ctx context.Context) (expired bool, hashedPassword password.PasswordHash, err error),
 	err error,
 ) {
 	runFn := getUserInfoRunFn(execCfg, user, "get-user-session")
 
 	if user.IsRootUser() {
-		// As explained above, for root we report that the user exists
-		// immediately, and delay retrieving the password until strictly
-		// necessary.
-		rootFn := func(ctx context.Context) (expired bool, ret password.PasswordHash, err error) {
-			err = runFn(ctx, func(ctx context.Context) error {
-				authInfo, _, err := retrieveSessionInitInfoWithCache(ctx, execCfg, user, databaseName)
-				if err != nil {
-					return err
-				}
-				ret = authInfo.HashedPassword
-				return nil
-			})
-			if ret == nil {
-				ret = password.MissingPasswordHash
-			}
-			// NB: Root user password does not expire.
-			return false /* expired */, ret, err
-		}
-
-		// Root user cannot have password expiry and must have login.
+		// Root user must have login.
 		// It also never has default settings applied to it.
-		return true, true, true, true, true, nil, rootFn, nil
+		return true, true, true, true, true, nil, nil
 	}
 
 	var authInfo sessioninit.AuthInfo
@@ -200,23 +167,6 @@ func GetUserSessionInitInfo(
 		canUseReplicationMode,
 		isSuperuser,
 		settingsEntries,
-		func(ctx context.Context) (expired bool, ret password.PasswordHash, err error) {
-			ret = authInfo.HashedPassword
-			if authInfo.ValidUntil != nil {
-				// NB: we compute the expiration as late as possible,
-				// to ensure that we determine the expiration relative
-				// to the time at which the client presents the password
-				// to the server (and not earlier).
-				if authInfo.ValidUntil.Time.Sub(timeutil.Now()) < 0 {
-					expired = true
-					ret = nil
-				}
-			}
-			if ret == nil {
-				ret = password.MissingPasswordHash
-			}
-			return expired, ret, nil
-		},
 		err
 }
 
@@ -282,25 +232,19 @@ func retrieveAuthInfo(
 	// Use fully qualified table name to avoid looking up "".system.users.
 	// We use a nil txn as login is not tied to any transaction state, and
 	// we should always look up the latest data.
-	const getHashedPassword = `SELECT "hashedPassword" FROM system.public.users ` +
-		`WHERE username=$1`
+	// Logins use client certificates, so the stored password hash is not
+	// read.
+	const getUser = `SELECT 1 FROM system.public.users WHERE username=$1`
 	ie := f.Executor()
 	values, err := ie.QueryRowEx(
-		ctx, "get-hashed-pwd", nil, /* txn */
+		ctx, "get-user", nil, /* txn */
 		sessiondata.RootUserSessionDataOverride,
-		getHashedPassword, user)
+		getUser, user)
 
 	if err != nil {
 		return aInfo, errors.Wrapf(err, "error looking up user %s", user)
 	}
-	var hashedPassword []byte
-	if values != nil {
-		aInfo.UserExists = true
-		if v := values[0]; v != tree.DNull {
-			hashedPassword = []byte(*(v.(*tree.DBytes)))
-		}
-	}
-	aInfo.HashedPassword = password.LoadPasswordHash(ctx, hashedPassword)
+	aInfo.UserExists = values != nil
 
 	if !aInfo.UserExists {
 		return aInfo, nil
@@ -313,7 +257,7 @@ func retrieveAuthInfo(
 
 	// Use fully qualified table name to avoid looking up "".system.role_options.
 	const getLoginDependencies = `SELECT option, value FROM system.public.role_options ` +
-		`WHERE username=$1 AND option IN ('NOLOGIN', 'VALID UNTIL', 'NOSQLLOGIN', 'REPLICATION')`
+		`WHERE username=$1 AND option IN ('NOLOGIN', 'NOSQLLOGIN', 'REPLICATION')`
 
 	roleOptsIt, err := ie.QueryIteratorEx(
 		ctx, "get-login-dependencies", nil, /* txn */
@@ -346,19 +290,6 @@ func retrieveAuthInfo(
 			aInfo.CanLoginSQLRoleOpt = false
 		case "REPLICATION":
 			aInfo.CanUseReplicationRoleOpt = true
-		case "VALID UNTIL":
-			if tree.DNull.Compare(nil, row[1]) != 0 {
-				ts := string(tree.MustBeDString(row[1]))
-				// This is okay because the VALID UNTIL is stored as a string
-				// representation of a TimestampTZ which has the same underlying
-				// representation in the table as a Timestamp (UTC time).
-				timeCtx := tree.NewParseContext(timeutil.Now())
-				aInfo.ValidUntil, _, err = tree.ParseDTimestamp(timeCtx, ts, time.Microsecond)
-				if err != nil {
-					return aInfo, errors.Wrap(err,
-						"error trying to parse timestamp while retrieving password valid until value")
-				}
-			}
 		}
 	}
 

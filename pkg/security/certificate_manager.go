@@ -259,6 +259,10 @@ func loadKeyPair(certPath, keyPath string) (*tls.Certificate, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	// tls.X509KeyPair ignores a broken block after the leaf.
+	if _, err := PEMToCertificates(certPEM); err != nil {
+		return nil, nil, errors.Wrapf(err, "parsing %s", certPath)
+	}
 	keyPEM, err := readKeyFile(keyPath)
 	if err != nil {
 		return nil, nil, err

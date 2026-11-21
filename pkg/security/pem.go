@@ -22,16 +22,14 @@ import (
 // Each block must be a certificate.
 // It is allowed to have zero certificates.
 func PEMToCertificates(contents []byte) ([]*pem.Block, error) {
+	// pem.Decode skips a broken block, so count the blocks that start to
+	// catch a half-written file anywhere in it.
+	begun := bytes.Count(contents, []byte("-----BEGIN"))
 	certs := make([]*pem.Block, 0)
 	for {
 		var block *pem.Block
 		block, contents = pem.Decode(contents)
 		if block == nil {
-			// Text that is not PEM is allowed, as in openssl's output, but
-			// a broken block is not: it may be a half-written file.
-			if bytes.Contains(contents, []byte("-----BEGIN")) {
-				return nil, errors.Errorf("block #%d is not a complete PEM block", len(certs))
-			}
 			break
 		}
 		if block.Type != "CERTIFICATE" {
@@ -40,7 +38,11 @@ func PEMToCertificates(contents []byte) ([]*pem.Block, error) {
 
 		certs = append(certs, block)
 	}
-
+	// Text that is not PEM is allowed, as in openssl's output, but a
+	// broken block is not: it may be a half-written file.
+	if len(certs) != begun {
+		return nil, errors.Errorf("%d of %d PEM blocks are not complete", begun-len(certs), begun)
+	}
 	return certs, nil
 }
 

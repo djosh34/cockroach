@@ -102,7 +102,7 @@ func (c *conn) handleAuthentication(
 	ac.SetDbUser(dbUser)
 
 	// Check that the requested user exists and may log in.
-	exists, canLoginSQL, _, canUseReplicationMode, isSuperuser, defaultSettings, _, err :=
+	exists, canLoginSQL, _, canUseReplicationMode, isSuperuser, defaultSettings, err :=
 		sql.GetUserSessionInitInfo(
 			ctx,
 			execCfg,

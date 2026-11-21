@@ -85,7 +85,8 @@ type Identity struct {
 	SPIFFE string
 }
 
-// CA is a certificate authority.
+// CA is a certificate authority. If making it failed, Cert is nil and it
+// makes no certificates.
 type CA struct {
 	g     *Generator
 	label string
@@ -119,6 +120,10 @@ func (g *Generator) RootCA(cn string) *CA {
 // IntermediateCA makes a CA signed by ca.
 func (ca *CA) IntermediateCA(cn string) *CA {
 	label := ca.label + "/ca/" + cn
+	if ca.Cert == nil {
+		// Making ca failed and was reported.
+		return &CA{g: ca.g, label: label}
+	}
 	key := ca.g.key(label)
 	tmpl := &x509.Certificate{
 		SerialNumber:          ca.g.serial(label),
@@ -155,6 +160,10 @@ func (ca *CA) ClientCert(id Identity) Pair {
 }
 
 func (ca *CA) leaf(kind string, id Identity, hosts []string, usage []x509.ExtKeyUsage) Pair {
+	if ca.Cert == nil {
+		// Making ca failed and was reported.
+		return Pair{}
+	}
 	label := ca.label + "/" + kind + "/" + id.CN + "/" + id.SPIFFE
 	for _, h := range hosts {
 		label += "/" + h

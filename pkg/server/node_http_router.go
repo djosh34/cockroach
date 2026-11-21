@@ -134,16 +134,20 @@ func (np *nodeProxy) routeToNode(
 		return
 	}
 	var forwardedUser *string
-	if r.TLS != nil {
+	if np.scheme == "https" {
 		// The other node sees this node's certificate, which is root. Name
 		// the request's own user, or none, so that it does not run as root.
-		if np.authServer == nil {
-			http.Error(w, "server: HTTP authentication is not set up yet", http.StatusServiceUnavailable)
-			return
-		}
+		// A request without TLS, such as /health on the plain HTTP
+		// listener, has no user.
 		var user string
-		if u, err := np.authServer.UserFromRequest(r); err == nil {
-			user = u.Normalized()
+		if r.TLS != nil {
+			if np.authServer == nil {
+				http.Error(w, "server: HTTP authentication is not set up yet", http.StatusServiceUnavailable)
+				return
+			}
+			if u, err := np.authServer.UserFromRequest(r); err == nil {
+				user = u.Normalized()
+			}
 		}
 		forwardedUser = &user
 	}
@@ -184,8 +188,8 @@ func (np *nodeProxy) routeToNode(
 }
 
 // forwardedUserKey is the context key of the user that routeToNode names in
-// the forwarded request: nil without TLS, where the other node has no
-// certificate to trust either.
+// the forwarded request: nil when the proxy talks plain HTTP and presents no
+// certificate.
 type forwardedUserKey struct{}
 
 // resetCookie only resets the cookie if one exists on the request

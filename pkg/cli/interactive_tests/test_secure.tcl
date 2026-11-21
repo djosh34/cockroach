@@ -78,7 +78,7 @@ eexpect "no client rule maps certificate"
 eexpect $prompt
 end_test
 
-start_test "Check that root's client cert works on the HTTP API."
+start_test "Check that root can use the HTTP API with a client cert"
 send "$curl https://localhost:8080/_admin/v1/settings\r"
 eexpect "cluster.organization"
 eexpect $prompt
