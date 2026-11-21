@@ -769,6 +769,20 @@ and key. Admin commands use the node certificate for RPCs and the client
 certificate for SQL.`,
 	}
 
+	BackupName = FlagInfo{
+		Name: "backup",
+		Description: `
+The name of the full backup to check, as 'backup info' shows it. The last
+one if empty.`,
+	}
+
+	RestoreTarget = FlagInfo{
+		Name: "target",
+		Description: `
+The time to restore to, as RFC 3339 or as an HLC decimal. The last
+restorable time if empty.`,
+	}
+
 	// Server version of the config file flag, cannot be set through environment.
 	ServerConfigFile = FlagInfo{
 		Name: "config",

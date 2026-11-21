@@ -514,6 +514,7 @@ func init() {
 	clientCmds = append(clientCmds, stmtDiagCmds...)
 	clientCmds = append(clientCmds, debugResetQuorumCmd)
 	clientCmds = append(clientCmds, recoverCommands...)
+	clientCmds = append(clientCmds, backupRestoreCmd)
 	for _, cmd := range clientCmds {
 		clientflags.AddBaseFlags(cmd, &cliCtx.clientOpts, &baseCfg.Insecure, &cliCtx.configFile)
 	}
@@ -605,6 +606,7 @@ func init() {
 		statementBundleRecreateCmd,
 		lsNodesCmd,
 		statusNodeCmd,
+		backupRestoreCmd,
 	}
 	sqlCmds = append(sqlCmds, demoCmd.Commands()...)
 	sqlCmds = append(sqlCmds, stmtDiagCmds...)
@@ -798,6 +800,15 @@ func init() {
 				cliflagcfg.BoolFlag(f, &debugCtx.verbose, cliflags.Verbose)
 			}
 		}
+	}
+
+	// backup commands.
+	{
+		for _, cmd := range []*cobra.Command{backupInfoCmd, backupCheckCmd, backupExpireCmd} {
+			cliflagcfg.StringFlag(cmd.Flags(), &cliCtx.configFile, cliflags.ConfigFile)
+		}
+		cliflagcfg.StringFlag(backupCheckCmd.Flags(), &backupCheckName, cliflags.BackupName)
+		cliflagcfg.StringFlag(backupRestoreCmd.Flags(), &backupRestoreTarget, cliflags.RestoreTarget)
 	}
 
 	// userfile upload command.

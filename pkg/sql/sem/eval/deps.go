@@ -321,6 +321,12 @@ type Planner interface {
 	// it is invalid.
 	RepairTTLScheduledJobForTable(ctx context.Context, tableID int64) error
 
+	// RestoreCluster creates a job that restores the whole cluster from the
+	// backup repository in the given S3 bucket, to target (an HLC decimal)
+	// or, if target is empty, to the last restorable time. The statement
+	// waits for the job.
+	RestoreCluster(ctx context.Context, bucket, prefix, endpoint, region, target string) (int64, error)
+
 	// FingerprintSpan calculates a fingerprint for the given span. If a
 	// startTime is passed and allRevisions is true, then the fingerprint
 	// includes the MVCC history between startTime and the read timestamp of

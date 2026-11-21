@@ -246,6 +246,13 @@ func (*DummyEvalPlanner) ValidateTTLScheduledJobsInCurrentDB(ctx context.Context
 	return errors.WithStack(errEvalPlanner)
 }
 
+// RestoreCluster is part of the Planner interface.
+func (*DummyEvalPlanner) RestoreCluster(
+	context.Context, string, string, string, string, string,
+) (int64, error) {
+	return 0, errors.WithStack(errEvalPlanner)
+}
+
 // RepairTTLScheduledJobForTable is part of the Planner interface.
 func (*DummyEvalPlanner) RepairTTLScheduledJobForTable(ctx context.Context, tableID int64) error {
 	return errors.WithStack(errEvalPlanner)

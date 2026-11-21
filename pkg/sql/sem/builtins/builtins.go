@@ -7042,6 +7042,46 @@ Parameters:` + randgencfg.ConfigDoc,
 		},
 	),
 
+	"crdb_internal.restore_cluster": makeBuiltin(
+		tree.FunctionProperties{
+			Category:         builtinconstants.CategorySystemInfo,
+			DistsqlBlocklist: true,
+		},
+		tree.Overload{
+			Types: tree.ParamTypes{
+				{Name: "bucket", Typ: types.String},
+				{Name: "prefix", Typ: types.String},
+				{Name: "endpoint", Typ: types.String},
+				{Name: "region", Typ: types.String},
+				{Name: "target", Typ: types.String},
+			},
+			ReturnType: tree.FixedReturnType(types.Int),
+			Fn: func(ctx context.Context, evalCtx *eval.Context, args tree.Datums) (tree.Datum, error) {
+				isAdmin, err := evalCtx.SessionAccessor.HasAdminRole(ctx)
+				if err != nil {
+					return nil, err
+				}
+				if !isAdmin {
+					return nil, errInsufficientPriv
+				}
+				var s [5]string
+				for i := range s {
+					s[i] = string(tree.MustBeDString(args[i]))
+				}
+				id, err := evalCtx.Planner.RestoreCluster(ctx, s[0], s[1], s[2], s[3], s[4])
+				if err != nil {
+					return nil, err
+				}
+				return tree.NewDInt(tree.DInt(id)), nil
+			},
+			Info: `Restores the whole cluster from the backup repository in an S3 bucket, ` +
+				`to target (an HLC decimal) or, if target is empty, to the last restorable time. ` +
+				`The cluster must have no user databases or tables. Returns the ID of the job, ` +
+				`after it has finished. ` + "`patchroaddb backup restore`" + ` calls this.`,
+			Volatility: volatility.Volatile,
+		},
+	),
+
 	"crdb_internal.check_password_hash_format": makeBuiltin(
 		tree.FunctionProperties{
 			Category: builtinconstants.CategorySystemInfo,
