@@ -501,6 +501,7 @@ func (s *scenario) compareQueries(ctx context.Context, conn *pgx.Conn) error {
 				s.judge(err)
 				continue
 			}
+			s.count("query: compared")
 			if !sameResult(base, other, q.ordered) {
 				s.fail("results differ at %s:\n%s\nwith the default plan, against\n%s\nwith %v:\n%s",
 					ts, q.render(noHint), sql, settings, diffResult(base, other))
@@ -616,16 +617,26 @@ func (s *scenario) checkPITR(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// The restore runs from the system database, and may take longer than
+	// a statement's usual timeout.
+	sys, err := connectDB(ctx, addr, "system")
+	if err != nil {
+		return err
+	}
+	defer sys.Close(ctx)
+	if _, err := sys.Exec(ctx, "SET statement_timeout = '5m'"); err != nil {
+		return err
+	}
+	if _, err := sys.Exec(ctx, "SELECT crdb_internal.restore_cluster($1, $2, $3, $4, $5)",
+		s3Bucket, "cluster", s.env.s3Endpoint(), s3Region, s.pitr.AsOfSystemTime()); err != nil {
+		s.fail("restoring to %s: %v", s.pitr, err)
+		return nil
+	}
 	dst, err := connect(ctx, addr)
 	if err != nil {
 		return err
 	}
 	defer dst.Close(ctx)
-	if _, err := dst.Exec(ctx, "SELECT crdb_internal.restore_cluster($1, $2, $3, $4, $5)",
-		s3Bucket, "cluster", s.env.s3Endpoint(), s3Region, s.pitr.AsOfSystemTime()); err != nil {
-		s.fail("restoring to %s: %v", s.pitr, err)
-		return nil
-	}
 	for _, t := range tables {
 		got, err := queryAt(ctx, dst, "'-1us'", nil, "SELECT * FROM "+t+" ORDER BY 1")
 		if err != nil {

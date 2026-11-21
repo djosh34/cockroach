@@ -50,8 +50,13 @@ func backupConfig(endpoint string) string {
 // after 10 s, so that a worker does not wait for a partitioned node
 // forever.
 func connect(ctx context.Context, addr string) (*pgx.Conn, error) {
+	return connectDB(ctx, addr, "defaultdb")
+}
+
+// connectDB is connect to the database db.
+func connectDB(ctx context.Context, addr, db string) (*pgx.Conn, error) {
 	cfg, err := pgx.ParseConfig(fmt.Sprintf(
-		"postgresql://root@%s:%d/defaultdb?sslmode=disable&connect_timeout=5&statement_timeout=10000", addr, sqlPort))
+		"postgresql://root@%s:%d/%s?sslmode=disable&connect_timeout=5&statement_timeout=10000", addr, sqlPort, db))
 	if err != nil {
 		return nil, err
 	}
