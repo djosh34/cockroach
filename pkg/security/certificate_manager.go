@@ -393,42 +393,54 @@ func verifyChainCerts(
 	})
 }
 
-// verifyPeer verifies a peer's chain against roots and runs the OCSP check.
+// verifyPeer verifies a peer's chain against roots, runs the OCSP check and
+// returns the verified chains.
 func (cm *CertificateManager) verifyPeer(
 	certs []*x509.Certificate, roots *x509.CertPool, usage x509.ExtKeyUsage,
-) error {
+) ([][]*x509.Certificate, error) {
 	if len(certs) == 0 {
-		return errors.New("peer sent no certificate")
+		return nil, errors.New("peer sent no certificate")
 	}
 	if roots == nil {
-		return errors.New("no CA file configured")
+		return nil, errors.New("no CA file configured")
 	}
 	chains, err := verifyChainCerts(certs, roots, usage)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return makeOCSPVerifier(cm.tlsSettings)(nil, chains)
+	return chains, makeOCSPVerifier(cm.tlsSettings)(nil, chains)
+}
+
+// chainAllows reports whether every cert of a chain allows usage, the way
+// x509 checks it: no extended key usage allows all.
+func chainAllows(chain []*x509.Certificate, usage x509.ExtKeyUsage) bool {
+	for _, c := range chain {
+		if len(c.ExtKeyUsage) > 0 && !hasExtKeyUsage(c, usage) {
+			return false
+		}
+	}
+	return true
 }
 
 // VerifyNode checks that certs, leaf first, is a node: it chains to the node
 // CA with the given usage and matches a node rule.
 func (cm *CertificateManager) VerifyNode(certs []*x509.Certificate, usage x509.ExtKeyUsage) error {
 	s := cm.cur.Load()
-	if err := cm.verifyPeer(certs, s.nodeCAs, usage); err != nil {
+	chains, err := cm.verifyPeer(certs, s.nodeCAs, usage)
+	if err != nil {
 		return errors.Wrap(err, "verifying node certificate")
 	}
-	// A node serves and dials, so the leaf must name both uses, and its
-	// chain must allow both: a CA above it may restrict either.
-	if !hasExtKeyUsage(certs[0], x509.ExtKeyUsageServerAuth) || !hasExtKeyUsage(certs[0], x509.ExtKeyUsageClientAuth) {
+	// A node serves and dials, so the leaf must name both uses, and one
+	// verified chain must allow both: a CA above it may restrict either.
+	both := false
+	for _, chain := range chains {
+		if chainAllows(chain, x509.ExtKeyUsageServerAuth) && chainAllows(chain, x509.ExtKeyUsageClientAuth) {
+			both = true
+			break
+		}
+	}
+	if !both || !hasExtKeyUsage(certs[0], x509.ExtKeyUsageServerAuth) || !hasExtKeyUsage(certs[0], x509.ExtKeyUsageClientAuth) {
 		return errors.Errorf("certificate %s needs both server and client extended key usage to be a node",
-			certconfig.DescribeCert(certs[0]))
-	}
-	other := x509.ExtKeyUsageServerAuth
-	if usage == x509.ExtKeyUsageServerAuth {
-		other = x509.ExtKeyUsageClientAuth
-	}
-	if _, err := verifyChainCerts(certs, s.nodeCAs, other); err != nil {
-		return errors.Wrapf(err, "certificate %s needs both server and client extended key usage to be a node",
 			certconfig.DescribeCert(certs[0]))
 	}
 	if !s.rules.MatchesNode(certs[0]) {
@@ -444,7 +456,7 @@ func (cm *CertificateManager) ClientRoles(
 	certs []*x509.Certificate,
 ) ([]username.SQLUsername, error) {
 	s := cm.cur.Load()
-	if err := cm.verifyPeer(certs, s.clientCAs, x509.ExtKeyUsageClientAuth); err != nil {
+	if _, err := cm.verifyPeer(certs, s.clientCAs, x509.ExtKeyUsageClientAuth); err != nil {
 		return nil, errors.Wrap(err, "verifying client certificate")
 	}
 	roles := s.rules.ClientRoles(certs[0])
@@ -526,7 +538,8 @@ func (cm *CertificateManager) SQLServerTLSConfig() (*tls.Config, error) {
 		func(s *certSet) *x509.CertPool { return s.clientCAs },
 		func(certs []*x509.Certificate) error {
 			s := cm.cur.Load()
-			return cm.verifyPeer(certs, s.clientCAs, x509.ExtKeyUsageClientAuth)
+			_, err := cm.verifyPeer(certs, s.clientCAs, x509.ExtKeyUsageClientAuth)
+			return err
 		})
 }
 

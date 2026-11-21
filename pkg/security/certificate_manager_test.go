@@ -240,6 +240,14 @@ func TestLoadChecks(t *testing.T) {
 	_, err = security.NewCertificateManager(cfg, security.ClusterTLSSettings(cluster.MakeTestingClusterSettings()))
 	require.ErrorContains(t, err, "does not verify against node CA")
 
+	// Text before the PEM blocks is fine, even if it mentions -----BEGIN.
+	good := p.nodeCA.NodeCert(nodeID)
+	writeFile(t, cfg.Cert, good.CertPEM)
+	writeFile(t, cfg.Key, good.KeyPEM)
+	writeFile(t, cfg.NodeCA, append([]byte("This file starts with -----BEGIN CERTIFICATE----- blocks.\n"), p.nodeRoot.CertPEM...))
+	_, err = security.NewCertificateManager(cfg, security.ClusterTLSSettings(cluster.MakeTestingClusterSettings()))
+	require.NoError(t, err)
+
 	// A CA bundle whose second root is cut off does not load.
 	writeFile(t, cfg.NodeCA, append(append([]byte(nil), p.nodeRoot.CertPEM...), p.clientCA.CertPEM[:100]...))
 	_, err = security.NewCertificateManager(cfg, security.ClusterTLSSettings(cluster.MakeTestingClusterSettings()))
@@ -247,9 +255,6 @@ func TestLoadChecks(t *testing.T) {
 	writeFile(t, cfg.NodeCA, p.nodeRoot.CertPEM)
 
 	// The key file must not be readable by others.
-	good := p.nodeCA.NodeCert(nodeID)
-	writeFile(t, cfg.Cert, good.CertPEM)
-	writeFile(t, cfg.Key, good.KeyPEM)
 	require.NoError(t, os.Chmod(cfg.Key, 0644))
 	_, err = security.NewCertificateManager(cfg, security.ClusterTLSSettings(cluster.MakeTestingClusterSettings()))
 	require.ErrorContains(t, err, "exceeds")
@@ -361,6 +366,18 @@ func TestReload(t *testing.T) {
 	testutils.SucceedsSoon(t, func() error {
 		return cm.VerifyNode(secondRootNode, x509.ExtKeyUsageClientAuth)
 	})
+	// A cut-off first root fails the reload even though the node's root
+	// after it is complete.
+	before = failures()
+	writeFile(t, cfg.NodeCA, append(append([]byte(nil), secondRoot.CertPEM[:100]...), p.nodeRoot.CertPEM...))
+	testutils.SucceedsSoon(t, func() error {
+		if failures() == before {
+			return errors.New("no failed reload yet")
+		}
+		return nil
+	})
+	require.NoError(t, cm.VerifyNode(secondRootNode, x509.ExtKeyUsageClientAuth), "the second root is still trusted")
+
 	before = failures()
 	broken := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("not DER")})
 	writeFile(t, cfg.NodeCA, append(append([]byte(nil), p.nodeRoot.CertPEM...), broken...))

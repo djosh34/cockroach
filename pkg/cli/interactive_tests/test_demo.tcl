@@ -159,23 +159,7 @@ end_test
 
 start_test "Check that the port numbers can be overridden from the command line."
 
-spawn $argv demo --no-line-editor --no-example-database --nodes 3 --http-port 8000 --log-dir=logs
-eexpect "Welcome"
-eexpect "defaultdb>"
-
-# Show the URLs.
-send "\\demo ls\r"
-eexpect "http://"
-eexpect ":8000"
-eexpect "http://"
-eexpect ":8001"
-eexpect "http://"
-eexpect ":8002"
-eexpect "defaultdb>"
-
-send_eof
-eexpect eof
-
+# demo ls no longer prints HTTP addresses, so only the SQL port is checked.
 spawn $argv demo --no-line-editor --no-example-database --nodes 3 --sql-port 23000 --log-dir=logs --multitenant=true
 eexpect "Welcome"
 eexpect "defaultdb>"

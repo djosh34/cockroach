@@ -11,12 +11,15 @@
 package security
 
 import (
-	"bytes"
+	"regexp"
 	"crypto/x509"
 	"encoding/pem"
 
 	"github.com/cockroachdb/errors"
 )
+
+// pemBegin matches the first line of a PEM block.
+var pemBegin = regexp.MustCompile(`(?m)^-----BEGIN `)
 
 // PEMToCertificates parses multiple certificate PEM blocks and returns them.
 // Each block must be a certificate.
@@ -24,7 +27,7 @@ import (
 func PEMToCertificates(contents []byte) ([]*pem.Block, error) {
 	// pem.Decode skips a broken block, so count the blocks that start to
 	// catch a half-written file anywhere in it.
-	begun := bytes.Count(contents, []byte("-----BEGIN"))
+	begun := len(pemBegin.FindAllIndex(contents, -1))
 	certs := make([]*pem.Block, 0)
 	for {
 		var block *pem.Block
