@@ -136,15 +136,6 @@ func scheduleProblems(ctx context.Context, txn descs.Txn) ([]string, error) {
 // catalogProblems lists the descriptors in c that use cut features. It reads
 // them without validation, because validation rejects some of them.
 func catalogProblems(c nstree.Catalog) []string {
-	// User-defined types that views and routines may name like a spatial
-	// type.
-	var spatialNamed []catalog.Descriptor
-	_ = c.ForEachDescriptor(func(d catalog.Descriptor) error {
-		if d.DescriptorType() == catalog.Type && removedTypes[d.GetName()] {
-			spatialNamed = append(spatialNamed, d)
-		}
-		return nil
-	})
 	var found []string
 	_ = c.ForEachDescriptor(func(d catalog.Descriptor) error {
 		var problems []string
@@ -154,19 +145,14 @@ func catalogProblems(c nstree.Catalog) []string {
 				problems = append(problems, "is a multi-region database")
 			}
 		case catalog.TableDescriptor:
-			// A view records the functions it calls.
-			var calls []catalog.Descriptor
-			for _, id := range d.GetDependsOnFunctions() {
-				if fn := c.LookupDescriptor(id); fn != nil {
-					calls = append(calls, fn)
-				}
-			}
-			problems = tableProblems(d, udfMatcher(c, calls), udtMatcher(c, spatialNamed, d.GetParentID()))
+			// A view records the functions and types it uses.
+			problems = tableProblems(d, udfMatcher(c, lookup(c, d.GetDependsOnFunctions())),
+				udtMatcher(c, lookup(c, d.GetDependsOnTypes())))
 		case catalog.TypeDescriptor:
 			problems = typeProblems(d)
 		case catalog.FunctionDescriptor:
 			// CockroachDB v23.2 lets no routine call a user-defined function.
-			problems = functionProblems(d, noUDFs, udtMatcher(c, spatialNamed, d.GetParentID()))
+			problems = functionProblems(d, noUDFs, udtMatcher(c, lookup(c, d.GetDependsOnTypes())))
 		}
 		if len(problems) == 0 {
 			return nil
@@ -215,12 +201,12 @@ type isUDT func(*tree.UnresolvedObjectName) bool
 // types by OID instead of by name.
 func noUDTs(*tree.UnresolvedObjectName) bool { return false }
 
-// udtMatcher returns an isUDT that matches the types typs, for a view or
-// routine in database db. In CockroachDB v23.2 an unqualified geometry,
+// udtMatcher returns an isUDT that matches the types typs, the types that a
+// view or routine depends on. In CockroachDB v23.2 an unqualified geometry,
 // geography or box2d is the spatial type, a keyword of the grammar, and so is
 // one in public or pg_catalog, even when a user-defined type of that name was
-// moved into public. A name without a database is in db.
-func udtMatcher(c nstree.Catalog, typs []catalog.Descriptor, db descpb.ID) isUDT {
+// moved into public.
+func udtMatcher(c nstree.Catalog, typs []catalog.Descriptor) isUDT {
 	return func(n *tree.UnresolvedObjectName) bool {
 		if n.NumParts == 1 || n.Schema() == catconstants.PublicSchemaName ||
 			n.Schema() == catconstants.PgCatalogName {
@@ -228,13 +214,23 @@ func udtMatcher(c nstree.Catalog, typs []catalog.Descriptor, db descpb.ID) isUDT
 		}
 		for _, typ := range typs {
 			if typ.GetName() == n.Object() && schemaName(c, typ) == n.Schema() &&
-				(n.NumParts == 3 && dbName(c, typ) == n.Catalog() ||
-					n.NumParts == 2 && typ.GetParentID() == db) {
+				(n.NumParts < 3 || dbName(c, typ) == n.Catalog()) {
 				return true
 			}
 		}
 		return false
 	}
+}
+
+// lookup returns the descriptors in c with the IDs ids.
+func lookup(c nstree.Catalog, ids []descpb.ID) []catalog.Descriptor {
+	var descs []catalog.Descriptor
+	for _, id := range ids {
+		if d := c.LookupDescriptor(id); d != nil {
+			descs = append(descs, d)
+		}
+	}
+	return descs
 }
 
 func tableProblems(t catalog.TableDescriptor, udf isUDF, udt isUDT) []string {

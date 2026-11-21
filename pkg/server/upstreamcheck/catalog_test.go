@@ -11,6 +11,7 @@
 package upstreamcheck
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catpb"
@@ -204,7 +205,7 @@ func TestCatalogProblems(t *testing.T) {
 		FunctionBody: "SELECT fips_ready() OR other.my_func() > 0 OR my_func() > 0;",
 	}).BuildImmutable())
 
-	// A user-defined type named geometry, in schema my.
+	// User-defined types named like the spatial types.
 	mc.UpsertDescriptor(schemadesc.NewBuilder(&descpb.SchemaDescriptor{
 		ID: 116, Name: "my", ParentID: 100,
 	}).BuildImmutable())
@@ -214,27 +215,38 @@ func TestCatalogProblems(t *testing.T) {
 	mc.UpsertDescriptor(typedesc.NewBuilder(&descpb.TypeDescriptor{
 		ID: 119, Name: "Geometry", ParentID: 100, ParentSchemaID: 116, Kind: descpb.TypeDescriptor_ENUM,
 	}).BuildImmutable())
-	// A type moved into public does not hide the spatial type of that name.
+	// Moved into public with ALTER TYPE ... SET SCHEMA.
 	mc.UpsertDescriptor(typedesc.NewBuilder(&descpb.TypeDescriptor{
 		ID: 122, Name: "geography", ParentID: 100, ParentSchemaID: 101, Kind: descpb.TypeDescriptor_ENUM,
 	}).BuildImmutable())
-	// A type in another database does not hide the spatial type for a name
-	// without a database.
 	mc.UpsertDescriptor(schemadesc.NewBuilder(&descpb.SchemaDescriptor{
 		ID: 120, Name: "shop", ParentID: 110,
 	}).BuildImmutable())
 	mc.UpsertDescriptor(typedesc.NewBuilder(&descpb.TypeDescriptor{
 		ID: 121, Name: "geometry", ParentID: 110, ParentSchemaID: 120, Kind: descpb.TypeDescriptor_ENUM,
 	}).BuildImmutable())
-	mc.UpsertDescriptor(tabledesc.NewBuilder(&descpb.TableDescriptor{
-		ID: 118, Name: "casts", ParentID: 100, UnexposedParentSchemaID: 101,
-		Columns:      []descpb.ColumnDescriptor{{ID: 1, Name: "a", Type: types.Int}},
-		PrimaryIndex: primary,
-		ViewQuery: "SELECT 1 AS a FROM shop.public.customers AS c JOIN shop.public.customers AS d " +
-			"ON 'x'::my.geometry IS NOT NULL AND 'y'::shop.my.geometry IS NOT NULL " +
-			`AND 'w'::shop.my."Geometry" IS NOT NULL AND 'v'::world.shop.geometry IS NOT NULL ` +
-			`AND 'z'::shop.geometry IS NULL AND 'u'::public.geography IS NULL`,
-	}).BuildImmutable())
+	// One view per cast, each recording the types it depends on as upstream
+	// did.
+	view := func(id, db, schema descpb.ID, cast string, typeDeps ...descpb.ID) {
+		mc.UpsertDescriptor(tabledesc.NewBuilder(&descpb.TableDescriptor{
+			ID: id, Name: fmt.Sprintf("v%d", id), ParentID: db, UnexposedParentSchemaID: schema,
+			Columns:        []descpb.ColumnDescriptor{{ID: 1, Name: "a", Type: types.Int}},
+			PrimaryIndex:   primary,
+			ViewQuery:      "SELECT 1 AS a FROM t JOIN u ON 'x'::" + cast + " IS NOT NULL",
+			DependsOnTypes: typeDeps,
+		}).BuildImmutable())
+	}
+	view(123, 100, 101, "my.geometry", 117)
+	view(124, 100, 101, "shop.my.geometry", 117)
+	view(125, 100, 101, `shop.my."Geometry"`, 119)
+	// A view in another database that uses the enum of database shop.
+	view(126, 110, 120, "my.geometry", 117)
+	// An enum of that name that the view does not use does not hide the
+	// spatial type.
+	view(127, 100, 101, "shop.geometry")
+	view(128, 100, 101, "world.shop.geometry")
+	// Nor does an enum moved into public.
+	view(129, 100, 101, "public.geography", 122)
 
 	require.Equal(t, []string{
 		`table shop.public.places: has a multi-region locality`,
@@ -254,7 +266,9 @@ func TestCatalogProblems(t *testing.T) {
 		`type world.public.crdb_internal_region: is a multi-region enum`,
 		`view shop.public.checks: the query calls the removed function fips_ready`,
 		`function shop.public.calls_other: the body calls the removed functions fips_ready, my_func, other.my_func`,
-		`view shop.public.casts: the query uses the removed types GEOGRAPHY, GEOMETRY`,
+		`view shop.public.v127: the query uses the removed type GEOMETRY`,
+		`view shop.public.v128: the query uses the removed type GEOMETRY`,
+		`view shop.public.v129: the query uses the removed type GEOGRAPHY`,
 	}, catalogProblems(mc.Catalog))
 }
 
