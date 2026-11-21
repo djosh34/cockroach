@@ -307,6 +307,23 @@ func TestRestoreToPointsInTime(t *testing.T) {
 			b.Bucket, b.Prefix, b.Endpoint, b.Region, "")
 	})
 
+	t.Run("a cluster that handed out an ID", func(t *testing.T) {
+		dst, _ := startServer(t, nil)
+		defer dst.Stopper().Stop(ctx)
+		// CREATE TABLE takes its ID outside its transaction, so a rolled
+		// back one leaves no table but uses up an ID that a restored table
+		// would have.
+		tx, err := dst.ApplicationLayer().SQLConn(t).Begin()
+		require.NoError(t, err)
+		_, err = tx.Exec(`CREATE TABLE defaultdb.gone (k INT PRIMARY KEY)`)
+		require.NoError(t, err)
+		require.NoError(t, tx.Rollback())
+		sys := sqlutils.MakeSQLRunner(dst.ApplicationLayer().SQLConn(t, serverutils.DBName("system")))
+		sys.ExpectErr(t, "this cluster has handed out descriptor IDs",
+			`SELECT crdb_internal.restore_cluster($1, $2, $3, $4, $5)`,
+			b.Bucket, b.Prefix, b.Endpoint, b.Region, "")
+	})
+
 	t.Run("a cluster that is not empty", func(t *testing.T) {
 		dst, dstDB := startServer(t, nil)
 		defer dst.Stopper().Stop(ctx)
