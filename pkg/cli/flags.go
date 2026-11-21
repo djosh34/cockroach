@@ -25,6 +25,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/cli/cliflags"
 	"github.com/cockroachdb/cockroach/pkg/configprofiles"
 	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
+	"github.com/cockroachdb/cockroach/pkg/security/clientsecopts"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/telemetry"
 	"github.com/cockroachdb/cockroach/pkg/util/envutil"
@@ -1014,7 +1015,8 @@ func extraClientFlagInit() error {
 			return err
 		}
 		baseCfg.Certs = c
-		if cliCtx.clientOpts.User == "" {
+		if cliCtx.clientOpts.User == "" &&
+			clientsecopts.UsesConfigClientCert(baseCfg.Insecure, cliCtx.clientOpts.ExplicitURL) {
 			if cliCtx.clientOpts.User, err = certconfig.DefaultClientUser(c); err != nil {
 				return err
 			}

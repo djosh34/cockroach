@@ -279,11 +279,11 @@ func TestSingleNodeDocker(t *testing.T) {
 }
 
 const (
-	imageName           = "cockroachdb/cockroach-ci:latest"
+	imageName           = "patchroaddb-ci:latest"
 	defaultTimeout      = 10 * time.Second
 	waitInitTimeout     = 80 * time.Second
 	initSuccessFile     = "init_success"
-	cockroachEntrypoint = "./cockroach"
+	cockroachEntrypoint = "./patchroaddb"
 	hostPort            = "8080"
 	cockroachPort       = "26257"
 	hostIP              = "127.0.0.1"

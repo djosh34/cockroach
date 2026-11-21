@@ -9,8 +9,6 @@ eexpect "Welcome"
 # Warn the user that they won't get persistence.
 eexpect "your changes to data stored in the demo session will not be saved!"
 # Check that the connection URL is printed.
-eexpect "(webui)"
-eexpect "http://127.0.0.1:8080"
 eexpect "(sql)"
 eexpect "root"
 eexpect ":26257/movr"
@@ -31,8 +29,6 @@ start_test "Check that demo insecure says hello properly, singletenant"
 spawn $argv demo --no-line-editor --insecure=true --multitenant=false --log-dir=logs
 # Check that the connection URL is printed; and that we're still
 # using default ports.
-eexpect "(webui)"
-eexpect "http://127.0.0.1:8080"
 eexpect "(sql)"
 eexpect "root"
 eexpect ":26257/movr"
@@ -55,8 +51,6 @@ start_test "Check the detailed URLs, insecure mode"
 # Show the URLs.
 # Also check that the default port is used.
 send "\\demo ls\r"
-eexpect "(webui)"
-eexpect "http://"
 eexpect ":8080"
 eexpect "Application tenant"
 eexpect "(sql)"
@@ -87,8 +81,6 @@ eexpect "defaultdb>"
 
 # Show the URLs.
 send "\\demo ls\r"
-eexpect "(webui)"
-eexpect "http://"
 eexpect "(sql)"
 eexpect "root@"
 eexpect "sslmode=disable"
@@ -99,13 +91,15 @@ eexpect "defaultdb>"
 send_eof
 eexpect eof
 
+# A demo cluster is always insecure.
+set ::env(COCKROACH_INSECURE) "true"
 end_test
+
 # Test that demo displays connection URLs for nodes in the cluster.
 start_test "Check that node URLs are displayed"
 spawn $argv demo --no-line-editor --insecure --no-example-database --log-dir=logs
 # Check that we see our message.
 eexpect "Connection parameters"
-eexpect "(webui)"
 eexpect "(sql)"
 expect "root@"
 send_eof
@@ -116,21 +110,17 @@ spawn $argv demo --no-line-editor --insecure --nodes 3 --no-example-database --l
 
 # Check that we get a message for each node.
 eexpect "Connection parameters"
-eexpect "(webui)"
 eexpect "(sql)"
 eexpect "defaultdb>"
 
 send "\\demo ls\r"
 eexpect "node 1"
-eexpect "(webui)"
 eexpect "(sql)"
 eexpect "(sql/unix)"
 eexpect "node 2"
-eexpect "(webui)"
 eexpect "(sql)"
 eexpect "(sql/unix)"
 eexpect "node 3"
-eexpect "(webui)"
 eexpect "(sql)"
 eexpect "(sql/unix)"
 eexpect "defaultdb>"
@@ -153,7 +143,6 @@ eexpect "Cluster ID:"
 eexpect "You are connected to database \"defaultdb\""
 eexpect "You are connected to a demo cluster"
 eexpect "Connection parameters"
-eexpect "(webui)"
 eexpect "(sql)"
 eexpect "defaultdb>"
 end_test

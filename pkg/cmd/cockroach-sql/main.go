@@ -163,7 +163,8 @@ func runSQL(cmd *cobra.Command, args []string) (resErr error) {
 			return err
 		}
 		copts.Certs = c
-		if f := fs.Lookup(cliflags.User.Name); f == nil || !f.Changed {
+		if f := fs.Lookup(cliflags.User.Name); (f == nil || !f.Changed) &&
+			clientsecopts.UsesConfigClientCert(copts.Insecure, copts.ExplicitURL) {
 			if copts.User, err = certconfig.DefaultClientUser(c); err != nil {
 				return err
 			}

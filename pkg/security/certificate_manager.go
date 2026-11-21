@@ -329,8 +329,10 @@ func loadCertSet(cfg certconfig.Config) (*certSet, error) {
 			return nil, errors.Errorf("node cert %s needs both server and client extended key usage", cfg.Cert)
 		}
 		if s.nodeCAs != nil {
-			if _, err := verifyChain(s.node.Leaf, s.node.Certificate, s.nodeCAs, x509.ExtKeyUsageServerAuth); err != nil {
-				return nil, errors.Wrapf(err, "node cert %s does not verify against node CA %s", cfg.Cert, cfg.NodeCA)
+			for _, usage := range []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth} {
+				if _, err := verifyChain(s.node.Leaf, s.node.Certificate, s.nodeCAs, usage); err != nil {
+					return nil, errors.Wrapf(err, "node cert %s does not verify against node CA %s", cfg.Cert, cfg.NodeCA)
+				}
 			}
 		}
 		s.files = append(s.files, CertFile{Usage: NodePem, Filename: cfg.Cert, Contents: b})
@@ -375,6 +377,22 @@ func verifyChain(
 	})
 }
 
+// verifyChainCerts verifies certs, leaf first, against roots for usage.
+func verifyChainCerts(
+	certs []*x509.Certificate, roots *x509.CertPool, usage x509.ExtKeyUsage,
+) ([][]*x509.Certificate, error) {
+	inter := x509.NewCertPool()
+	for _, c := range certs[1:] {
+		inter.AddCert(c)
+	}
+	return certs[0].Verify(x509.VerifyOptions{
+		Roots:         roots,
+		Intermediates: inter,
+		KeyUsages:     []x509.ExtKeyUsage{usage},
+		CurrentTime:   timeutil.Now(),
+	})
+}
+
 // verifyPeer verifies a peer's chain against roots and runs the OCSP check.
 func (cm *CertificateManager) verifyPeer(
 	certs []*x509.Certificate, roots *x509.CertPool, usage x509.ExtKeyUsage,
@@ -385,16 +403,7 @@ func (cm *CertificateManager) verifyPeer(
 	if roots == nil {
 		return errors.New("no CA file configured")
 	}
-	inter := x509.NewCertPool()
-	for _, c := range certs[1:] {
-		inter.AddCert(c)
-	}
-	chains, err := certs[0].Verify(x509.VerifyOptions{
-		Roots:         roots,
-		Intermediates: inter,
-		KeyUsages:     []x509.ExtKeyUsage{usage},
-		CurrentTime:   timeutil.Now(),
-	})
+	chains, err := verifyChainCerts(certs, roots, usage)
 	if err != nil {
 		return err
 	}
@@ -408,8 +417,14 @@ func (cm *CertificateManager) VerifyNode(certs []*x509.Certificate, usage x509.E
 	if err := cm.verifyPeer(certs, s.nodeCAs, usage); err != nil {
 		return errors.Wrap(err, "verifying node certificate")
 	}
-	if !hasExtKeyUsage(certs[0], x509.ExtKeyUsageServerAuth) || !hasExtKeyUsage(certs[0], x509.ExtKeyUsageClientAuth) {
-		return errors.Errorf("certificate %s needs both server and client extended key usage to be a node",
+	// A node serves and dials, so its chain must allow both uses. The leaf
+	// or a CA above it may restrict either.
+	other := x509.ExtKeyUsageServerAuth
+	if usage == x509.ExtKeyUsageServerAuth {
+		other = x509.ExtKeyUsageClientAuth
+	}
+	if _, err := verifyChainCerts(certs, s.nodeCAs, other); err != nil {
+		return errors.Wrapf(err, "certificate %s needs both server and client extended key usage to be a node",
 			certconfig.DescribeCert(certs[0]))
 	}
 	if !s.rules.MatchesNode(certs[0]) {

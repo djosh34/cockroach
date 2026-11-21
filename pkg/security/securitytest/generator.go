@@ -117,8 +117,9 @@ func (g *Generator) RootCA(cn string) *CA {
 	return ca
 }
 
-// IntermediateCA makes a CA signed by ca.
-func (ca *CA) IntermediateCA(cn string) *CA {
+// IntermediateCA makes a CA signed by ca. If usage is given, the CA may
+// only sign certs for those extended key usages.
+func (ca *CA) IntermediateCA(cn string, usage ...x509.ExtKeyUsage) *CA {
 	label := ca.label + "/ca/" + cn
 	if ca.Cert == nil {
 		// Making ca failed and was reported.
@@ -131,6 +132,7 @@ func (ca *CA) IntermediateCA(cn string) *CA {
 		NotBefore:             notBefore,
 		NotAfter:              notAfter,
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		ExtKeyUsage:           usage,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
 	}

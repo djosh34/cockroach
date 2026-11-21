@@ -174,6 +174,12 @@ func TestTwoTrustPools(t *testing.T) {
 	_, sErr = handshake(t, presenting(t, clientUsage), rpcServer)
 	require.ErrorContains(t, sErr, "needs both server and client extended key usage")
 
+	// Nor is a dual-use leaf under an intermediate restricted to client use.
+	clientOnlyCA := p.nodeRoot.IntermediateCA("client-only intermediate", x509.ExtKeyUsageClientAuth)
+	restricted := clientOnlyCA.NodeCert(nodeID)
+	_, sErr = handshake(t, presenting(t, restricted), rpcServer)
+	require.ErrorContains(t, sErr, "needs both server and client extended key usage")
+
 	// A SQL client cert from the client CA passes TLS and maps to its role.
 	alice := p.clientCA.ClientCert(securitytest.Identity{CN: "alice"})
 	sqlClient := presenting(t, alice)

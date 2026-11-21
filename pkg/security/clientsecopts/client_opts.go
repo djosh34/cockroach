@@ -177,3 +177,20 @@ func MakeClientConnURL(copts ClientOptions) (*pgurl.URL, error) {
 
 	return purl, nil
 }
+
+// UsesConfigClientCert reports whether a connection made with these options
+// presents the client cert of the --config file: it uses TLS and its URL
+// names no client cert of its own.
+func UsesConfigClientCert(insecure bool, u *pgurl.URL) bool {
+	if insecure {
+		return false
+	}
+	if u == nil {
+		return true
+	}
+	if tlsUsed, _, _ := u.GetTLSOptions(); !tlsUsed {
+		return false
+	}
+	hasCert, _, _ := u.GetAuthnCert()
+	return !hasCert
+}
