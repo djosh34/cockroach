@@ -33,6 +33,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/cockroach/pkg/util/uuid"
 	"github.com/cockroachdb/errors"
+	"github.com/robfig/cron/v3"
 )
 
 // The AUTO BACKUP job runs while the cluster runs, on one node at a time.
@@ -300,6 +301,27 @@ func (a *archiver) run(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
+	for {
+		err := a.archive(ctx, schedule, protected)
+		if !errors.Is(err, ErrExists) {
+			return err
+		}
+		// Another instance of this job wrote a segment: go on from what
+		// the repository holds. The protected timestamp is still ours.
+		a.warn(ctx, "%v; reading the repository again", err)
+		protected = true
+		if err := wait(ctx, a.cfg.ArchiveInterval); err != nil {
+			return err
+		}
+	}
+}
+
+// archive goes on with the archive from what the repository holds, taking
+// full backups when they are due. It returns ErrExists if another instance
+// of the job wrote a segment first.
+func (a *archiver) archive(ctx context.Context, schedule cron.Schedule, protected bool) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	// Find where the archive goes on.
 	var fulls []Manifest
@@ -404,8 +426,6 @@ func (a *archiver) run(ctx context.Context) error {
 					return ctx.Err()
 				}
 				if errors.Is(err, ErrExists) {
-					// Another instance of this job wrote it: start over from
-					// what the repository holds.
 					return err
 				}
 				a.warn(ctx, "segment %d failed, retrying: %v", next, err)
