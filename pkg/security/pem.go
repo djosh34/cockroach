@@ -11,9 +11,9 @@
 package security
 
 import (
-	"regexp"
 	"crypto/x509"
 	"encoding/pem"
+	"regexp"
 
 	"github.com/cockroachdb/errors"
 )
