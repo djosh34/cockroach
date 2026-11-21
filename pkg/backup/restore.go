@@ -65,10 +65,9 @@ import (
 // materialized views that were being created; references to them go. A
 // table that was taken offline by an IMPORT INTO comes back online with the
 // data it had before the import; a table that the import itself created is
-// left out. Schema changes that were
-// running at the target time, including tables being created, get new jobs
-// and carry on; a table being created comes back without rows, which its
-// job writes.
+// left out. Schema changes that were running at the target time,
+// including tables being created, get new jobs and carry on; a table being
+// created comes back without rows, which its job writes.
 
 // restoredSystemTables are the system tables whose rows a cluster restore
 // brings back, by name. descriptor and namespace are handled on their own.
