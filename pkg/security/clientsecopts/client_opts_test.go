@@ -48,6 +48,8 @@ func TestUsesConfigClientCert(t *testing.T) {
 	require.True(t, uses(false, "postgresql://h:26257?sslmode=verify-full", "", ""))
 	require.False(t, uses(false, "postgresql://h:26257?sslmode=disable", "", ""))
 	require.False(t, uses(false, "postgresql://h:26257?sslmode=verify-full&sslcert=c.crt&sslkey=c.key", "", ""))
+	// Even when the URL names the config's own cert file.
+	require.False(t, uses(false, "postgresql://h:26257?sslmode=verify-full&sslcert=client.crt&sslkey=other.key", "", ""))
 	require.False(t, uses(false, "postgresql://root@/defaultdb?host=/tmp&port=26257", "", ""))
 	// --host after a socket URL makes it TCP, with the config cert.
 	require.True(t, uses(false, "postgresql://root@/defaultdb?host=/tmp&port=26257", "h", "26257"))

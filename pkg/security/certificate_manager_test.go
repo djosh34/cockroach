@@ -256,8 +256,26 @@ func TestLoadChecks(t *testing.T) {
 	_, err = security.NewCertificateManager(clientCfg, security.ClusterTLSSettings(cluster.MakeTestingClusterSettings()))
 	require.ErrorContains(t, err, "parsing "+clientCfg.ClientCert)
 
-	// Text before the PEM blocks is fine, even if it mentions -----BEGIN.
-	writeFile(t, cfg.NodeCA, append([]byte("This file starts with -----BEGIN CERTIFICATE----- blocks.\n"), p.nodeRoot.CertPEM...))
+	// A reload with that chain keeps the old client cert.
+	writeFile(t, clientCfg.ClientCert, client.CertPEM)
+	cm, err := security.NewCertificateManager(clientCfg, security.ClusterTLSSettings(cluster.MakeTestingClusterSettings()))
+	require.NoError(t, err)
+	clientFile := func() []byte {
+		for _, f := range cm.ListCertificates() {
+			if f.Usage == security.ClientPem {
+				return f.Contents
+			}
+		}
+		return nil
+	}
+	writeFile(t, clientCfg.ClientCert, append(append([]byte(nil), client.CertPEM...), broken...))
+	require.ErrorContains(t, cm.Reload(context.Background()), "parsing "+clientCfg.ClientCert)
+	require.Equal(t, client.CertPEM, clientFile())
+
+	// Text before the PEM blocks is fine, even if it mentions -----BEGIN or
+	// starts a line with a longer word.
+	writeFile(t, cfg.NodeCA, append([]byte("This file starts with -----BEGIN CERTIFICATE----- blocks.\n"+
+		"-----BEGINNING OF NOTES-----\n"), p.nodeRoot.CertPEM...))
 	_, err = security.NewCertificateManager(cfg, security.ClusterTLSSettings(cluster.MakeTestingClusterSettings()))
 	require.NoError(t, err)
 

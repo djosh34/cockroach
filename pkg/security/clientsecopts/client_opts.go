@@ -186,8 +186,12 @@ func UsesConfigClientCert(copts ClientOptions) (bool, error) {
 	if copts.Certs.ClientCert == "" {
 		return false, nil
 	}
-	// MakeClientConnURL changes the URL it is given.
 	if copts.ExplicitURL != nil {
+		if hasCert, _, _ := copts.ExplicitURL.GetAuthnCert(); hasCert {
+			// The URL names a client cert of its own.
+			return false, nil
+		}
+		// MakeClientConnURL changes the URL it is given.
 		copts.ExplicitURL = copts.ExplicitURL.Clone()
 	}
 	u, err := MakeClientConnURL(copts)
