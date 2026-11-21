@@ -240,10 +240,23 @@ func TestLoadChecks(t *testing.T) {
 	_, err = security.NewCertificateManager(cfg, security.ClusterTLSSettings(cluster.MakeTestingClusterSettings()))
 	require.ErrorContains(t, err, "does not verify against node CA")
 
-	// Text before the PEM blocks is fine, even if it mentions -----BEGIN.
 	good := p.nodeCA.NodeCert(nodeID)
 	writeFile(t, cfg.Cert, good.CertPEM)
 	writeFile(t, cfg.Key, good.KeyPEM)
+
+	// A client chain whose intermediate is complete PEM but not a
+	// certificate does not load.
+	broken := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("not DER")})
+	client := p.clientCA.ClientCert(securitytest.Identity{CN: "alice"})
+	clientCfg := cfg
+	clientCfg.ClientCert = filepath.Join(t.TempDir(), "client.crt")
+	clientCfg.ClientKey = filepath.Join(filepath.Dir(clientCfg.ClientCert), "client.key")
+	writeFile(t, clientCfg.ClientCert, append(append([]byte(nil), client.CertPEM...), broken...))
+	writeFile(t, clientCfg.ClientKey, client.KeyPEM)
+	_, err = security.NewCertificateManager(clientCfg, security.ClusterTLSSettings(cluster.MakeTestingClusterSettings()))
+	require.ErrorContains(t, err, "parsing "+clientCfg.ClientCert)
+
+	// Text before the PEM blocks is fine, even if it mentions -----BEGIN.
 	writeFile(t, cfg.NodeCA, append([]byte("This file starts with -----BEGIN CERTIFICATE----- blocks.\n"), p.nodeRoot.CertPEM...))
 	_, err = security.NewCertificateManager(cfg, security.ClusterTLSSettings(cluster.MakeTestingClusterSettings()))
 	require.NoError(t, err)
@@ -366,6 +379,17 @@ func TestReload(t *testing.T) {
 	testutils.SucceedsSoon(t, func() error {
 		return cm.VerifyNode(secondRootNode, x509.ExtKeyUsageClientAuth)
 	})
+	// So does a bundle cut off right at the start of the second root.
+	before = failures()
+	writeFile(t, cfg.NodeCA, append(append([]byte(nil), p.nodeRoot.CertPEM...), "-----BEGIN"...))
+	testutils.SucceedsSoon(t, func() error {
+		if failures() == before {
+			return errors.New("no failed reload yet")
+		}
+		return nil
+	})
+	require.NoError(t, cm.VerifyNode(secondRootNode, x509.ExtKeyUsageClientAuth), "the second root is still trusted")
+
 	// A cut-off first root fails the reload even though the node's root
 	// after it is complete.
 	before = failures()

@@ -329,10 +329,14 @@ func loadCertSet(cfg certconfig.Config) (*certSet, error) {
 			return nil, errors.Errorf("node cert %s needs both server and client extended key usage", cfg.Cert)
 		}
 		if s.nodeCAs != nil {
-			for _, usage := range []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth} {
-				if _, err := verifyChain(s.node.Leaf, s.node.Certificate, s.nodeCAs, usage); err != nil {
-					return nil, errors.Wrapf(err, "node cert %s does not verify against node CA %s", cfg.Cert, cfg.NodeCA)
-				}
+			// The same check a peer makes: one chain allows both uses.
+			chains, err := verifyChain(s.node.Leaf, s.node.Certificate, s.nodeCAs, x509.ExtKeyUsageServerAuth)
+			if err != nil {
+				return nil, errors.Wrapf(err, "node cert %s does not verify against node CA %s", cfg.Cert, cfg.NodeCA)
+			}
+			if !someChainAllowsBoth(chains) {
+				return nil, errors.Errorf("node cert %s has no chain to node CA %s that allows both server and client use",
+					cfg.Cert, cfg.NodeCA)
 			}
 		}
 		s.files = append(s.files, CertFile{Usage: NodePem, Filename: cfg.Cert, Contents: b})
@@ -411,6 +415,17 @@ func (cm *CertificateManager) verifyPeer(
 	return chains, makeOCSPVerifier(cm.tlsSettings)(nil, chains)
 }
 
+// someChainAllowsBoth reports whether one of the chains allows both server
+// and client use.
+func someChainAllowsBoth(chains [][]*x509.Certificate) bool {
+	for _, chain := range chains {
+		if chainAllows(chain, x509.ExtKeyUsageServerAuth) && chainAllows(chain, x509.ExtKeyUsageClientAuth) {
+			return true
+		}
+	}
+	return false
+}
+
 // chainAllows reports whether every cert of a chain allows usage, the way
 // x509 checks it: no extended key usage allows all.
 func chainAllows(chain []*x509.Certificate, usage x509.ExtKeyUsage) bool {
@@ -432,14 +447,7 @@ func (cm *CertificateManager) VerifyNode(certs []*x509.Certificate, usage x509.E
 	}
 	// A node serves and dials, so the leaf must name both uses, and one
 	// verified chain must allow both: a CA above it may restrict either.
-	both := false
-	for _, chain := range chains {
-		if chainAllows(chain, x509.ExtKeyUsageServerAuth) && chainAllows(chain, x509.ExtKeyUsageClientAuth) {
-			both = true
-			break
-		}
-	}
-	if !both || !hasExtKeyUsage(certs[0], x509.ExtKeyUsageServerAuth) || !hasExtKeyUsage(certs[0], x509.ExtKeyUsageClientAuth) {
+	if !someChainAllowsBoth(chains) || !hasExtKeyUsage(certs[0], x509.ExtKeyUsageServerAuth) || !hasExtKeyUsage(certs[0], x509.ExtKeyUsageClientAuth) {
 		return errors.Errorf("certificate %s needs both server and client extended key usage to be a node",
 			certconfig.DescribeCert(certs[0]))
 	}

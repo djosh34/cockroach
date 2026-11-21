@@ -18,8 +18,9 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-// pemBegin matches the first line of a PEM block.
-var pemBegin = regexp.MustCompile(`(?m)^-----BEGIN `)
+// pemBegin matches the start of a PEM block at the start of a line, also
+// when the file was cut off right after it.
+var pemBegin = regexp.MustCompile(`(?m)^-----BEGIN`)
 
 // PEMToCertificates parses multiple certificate PEM blocks and returns them.
 // Each block must be a certificate.
