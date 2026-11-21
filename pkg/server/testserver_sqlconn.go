@@ -68,6 +68,16 @@ func pgURL(
 			RawQuery: opts.Encode(),
 		}, func() {}, nil
 	}
+	if insecure {
+		// No certificates to copy.
+		return url.URL{
+			Scheme:   "postgres",
+			User:     user,
+			Host:     sqlAddr,
+			Path:     dbName,
+			RawQuery: opts.Encode(),
+		}, func() {}, nil
+	}
 
 	// No LoopbackListener
 	pgURL, cleanupFn, err = sqlutils.PGUrlWithOptionalClientCertsE(sqlAddr, prefix, user, clientCerts, "")

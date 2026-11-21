@@ -79,6 +79,11 @@ func (c *conn) handleAuthentication(
 	}
 
 	dbUser := c.sessionArgs.User
+	// Tests may pass a system_identity option; otherwise the system identity
+	// is the user.
+	if c.sessionArgs.SystemIdentity.Undefined() {
+		c.sessionArgs.SystemIdentity = dbUser
+	}
 	var certExpiration int64
 	switch {
 	case authOpt.insecure:
