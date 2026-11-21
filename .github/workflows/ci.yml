@@ -112,6 +112,17 @@ jobs:
       - uses: ./.github/actions/setup-go
       - run: build/ci/s3.sh -v
 
+  # Migrates a 3-node cluster of the official CockroachDB v23.2.15 release to
+  # patchroaddb in place and checks the data. See build/ci/migration.sh.
+  migration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+      - run: go build -o bin/patchroaddb ./pkg/cmd/patchroaddb
+      - run: build/ci/migration.sh bin/patchroaddb
+
   # Fails on any known vulnerability in a package that this module or its
   # tests import, from a module or from the Go standard library. This is
   # stricter than checking only reachable functions.
@@ -125,7 +136,7 @@ jobs:
 
   ci-ok:
     if: always()
-    needs: [build, generate, lint, test, logic, no-outbound, s3, vuln]
+    needs: [build, generate, lint, test, logic, no-outbound, s3, migration, vuln]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
