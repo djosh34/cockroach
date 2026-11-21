@@ -55,7 +55,8 @@ func loadSecurityOptions(
 		}
 		u.WithTransport(pgurl.TransportTLS(tlsMode, caCertPath))
 
-		if opts.Certs.ClientCert != "" {
+		// A client cert named in the URL wins over the config's.
+		if hasCert, _, _ := u.GetAuthnCert(); !hasCert && opts.Certs.ClientCert != "" {
 			u.WithAuthn(pgurl.AuthnClientCert(opts.Certs.ClientCert, opts.Certs.ClientKey))
 		}
 	}

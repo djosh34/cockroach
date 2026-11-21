@@ -92,7 +92,7 @@ func handshake(t *testing.T, client, server *tls.Config) (clientErr, serverErr e
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	errCh := make(chan error, 1)
 	go func() {
 		c, err := ln.Accept()

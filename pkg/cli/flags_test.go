@@ -699,8 +699,7 @@ func TestServerConnSettings(t *testing.T) {
 	for i, td := range testData {
 		t.Run(strings.Join(td.args, " "), func(t *testing.T) {
 			initCLIDefaults()
-			// --insecure, so that the test needs no --config.
-			if err := f.Parse(append(td.args, "--insecure")); err != nil {
+			if err := f.Parse(td.args); err != nil {
 				t.Fatalf("Parse(%#v) got unexpected error: %v", td.args, err)
 			}
 
@@ -1174,10 +1173,8 @@ Available Commands:
   start             start a node in a multi-node cluster
   start-single-node start a single-node cluster
   init              initialize a cluster
-  cert              create ca, node, and client certs
   sql               open a sql shell
   statement-diag    commands for managing statement diagnostics bundles
-  auth-session      log in and out of HTTP sessions
   node              list, inspect, drain or remove nodes
 
   nodelocal         upload and delete nodelocal files

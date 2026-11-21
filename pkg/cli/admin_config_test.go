@@ -120,7 +120,7 @@ func TestAdminCommandsWithConfig(t *testing.T) {
 	require.NoError(t, err)
 	r, err := zip.OpenReader(zipFile)
 	require.NoError(t, err)
-	defer r.Close()
+	defer func() { require.NoError(t, r.Close()) }()
 	var sqlDump bool
 	for _, f := range r.File {
 		if strings.HasSuffix(f.Name, "crdb_internal.cluster_settings.txt") {

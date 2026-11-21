@@ -1646,15 +1646,6 @@ func (c *transientCluster) printURLs(
 	}
 }
 
-func fileExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	exists := err == nil
-	if oserror.IsNotExist(err) {
-		err = nil
-	}
-	return exists, err
-}
-
 func (c *transientCluster) TenantName() string {
 	if c.demoCtx.Multitenant {
 		return demoTenantName

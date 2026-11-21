@@ -34,11 +34,8 @@ const reloadDelay = 200 * time.Millisecond
 // sees a symlink swap such as a Kubernetes secret update. Network file
 // systems that send no events need a SIGHUP.
 func (cm *CertificateManager) Watch(ctx context.Context, stopper *stop.Stopper) error {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return errors.Wrap(err, "watching certificate files")
-	}
-	dirs := map[string]bool{}
+	var dirs []string
+	seen := map[string]bool{}
 	for _, p := range []string{
 		cm.cfg.Cert, cm.cfg.Key, cm.cfg.NodeCA, cm.cfg.ClientCA,
 		cm.cfg.Rules, cm.cfg.ClientCert, cm.cfg.ClientKey,
@@ -46,11 +43,20 @@ func (cm *CertificateManager) Watch(ctx context.Context, stopper *stop.Stopper) 
 		if p == "" || securityassets.GetLoader().InMemory(p) {
 			continue
 		}
-		dir := filepath.Dir(p)
-		if dirs[dir] {
-			continue
+		if dir := filepath.Dir(p); !seen[dir] {
+			seen[dir] = true
+			dirs = append(dirs, dir)
 		}
-		dirs[dir] = true
+	}
+	if len(dirs) == 0 {
+		// The files are served from memory, as in tests.
+		return nil
+	}
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return errors.Wrap(err, "watching certificate files")
+	}
+	for _, dir := range dirs {
 		if err := watcher.Add(dir); err != nil {
 			_ = watcher.Close()
 			return errors.Wrapf(err, "watching %s", dir)
@@ -59,7 +65,7 @@ func (cm *CertificateManager) Watch(ctx context.Context, stopper *stop.Stopper) 
 	// Ask for SIGHUP before returning, so that a SIGHUP sent once Watch
 	// returns reloads instead of stopping the process.
 	sighup := sysutil.RefreshSignaledChan()
-	return stopper.RunAsyncTask(ctx, "watch-certs", func(ctx context.Context) {
+	err = stopper.RunAsyncTask(ctx, "watch-certs", func(ctx context.Context) {
 		defer func() { _ = watcher.Close() }()
 		var timer timeutil.Timer
 		defer timer.Stop()
@@ -88,4 +94,8 @@ func (cm *CertificateManager) Watch(ctx context.Context, stopper *stop.Stopper) 
 			}
 		}
 	})
+	if err != nil {
+		_ = watcher.Close()
+	}
+	return err
 }

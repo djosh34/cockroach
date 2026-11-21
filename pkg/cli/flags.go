@@ -17,7 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
@@ -26,7 +25,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/cli/cliflagcfg"
 	"github.com/cockroachdb/cockroach/pkg/cli/cliflags"
 	"github.com/cockroachdb/cockroach/pkg/configprofiles"
-	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/security"
 	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
@@ -147,42 +145,6 @@ func (a clusterNameSetter) String() string { return *a.clusterName }
 
 // Type implements the pflag.Value interface.
 func (a clusterNameSetter) Type() string { return "<identifier>" }
-
-// tenantIDSetter wraps a list of roachpb.TenantIDs and enables setting them via a command-line flag.
-type tenantIDSetter struct {
-	tenantIDs *[]roachpb.TenantID
-}
-
-// String implements the pflag.Value interface.
-func (t tenantIDSetter) String() string {
-	var tenantString strings.Builder
-	separator := ""
-	for _, tID := range *t.tenantIDs {
-		tenantString.WriteString(separator)
-		tenantString.WriteString(strconv.FormatUint(tID.ToUint64(), 10))
-		separator = ","
-	}
-	return tenantString.String()
-}
-
-// Type implements the pflag.Value interface.
-func (t tenantIDSetter) Type() string { return "<[]TenantID>" }
-
-// Set implements the pflag.Value interface.
-func (t tenantIDSetter) Set(v string) error {
-	// Reset tenantIDs slice as it is initialized to contain the system tenant ID
-	// by default.
-	*t.tenantIDs = []roachpb.TenantID{}
-	tenantScopes := strings.Split(v, "," /* separator */)
-	for _, tenantScope := range tenantScopes {
-		tenantID, err := roachpb.TenantIDFromString(tenantScope)
-		if err != nil {
-			return err
-		}
-		*t.tenantIDs = append(*t.tenantIDs, tenantID)
-	}
-	return nil
-}
 
 // Set implements the pflag.Value interface.
 func (a clusterNameSetter) Set(v string) error {
@@ -847,11 +809,7 @@ func init() {
 func extraServerFlagInit(cmd *cobra.Command) error {
 	serverCfg.User = username.NodeUserName()
 	serverCfg.Insecure = startCtx.serverInsecure
-	if !serverCfg.Insecure {
-		if startCtx.serverConfigFile == "" {
-			return errors.Newf("a secure node needs --%s, or --%s",
-				cliflags.ServerConfigFile.Name, cliflags.ServerInsecure.Name)
-		}
+	if !serverCfg.Insecure && startCtx.serverConfigFile != "" {
 		c, err := certconfig.Load(startCtx.serverConfigFile)
 		if err != nil {
 			return err

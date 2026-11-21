@@ -340,6 +340,10 @@ func runStartJoin(cmd *cobra.Command, args []string) error {
 // runStart, runStartSingleNode and runStartSingleNodeCmd.
 func runStart(cmd *cobra.Command, args []string, startSingleNode bool) error {
 	const serverType redact.SafeString = "node"
+	if !serverCfg.Insecure && startCtx.serverConfigFile == "" {
+		return errors.Newf("a secure node needs --%s, or --%s",
+			cliflags.ServerConfigFile.Name, cliflags.ServerInsecure.Name)
+	}
 
 	newServerFn := func(_ context.Context, serverCfg server.Config, stopper *stop.Stopper) (serverctl.ServerStartupInterface, error) {
 		// Beware of not writing simply 'return server.NewServer()'. This is
