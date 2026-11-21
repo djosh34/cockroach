@@ -1,0 +1,305 @@
+// Copyright 2026 The Cockroach Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
+// file except in compliance with the License. You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software distributed under
+// the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+// ANY KIND, either express or implied. See the License for the specific language
+// governing permissions and limitations under the License.
+
+//go:build sim
+
+package sim
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/netip"
+	"os"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/cockroachdb/cockroach/pkg/cli"
+	"github.com/cockroachdb/cockroach/pkg/sim/fakes3"
+	"github.com/jackc/pgx/v5"
+	"github.com/jellevandenhooff/gosim"
+)
+
+// The simulated network. Each node is a gosim machine of its own, with its
+// own globals, disk and address; the test runs on the main machine.
+const (
+	s3Addr      = "10.0.2.1"
+	s3Bucket    = "backups"
+	initAddr    = "10.0.3.1"
+	restoreAddr = "10.0.1.1"
+	sqlPort     = 26257
+	httpPort    = 8080
+)
+
+func nodeAddr(i int) string { return fmt.Sprintf("10.0.0.%d", i+1) }
+
+// node is one patchroaddb process on a machine.
+type node struct {
+	idx  int
+	addr string
+	m    gosim.Machine
+	// state and syncFaults are guarded by cluster.mu.
+	state nodeState
+	// syncFaults is set while the node's fsyncs may crash it.
+	syncFaults bool
+}
+
+type nodeState int
+
+const (
+	up nodeState = iota
+	// crashed: the harness crashed the node and restarts it.
+	crashed
+	// crashedInSync: an fsync crashed the node, and watch restarts it.
+	crashedInSync
+)
+
+// cluster is the simulated cluster, the fake S3 server and what the
+// harness knows of them.
+type cluster struct {
+	nodes []*node
+	s3    *fakes3.Server
+
+	mu sync.Mutex
+	// failures are the nodes that stopped without the harness crashing
+	// them: a crash of patchroaddb.
+	failures []string
+}
+
+// The --config of every node: only its backup section, since the nodes
+// run insecure. Full backups every 20 s of simulated time, archive
+// segments every 2 s.
+var nodeConfig = fmt.Sprintf(`backup:
+  bucket: %s
+  prefix: cluster
+  endpoint: http://%s:9000
+  region: us-east-1
+  full-schedule: "@every 20s"
+  archive-interval: 2s
+  keep-full: 100
+`, s3Bucket, s3Addr)
+
+// s3Env gives a machine the S3 credentials of the fake server, which
+// checks none, and keeps the AWS SDK from looking elsewhere for them.
+func s3Env() {
+	os.Setenv("AWS_ACCESS_KEY_ID", "sim")
+	os.Setenv("AWS_SECRET_ACCESS_KEY", "sim")
+	os.Setenv("AWS_REGION", "us-east-1")
+	os.Setenv("AWS_EC2_METADATA_DISABLED", "true")
+}
+
+// runCLI runs patchroaddb with the arguments, on the machine that calls
+// it, the way the binary's main does. It does not return: cli.Main exits.
+func runCLI(args ...string) {
+	os.Args = append([]string{"patchroaddb"}, args...)
+	cli.Main()
+}
+
+func startArgs(addr, join string) []string {
+	return []string{
+		"start", "--insecure",
+		"--listen-addr=" + addr + fmt.Sprintf(":%d", sqlPort),
+		"--http-addr=" + addr + fmt.Sprintf(":%d", httpPort),
+		"--join=" + join,
+		"--store=path=/data,ballast-size=0",
+		"--cache=32MiB", "--max-sql-memory=64MiB",
+		"--config=/sim.yaml",
+		"--logtostderr=INFO", "--log-dir=",
+	}
+}
+
+// nodeMain is the main function of a node's machine: it writes the config
+// file, if it is not there from an earlier start, and starts patchroaddb.
+func nodeMain(args []string) func() {
+	return func() {
+		s3Env()
+		if err := os.WriteFile("/sim.yaml", []byte(nodeConfig), 0o644); err != nil {
+			fmt.Fprintf(os.Stderr, "writing the config: %v\n", err)
+			return
+		}
+		runCLI(args...)
+	}
+}
+
+// startCluster starts the fake S3 server and n nodes, initializes the
+// cluster and waits until SQL works on every node.
+func startCluster(ctx context.Context, n int, s3 *fakes3.Server) (*cluster, error) {
+	c := &cluster{s3: s3}
+	s3.CreateBucket(s3Bucket)
+	gosim.NewMachine(gosim.MachineConfig{
+		Label: "s3",
+		Addr:  netip.MustParseAddr(s3Addr),
+		MainFunc: func() {
+			srv := &http.Server{Addr: s3Addr + ":9000", Handler: s3}
+			fmt.Fprintf(os.Stderr, "fake S3: %v\n", srv.ListenAndServe())
+		},
+	})
+
+	var join []string
+	for i := 0; i < n; i++ {
+		join = append(join, fmt.Sprintf("%s:%d", nodeAddr(i), sqlPort))
+	}
+	for i := 0; i < n; i++ {
+		nd := &node{idx: i, addr: nodeAddr(i)}
+		nd.m = gosim.NewMachine(gosim.MachineConfig{
+			Label:    fmt.Sprintf("n%d", i+1),
+			Addr:     netip.MustParseAddr(nd.addr),
+			MainFunc: nodeMain(startArgs(nd.addr, strings.Join(join, ","))),
+		})
+		c.nodes = append(c.nodes, nd)
+		go c.watch(nd)
+	}
+
+	// patchroaddb init, from a machine of its own: the CLI exits when it is
+	// done. It retries until the first node answers.
+	initM := gosim.NewMachine(gosim.MachineConfig{
+		Label: "init",
+		Addr:  netip.MustParseAddr(initAddr),
+		MainFunc: func() {
+			runCLI("init", "--insecure", fmt.Sprintf("--host=%s:%d", nodeAddr(0), sqlPort))
+		},
+	})
+	initM.Wait()
+
+	for _, nd := range c.nodes {
+		if err := c.waitSQL(ctx, nd, 2*time.Minute); err != nil {
+			return c, err
+		}
+	}
+	return c, nil
+}
+
+// watch records a node that stops on its own: a crash of patchroaddb.
+// A node that an fsync crashed while its sync faults were on is restarted
+// after a second.
+func (c *cluster) watch(nd *node) {
+	for {
+		nd.m.Wait()
+		c.mu.Lock()
+		state := nd.state
+		if state == up && nd.syncFaults {
+			nd.state, state = crashedInSync, crashedInSync
+		}
+		if state == up {
+			c.failures = append(c.failures, fmt.Sprintf("n%d stopped on its own", nd.idx+1))
+		}
+		c.mu.Unlock()
+		switch state {
+		case up:
+			return
+		case crashedInSync:
+			time.Sleep(time.Second)
+			nd.m.RestartWithPartialDisk()
+			c.mu.Lock()
+			nd.state = up
+			c.mu.Unlock()
+		case crashed:
+			// The harness restarts it; Wait blocks until the next stop.
+			for {
+				time.Sleep(100 * time.Millisecond)
+				c.mu.Lock()
+				state = nd.state
+				c.mu.Unlock()
+				if state != crashed {
+					break
+				}
+			}
+		}
+	}
+}
+
+// crash stops the node abruptly: writes it has not synced are lost. It
+// reports false, and does nothing, if the node is down already.
+func (c *cluster) crash(nd *node) bool {
+	c.mu.Lock()
+	if nd.state != up {
+		c.mu.Unlock()
+		return false
+	}
+	nd.state = crashed
+	c.mu.Unlock()
+	nd.m.Crash()
+	return true
+}
+
+// restart starts a node that crash stopped. With partial, a random part of
+// the writes it had not synced reaches the disk.
+func (c *cluster) restart(nd *node, partial bool) {
+	if partial {
+		nd.m.RestartWithPartialDisk()
+	} else {
+		nd.m.Restart()
+	}
+	c.mu.Lock()
+	nd.state = up
+	c.mu.Unlock()
+}
+
+// syncFaults turns on or off crashes of the node in fsync.
+func (c *cluster) syncFaults(nd *node, on bool) {
+	c.mu.Lock()
+	nd.syncFaults = on
+	c.mu.Unlock()
+	nd.m.SetSometimesCrashOnSync(on)
+}
+
+// startRestoreNode starts a new single-node cluster for a restore.
+func (c *cluster) startRestoreNode(ctx context.Context) (*node, error) {
+	nd := &node{idx: len(c.nodes), addr: restoreAddr}
+	args := startArgs(nd.addr, "")
+	args[0] = "start-single-node"
+	args = slices.DeleteFunc(args, func(a string) bool { return strings.HasPrefix(a, "--join=") })
+	nd.m = gosim.NewMachine(gosim.MachineConfig{
+		Label:    "restore",
+		Addr:     netip.MustParseAddr(nd.addr),
+		MainFunc: nodeMain(args),
+	})
+	go c.watch(nd)
+	return nd, c.waitSQL(ctx, nd, 2*time.Minute)
+}
+
+func (c *cluster) failed() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.failures...)
+}
+
+func connString(addr string) string {
+	return fmt.Sprintf("postgresql://root@%s:%d/defaultdb?sslmode=disable&connect_timeout=5", addr, sqlPort)
+}
+
+func connect(ctx context.Context, addr string) (*pgx.Conn, error) {
+	cfg, err := pgx.ParseConfig(connString(addr))
+	if err != nil {
+		return nil, err
+	}
+	return pgx.ConnectConfig(ctx, cfg)
+}
+
+// waitSQL waits until SELECT 1 works on the node.
+func (c *cluster) waitSQL(ctx context.Context, nd *node, limit time.Duration) error {
+	deadline := time.Now().Add(limit)
+	for {
+		conn, err := connect(ctx, nd.addr)
+		if err == nil {
+			_, err = conn.Exec(ctx, "SELECT 1")
+			_ = conn.Close(ctx)
+			if err == nil {
+				return nil
+			}
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("n%d: SQL did not work within %s: %v", nd.idx+1, limit, err)
+		}
+		time.Sleep(time.Second)
+	}
+}
