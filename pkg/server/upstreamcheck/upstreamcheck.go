@@ -20,6 +20,7 @@ package upstreamcheck
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -34,6 +35,7 @@ import (
 	_ "github.com/cockroachdb/cockroach/pkg/sql/sem/builtins" // registers the builtins that names resolve to
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
+	"github.com/cockroachdb/cockroach/pkg/sql/types"
 	"github.com/cockroachdb/errors"
 )
 
@@ -88,9 +90,13 @@ func Check(ctx context.Context, db descs.DB) error {
 }
 
 func jobProblems(ctx context.Context, txn descs.Txn) ([]string, error) {
+	// Finished jobs, with the statuses of jobs.Status.Terminal, do not count.
 	rows, err := txn.QueryBufferedEx(ctx, "upstream-check-jobs", txn.KV(),
 		sessiondata.NodeUserSessionDataOverride,
-		`SELECT id, COALESCE(job_type, ''), status FROM system.jobs ORDER BY id`)
+		`SELECT id, COALESCE(job_type, ''), status FROM system.jobs
+		WHERE status NOT IN ($1, $2, $3, $4) ORDER BY id`,
+		string(jobs.StatusSucceeded), string(jobs.StatusFailed),
+		string(jobs.StatusCanceled), string(jobs.StatusRevertFailed))
 	if err != nil {
 		return nil, err
 	}
@@ -98,9 +104,6 @@ func jobProblems(ctx context.Context, txn descs.Txn) ([]string, error) {
 	for _, r := range rows {
 		id, typ, status := int64(tree.MustBeDInt(r[0])), string(tree.MustBeDString(r[1])),
 			jobs.Status(tree.MustBeDString(r[2]))
-		if status.Terminal() {
-			continue
-		}
 		t, err := jobspb.TypeFromString(typ)
 		if err != nil {
 			found = append(found, fmt.Sprintf("job %d: %s job of unknown type %q", id, status, typ))
@@ -132,11 +135,12 @@ func scheduleProblems(ctx context.Context, txn descs.Txn) ([]string, error) {
 // catalogProblems lists the descriptors in c that use cut features. It reads
 // them without validation, because validation rejects some of them.
 func catalogProblems(c nstree.Catalog) []string {
-	// Views and routine bodies call user-defined functions by name.
-	udfNames := make(map[string]bool)
+	// Routine bodies call user-defined functions by name, and do not record
+	// which ones.
+	funcsByDB := make(map[descpb.ID][]catalog.Descriptor)
 	_ = c.ForEachDescriptor(func(d catalog.Descriptor) error {
-		if fn, ok := d.(catalog.FunctionDescriptor); ok {
-			udfNames[fn.GetName()] = true
+		if d.DescriptorType() == catalog.Function {
+			funcsByDB[d.GetParentID()] = append(funcsByDB[d.GetParentID()], d)
 		}
 		return nil
 	})
@@ -149,11 +153,18 @@ func catalogProblems(c nstree.Catalog) []string {
 				problems = append(problems, "is a multi-region database")
 			}
 		case catalog.TableDescriptor:
-			problems = tableProblems(d, udfNames)
+			// A view records the functions it calls.
+			var calls []catalog.Descriptor
+			for _, id := range d.GetDependsOnFunctions() {
+				if fn := c.LookupDescriptor(id); fn != nil {
+					calls = append(calls, fn)
+				}
+			}
+			problems = tableProblems(d, udfMatcher(c, calls))
 		case catalog.TypeDescriptor:
 			problems = typeProblems(d)
 		case catalog.FunctionDescriptor:
-			problems = functionProblems(d, udfNames)
+			problems = functionProblems(d, udfMatcher(c, funcsByDB[d.GetParentID()]))
 		}
 		if len(problems) == 0 {
 			return nil
@@ -170,7 +181,30 @@ func catalogProblems(c nstree.Catalog) []string {
 	return found
 }
 
-func tableProblems(t catalog.TableDescriptor, udfNames map[string]bool) []string {
+// isUDF reports whether a function name that an expression or statement
+// calls names a user-defined function.
+type isUDF func(tree.RoutineName) bool
+
+// noUDFs is the isUDF of stored expressions, which refer to user-defined
+// functions by OID instead of by name.
+func noUDFs(tree.RoutineName) bool { return false }
+
+// udfMatcher returns an isUDF that matches the functions fns. A name that
+// gives a schema or a database must match those too.
+func udfMatcher(c nstree.Catalog, fns []catalog.Descriptor) isUDF {
+	return func(n tree.RoutineName) bool {
+		for _, fn := range fns {
+			if fn.GetName() == n.Object() &&
+				(!n.ExplicitSchema || schemaName(c, fn) == n.Schema()) &&
+				(!n.ExplicitCatalog || dbName(c, fn) == n.Catalog()) {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+func tableProblems(t catalog.TableDescriptor, udf isUDF) []string {
 	var problems []string
 	add := func(format string, args ...interface{}) {
 		problems = append(problems, fmt.Sprintf(format, args...))
@@ -187,7 +221,7 @@ func tableProblems(t catalog.TableDescriptor, udfNames map[string]bool) []string
 			{"ON UPDATE expression", col.GetOnUpdateExpr()},
 			{"computed expression", col.GetComputeExpr()},
 		} {
-			for _, p := range exprProblems(e.expr, udfNames) {
+			for _, p := range exprProblems(e.expr) {
 				add("the %s of column %q %s", e.what, col.GetName(), p)
 			}
 		}
@@ -200,23 +234,30 @@ func tableProblems(t catalog.TableDescriptor, udfNames map[string]bool) []string
 			add("index %q is partitioned", idx.GetName())
 		}
 		if idx.IsPartial() {
-			for _, p := range exprProblems(idx.GetPredicate(), udfNames) {
+			for _, p := range exprProblems(idx.GetPredicate()) {
 				add("the predicate of index %q %s", idx.GetName(), p)
 			}
 		}
 	}
 	for _, ck := range t.CheckConstraints() {
-		for _, p := range exprProblems(ck.GetExpr(), udfNames) {
+		for _, p := range exprProblems(ck.GetExpr()) {
 			add("constraint %q %s", ck.GetName(), p)
 		}
 	}
+	for _, uc := range t.UniqueConstraintsWithoutIndex() {
+		if uc.IsPartial() {
+			for _, p := range exprProblems(uc.GetPredicate()) {
+				add("the predicate of constraint %q %s", uc.GetName(), p)
+			}
+		}
+	}
 	if ttl := t.GetRowLevelTTL(); ttl != nil && ttl.HasExpirationExpr() {
-		for _, p := range exprProblems(string(ttl.ExpirationExpr), udfNames) {
+		for _, p := range exprProblems(string(ttl.ExpirationExpr)) {
 			add("the TTL expiration expression %s", p)
 		}
 	}
 	if t.IsView() {
-		for _, p := range stmtProblems(t.GetViewQuery(), udfNames) {
+		for _, p := range stmtProblems(t.GetViewQuery(), udf) {
 			add("the query %s", p)
 		}
 	}
@@ -240,7 +281,7 @@ func typeProblems(t catalog.TypeDescriptor) []string {
 	return problems
 }
 
-func functionProblems(fn catalog.FunctionDescriptor, udfNames map[string]bool) []string {
+func functionProblems(fn catalog.FunctionDescriptor, udf isUDF) []string {
 	var problems []string
 	if fn.GetLanguage() == catpb.Function_PLPGSQL {
 		// The body is PL/pgSQL, which patchroaddb cannot parse.
@@ -254,7 +295,7 @@ func functionProblems(fn catalog.FunctionDescriptor, udfNames map[string]bool) [
 	if typ := fn.GetReturnType().Type; typ != nil && typ.ContainsRemovedSpatialType() {
 		problems = append(problems, fmt.Sprintf("returns type %s", typ.SQLString()))
 	}
-	for _, p := range stmtProblems(fn.GetFunctionBody(), udfNames) {
+	for _, p := range stmtProblems(fn.GetFunctionBody(), udf) {
 		problems = append(problems, "the body "+p)
 	}
 	return problems
@@ -262,7 +303,7 @@ func functionProblems(fn catalog.FunctionDescriptor, udfNames map[string]bool) [
 
 // exprProblems parses a stored expression and describes each removed
 // function that it calls. An empty expression has none.
-func exprProblems(s string, udfNames map[string]bool) []string {
+func exprProblems(s string) []string {
 	if s == "" {
 		return nil
 	}
@@ -270,78 +311,142 @@ func exprProblems(s string, udfNames map[string]bool) []string {
 	if err != nil {
 		return []string{fmt.Sprintf("cannot be parsed: %v", err)}
 	}
-	var calls removedCalls
-	if _, err := tree.SimpleVisit(expr, calls.visitor(udfNames)); err != nil {
-		return []string{err.Error()}
-	}
-	return calls.problems()
+	return callProblems(expr, noUDFs)
 }
 
 // stmtProblems is exprProblems for the statements of a view query or a
 // routine body.
-func stmtProblems(s string, udfNames map[string]bool) []string {
+func stmtProblems(s string, udf isUDF) []string {
 	stmts, err := parser.Parse(s)
 	if err != nil {
 		return []string{fmt.Sprintf("cannot be parsed: %v", err)}
 	}
-	var calls removedCalls
-	for _, stmt := range stmts {
-		if _, err := tree.SimpleStmtVisit(stmt.AST, calls.visitor(udfNames)); err != nil {
-			return []string{err.Error()}
-		}
+	asts := make([]tree.Statement, len(stmts))
+	for i, stmt := range stmts {
+		asts[i] = stmt.AST
 	}
-	return calls.problems()
+	return callProblems(asts, udf)
 }
 
-// removedCalls collects the names of called functions that are neither
-// builtins nor user-defined functions.
-type removedCalls map[string]bool
+// removedTypes are the names of the removed spatial types.
+var removedTypes = map[string]bool{"geometry": true, "geography": true, "box2d": true}
 
-func (r *removedCalls) visitor(
-	udfNames map[string]bool,
-) func(tree.Expr) (bool, tree.Expr, error) {
-	return func(expr tree.Expr) (bool, tree.Expr, error) {
-		f, ok := expr.(*tree.FuncExpr)
-		if !ok {
-			return true, expr, nil
-		}
-		// Stored expressions refer to user-defined functions by OID, which
-		// needs no check.
+// callProblems describes the functions that the syntax tree node calls and
+// that are neither builtins nor user-defined functions, and the removed types
+// that it casts to.
+func callProblems(node interface{}, udf isUDF) []string {
+	calls, typeRefs := walkSyntax(node)
+	removed := make(map[string]bool)
+	for _, f := range calls {
+		// A reference by OID is to a user-defined function.
 		name, ok := f.Func.FunctionReference.(*tree.UnresolvedName)
 		if !ok {
-			return true, expr, nil
+			continue
 		}
 		fn, err := name.ToRoutineName()
 		if err != nil {
-			return false, expr, err
+			return []string{fmt.Sprintf("cannot be checked: %v", err)}
 		}
 		def, err := tree.GetBuiltinFuncDefinition(fn, &sessiondata.DefaultSearchPath)
 		if err != nil {
-			return false, expr, err
+			return []string{fmt.Sprintf("cannot be checked: %v", err)}
 		}
-		if def == nil && !udfNames[fn.Object()] {
-			if *r == nil {
-				*r = make(removedCalls)
-			}
-			(*r)[fn.String()] = true
+		if def == nil && !udf(fn) {
+			removed[fn.String()] = true
 		}
-		return true, expr, nil
 	}
+	var problems []string
+	if len(removed) > 0 {
+		problems = append(problems, describe("calls the removed function", removed))
+	}
+	// Views, routines and stored expressions refer to user-defined types by
+	// OID, so a type that patchroaddb does not know by name is a removed one.
+	removed = make(map[string]bool)
+	for _, ref := range typeRefs {
+		for {
+			a, ok := ref.(*tree.ArrayTypeReference)
+			if !ok {
+				break
+			}
+			ref = a.ElementType
+		}
+		switch t := ref.(type) {
+		case *tree.UnresolvedObjectName:
+			if name := strings.ToLower(t.Object()); removedTypes[name] {
+				removed[strings.ToUpper(name)] = true
+			}
+		case *types.T:
+			if t.ContainsRemovedSpatialType() {
+				removed[t.SQLString()] = true
+			}
+		}
+	}
+	if len(removed) > 0 {
+		problems = append(problems, describe("uses the removed type", removed))
+	}
+	return problems
 }
 
-func (r removedCalls) problems() []string {
-	if len(r) == 0 {
-		return nil
+// describe returns what followed by the sorted names, with what in the
+// plural for more than one name.
+func describe(what string, names map[string]bool) string {
+	sorted := make([]string, 0, len(names))
+	for n := range names {
+		sorted = append(sorted, n)
 	}
-	names := make([]string, 0, len(r))
-	for n := range r {
-		names = append(names, n)
+	sort.Strings(sorted)
+	if len(sorted) > 1 {
+		what += "s"
 	}
-	sort.Strings(names)
-	if len(names) == 1 {
-		return []string{"calls the removed function " + names[0]}
+	return what + " " + strings.Join(sorted, ", ")
+}
+
+var (
+	funcExprType     = reflect.TypeOf((*tree.FuncExpr)(nil))
+	castExprType     = reflect.TypeOf((*tree.CastExpr)(nil))
+	annotateExprType = reflect.TypeOf((*tree.AnnotateTypeExpr)(nil))
+	isOfTypeExprType = reflect.TypeOf((*tree.IsOfTypeExpr)(nil))
+)
+
+// walkSyntax returns every function call in a syntax tree, and the types of
+// every cast, type annotation and IS OF test. The tree package's visitors
+// skip some expressions, such as join conditions and window definitions, so
+// this follows every exported field instead.
+func walkSyntax(
+	node interface{},
+) (calls []*tree.FuncExpr, typeRefs []tree.ResolvableTypeReference) {
+	var walk func(v reflect.Value)
+	walk = func(v reflect.Value) {
+		switch v.Kind() {
+		case reflect.Pointer, reflect.Interface:
+			if v.IsNil() {
+				return
+			}
+			switch v.Type() {
+			case funcExprType:
+				calls = append(calls, v.Interface().(*tree.FuncExpr))
+			case castExprType:
+				typeRefs = append(typeRefs, v.Interface().(*tree.CastExpr).Type)
+			case annotateExprType:
+				typeRefs = append(typeRefs, v.Interface().(*tree.AnnotateTypeExpr).Type)
+			case isOfTypeExprType:
+				typeRefs = append(typeRefs, v.Interface().(*tree.IsOfTypeExpr).Types...)
+			}
+			walk(v.Elem())
+		case reflect.Struct:
+			for i := 0; i < v.NumField(); i++ {
+				if v.Type().Field(i).IsExported() {
+					walk(v.Field(i))
+				}
+			}
+		case reflect.Slice, reflect.Array:
+			for i := 0; i < v.Len(); i++ {
+				walk(v.Index(i))
+			}
+		}
 	}
-	return []string{"calls the removed functions " + strings.Join(names, ", ")}
+	walk(reflect.ValueOf(node))
+	return calls, typeRefs
 }
 
 // kind names the kind of object that d describes.
@@ -362,19 +467,27 @@ func kind(d catalog.Descriptor) string {
 // its name otherwise.
 func qualifiedName(c nstree.Catalog, d catalog.Descriptor) string {
 	name := tree.NameString(d.GetName())
-	if id := d.GetParentSchemaID(); id != descpb.InvalidID {
-		schema := "public"
-		if s := c.LookupDescriptor(id); s != nil {
-			schema = s.GetName()
-		}
-		name = tree.NameString(schema) + "." + name
+	if d.GetParentSchemaID() != descpb.InvalidID {
+		name = tree.NameString(schemaName(c, d)) + "." + name
 	}
-	if id := d.GetParentID(); id != descpb.InvalidID {
-		db := fmt.Sprintf("[%d]", id)
-		if p := c.LookupDescriptor(id); p != nil {
-			db = tree.NameString(p.GetName())
-		}
-		name = db + "." + name
+	if d.GetParentID() != descpb.InvalidID {
+		name = tree.NameString(dbName(c, d)) + "." + name
 	}
 	return name
+}
+
+// schemaName returns the name of d's schema.
+func schemaName(c nstree.Catalog, d catalog.Descriptor) string {
+	if s := c.LookupDescriptor(d.GetParentSchemaID()); s != nil {
+		return s.GetName()
+	}
+	return "public"
+}
+
+// dbName returns the name of d's database.
+func dbName(c nstree.Catalog, d catalog.Descriptor) string {
+	if db := c.LookupDescriptor(d.GetParentID()); db != nil {
+		return db.GetName()
+	}
+	return fmt.Sprintf("[%d]", d.GetParentID())
 }

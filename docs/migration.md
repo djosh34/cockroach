@@ -14,8 +14,8 @@ started on the data.
 
 - **Encrypted stores.** A store that CockroachDB encrypted at rest
   (`--enterprise-encryption`) does not open: patchroaddb fails with
-  "encrypted stores are unsupported". So does a store on disaggregated
-  shared storage.
+  "encrypted stores are unsupported". A store on disaggregated shared
+  storage fails too, with "shared storage is unsupported".
 - **Versions other than v23.2.** Upgrade CockroachDB to v23.2.15 first, the
   version that CI tests, and let the upgrade finish: `SHOW CLUSTER SETTING
   version` must show `23.2`.
@@ -37,9 +37,10 @@ in CockroachDB first:
 - partitioned tables and indexes (PARTITION BY);
 - PL/pgSQL functions and procedures;
 - views, functions, column defaults, ON UPDATE and computed expressions,
-  check constraints, partial index predicates and TTL expressions that call
-  a function patchroaddb removed, such as the spatial functions, `decrypt`
-  and `crdb_internal.fips_ready`.
+  check and unique constraints, partial index predicates and TTL
+  expressions that call a function patchroaddb removed, such as the spatial
+  functions, `decrypt` and `crdb_internal.fips_ready`, or cast to a spatial
+  type.
 
 The check also counts dropped objects that the garbage collector has not
 removed yet; the list marks them "dropped". Wait until it removes them, or

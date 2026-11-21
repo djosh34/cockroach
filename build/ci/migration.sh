@@ -3,7 +3,8 @@
 # docs/migration.md describes, and checks the result:
 #
 #  1. The official v23.2.15 binary runs a 3-node cluster with tables,
-#     indexes (an array and a JSON inverted index among them), a view, a
+#     indexes (forward and inverted indexes on an array and a JSON column
+#     among them), a view, a
 #     sequence, a type, a function, users, grants and rows. The cluster also
 #     gets two things that patchroaddb cut: a spatial column with a spatial
 #     index, and a backup schedule.
@@ -13,7 +14,7 @@
 #     and stops.
 #  4. patchroaddb starts on the same directories with certs from a new CA and
 #     identity rules, shows the same objects and rows, reads and updates rows
-#     through the array and JSON indexes that upstream built, and takes new
+#     through each array and JSON index that upstream built, and takes new
 #     tables and writes.
 #
 # Usage: build/ci/migration.sh <patchroaddb binary>
@@ -141,6 +142,8 @@ CREATE TABLE orders (
   details JSONB,
   label STRING AS (lower(status::STRING) || ':' || id::STRING) STORED,
   INDEX (customer),
+  INDEX tags_fwd (tags),
+  INDEX details_fwd (details),
   INVERTED INDEX tags_idx (tags),
   INVERTED INDEX details_idx (details)
 );
@@ -296,6 +299,20 @@ echo "== patchroaddb: the finished backup job is still listed"
 expect $'BACKUP\tsucceeded' "SELECT job_type, status FROM [SHOW JOBS] WHERE job_type = 'BACKUP'"
 
 echo "== patchroaddb: read and update rows through the indexes upstream built"
+# Forward indexes hold whole array and JSON values in their keys.
+tag5=$(new_sql -e "SELECT count(*) FROM shop.orders@primary WHERE tags = ARRAY['tag5', 'all']" | tail -n 1)
+expect "$tag5" "SELECT count(*) FROM shop.orders@tags_fwd WHERE tags = ARRAY['tag5', 'all']"
+new_sql -e "UPDATE shop.orders@tags_fwd SET tags = ARRAY['tag5', 'fwd'] WHERE tags = ARRAY['tag5', 'all']" >/dev/null
+expect "$tag5" "SELECT count(*) FROM shop.orders@tags_fwd WHERE tags = ARRAY['tag5', 'fwd']"
+expect "0" "SELECT count(*) FROM shop.orders@tags_fwd WHERE tags = ARRAY['tag5', 'all']"
+expect "$tag5" "SELECT count(*) FROM shop.orders@primary WHERE tags = ARRAY['tag5', 'fwd']"
+
+expect "1234" "SELECT details->>'n' FROM shop.orders@details_fwd WHERE details = '{\"color\": \"c4\", \"n\": 1234}'"
+new_sql -e "UPDATE shop.orders@details_fwd SET details = '{\"color\": \"c4\", \"n\": 1234, \"fwd\": true}' WHERE details = '{\"color\": \"c4\", \"n\": 1234}'" >/dev/null
+expect "1234" "SELECT details->>'n' FROM shop.orders@details_fwd WHERE details = '{\"color\": \"c4\", \"n\": 1234, \"fwd\": true}'"
+expect "0" "SELECT count(*) FROM shop.orders@details_fwd WHERE details = '{\"color\": \"c4\", \"n\": 1234}'"
+
+# Inverted indexes hold each array element and JSON path.
 tagged=$(new_sql -e "SELECT count(*) FROM shop.orders@primary WHERE 'tag3' = ANY tags" | tail -n 1)
 expect "$tagged" "SELECT count(*) FROM shop.orders@tags_idx WHERE tags @> ARRAY['tag3']"
 new_sql -e "UPDATE shop.orders@tags_idx SET tags = array_append(tags, 'moved') WHERE tags @> ARRAY['tag3']" >/dev/null
@@ -325,8 +342,9 @@ if [[ $got != "$want" ]]; then
   echo "alice sees $got rows of big_orders, want $want" >&2
   exit 1
 fi
-if "$new" sql --url="$alice_url" -e "SELECT count(*) FROM customers" >/dev/null 2>&1; then
-  echo "alice could read customers without a grant" >&2
+denied=$("$new" sql --url="$alice_url" -e "SELECT count(*) FROM customers" 2>&1 || true)
+if [[ $denied != *"user alice does not have SELECT privilege on relation customers"* ]]; then
+  printf 'alice read customers without a grant, or failed for another reason:\n%s\n' "$denied" >&2
   exit 1
 fi
 stop

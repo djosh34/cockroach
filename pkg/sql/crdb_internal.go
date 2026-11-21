@@ -1205,9 +1205,11 @@ func makeJobsTableRows(
 		// stored yet; its payload has the type.
 		jobType = storedType
 		if jobType == tree.DNull {
-			if typ, err := payload.CheckType(); err == nil {
-				jobType = tree.NewDString(typ.String())
+			typ, err := payload.CheckType()
+			if err != nil {
+				return matched, errors.Wrapf(err, "job %s", id)
 			}
+			jobType = tree.NewDString(typ.String())
 		}
 		description = tree.NewDString(payload.Description)
 		statement = tree.NewDString(strings.Join(payload.Statement, "; "))
