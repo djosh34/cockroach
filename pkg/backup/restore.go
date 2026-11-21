@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/cockroachdb/cockroach/pkg/config/zonepb"
 	"github.com/cockroachdb/cockroach/pkg/jobs"
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
 	"github.com/cockroachdb/cockroach/pkg/keys"
@@ -27,6 +28,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
+	"github.com/cockroachdb/cockroach/pkg/sql/catalog/bootstrap"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catalogkeys"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/dbdesc"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descbuilder"
@@ -70,6 +72,8 @@ import (
 
 // restoredSystemTables are the system tables whose rows a cluster restore
 // brings back, by name. descriptor and namespace are handled on their own.
+// descriptor_id_seq is not copied: the claim raised it past the backup's
+// value.
 var restoredSystemTables = []catconstants.SystemTableName{
 	catconstants.UsersTableName,
 	catconstants.RoleMembersTableName,
@@ -77,7 +81,6 @@ var restoredSystemTables = []catconstants.SystemTableName{
 	catconstants.DatabaseRoleSettingsTableName,
 	catconstants.SystemPrivilegeTableName,
 	catconstants.RoleIDSequenceName,
-	catconstants.DescIDSequenceTableName,
 	catconstants.SettingsTableName,
 	catconstants.ZonesTableName,
 	catconstants.CommentsTableName,
@@ -178,14 +181,14 @@ func (r *restoreResumer) CollectProfile(context.Context, interface{}) error { re
 
 // claimCluster makes sure that this restore is the only thing that
 // writes into this cluster's catalog. The claim is the descriptor ID
-// sequence: a cluster can be claimed only while it has handed out no ID
-// beyond its pre-loaded defaultdb and postgres, so no table was ever
-// created in it and no other restore claimed it, and claiming it raises
-// the sequence to raiseTo, the backup's next ID. The check and the raise
-// are one transaction, so a concurrent CREATE TABLE or restore makes one
-// of them fail. The job marks itself as the owner in the same transaction
-// (a fraction completed above 0) and does not check again when it
-// resumes. With raiseTo == 0 claimCluster only checks.
+// sequence: a cluster can be claimed only while the sequence is where a new
+// cluster has it, so no table was ever created in it and no other restore
+// claimed it, and claiming it raises the sequence past that value and past
+// the backup's next ID, raiseTo. The check and the raise are one
+// transaction, so of a concurrent CREATE TABLE or restore one fails. The
+// job marks itself as the owner in the same transaction (a fraction
+// completed above 0) and does not check again when it resumes. With
+// raiseTo == 0 claimCluster only checks.
 func claimCluster(
 	ctx context.Context, execCfg *sql.ExecutorConfig, job *jobs.Job, raiseTo int64,
 ) error {
@@ -197,8 +200,7 @@ func claimCluster(
 		if err != nil {
 			return err
 		}
-		maxID, err := onlyPreloaded(all)
-		if err != nil {
+		if err := onlyPreloaded(all); err != nil {
 			return err
 		}
 		key := codec.SequenceKey(keys.DescIDSequenceID)
@@ -210,7 +212,7 @@ func claimCluster(
 		if err != nil {
 			return err
 		}
-		if next != int64(maxID)+1 {
+		if next != pristineNextID() {
 			return errors.New("this cluster has handed out descriptor IDs: a table was created " +
 				"in it or another restore claimed it; restore into a new cluster")
 		}
@@ -220,19 +222,26 @@ func claimCluster(
 		if err := job.WithTxn(txn).FractionProgressed(ctx, jobs.FractionUpdater(claimedFraction)); err != nil {
 			return err
 		}
-		if next >= raiseTo {
-			return nil
+		if raiseTo <= next {
+			raiseTo = next + 1
 		}
 		return txn.KV().Put(ctx, key, raiseTo)
 	})
 }
 
+// pristineNextID is the descriptor ID sequence of a new cluster: the first
+// ID after the system tables, defaultdb and postgres and their public
+// schemas.
+func pristineNextID() int64 {
+	ms := bootstrap.MakeMetadataSchema(codec, zonepb.DefaultZoneConfigRef(), zonepb.DefaultSystemZoneConfigRef())
+	return int64(ms.FirstNonSystemDescriptorID()) + 2*int64(len(catalogkeys.DefaultUserDBs))
+}
+
 // onlyPreloaded returns an error if all has user objects other than the
-// pre-loaded defaultdb and postgres, and else the highest ID of those.
-func onlyPreloaded(all nstree.Catalog) (descpb.ID, error) {
+// pre-loaded defaultdb and postgres.
+func onlyPreloaded(all nstree.Catalog) error {
 	preloaded := map[descpb.ID]bool{}
-	var maxID descpb.ID
-	err := all.ForEachDescriptor(func(desc catalog.Descriptor) error {
+	return all.ForEachDescriptor(func(desc catalog.Descriptor) error {
 		if catalog.IsSystemDescriptor(desc) {
 			return nil
 		}
@@ -240,18 +249,14 @@ func onlyPreloaded(all nstree.Catalog) (descpb.ID, error) {
 		case desc.DescriptorType() == catalog.Database &&
 			(desc.GetName() == catalogkeys.DefaultDatabaseName || desc.GetName() == catalogkeys.PgDatabaseName):
 			preloaded[desc.GetID()] = true
+			return nil
 		case desc.DescriptorType() == catalog.Schema && desc.GetName() == catconstants.PublicSchemaName &&
 			preloaded[desc.GetParentID()]:
-		default:
-			return errors.Newf("the cluster is not empty: it has %s %q; restore into a new cluster",
-				desc.DescriptorType(), desc.GetName())
+			return nil
 		}
-		if desc.GetID() > maxID {
-			maxID = desc.GetID()
-		}
-		return nil
+		return errors.Newf("the cluster is not empty: it has %s %q; restore into a new cluster",
+			desc.DescriptorType(), desc.GetName())
 	})
-	return maxID, err
 }
 
 // claimedFraction is the fraction completed of a restore that has claimed
@@ -576,7 +581,7 @@ func publish(
 		if err != nil {
 			return err
 		}
-		if _, err := onlyPreloaded(all); err != nil {
+		if err := onlyPreloaded(all); err != nil {
 			return err
 		}
 		oldVersions := map[descpb.ID]descpb.DescriptorVersion{}
