@@ -135,15 +135,6 @@ func scheduleProblems(ctx context.Context, txn descs.Txn) ([]string, error) {
 // catalogProblems lists the descriptors in c that use cut features. It reads
 // them without validation, because validation rejects some of them.
 func catalogProblems(c nstree.Catalog) []string {
-	// Routine bodies call user-defined functions by name, and do not record
-	// which ones.
-	funcsByDB := make(map[descpb.ID][]catalog.Descriptor)
-	_ = c.ForEachDescriptor(func(d catalog.Descriptor) error {
-		if d.DescriptorType() == catalog.Function {
-			funcsByDB[d.GetParentID()] = append(funcsByDB[d.GetParentID()], d)
-		}
-		return nil
-	})
 	var found []string
 	_ = c.ForEachDescriptor(func(d catalog.Descriptor) error {
 		var problems []string
@@ -164,7 +155,8 @@ func catalogProblems(c nstree.Catalog) []string {
 		case catalog.TypeDescriptor:
 			problems = typeProblems(d)
 		case catalog.FunctionDescriptor:
-			problems = functionProblems(d, udfMatcher(c, funcsByDB[d.GetParentID()]))
+			// CockroachDB v23.2 lets no routine call a user-defined function.
+			problems = functionProblems(d, noUDFs)
 		}
 		if len(problems) == 0 {
 			return nil
@@ -186,7 +178,8 @@ func catalogProblems(c nstree.Catalog) []string {
 type isUDF func(tree.RoutineName) bool
 
 // noUDFs is the isUDF of stored expressions, which refer to user-defined
-// functions by OID instead of by name.
+// functions by OID instead of by name, and of routine bodies, which cannot
+// call them.
 func noUDFs(tree.RoutineName) bool { return false }
 
 // udfMatcher returns an isUDF that matches the functions fns. A name that
@@ -359,8 +352,9 @@ func callProblems(node interface{}, udf isUDF) []string {
 	if len(removed) > 0 {
 		problems = append(problems, describe("calls the removed function", removed))
 	}
-	// Views, routines and stored expressions refer to user-defined types by
-	// OID, so a type that patchroaddb does not know by name is a removed one.
+	// In CockroachDB v23.2 an unqualified geometry, geography or box2d is the
+	// spatial type, a keyword of the grammar. A user-defined type of that
+	// name needs its schema.
 	removed = make(map[string]bool)
 	for _, ref := range typeRefs {
 		for {
@@ -372,7 +366,7 @@ func callProblems(node interface{}, udf isUDF) []string {
 		}
 		switch t := ref.(type) {
 		case *tree.UnresolvedObjectName:
-			if name := strings.ToLower(t.Object()); removedTypes[name] {
+			if name := strings.ToLower(t.Object()); t.NumParts == 1 && removedTypes[name] {
 				removed[strings.ToUpper(name)] = true
 			}
 		case *types.T:

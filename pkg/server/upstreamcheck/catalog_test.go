@@ -78,6 +78,8 @@ func TestStmtProblems(t *testing.T) {
 		{"SELECT st_x(a::BOX2D) FROM t", []string{
 			"calls the removed function st_x", "uses the removed type BOX2D"}},
 		{"SELECT a::INT8, b::@100105, c::myschema.mytype FROM t", nil},
+		// User-defined types named like the spatial types need their schema.
+		{"SELECT 1 FROM t JOIN u ON t.w::my.geometry IS NOT NULL WHERE t.w IS OF (defaultdb.my.geometry)", nil},
 	} {
 		t.Run(tc.stmts, func(t *testing.T) {
 			require.Equal(t, tc.want, stmtProblems(tc.stmts, isMyFunc))
@@ -157,9 +159,9 @@ func TestCatalogProblems(t *testing.T) {
 		FunctionBody: "SELECT 1;",
 	}).BuildImmutable())
 	mc.UpsertDescriptor(funcdesc.NewBuilder(&descpb.FunctionDescriptor{
-		ID: 107, Name: "uses_my_func", ParentID: 100, ParentSchemaID: 101, Lang: catpb.Function_SQL,
+		ID: 107, Name: "plain_func", ParentID: 100, ParentSchemaID: 101, Lang: catpb.Function_SQL,
 		ReturnType:   descpb.FunctionDescriptor_ReturnType{Type: types.Int},
-		FunctionBody: "SELECT my_func() + length('x');",
+		FunctionBody: "SELECT length('x');",
 	}).BuildImmutable())
 	mc.UpsertDescriptor(funcdesc.NewBuilder(&descpb.FunctionDescriptor{
 		ID: 108, Name: "plpgsql_func", ParentID: 100, ParentSchemaID: 101, Lang: catpb.Function_PLPGSQL,
@@ -172,8 +174,8 @@ func TestCatalogProblems(t *testing.T) {
 		ReturnType:   descpb.FunctionDescriptor_ReturnType{Type: types.Float},
 		FunctionBody: "SELECT st_area(g);",
 	}).BuildImmutable())
-	// A view records the functions it calls. A function of the same name in
-	// another database does not hide a removed one.
+	// A view records the functions it calls, and a routine can call none, so
+	// a function of the same name elsewhere does not hide a removed one.
 	mc.UpsertDescriptor(tabledesc.NewBuilder(&descpb.TableDescriptor{
 		ID: 113, Name: "checks", ParentID: 100, UnexposedParentSchemaID: 101,
 		Columns:            []descpb.ColumnDescriptor{{ID: 1, Name: "a", Type: types.Int}},
@@ -189,7 +191,7 @@ func TestCatalogProblems(t *testing.T) {
 	mc.UpsertDescriptor(funcdesc.NewBuilder(&descpb.FunctionDescriptor{
 		ID: 115, Name: "calls_other", ParentID: 100, ParentSchemaID: 101, Lang: catpb.Function_SQL,
 		ReturnType:   descpb.FunctionDescriptor_ReturnType{Type: types.Bool},
-		FunctionBody: "SELECT fips_ready() OR other.my_func() > 0;",
+		FunctionBody: "SELECT fips_ready() OR other.my_func() > 0 OR my_func() > 0;",
 	}).BuildImmutable())
 
 	require.Equal(t, []string{
@@ -209,7 +211,7 @@ func TestCatalogProblems(t *testing.T) {
 		`database world: is a multi-region database`,
 		`type world.public.crdb_internal_region: is a multi-region enum`,
 		`view shop.public.checks: the query calls the removed function fips_ready`,
-		`function shop.public.calls_other: the body calls the removed functions fips_ready, other.my_func`,
+		`function shop.public.calls_other: the body calls the removed functions fips_ready, my_func, other.my_func`,
 	}, catalogProblems(mc.Catalog))
 }
 
