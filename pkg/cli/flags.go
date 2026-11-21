@@ -1015,10 +1015,17 @@ func extraClientFlagInit() error {
 			return err
 		}
 		baseCfg.Certs = c
-		if cliCtx.clientOpts.User == "" &&
-			clientsecopts.UsesConfigClientCert(baseCfg.Insecure, cliCtx.clientOpts.ExplicitURL) {
-			if cliCtx.clientOpts.User, err = certconfig.DefaultClientUser(c); err != nil {
+		if cliCtx.clientOpts.User == "" {
+			copts := cliCtx.clientOpts
+			copts.ClientSecurityOptions = clientsecopts.ClientSecurityOptions{Insecure: baseCfg.Insecure, Certs: c}
+			usesCert, err := clientsecopts.UsesConfigClientCert(copts)
+			if err != nil {
 				return err
+			}
+			if usesCert {
+				if cliCtx.clientOpts.User, err = certconfig.DefaultClientUser(c); err != nil {
+					return err
+				}
 			}
 		}
 	}

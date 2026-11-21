@@ -13,6 +13,7 @@ package clientsecopts_test
 import (
 	"testing"
 
+	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/security/clientsecopts"
 	"github.com/cockroachdb/cockroach/pkg/server/pgurl"
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
@@ -21,16 +22,33 @@ import (
 
 func TestUsesConfigClientCert(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	parse := func(s string) *pgurl.URL {
-		u, err := pgurl.Parse(s)
+	certs := certconfig.Config{NodeCA: "ca.crt", ClientCert: "client.crt", ClientKey: "client.key"}
+	uses := func(insecure bool, url, host, port string) bool {
+		t.Helper()
+		copts := clientsecopts.ClientOptions{
+			ClientSecurityOptions: clientsecopts.ClientSecurityOptions{Insecure: insecure, Certs: certs},
+			ServerHost:            host,
+			ServerPort:            port,
+		}
+		if url != "" {
+			u, err := pgurl.Parse(url)
+			require.NoError(t, err)
+			copts.ExplicitURL = u
+			_, copts.ServerHost, copts.ServerPort = u.GetNetworking()
+			if host != "" {
+				copts.ServerHost, copts.ServerPort = host, port
+			}
+		}
+		ok, err := clientsecopts.UsesConfigClientCert(copts)
 		require.NoError(t, err)
-		return u
+		return ok
 	}
-	require.True(t, clientsecopts.UsesConfigClientCert(false, nil))
-	require.False(t, clientsecopts.UsesConfigClientCert(true, nil))
-	require.True(t, clientsecopts.UsesConfigClientCert(false, parse("postgresql://h:26257?sslmode=verify-full")))
-	require.False(t, clientsecopts.UsesConfigClientCert(false, parse("postgresql://h:26257?sslmode=disable")))
-	require.False(t, clientsecopts.UsesConfigClientCert(false,
-		parse("postgresql://h:26257?sslmode=verify-full&sslcert=c.crt&sslkey=c.key")))
-	require.False(t, clientsecopts.UsesConfigClientCert(false, parse("postgresql://root@/defaultdb?host=/tmp&port=26257")))
+	require.True(t, uses(false, "", "h", "26257"))
+	require.False(t, uses(true, "", "h", "26257"))
+	require.True(t, uses(false, "postgresql://h:26257?sslmode=verify-full", "", ""))
+	require.False(t, uses(false, "postgresql://h:26257?sslmode=disable", "", ""))
+	require.False(t, uses(false, "postgresql://h:26257?sslmode=verify-full&sslcert=c.crt&sslkey=c.key", "", ""))
+	require.False(t, uses(false, "postgresql://root@/defaultdb?host=/tmp&port=26257", "", ""))
+	// --host after a socket URL makes it TCP, with the config cert.
+	require.True(t, uses(false, "postgresql://root@/defaultdb?host=/tmp&port=26257", "h", "26257"))
 }

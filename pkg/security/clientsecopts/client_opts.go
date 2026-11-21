@@ -178,23 +178,22 @@ func MakeClientConnURL(copts ClientOptions) (*pgurl.URL, error) {
 	return purl, nil
 }
 
-// UsesConfigClientCert reports whether a connection made with these options
-// presents the client cert of the --config file: it uses TLS over TCP and
-// its URL names no client cert of its own.
-func UsesConfigClientCert(insecure bool, u *pgurl.URL) bool {
-	if insecure {
-		return false
+// UsesConfigClientCert reports whether the connection URL that
+// MakeClientConnURL builds from copts presents the client cert of the
+// --config file: not in insecure mode, over a Unix socket, without TLS, or
+// when the URL names a client cert of its own.
+func UsesConfigClientCert(copts ClientOptions) (bool, error) {
+	if copts.Certs.ClientCert == "" {
+		return false, nil
 	}
-	if u == nil {
-		return true
+	// MakeClientConnURL changes the URL it is given.
+	if copts.ExplicitURL != nil {
+		copts.ExplicitURL = copts.ExplicitURL.Clone()
 	}
-	if net, _, _ := u.GetNetworking(); net != pgurl.ProtoTCP {
-		// A Unix socket does not use TLS.
-		return false
+	u, err := MakeClientConnURL(copts)
+	if err != nil {
+		return false, err
 	}
-	if tlsUsed, _, _ := u.GetTLSOptions(); !tlsUsed {
-		return false
-	}
-	hasCert, _, _ := u.GetAuthnCert()
-	return !hasCert
+	hasCert, cert, _ := u.GetAuthnCert()
+	return hasCert && cert == copts.Certs.ClientCert, nil
 }

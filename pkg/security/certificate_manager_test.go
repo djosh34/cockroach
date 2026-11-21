@@ -393,7 +393,9 @@ func TestReload(t *testing.T) {
 	// A cut-off first root fails the reload even though the node's root
 	// after it is complete.
 	before = failures()
-	writeFile(t, cfg.NodeCA, append(append([]byte(nil), secondRoot.CertPEM[:100]...), p.nodeRoot.CertPEM...))
+	// The cut leaves a partial line; the complete root starts on the next.
+	cutFirst := append(append([]byte(nil), secondRoot.CertPEM[:100]...), '\n')
+	writeFile(t, cfg.NodeCA, append(cutFirst, p.nodeRoot.CertPEM...))
 	testutils.SucceedsSoon(t, func() error {
 		if failures() == before {
 			return errors.New("no failed reload yet")
