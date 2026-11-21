@@ -245,6 +245,10 @@ func TestCatalogProblems(t *testing.T) {
 	// With a database of the schema's name, the name is the spatial type of
 	// that database, whatever enums of that name exist elsewhere.
 	view(127, 100, 101, cast("shop.geometry"))
+	// A dropped database not yet garbage collected does not count.
+	mc.UpsertDescriptor(dbdesc.NewBuilder(&descpb.DatabaseDescriptor{
+		ID: 131, Name: "my", State: descpb.DescriptorState_DROP,
+	}).BuildImmutable())
 	view(130, 100, 101, "SELECT 1 AS a FROM t JOIN u ON 'x'::world.geometry IS NOT NULL "+
 		"AND 'y'::world.shop.geometry IS NOT NULL", 121)
 	// IS OF records no type dependency, and v23.2 stores its types with

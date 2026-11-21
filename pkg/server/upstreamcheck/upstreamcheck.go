@@ -213,7 +213,8 @@ func noUDTs(*tree.UnresolvedObjectName) bool { return false }
 func udtMatcher(c nstree.Catalog) isUDT {
 	dbs := make(map[string]bool)
 	_ = c.ForEachDescriptor(func(d catalog.Descriptor) error {
-		if d.DescriptorType() == catalog.Database {
+		// A dropped database no longer resolves names.
+		if d.DescriptorType() == catalog.Database && !d.Dropped() {
 			dbs[d.GetName()] = true
 		}
 		return nil
