@@ -136,6 +136,7 @@ func scheduleProblems(ctx context.Context, txn descs.Txn) ([]string, error) {
 // catalogProblems lists the descriptors in c that use cut features. It reads
 // them without validation, because validation rejects some of them.
 func catalogProblems(c nstree.Catalog) []string {
+	udt := udtMatcher(c)
 	var found []string
 	_ = c.ForEachDescriptor(func(d catalog.Descriptor) error {
 		var problems []string
@@ -145,14 +146,13 @@ func catalogProblems(c nstree.Catalog) []string {
 				problems = append(problems, "is a multi-region database")
 			}
 		case catalog.TableDescriptor:
-			// A view records the functions and types it uses.
-			problems = tableProblems(d, udfMatcher(c, lookup(c, d.GetDependsOnFunctions())),
-				udtMatcher(c, lookup(c, d.GetDependsOnTypes())))
+			// A view records the functions it calls.
+			problems = tableProblems(d, udfMatcher(c, lookup(c, d.GetDependsOnFunctions())), udt)
 		case catalog.TypeDescriptor:
 			problems = typeProblems(d)
 		case catalog.FunctionDescriptor:
 			// CockroachDB v23.2 lets no routine call a user-defined function.
-			problems = functionProblems(d, noUDFs, udtMatcher(c, lookup(c, d.GetDependsOnTypes())))
+			problems = functionProblems(d, noUDFs, udt)
 		}
 		if len(problems) == 0 {
 			return nil
@@ -201,24 +201,32 @@ type isUDT func(*tree.UnresolvedObjectName) bool
 // types by OID instead of by name.
 func noUDTs(*tree.UnresolvedObjectName) bool { return false }
 
-// udtMatcher returns an isUDT that matches the types typs, the types that a
-// view or routine depends on. In CockroachDB v23.2 an unqualified geometry,
-// geography or box2d is the spatial type, a keyword of the grammar, and so is
-// one in public or pg_catalog, even when a user-defined type of that name was
-// moved into public.
-func udtMatcher(c nstree.Catalog, typs []catalog.Descriptor) isUDT {
+// udtMatcher returns an isUDT for the views and routines of catalog c. In
+// CockroachDB v23.2, geometry, geography and box2d name the spatial type
+// when unqualified, a keyword of the grammar, or in public or pg_catalog, even
+// when a user-defined type of that name was moved into public. A name with a
+// database and another schema is never the spatial type. A name like
+// x.geometry is a type in schema x of the current database if there is one,
+// and otherwise the spatial type of database x. The current database of the
+// session that created the view is not stored, so x.geometry counts as the
+// spatial type whenever a database x exists.
+func udtMatcher(c nstree.Catalog) isUDT {
+	dbs := make(map[string]bool)
+	_ = c.ForEachDescriptor(func(d catalog.Descriptor) error {
+		if d.DescriptorType() == catalog.Database {
+			dbs[d.GetName()] = true
+		}
+		return nil
+	})
 	return func(n *tree.UnresolvedObjectName) bool {
-		if n.NumParts == 1 || n.Schema() == catconstants.PublicSchemaName ||
-			n.Schema() == catconstants.PgCatalogName {
+		switch {
+		case n.NumParts == 1 || n.Schema() == catconstants.PublicSchemaName ||
+			n.Schema() == catconstants.PgCatalogName:
 			return false
+		case n.NumParts == 3:
+			return true
 		}
-		for _, typ := range typs {
-			if typ.GetName() == n.Object() && schemaName(c, typ) == n.Schema() &&
-				(n.NumParts < 3 || dbName(c, typ) == n.Catalog()) {
-				return true
-			}
-		}
-		return false
+		return !dbs[n.Schema()]
 	}
 }
 

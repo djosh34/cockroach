@@ -227,26 +227,31 @@ func TestCatalogProblems(t *testing.T) {
 	}).BuildImmutable())
 	// One view per cast, each recording the types it depends on as upstream
 	// did.
-	view := func(id, db, schema descpb.ID, cast string, typeDeps ...descpb.ID) {
+	view := func(id, db, schema descpb.ID, query string, typeDeps ...descpb.ID) {
 		mc.UpsertDescriptor(tabledesc.NewBuilder(&descpb.TableDescriptor{
 			ID: id, Name: fmt.Sprintf("v%d", id), ParentID: db, UnexposedParentSchemaID: schema,
 			Columns:        []descpb.ColumnDescriptor{{ID: 1, Name: "a", Type: types.Int}},
 			PrimaryIndex:   primary,
-			ViewQuery:      "SELECT 1 AS a FROM t JOIN u ON 'x'::" + cast + " IS NOT NULL",
+			ViewQuery:      query,
 			DependsOnTypes: typeDeps,
 		}).BuildImmutable())
 	}
-	view(123, 100, 101, "my.geometry", 117)
-	view(124, 100, 101, "shop.my.geometry", 117)
-	view(125, 100, 101, `shop.my."Geometry"`, 119)
+	cast := func(typ string) string { return "SELECT 1 AS a FROM t JOIN u ON 'x'::" + typ + " IS NOT NULL" }
+	view(123, 100, 101, cast("my.geometry"), 117)
+	view(124, 100, 101, cast("shop.my.geometry"), 117)
+	view(125, 100, 101, cast(`shop.my."Geometry"`), 119)
 	// A view in another database that uses the enum of database shop.
-	view(126, 110, 120, "my.geometry", 117)
-	// An enum of that name that the view does not use does not hide the
-	// spatial type.
-	view(127, 100, 101, "shop.geometry")
-	view(128, 100, 101, "world.shop.geometry")
-	// Nor does an enum moved into public.
-	view(129, 100, 101, "public.geography", 122)
+	view(126, 110, 120, cast("my.geometry"), 117)
+	// With a database of the schema's name, the name is the spatial type of
+	// that database, whatever enums of that name exist elsewhere.
+	view(127, 100, 101, cast("shop.geometry"))
+	view(130, 100, 101, "SELECT 1 AS a FROM t JOIN u ON 'x'::world.geometry IS NOT NULL "+
+		"AND 'y'::world.shop.geometry IS NOT NULL", 121)
+	// IS OF records no type dependency, and v23.2 stores its types with
+	// their database.
+	view(128, 100, 101, "SELECT 1 IS OF (shop.my.geometry) AS a FROM shop.public.t")
+	// An enum moved into public does not hide the spatial type.
+	view(129, 100, 101, cast("public.geography"), 122)
 
 	require.Equal(t, []string{
 		`table shop.public.places: has a multi-region locality`,
@@ -267,8 +272,8 @@ func TestCatalogProblems(t *testing.T) {
 		`view shop.public.checks: the query calls the removed function fips_ready`,
 		`function shop.public.calls_other: the body calls the removed functions fips_ready, my_func, other.my_func`,
 		`view shop.public.v127: the query uses the removed type GEOMETRY`,
-		`view shop.public.v128: the query uses the removed type GEOMETRY`,
 		`view shop.public.v129: the query uses the removed type GEOGRAPHY`,
+		`view shop.public.v130: the query uses the removed type GEOMETRY`,
 	}, catalogProblems(mc.Catalog))
 }
 

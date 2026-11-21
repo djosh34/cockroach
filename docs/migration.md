@@ -42,6 +42,12 @@ in CockroachDB first:
   functions, `decrypt` and `crdb_internal.fips_ready`, or cast to a spatial
   type.
 
+A user-defined type named geometry, geography or box2d is fine. But a view
+or function that names one as `x.geometry` while a database named `x`
+exists is refused, because in CockroachDB that name can also mean the
+spatial type of database `x`. Recreate it with the type's full name,
+`db.x.geometry`.
+
 The check also counts dropped objects that the garbage collector has not
 removed yet; the list marks them "dropped". Wait until it removes them, or
 lower `gc.ttlseconds` on the table before you drop it.
