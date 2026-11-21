@@ -25,8 +25,8 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/envutil"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/log/eventpb"
-	"github.com/cockroachdb/cockroach/pkg/util/sysutil"
 	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
+	"github.com/cockroachdb/cockroach/pkg/util/sysutil"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/errors"
 )
@@ -49,9 +49,9 @@ type CertificateManager struct {
 	// Client cert expiration cache.
 	clientCertExpirationCache *ClientCertExpirationCache
 
-	// reloadMu serializes reloads.
+	// reloadMu serializes reloads and protects onReload.
 	reloadMu syncutil.Mutex
-	// onReload is called after each successful reload. Set before Watch.
+	// onReload is called after each successful reload.
 	onReload []func()
 
 	cur atomic.Pointer[certSet]
@@ -111,9 +111,10 @@ func (cm *CertificateManager) Rules() *Rules {
 	return cm.cur.Load().rules
 }
 
-// OnReload registers f to run after each successful reload. It must be
-// called before Watch.
+// OnReload registers f to run after each successful reload.
 func (cm *CertificateManager) OnReload(f func()) {
+	cm.reloadMu.Lock()
+	defer cm.reloadMu.Unlock()
 	cm.onReload = append(cm.onReload, f)
 }
 

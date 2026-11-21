@@ -39,7 +39,7 @@ func TestAllowRoleMembershipsToChangeDuringTransaction(t *testing.T) {
 
 	openUser := func(username, dbName string) (_ *gosql.DB, cleanup func()) {
 		db := s.ApplicationLayer().
-			SQLConn(t, serverutils.UserPassword(username, username), serverutils.DBName(dbName), serverutils.ClientCerts(false))
+			SQLConn(t, serverutils.User(username), serverutils.DBName(dbName))
 		return db, func() {
 			require.NoError(t, db.Close())
 		}

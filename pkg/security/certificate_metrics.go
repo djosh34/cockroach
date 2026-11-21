@@ -32,6 +32,9 @@ type Metrics struct {
 	// ReloadFailures counts reloads that kept the old files because a new
 	// file did not parse or did not match.
 	ReloadFailures *metric.Counter
+	// RulesMismatchedNodes is the number of live nodes whose identity rules
+	// differ from this node's.
+	RulesMismatchedNodes *metric.Gauge
 }
 
 var _ metric.Struct = (*Metrics)(nil)
@@ -65,6 +68,12 @@ var (
 		Measurement: "Certificate Expiration",
 		Unit:        metric.Unit_TIMESTAMP_SEC,
 	}
+	metaRulesMismatchedNodes = metric.Metadata{
+		Name:        "security.identity.rules.mismatched_nodes",
+		Help:        "Number of live nodes whose loaded identity rules differ from this node's",
+		Measurement: "Nodes",
+		Unit:        metric.Unit_COUNT,
+	}
 	metaReloadFailures = metric.Metadata{
 		Name:        "security.certificate.reload.failures",
 		Help:        "Reloads of the certificate, key, CA and rules files that kept the old files because of an error",
@@ -76,10 +85,11 @@ var (
 func makeMetrics() Metrics {
 	b := aggmetric.MakeBuilder(SQLUserLabel)
 	return Metrics{
-		CAExpiration:       metric.NewGauge(metaCAExpiration),
-		ClientCAExpiration: metric.NewGauge(metaClientCAExpiration),
-		ClientExpiration:   b.Gauge(metaClientExpiration),
-		NodeExpiration:     metric.NewGauge(metaNodeExpiration),
-		ReloadFailures:     metric.NewCounter(metaReloadFailures),
+		CAExpiration:         metric.NewGauge(metaCAExpiration),
+		ClientCAExpiration:   metric.NewGauge(metaClientCAExpiration),
+		ClientExpiration:     b.Gauge(metaClientExpiration),
+		NodeExpiration:       metric.NewGauge(metaNodeExpiration),
+		ReloadFailures:       metric.NewCounter(metaReloadFailures),
+		RulesMismatchedNodes: metric.NewGauge(metaRulesMismatchedNodes),
 	}
 }

@@ -20,7 +20,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/util/envutil"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
-	"github.com/cockroachdb/cockroach/pkg/util/metric"
 	"github.com/cockroachdb/cockroach/pkg/util/quotapool"
 	"github.com/cockroachdb/errors"
 	"golang.org/x/crypto/bcrypt"
@@ -153,38 +152,6 @@ var MinPasswordLength = settings.RegisterIntSetting(
 	settings.NonNegativeInt,
 	settings.WithPublic)
 
-// AutoUpgradePasswordHashes is the cluster setting that configures whether to
-// automatically re-encode stored passwords using crdb-bcrypt to scram-sha-256.
-var AutoUpgradePasswordHashes = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"server.user_login.upgrade_bcrypt_stored_passwords_to_scram.enabled",
-	"if server.user_login.password_encryption=scram-sha-256, this controls "+
-		"whether to automatically re-encode stored passwords using crdb-bcrypt to scram-sha-256",
-	true,
-	settings.WithPublic)
-
-// AutoDowngradePasswordHashes is the cluster setting that configures whether to
-// automatically re-encode stored passwords using scram-sha-256 to crdb-bcrypt.
-var AutoDowngradePasswordHashes = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"server.user_login.downgrade_scram_stored_passwords_to_bcrypt.enabled",
-	"if server.user_login.password_encryption=crdb-bcrypt, this controls "+
-		"whether to automatically re-encode stored passwords using scram-sha-256 to crdb-bcrypt",
-	true,
-	settings.WithPublic)
-
-// AutoRehashOnSCRAMCostChange is the cluster setting that configures whether to
-// automatically re-encode stored passwords using scram-sha-256 to use a new
-// default cost setting.
-var AutoRehashOnSCRAMCostChange = settings.RegisterBoolSetting(
-	settings.ApplicationLevel,
-	"server.user_login.rehash_scram_stored_passwords_on_cost_change.enabled",
-	"if server.user_login.password_hashes.default_cost.scram_sha_256 differs from, "+
-		"the cost in a stored hash, this controls whether to automatically re-encode "+
-		"stored passwords using scram-sha-256 with the new default cost",
-	true,
-	settings.WithPublic)
-
 // expensiveHashComputeSemOnce wraps a semaphore that limits the
 // number of concurrent calls to the bcrypt and sha256 hash
 // functions. This is needed to avoid the risk of a DoS attacks by
@@ -228,21 +195,8 @@ func maybeInitializeSem(ctx context.Context) {
 
 // GetExpensiveHashComputeSem retrieves the hashing semaphore.
 func GetExpensiveHashComputeSem(ctx context.Context) password.HashSemaphore {
-	return GetExpensiveHashComputeSemWithGauge(ctx, nil /* gauge */)
-}
-
-// GetExpensiveHashComputeSemWithGauge retrieves the hashing semaphore and
-// will make the callback update a gauge to track the number of goroutines
-// waiting for the semaphore.
-func GetExpensiveHashComputeSemWithGauge(
-	ctx context.Context, gauge *metric.Gauge,
-) password.HashSemaphore {
 	maybeInitializeSem(ctx)
 	return func(ctx context.Context) (cleanup func(), retErr error) {
-		if gauge != nil {
-			gauge.Inc(1)
-			defer gauge.Dec(1)
-		}
 		alloc, err := expensiveHashComputeSemOnce.sem.Acquire(ctx, 1)
 		if err != nil {
 			return nil, err

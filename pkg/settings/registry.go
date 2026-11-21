@@ -252,6 +252,17 @@ var retiredSettings = map[InternalKey]struct{}{
 	"diagnostics.reporting.enabled":            {},
 	"diagnostics.reporting.interval":           {},
 	"diagnostics.reporting.send_crash_reports": {},
+
+	// removed with every login method but TLS client certificates.
+	"server.host_based_authentication.configuration":                         {},
+	"server.identity_map.configuration":                                      {},
+	"server.user_login.cert_password_method.auto_scram_promotion.enabled":    {},
+	"server.user_login.upgrade_bcrypt_stored_passwords_to_scram.enabled":     {},
+	"server.user_login.downgrade_scram_stored_passwords_to_bcrypt.enabled":   {},
+	"server.user_login.rehash_scram_stored_passwords_on_cost_change.enabled": {},
+	"server.web_session.timeout":                                             {},
+	"server.web_session_timeout":                                             {},
+	"server.http.base_path":                                                  {},
 }
 
 // sqlDefaultSettings is the list of "grandfathered" existing sql.defaults

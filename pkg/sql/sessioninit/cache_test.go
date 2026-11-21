@@ -38,7 +38,7 @@ func TestCacheInvalidation(t *testing.T) {
 	s := srv.ApplicationLayer()
 
 	pgURL, cleanupFunc := s.PGUrl(
-		t, serverutils.CertsDirPrefix("TestCacheInvalidation"), serverutils.UserPassword("testuser", "abc"),
+		t, serverutils.CertsDirPrefix("TestCacheInvalidation"), serverutils.User("testuser"),
 	)
 	defer cleanupFunc()
 

@@ -56,9 +56,11 @@ func (cm *CertificateManager) Watch(ctx context.Context, stopper *stop.Stopper) 
 			return errors.Wrapf(err, "watching %s", dir)
 		}
 	}
+	// Ask for SIGHUP before returning, so that a SIGHUP sent once Watch
+	// returns reloads instead of stopping the process.
+	sighup := sysutil.RefreshSignaledChan()
 	return stopper.RunAsyncTask(ctx, "watch-certs", func(ctx context.Context) {
 		defer func() { _ = watcher.Close() }()
-		sighup := sysutil.RefreshSignaledChan()
 		var timer timeutil.Timer
 		defer timer.Stop()
 		for {

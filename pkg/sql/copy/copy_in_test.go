@@ -744,8 +744,7 @@ func TestCopyInReleasesLeases(t *testing.T) {
 
 	userURL, cleanupFn := s.PGUrl(t,
 		serverutils.CertsDirPrefix(t.Name()),
-		serverutils.UserPassword("foo", "testabc"),
-		serverutils.ClientCerts(false),
+		serverutils.User("foo"),
 	)
 	defer cleanupFn()
 	conn, err := sqltestutils.PGXConn(t, userURL)

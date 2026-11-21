@@ -39,8 +39,8 @@ type tenantAuthorizer struct {
 	capabilitiesAuthorizer tenantcapabilities.Authorizer
 }
 
-func tenantIDFromString(commonName, field string) (roachpb.TenantID, error) {
-	tenID, err := strconv.ParseUint(commonName, 10, 64)
+func tenantIDFromString(s, field string) (roachpb.TenantID, error) {
+	tenID, err := strconv.ParseUint(s, 10, 64)
 	if err != nil {
 		return roachpb.TenantID{}, authErrorf("could not parse tenant ID from %s: %s", field, err)
 	}

@@ -25,8 +25,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/multitenant/tenantcapabilities/tenantcapabilitiesauthorizer"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/rpc"
-	"github.com/cockroachdb/cockroach/pkg/security"
-	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/spanconfig"
 	"github.com/cockroachdb/cockroach/pkg/ts/tspb"
@@ -98,98 +96,43 @@ func TestWrappedServerStream(t *testing.T) {
 	require.Equal(t, 3, recv)
 }
 
+// TestAuthenticateTenant checks who a peer is on the RPC port. The TLS
+// handshake has already admitted only node certs, so a peer is privileged
+// unless it names a tenant in the gRPC metadata.
 func TestAuthenticateTenant(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	correctOU := []string{security.TenantsOU}
 	stid := roachpb.SystemTenantID
 	tenTen := roachpb.MustMakeTenantID(10)
 	for _, tc := range []struct {
 		systemID         roachpb.TenantID
-		ous              []string
-		commonName       string
+		noCert           bool
 		expTenID         roachpb.TenantID
 		expErr           string
-		tenantScope      uint64
 		clientTenantInMD string
 	}{
-		{systemID: stid, ous: correctOU, commonName: "10", expTenID: tenTen},
-		{systemID: stid, ous: correctOU, commonName: roachpb.MinTenantID.String(), expTenID: roachpb.MinTenantID},
-		{systemID: stid, ous: correctOU, commonName: roachpb.MaxTenantID.String(), expTenID: roachpb.MaxTenantID},
-		{systemID: stid, ous: correctOU, commonName: roachpb.SystemTenantID.String() /* "system" */, expErr: `could not parse tenant ID from Common Name \(CN\)`},
-		{systemID: stid, ous: correctOU, commonName: "-1", expErr: `could not parse tenant ID from Common Name \(CN\)`},
-		{systemID: stid, ous: correctOU, commonName: "0", expErr: `invalid tenant ID 0 in Common Name \(CN\)`},
-		{systemID: stid, ous: correctOU, commonName: "1", expErr: `invalid tenant ID 1 in Common Name \(CN\)`},
-		{systemID: stid, ous: correctOU, commonName: "root", expErr: `could not parse tenant ID from Common Name \(CN\)`},
-		{systemID: stid, ous: correctOU, commonName: "other", expErr: `could not parse tenant ID from Common Name \(CN\)`},
-		{systemID: stid, ous: []string{"foo"}, commonName: "other",
-			expErr: `need root or node client cert to perform RPCs on this server \(this is tenant system; cert is valid for "other" on all tenants\)`},
-		{systemID: stid, ous: nil, commonName: "other",
-			expErr: `need root or node client cert to perform RPCs on this server \(this is tenant system; cert is valid for "other" on all tenants\)`},
-		{systemID: stid, ous: append([]string{"foo"}, correctOU...), commonName: "other", expErr: `could not parse tenant ID from Common Name`},
-		{systemID: stid, ous: nil, commonName: "root"},
-		{systemID: stid, ous: nil, commonName: "node"},
-		{systemID: stid, ous: nil, commonName: "root", tenantScope: 10,
-			expErr: `need root or node client cert to perform RPCs on this server \(this is tenant system; cert is valid for "root" on tenant 10\)`},
-		{systemID: tenTen, ous: correctOU, commonName: "10", expTenID: roachpb.TenantID{}},
-		{systemID: tenTen, ous: correctOU, commonName: "123", expErr: `client tenant identity \(123\) does not match server`},
-		{systemID: tenTen, ous: correctOU, commonName: "1", expErr: `invalid tenant ID 1 in Common Name \(CN\)`},
-		{systemID: tenTen, ous: nil, commonName: "root"},
-		{systemID: tenTen, ous: nil, commonName: "node"},
+		{systemID: stid},
+		{systemID: tenTen},
+		{systemID: stid, noCert: true, expErr: `TLSInfo is not available`},
 
-		// Passing a client ID in metadata instead of relying only on the TLS cert.
-		{clientTenantInMD: "invalid", expErr: `could not parse tenant ID from gRPC metadata`},
-		{clientTenantInMD: "1", expErr: `invalid tenant ID 1 in gRPC metadata`},
-		{clientTenantInMD: "-1", expErr: `could not parse tenant ID from gRPC metadata`},
-
-		// tenant ID in MD matches that in client cert.
+		// Passing a client ID in metadata.
+		{systemID: stid, clientTenantInMD: "invalid", expErr: `could not parse tenant ID from gRPC metadata`},
+		{systemID: stid, clientTenantInMD: "1", expErr: `invalid tenant ID 1 in gRPC metadata`},
+		{systemID: stid, clientTenantInMD: "-1", expErr: `could not parse tenant ID from gRPC metadata`},
 		// Server is KV node: expect tenant authorization.
-		{clientTenantInMD: "10",
-			systemID: stid, ous: correctOU, commonName: "10", expTenID: tenTen},
-		// tenant ID in MD doesn't match that in client cert.
-		{clientTenantInMD: "10",
-			systemID: stid, ous: correctOU, commonName: "123",
-			expErr: `client wants to authenticate as tenant 10, but is using TLS cert for tenant 123`},
-		// tenant ID present in MD, but not in client cert. However,
-		// client cert is valid. Use MD tenant ID.
-		// Server is KV node: expect tenant authorization.
-		{clientTenantInMD: "10",
-			systemID: stid, ous: nil, commonName: "root", expTenID: tenTen},
-		// tenant ID present in MD, but not in client cert. However,
-		// client cert is valid. Use MD tenant ID.
-		// Server is KV node: expect tenant authorization.
-		{clientTenantInMD: "10",
-			systemID: stid, ous: nil, commonName: "node", expTenID: tenTen},
-		// tenant ID present in MD, but not in client cert. However,
-		// client cert is valid. Use MD tenant ID.
+		{systemID: stid, clientTenantInMD: "10", expTenID: tenTen},
 		// Server is secondary tenant: do not do additional tenant authorization.
-		{clientTenantInMD: "10",
-			systemID: tenTen, ous: nil, commonName: "root", expTenID: roachpb.TenantID{}},
-		{clientTenantInMD: "10",
-			systemID: tenTen, ous: nil, commonName: "node", expTenID: roachpb.TenantID{}},
-		// tenant ID present in MD, but not in client cert. Use MD tenant ID.
+		{systemID: tenTen, clientTenantInMD: "10", expTenID: roachpb.TenantID{}},
 		// Server tenant ID does not match client tenant ID.
-		{clientTenantInMD: "123",
-			systemID: tenTen, ous: nil, commonName: "root",
+		{systemID: tenTen, clientTenantInMD: "123",
 			expErr: `client tenant identity \(123\) does not match server`},
 	} {
-		t.Run(fmt.Sprintf("from %v to %v (md %q)", tc.commonName, tc.systemID, tc.clientTenantInMD), func(t *testing.T) {
-			cert := &x509.Certificate{
-				Subject: pkix.Name{
-					CommonName:         tc.commonName,
-					OrganizationalUnit: tc.ous,
-				},
-			}
-			if tc.tenantScope > 0 {
-				tenantSANs, err := security.MakeTenantURISANs(
-					username.MakeSQLUsernameFromPreNormalizedString(tc.commonName),
-					[]roachpb.TenantID{roachpb.MustMakeTenantID(tc.tenantScope)})
-				require.NoError(t, err)
-				cert.URIs = append(cert.URIs, tenantSANs...)
+		t.Run(fmt.Sprintf("to %v (md %q)", tc.systemID, tc.clientTenantInMD), func(t *testing.T) {
+			var certs []*x509.Certificate
+			if !tc.noCert {
+				certs = []*x509.Certificate{{Subject: pkix.Name{CommonName: "node"}}}
 			}
 			tlsInfo := credentials.TLSInfo{
-				State: tls.ConnectionState{
-					PeerCertificates: []*x509.Certificate{cert},
-				},
+				State: tls.ConnectionState{PeerCertificates: certs},
 			}
 			p := peer.Peer{AuthInfo: tlsInfo}
 			ctx := peer.NewContext(context.Background(), &p)

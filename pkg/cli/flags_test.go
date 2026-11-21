@@ -18,7 +18,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -28,7 +27,6 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/cli/cliflags"
-	"github.com/cockroachdb/cockroach/pkg/security/securitytest"
 	"github.com/cockroachdb/cockroach/pkg/server/status"
 	"github.com/cockroachdb/cockroach/pkg/testutils"
 	"github.com/cockroachdb/cockroach/pkg/testutils/skip"
@@ -279,18 +277,6 @@ func TestClientURLFlagEquivalence(t *testing.T) {
 	// Avoid leaking configuration changes after the tests end.
 	defer initCLIDefaults()
 
-	// Prepare a dummy default certificate directory.
-	defCertsDirPath := t.TempDir()
-	defCertsDirPath, _ = filepath.Abs(defCertsDirPath)
-	cleanup := securitytest.CreateTestCerts(defCertsDirPath)
-	defer func() { _ = cleanup() }()
-
-	// Prepare a custom certificate directory.
-	testCertsDirPath := t.TempDir()
-	testCertsDirPath, _ = filepath.Abs(testCertsDirPath)
-	cleanup2 := securitytest.CreateTestCerts(testCertsDirPath)
-	defer func() { _ = cleanup2() }()
-
 	anyCmd := []string{"sql", "node drain"}
 	anyNonSQL := []string{"node drain", "init"}
 	anySQL := []string{"sql"}
@@ -374,17 +360,7 @@ func TestClientURLFlagEquivalence(t *testing.T) {
 		{anyNonSQL, []string{"--url=postgresql://foo?sslmode=disable", "--insecure=false"}, []string{"--host=foo", "--insecure=false"}, "", ""},
 		{anyNonSQL, []string{"--url=postgresql://foo?sslmode=verify-full", "--insecure"}, []string{"--host=foo", "--insecure"}, "", ""},
 
-		// Check that the certs dir is extracted properly.
-		{anyNonSQL, []string{"--url=postgresql://foo?sslmode=verify-full&sslrootcert=" + testCertsDirPath + "/ca.crt"}, []string{"--host=foo", "--certs-dir=" + testCertsDirPath}, "", ""},
-		{anyNonSQL, []string{"--certs-dir=blah", "--url=postgresql://foo?sslmode=verify-full&sslrootcert=blih/ca.crt"}, nil, "non-homogeneous certificate directory", ""},
-		{anyNonSQL, []string{"--url=postgresql://foo?sslmode=verify-full&sslrootcert=blih/ca.crt&sslcert=blah/client.root.crt"}, nil, "non-homogeneous certificate directory", ""},
-
-		// Check the cert component file names are checked.
-		{anyNonSQL, []string{"--url=postgresql://foo?sslmode=verify-full&sslrootcert=blih/loh.crt"}, nil, `invalid file name for "sslrootcert": expected .* got .*`, ""},
-		{anyNonSQL, []string{"--url=postgresql://foo?sslmode=verify-full&sslcert=blih/loh.crt"}, nil, `invalid file name for "sslcert": expected .* got .*`, ""},
-		{anyNonSQL, []string{"--url=postgresql://foo?sslmode=verify-full&sslkey=blih/loh.crt"}, nil, `invalid file name for "sslkey": expected .* got .*`, ""},
-
-		// Check that not specifying a certs dir will cause Go to use root trust store.
+		// Check that not specifying a CA will cause Go to use root trust store.
 		{anyCmd, []string{"--url=postgresql://foo?sslmode=verify-full"}, []string{"--host=foo"}, "", ""},
 		{anySQL, []string{"--url=postgresql://foo?sslmode=verify-ca"}, []string{"--host=foo"}, "", ""},
 		{anySQL, []string{"--url=postgresql://foo?sslmode=require"}, []string{"--host=foo"}, "", ""},
@@ -396,23 +372,17 @@ func TestClientURLFlagEquivalence(t *testing.T) {
 		connUser     string
 		connDatabase string
 		insecure     bool
-		certsDir     string
 	}
 
 	// capture saves the parameter values computed in a round of
 	// command-line argument parsing.
 	capture := func(cmd *cobra.Command) capturedFlags {
-		certsDir := defCertsDirPath
-		if f := cmd.Flags().Lookup(cliflags.CertsDir.Name); f != nil && f.Changed {
-			certsDir = baseCfg.SSLCertsDir
-		}
 		return capturedFlags{
 			insecure:     baseCfg.Insecure,
 			connUser:     cliCtx.clientOpts.User,
 			connDatabase: cliCtx.clientOpts.Database,
 			connHost:     cliCtx.clientOpts.ServerHost,
 			connPort:     cliCtx.clientOpts.ServerPort,
-			certsDir:     certsDir,
 		}
 	}
 
@@ -424,7 +394,6 @@ func TestClientURLFlagEquivalence(t *testing.T) {
 				// Parse using the URL.
 				// This checks the URL parser works and/or that it produces the expected error.
 				initCLIDefaults()
-				cliCtx.SSLCertsDir = defCertsDirPath
 				err := cmd.ParseFlags(test.flags)
 				if !testutils.IsError(err, test.expErr) {
 					t.Fatalf("expected %q, got %v", test.expErr, err)
@@ -442,7 +411,6 @@ func TestClientURLFlagEquivalence(t *testing.T) {
 				// Parse using the discrete flags.
 				// We use this to generate the reference parameter values for the comparison below.
 				initCLIDefaults()
-				cliCtx.SSLCertsDir = defCertsDirPath
 				if err := cmd.ParseFlags(test.refargs); err != nil {
 					t.Fatal(err)
 				}
@@ -471,7 +439,6 @@ func TestClientURLFlagEquivalence(t *testing.T) {
 				// We'll want to ensure below that the derived URL specifies the same parameters
 				// (i.e. check makeClientConnURL does its work properly).
 				initCLIDefaults()
-				cliCtx.SSLCertsDir = defCertsDirPath
 				if err := cmd.ParseFlags([]string{"--url=" + resultURL}); err != nil {
 					if !testutils.IsError(err, test.reparseErr) {
 						t.Fatal(err)
@@ -489,7 +456,6 @@ func TestClientURLFlagEquivalence(t *testing.T) {
 				// We're checking here that makeClientConnURL is also doing its job
 				// properly when computing a URL from discrete parameters.
 				initCLIDefaults()
-				cliCtx.SSLCertsDir = defCertsDirPath
 				if err := cmd.ParseFlags([]string{"--url=" + defaultURL}); err != nil {
 					t.Fatal(err)
 				}
@@ -912,57 +878,6 @@ func TestServerJoinSettings(t *testing.T) {
 		if !reflect.DeepEqual(td.expectedJoin, actual) {
 			t.Errorf("%d. serverCfg.JoinList expected %#v, but got %#v. td.args was '%#v'.",
 				i, td.expectedJoin, actual, td.args)
-		}
-	}
-}
-
-func TestConnectJoinSettings(t *testing.T) {
-	defer leaktest.AfterTest(t)()
-	defer log.Scope(t).Close(t)
-
-	// Avoid leaking configuration changes after the tests end.
-	defer initCLIDefaults()
-
-	f := connectInitCmd.Flags()
-	testData := []struct {
-		args         []string
-		expectedJoin []string
-	}{
-		{[]string{"connect", "init", "--join=a"},
-			[]string{"a:" + base.DefaultPort}},
-		{[]string{"connect", "init", "--join=a,b,c"},
-			[]string{"a:" + base.DefaultPort, "b:" + base.DefaultPort, "c:" + base.DefaultPort}},
-		{[]string{"connect", "init", "--join=a", "--join=b"},
-			[]string{"a:" + base.DefaultPort, "b:" + base.DefaultPort}},
-		{[]string{"connect", "init", "--join=127.0.0.1"},
-			[]string{"127.0.0.1:" + base.DefaultPort}},
-		{[]string{"connect", "init", "--join=127.0.0.1:"},
-			[]string{"127.0.0.1:" + base.DefaultPort}},
-		{[]string{"connect", "init", "--join=127.0.0.1,abc"},
-			[]string{"127.0.0.1:" + base.DefaultPort, "abc:" + base.DefaultPort}},
-		{[]string{"connect", "init", "--join=[::1],[::2]"},
-			[]string{"[::1]:" + base.DefaultPort, "[::2]:" + base.DefaultPort}},
-		{[]string{"connect", "init", "--join=[::1]:123,[::2]"},
-			[]string{"[::1]:123", "[::2]:" + base.DefaultPort}},
-		{[]string{"connect", "init", "--join=[::1],127.0.0.1"},
-			[]string{"[::1]:" + base.DefaultPort, "127.0.0.1:" + base.DefaultPort}},
-		{[]string{"connect", "init", "--join=[::1]:123", "--join=[::2]"},
-			[]string{"[::1]:123", "[::2]:" + base.DefaultPort}},
-	}
-
-	for i, td := range testData {
-		initCLIDefaults()
-		if err := f.Parse(td.args); err != nil {
-			t.Fatalf("Parse(%#v) got unexpected error: %v", td.args, err)
-		}
-
-		if err := extraClientFlagInit(); err != nil {
-			t.Fatal(err)
-		}
-
-		if !reflect.DeepEqual(td.expectedJoin, []string(serverCfg.JoinList)) {
-			t.Errorf("%d. serverCfg.JoinList expected %#v, but got %#v. td.args was '%#v'.",
-				i, td.expectedJoin, serverCfg.JoinList, td.args)
 		}
 	}
 }

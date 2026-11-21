@@ -53,14 +53,6 @@ func User(username string) SQLConnOption {
 	}
 }
 
-// UserPassword sets the username and password to use when connecting to the
-// server.
-func UserPassword(username, password string) SQLConnOption {
-	return func(result *SQLConnOptions) {
-		result.User = url.UserPassword(username, password)
-	}
-}
-
 // ClientCerts set whether the client certificates are loaded on-disk and in the
 // connection URL.
 func ClientCerts(clientCerts bool) SQLConnOption {

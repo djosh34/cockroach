@@ -20,7 +20,6 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/security/securityassets"
-	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/errors/oserror"
 )
 
@@ -28,9 +27,14 @@ import (
 const Seed = 1
 
 // TestUsers have a client cert and a client rule in the default test
-// certificates. A test can still read a client cert for any other user, but
-// no rule admits it.
-var TestUsers = []string{"root", "testuser", "testuser2", "testuser3"}
+// certificates, so that tests can log in as them. A test can still read a
+// client cert for any other user, but no rule admits it.
+var TestUsers = []string{
+	"root", "testuser", "testuser2", "testuser3", "testadmin",
+	"authentic_user", "authentic_user_noadmin",
+	"foo", "bar", "baz", "newuser", "user1", "user2", "adminuser",
+	"test_user_a", "test_user_b", "test_user_c", "123foo", "foo.foo",
+}
 
 // Default test PKI: one root CA, one intermediate that signs every leaf.
 // Both CAs in certconfig.Embedded() are the root.
@@ -133,30 +137,3 @@ func (i fileInfo) Mode() fs.FileMode  { return 0600 }
 func (i fileInfo) ModTime() time.Time { return time.Time{} }
 func (i fileInfo) IsDir() bool        { return false }
 func (i fileInfo) Sys() any           { return nil }
-
-// WriteFiles writes the default test files to dir, with a config file named
-// config.yaml whose client cert is user's. It returns the config path.
-func WriteFiles(dir string, user string) (string, error) {
-	initEmbedded()
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return "", err
-	}
-	for name, b := range embedded.files {
-		if err := os.WriteFile(filepath.Join(dir, name), b, 0600); err != nil {
-			return "", err
-		}
-	}
-	for _, ext := range []string{".crt", ".key"} {
-		b, _ := File("client." + user + ext)
-		if err := os.WriteFile(filepath.Join(dir, "client"+ext), b, 0600); err != nil {
-			return "", err
-		}
-	}
-	config := "cert: node.crt\nkey: node.key\nnode-ca: ca.crt\nclient-ca: ca.crt\n" +
-		"rules: rules\nclient-cert: client.crt\nclient-key: client.key\n"
-	path := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(path, []byte(config), 0600); err != nil {
-		return "", errors.Wrap(err, "writing config file")
-	}
-	return path, nil
-}

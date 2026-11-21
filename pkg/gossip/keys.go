@@ -52,6 +52,10 @@ const (
 	// info.
 	KeyNodeLivenessPrefix = "liveness"
 
+	// KeyIdentityRulesPrefix is the key prefix for gossiping the identity
+	// rules a node has loaded. The value is the rules, one per line.
+	KeyIdentityRulesPrefix = "identity-rules"
+
 	// KeySentinel is a key for gossip which must not expire or
 	// else the node considers itself partitioned and will retry with
 	// bootstrap hosts.  The sentinel is gossiped by the node that holds
@@ -129,6 +133,12 @@ func DecodeNodeDescKey(key string, prefix string) (roachpb.NodeID, error) {
 // gossip health alerts.
 func MakeNodeHealthAlertKey(nodeID roachpb.NodeID) string {
 	return MakeKey(KeyNodeHealthAlertPrefix, strconv.Itoa(int(nodeID)))
+}
+
+// MakeIdentityRulesKey returns the gossip key under which the given node
+// gossips its identity rules.
+func MakeIdentityRulesKey(nodeID roachpb.NodeID) string {
+	return MakeKey(KeyIdentityRulesPrefix, strconv.Itoa(int(nodeID)))
 }
 
 // MakeNodeLivenessKey returns the gossip key for node liveness info.

@@ -1077,6 +1077,8 @@ func parseGossipValues(gossipInfo *gossip.InfoStatus) (string, error) {
 				return "", errors.Wrapf(err, "failed to parse value for key %q", key)
 			}
 			output = append(output, fmt.Sprintf("%q: %+v", key, version))
+		} else if strings.HasPrefix(key, gossip.KeyIdentityRulesPrefix) {
+			output = append(output, fmt.Sprintf("%q:\n  %s", key, strings.ReplaceAll(string(bytes), "\n", "\n  ")))
 		} else if strings.HasPrefix(key, gossip.KeyDistSQLDrainingPrefix) {
 			var drainingInfo execinfrapb.DistSQLDrainingInfo
 			if err := protoutil.Unmarshal(bytes, &drainingInfo); err != nil {

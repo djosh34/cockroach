@@ -1484,11 +1484,8 @@ func TestInternalSystemJobsAccess(t *testing.T) {
 	})
 
 	asUser := func(user string, f func(userDB *sqlutils.SQLRunner)) {
-		pgURL := url.URL{
-			Scheme: "postgres",
-			User:   url.UserPassword(user, "test"),
-			Host:   s.AdvSQLAddr(),
-		}
+		pgURL, cleanup := sqlutils.PGUrl(t, s.AdvSQLAddr(), t.Name(), url.User(user))
+		defer cleanup()
 		db2, err := gosql.Open("postgres", pgURL.String())
 		assert.NoError(t, err)
 		defer db2.Close()

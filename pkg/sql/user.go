@@ -14,8 +14,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/cockroachdb/cockroach/pkg/keys"
-	"github.com/cockroachdb/cockroach/pkg/security"
 	"github.com/cockroachdb/cockroach/pkg/security/password"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/settings"
@@ -32,7 +30,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlerrors"
 	"github.com/cockroachdb/cockroach/pkg/sql/syntheticprivilege"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
-	"github.com/cockroachdb/cockroach/pkg/util/log/eventpb"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/redact"
@@ -680,123 +677,4 @@ func (p *planner) checkCanBecomeUser(ctx context.Context, becomeUser username.SQ
 		)
 	}
 	return nil
-}
-
-// MaybeConvertStoredPasswordHash attempts to convert a stored hash
-// to match the current server.user_login.password_encryption setting..
-//
-// This auto-conversion is a CockroachDB-specific feature, which
-// pushes clusters upgraded from a previous version into using
-// SCRAM-SHA-256, and also allows easy downgrading from SCRAM-SHA-256
-// back to crdb-bcrypt.
-//
-// The caller is responsible for ensuring this function is only called
-// after a successful authentication, that is, the provided cleartext
-// password is known to match the previously-encoded prevHash.
-func MaybeConvertStoredPasswordHash(
-	ctx context.Context,
-	execCfg *ExecutorConfig,
-	userName username.SQLUsername,
-	cleartext string,
-	currentHash password.PasswordHash,
-) {
-	// This call also checks whether the conversion has been disabled by
-	// configuration.
-
-	autoUpgradePasswordHashesBool := security.AutoUpgradePasswordHashes.Get(&execCfg.Settings.SV)
-	autoDowngradePasswordHashesBool := security.AutoDowngradePasswordHashes.Get(&execCfg.Settings.SV)
-	autoRehashOnCostChangeBool := security.AutoRehashOnSCRAMCostChange.Get(&execCfg.Settings.SV)
-	configuredSCRAMCost := security.SCRAMCost.Get(&execCfg.Settings.SV)
-	configuredHashMethod := security.GetConfiguredPasswordHashMethod(&execCfg.Settings.SV)
-
-	converted, prevHash, newHash, newMethod, err := password.MaybeConvertPasswordHash(
-		ctx,
-		autoUpgradePasswordHashesBool, autoDowngradePasswordHashesBool, autoRehashOnCostChangeBool,
-		configuredHashMethod, configuredSCRAMCost, cleartext, currentHash,
-		security.GetExpensiveHashComputeSem(ctx),
-		log.Infof,
-	)
-	if err != nil {
-		// We're not returning an error: clients should not be refused a
-		// session just because a password conversion failed.
-		//
-		// Simply explain what happened in logs for troubleshooting.
-		log.Warningf(ctx, "password hash conversion failed: %+v", err)
-		return
-	} else if !converted {
-		// No conversion happening. Nothing to do.
-		return
-	}
-
-	// The password hash was successfully converted. Store the new hash.
-	if err := updateUserPasswordHash(ctx, execCfg, userName, prevHash, newHash); err != nil {
-		// Again, we don't want to fail with an error, because at this
-		// point authentication succeeded.
-		//
-		// Simply explain what happened in logs for troubleshooting.
-		log.Warningf(ctx, "storing the new password hash after conversion failed: %+v", err)
-	} else {
-		// Inform the security audit log that the hash was upgraded.
-		log.StructuredEvent(ctx, &eventpb.PasswordHashConverted{
-			RoleName:  userName.Normalized(),
-			OldMethod: currentHash.Method().String(),
-			NewMethod: newMethod,
-		})
-	}
-}
-
-func updateUserPasswordHash(
-	ctx context.Context,
-	execCfg *ExecutorConfig,
-	userName username.SQLUsername,
-	prevHash, newHash []byte,
-) error {
-	runFn := getUserInfoRunFn(execCfg, userName, "set-user-password-hash")
-
-	return runFn(ctx, func(ctx context.Context) error {
-		return DescsTxn(ctx, execCfg, func(ctx context.Context, txn isql.Txn, d *descs.Collection) error {
-			// NB: we cannot use ALTER USER ... WITH PASSWORD here,
-			// because it is not guaranteed to recognize the hash in the
-			// WITH PASSWORD clause.
-			// (The detection could be disabled via cluster setting
-			// server.user_login.store_client_pre_hashed_passwords.enabled)
-			//
-			// So instead we write to system.users and bump the version to
-			// invalidate the cache manually.
-			//
-			// The motivation for the "WHERE hashedPassword = prevHash"
-			// clause and the check for rowsAffected is to protect against
-			// two hazards:
-			//
-			// - a race condition where an ALTER USER WITH PASSWORD is
-			//   executed by an administrator concurrently with a user
-			//   login. Without WHERE, this could mistakenly override the
-			//   new password.
-			//
-			// - multiple concurrent logins by the same user, triggering
-			//   the same password upgrade for all of them. Without WHERE,
-			//   we'd be writing to system.users for all of them and queue
-			//   potentially many schema updates, creating a bottleneck.
-			//
-			rowsAffected, err := txn.Exec(
-				ctx,
-				"set-password-hash",
-				txn.KV(),
-				`UPDATE system.users SET "hashedPassword" = $3 WHERE username = $1 AND "hashedPassword" = $2`,
-				userName.Normalized(),
-				prevHash,
-				newHash,
-			)
-			if err != nil || rowsAffected == 0 {
-				// Error, or no update took place.
-				return err
-			}
-			usersTable, err := d.MutableByID(txn.KV()).Table(ctx, keys.UsersTableID)
-			if err != nil {
-				return err
-			}
-			// WriteDesc will internally bump the version.
-			return d.WriteDesc(ctx, false /* kvTrace */, usersTable, txn.KV())
-		})
-	})
 }

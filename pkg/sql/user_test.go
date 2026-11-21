@@ -59,9 +59,7 @@ func TestUserLoginAfterGC(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify that newuser can still log in.
-	newUserURL, cleanup := sqlutils.PGUrlWithOptionalClientCerts(
-		t, s.AdvSQLAddr(), t.Name(), url.UserPassword("newuser", "123"), false, /* withClientCerts */
-		"")
+	newUserURL, cleanup := sqlutils.PGUrl(t, s.AdvSQLAddr(), t.Name(), url.User("newuser"))
 	defer cleanup()
 
 	newUserConn, err := sqltestutils.PGXConn(t, newUserURL)
@@ -106,7 +104,7 @@ func TestGetUserTimeout(t *testing.T) {
 		s, db, _ := serverutils.StartServer(t, params)
 		defer s.Stopper().Stop(ctx)
 
-		// Make a user that must use a password to authenticate.
+		// Make a user that is not root.
 		// Default privileges on defaultdb are needed to run simple queries.
 		if _, err := db.Exec(`
 CREATE USER foo WITH PASSWORD 'testabc';
@@ -119,11 +117,9 @@ GRANT admin TO foo`); err != nil {
 		require.NoError(t, err)
 
 		// We'll attempt connections on gateway node 0.
-		fooURL, fooCleanupFn := sqlutils.PGUrlWithOptionalClientCerts(t,
-			s.AdvSQLAddr(), t.Name(), url.UserPassword("foo", "testabc"), false, "" /* withClientCerts */)
+		fooURL, fooCleanupFn := sqlutils.PGUrl(t, s.AdvSQLAddr(), t.Name(), url.User("foo"))
 		defer fooCleanupFn()
-		barURL, barCleanupFn := sqlutils.PGUrlWithOptionalClientCerts(t,
-			s.AdvSQLAddr(), t.Name(), url.UserPassword("bar", "testabc"), false, "" /* withClientCerts */)
+		barURL, barCleanupFn := sqlutils.PGUrl(t, s.AdvSQLAddr(), t.Name(), url.User("bar"))
 		defer barCleanupFn()
 		rootURL, rootCleanupFn := sqlutils.PGUrl(t,
 			s.AdvSQLAddr(), t.Name(), url.User(username.RootUser))

@@ -31,7 +31,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/cli/exit"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
-	"github.com/cockroachdb/cockroach/pkg/security/securitytest"
+	"github.com/cockroachdb/cockroach/pkg/security/securityassets"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlstats"
@@ -161,7 +161,7 @@ func newCLITestWithArgs(params TestCLIParams, argsFn func(args *base.TestServerA
 	var certs certconfig.Config
 	if !params.NoServer {
 		if !params.Insecure {
-			if c.configFile, err = securitytest.WriteFiles(certsDir, "root"); err != nil {
+			if c.configFile, err = writeTestCerts(certsDir); err != nil {
 				c.fail(err)
 			}
 			if certs, err = certconfig.Load(c.configFile); err != nil {
@@ -569,4 +569,32 @@ func MatchCSV(csvStr string, matchColRow [][]string) (err error) {
 		}
 	}
 	return err
+}
+
+// writeTestCerts copies the test certificates, which the securitytest
+// package serves from memory, to dir, and writes a config file for them
+// with root's client cert. It returns the config file path.
+func writeTestCerts(dir string) (string, error) {
+	embedded := certconfig.Embedded()
+	files := map[string]string{
+		embedded.NodeCA:     "ca.crt",
+		embedded.Cert:       "node.crt",
+		embedded.Key:        "node.key",
+		embedded.Rules:      "rules",
+		embedded.ClientCert: "client.crt",
+		embedded.ClientKey:  "client.key",
+	}
+	for src, dst := range files {
+		b, err := securityassets.GetLoader().ReadFile(src)
+		if err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(filepath.Join(dir, dst), b, 0600); err != nil {
+			return "", err
+		}
+	}
+	config := "cert: node.crt\nkey: node.key\nnode-ca: ca.crt\nclient-ca: ca.crt\n" +
+		"rules: rules\nclient-cert: client.crt\nclient-key: client.key\n"
+	path := filepath.Join(dir, "config.yaml")
+	return path, os.WriteFile(path, []byte(config), 0600)
 }

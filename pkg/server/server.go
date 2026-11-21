@@ -1806,6 +1806,17 @@ func (s *topLevelServer) PreStart(ctx context.Context) error {
 	if err := s.startPersistingHLCUpperBound(ctx, hlcUpperBoundExists); err != nil {
 		return err
 	}
+	if !s.cfg.Insecure {
+		cm, err := s.rpcContext.GetCertificateManager()
+		if err != nil {
+			return err
+		}
+		if err := startIdentityRulesGossip(
+			workersCtx, s.stopper, s.gossip, s.NodeID(), cm,
+		); err != nil {
+			return err
+		}
+	}
 	s.replicationReporter.Start(workersCtx, s.stopper)
 
 	// Init a log metrics registry.

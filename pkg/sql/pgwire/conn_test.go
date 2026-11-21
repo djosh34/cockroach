@@ -34,7 +34,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/clusterunique"
 	"github.com/cockroachdb/cockroach/pkg/sql/isql"
 	"github.com/cockroachdb/cockroach/pkg/sql/lex"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/hba"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgwirebase"
@@ -129,7 +128,7 @@ func TestConn(t *testing.T) {
 			serveCtx,
 			conn,
 			&mon.BoundAccount{}, /* reserved */
-			authOptions{testingSkipAuth: true, connType: hba.ConnHostAny},
+			authOptions{testingSkipAuth: true, connType: ConnHostSSL},
 			clusterunique.ID{},
 		)
 		return nil
@@ -253,7 +252,7 @@ func TestPipelineMetric(t *testing.T) {
 			ctx,
 			serverSideConn,
 			&mon.BoundAccount{}, /* reserved */
-			authOptions{testingSkipAuth: true, connType: hba.ConnHostAny},
+			authOptions{testingSkipAuth: true, connType: ConnHostSSL},
 			clusterunique.ID{},
 		)
 		return nil
@@ -1258,7 +1257,7 @@ func TestMaliciousInputs(t *testing.T) {
 				ctx,
 				conn,
 				&mon.BoundAccount{}, /* reserved */
-				authOptions{testingSkipAuth: true, connType: hba.ConnHostAny},
+				authOptions{testingSkipAuth: true, connType: ConnHostSSL},
 				clusterunique.ID{},
 			)
 			if err := <-errChan; err != nil {
@@ -2131,8 +2130,7 @@ func TestPGWireRejectsNewConnIfTooManyConns(t *testing.T) {
 	openConnWithUser := func(user string) (*pgx.Conn, func(), error) {
 		pgURL, cleanup := testServer.PGUrl(
 			t,
-			serverutils.UserPassword(user, user),
-			serverutils.ClientCerts(user == rootUser),
+			serverutils.User(user),
 		)
 		defer cleanup()
 		conn, err := pgx.Connect(ctx, pgURL.String())
