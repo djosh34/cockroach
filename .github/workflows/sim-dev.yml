@@ -12,7 +12,7 @@ permissions:
 jobs:
   seed:
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
+    timeout-minutes: 200
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-go
@@ -31,8 +31,12 @@ jobs:
         with:
           path: .gosim/cache.sqlite3
           key: sim-gosim-${{ github.sha }}
+      - name: List the unimplemented hooks the binary reaches
+        continue-on-error: true
+        run: .gosim/bin/gosim build-tests -tags noasm -allow-unimplemented /dev/null ./pkg/sim 2>&1 | tail -200
       - name: Replay seed 1
         run: |
+          set -o pipefail
           cd pkg/sim
           SIM_BINARY=$GITHUB_WORKSPACE/bin/sim/sim-gosim.test SIM_SEED=1 SIM_OUT=$RUNNER_TEMP/out \
             /usr/bin/time -v $GITHUB_WORKSPACE/bin/sim/sim.test -test.run '^TestReplay$' -test.v -test.timeout 100m 2>&1 | tail -300
