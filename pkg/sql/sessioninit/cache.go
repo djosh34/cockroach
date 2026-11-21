@@ -15,14 +15,12 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/cockroachdb/cockroach/pkg/security/password"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/mon"
 	"github.com/cockroachdb/cockroach/pkg/util/stop"
@@ -72,10 +70,6 @@ type AuthInfo struct {
 	CanLoginDBConsoleRoleOpt bool
 	// CanUseReplicationRoleOpt is set to true if the user has the REPLICATION role option.
 	CanUseReplicationRoleOpt bool
-	// HashedPassword is the hashed password and can be nil.
-	HashedPassword password.PasswordHash
-	// ValidUntil is the VALID UNTIL role option.
-	ValidUntil *tree.DTimestamp
 }
 
 // SettingsCacheKey is the key used for the settingsCache.
@@ -234,16 +228,7 @@ func (a *Cache) maybeWriteAuthInfoBackToCache(
 	// Table version remains the same: update map, unlock, return.
 	const sizeOfUsername = int(unsafe.Sizeof(username.SQLUsername{}))
 	const sizeOfAuthInfo = int(unsafe.Sizeof(AuthInfo{}))
-	const sizeOfTimestamp = int(unsafe.Sizeof(tree.DTimestamp{}))
-
-	hpSize := 0
-	if aInfo.HashedPassword != nil {
-		hpSize = aInfo.HashedPassword.Size()
-	}
-
-	sizeOfEntry := sizeOfUsername + len(user.Normalized()) +
-		sizeOfAuthInfo + hpSize +
-		sizeOfTimestamp
+	sizeOfEntry := sizeOfUsername + len(user.Normalized()) + sizeOfAuthInfo
 	if err := a.boundAccount.Grow(ctx, int64(sizeOfEntry)); err != nil {
 		// If there is no memory available to cache the entry, we can still
 		// proceed with authentication so that users are not locked out of

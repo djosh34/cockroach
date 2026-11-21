@@ -17,7 +17,6 @@ set -eum
 
 cockroach_entrypoint=${COCKROACH:-"/cockroach/patchroaddb"}
 
-certs_dir="certs"
 url=
 listen_addr=
 advertise_addr=
@@ -47,8 +46,6 @@ parse_command_line() {
     esac
 
     case "$argument" in
-      --certs-dir)          prev=certs_dir ;;
-      --certs-dir=*)        certs_dir=$optarg ;;
       --url)                prev=url ;;
       --url=*)              url=$optarg ;;
       --listen-addr)        prev=listen_addr ;;
@@ -86,28 +83,6 @@ parse_command_line() {
   fi
 }
 
-# setup_certs_dir is to set up the certs dir.
-setup_certs_dir() {
-  mkdir -p "$certs_dir"
-
-  # If there are no files inside $certs_dir, we create keys in it.
-  if [[ $(ls -A "$certs_dir" | wc -l) = 0 ]]; then
-    $cockroach_entrypoint cert create-ca --certs-dir="$certs_dir" \
-    --ca-key="$certs_dir"/ca.key
-    $cockroach_entrypoint cert create-client --certs-dir="$certs_dir" \
-    --ca-key="$certs_dir"/ca.key root
-  fi
-
-  # If there are no files with the name started with "node", we create key
-  # for this specific node.
-  if ! ls "$certs_dir"/node.* &>/dev/null; then
-    $cockroach_entrypoint cert create-node --certs-dir="$certs_dir" \
-    --ca-key="$certs_dir"/ca.key "$advertise_addr_host" "$default_listen_addr_host"
-  fi
-
-  echo "certificate dir \"$certs_dir\" is successfully set up"
-}
-
 # set_env_var is to set the an environment variable with given value.
 # The value is optional, and by default it's an empty string.
 # usage: set_env_var VAR_NAME VALUE
@@ -124,7 +99,6 @@ set_env_var() {
 setup_env() {
   set_env_var "COCKROACH_DATABASE" "defaultdb"
   set_env_var "COCKROACH_USER"
-  set_env_var "COCKROACH_PASSWORD"
 }
 
 # start_init_node is to start the single node for the initialization.
@@ -135,7 +109,6 @@ start_init_node() {
                            --listening-url-file=server_fifo \
                            --pid-file=server_pid \
                            --advertise-addr="$advertise_addr" \
-                           --certs-dir="$certs_dir" \
                            --log="file-defaults: {dir: $default_log_dir}" \
                            "$@" )
 
@@ -152,14 +125,15 @@ start_init_node() {
   echo >&2 "init node successfully started"
 }
 
-# setup_db is to create a default database, create a default user (with password
-# if applicable), and grant privileges to this user by running `patchroaddb sql`
-# queries.
+# setup_db is to create a default database, create a default user, and grant
+# privileges to this user by running `patchroaddb sql` queries. In secure mode
+# the queries connect with the client cert named by the --config file, which
+# must map to root.
 setup_db() {
   create_defaultdb
   create_default_user
 
-  local init_env_query=( --certs-dir="$certs_dir" )
+  local init_env_query=()
   if [[ -n "$COCKROACH_USER" ]]; then
     init_env_query+=( -e "GRANT ALL ON DATABASE "$COCKROACH_DATABASE" TO "$COCKROACH_USER"" \
                       -e "GRANT admin TO "$COCKROACH_USER" " )
@@ -239,15 +213,8 @@ create_default_user() {
   # Check if the username specified in COCKROACH_USER already exists.
   # If not, create a new user.
   if [[ -z $(user_already_exists "$COCKROACH_USER") ]]; then
-    $cockroach_entrypoint cert create-client --certs-dir="$certs_dir" \
-    --ca-key="$certs_dir"/ca.key "$COCKROACH_USER"
-    echo "==== create key for new user $COCKROACH_USER ===="
-    # Create a new user with the given name.
-    local create_user_query="CREATE USER "$COCKROACH_USER""
-    if [[ -n "$COCKROACH_PASSWORD" ]]; then
-          create_user_query+=" WITH PASSWORD '$COCKROACH_PASSWORD'"
-    fi
-    run_sql_query -e "$create_user_query"
+    # The user logs in with a client cert that a client rule maps to it.
+    run_sql_query -e "CREATE USER $COCKROACH_USER"
     echo >&2 "finished creating default user \"$COCKROACH_USER\""
   else
     echo >&2 "user \"$COCKROACH_USER\" already exists"
@@ -258,7 +225,6 @@ create_default_user() {
 run_single_node() {
   # If /cockroach-data is empty, run the initialization steps.
   if [[ $(ls -A cockroach-data | wc -l) = 0 ]]; then
-    setup_certs_dir
     setup_env
     # Start the server.
     start_init_node "$@"
@@ -270,7 +236,6 @@ run_single_node() {
     fg %1
   else
       exec $cockroach_entrypoint start-single-node \
-          --certs-dir="$certs_dir" \
           --advertise-addr=$advertise_addr \
           "$@"
   fi

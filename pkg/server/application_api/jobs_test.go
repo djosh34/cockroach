@@ -103,7 +103,7 @@ func TestAdminAPIJobs(t *testing.T) {
 	testutils.RunTrueAndFalse(t, "isAdmin", func(t *testing.T, isAdmin bool) {
 		// Creating this client causes a user to be created, which causes jobs
 		// to be created, so we do it up-front rather than inside the test.
-		_, err := s.GetAuthenticatedHTTPClient(isAdmin, serverutils.SingleTenantSession)
+		_, err := s.GetAuthenticatedHTTPClient(isAdmin)
 		if err != nil {
 			t.Fatal(err)
 		}

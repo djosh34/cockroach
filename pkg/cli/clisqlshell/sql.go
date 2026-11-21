@@ -1768,7 +1768,7 @@ func (c *cliState) handleConnectInternal(cmd []string, omitConnString bool) erro
 	}
 
 	if autoCerts {
-		if err := autoFillClientCerts(newURL, currURL, c.sqlCtx.CertsDir); err != nil {
+		if err := autoFillClientCerts(newURL, currURL); err != nil {
 			return err
 		}
 	}
@@ -2690,20 +2690,16 @@ func (c *cliState) closeOutputFile() error {
 // autoFillClientCerts tries to discover a TLS client certificate and key
 // for use in newURL. This is used from the \connect command with option
 // "autocerts".
-func autoFillClientCerts(newURL, currURL *pgurl.URL, extraCertsDir string) error {
+func autoFillClientCerts(newURL, currURL *pgurl.URL) error {
 	username := newURL.GetUsername()
 	// We could use methods from package "certnames" here but we're
 	// avoiding extra package dependencies for the sake of keeping
 	// the standalone shell binary (cockroach-sql) small.
 	desiredKeyFile := "client." + username + ".key"
 	desiredCertFile := "client." + username + ".crt"
-	// Try to discover a TLS client certificate and key.
-	// First we'll try to find them in the directory specified in the shell config.
-	// This is coming from --certs-dir on the command line (of COCKROACH_CERTS_DIR).
-	//
-	// If not found there, we'll try to find the client cert in the
-	// same directory as the cert in the original URL; and the key in
-	// the same directory as the key in the original URL (cert and key
+	// Try to discover a TLS client certificate and key: the client cert
+	// in the same directory as the cert in the original URL; and the key
+	// in the same directory as the key in the original URL (cert and key
 	// may be in different places).
 	//
 	// If the original URL doesn't have a cert, we'll try to find a
@@ -2712,16 +2708,7 @@ func autoFillClientCerts(newURL, currURL *pgurl.URL, extraCertsDir string) error
 	// If all fails, we'll tell the user where we tried to search.
 	candidateDirs := make(map[string]struct{})
 	var newCert, newKey string
-	if extraCertsDir != "" {
-		candidateDirs[extraCertsDir] = struct{}{}
-		if candidateCert := filepath.Join(extraCertsDir, desiredCertFile); fileExists(candidateCert) {
-			newCert = candidateCert
-		}
-		if candidateKey := filepath.Join(extraCertsDir, desiredKeyFile); fileExists(candidateKey) {
-			newKey = candidateKey
-		}
-	}
-	if newCert == "" || newKey == "" {
+	{
 		var caCertDir string
 		if tlsUsed, _, caCertPath := currURL.GetTLSOptions(); tlsUsed {
 			caCertDir = filepath.Dir(caCertPath)
@@ -2752,7 +2739,7 @@ func autoFillClientCerts(newURL, currURL *pgurl.URL, extraCertsDir string) error
 	if newCert == "" || newKey == "" {
 		err := errors.Newf("unable to find TLS client cert and key for user %q", username)
 		if len(candidateDirs) == 0 {
-			err = errors.WithHint(err, "No candidate directories; try specifying --certs-dir on the command line.")
+			err = errors.WithHint(err, "No candidate directories; the current URL names no certificate files.")
 		} else {
 			sortedDirs := make([]string, 0, len(candidateDirs))
 			for dir := range candidateDirs {

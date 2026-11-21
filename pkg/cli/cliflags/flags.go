@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cockroachdb/cockroach/pkg/build"
 	"github.com/cockroachdb/cockroach/pkg/docs"
 	"github.com/kr/text"
 )
@@ -217,19 +216,6 @@ If the first store is an in-memory one (i.e. type=mem), then this temporary
 percentage of the available internal memory. If not specified, the default
 shifts to 100MiB when the first store is in-memory.
 `,
-	}
-
-	AuthTokenValidityPeriod = FlagInfo{
-		Name: "expire-after",
-		Description: `
-Duration after which the newly created session token expires.`,
-	}
-
-	OnlyCookie = FlagInfo{
-		Name: "only-cookie",
-		Description: `
-Display only the newly created cookie on the standard output
-without additional details and decoration.`,
 	}
 
 	Cache = FlagInfo{
@@ -656,16 +642,6 @@ is then ignored. This flag is intended for use to facilitate
 local testing without requiring certificate setups in web browsers.`,
 	}
 
-	AcceptSQLWithoutTLS = FlagInfo{
-		Name: "accept-sql-without-tls",
-		Description: `
-When specified, this node will accept SQL client connections that do not wish
-to negotiate a TLS handshake. Authentication is still otherwise required
-as per the HBA configuration and all other security mechanisms continue to
-apply. This flag is experimental.
-`,
-	}
-
 	LocalityAdvertiseAddr = FlagInfo{
 		Name: "locality-advertise-addr",
 		Description: `
@@ -755,9 +731,7 @@ is likely to cause the entire host server to become compromised.
 <PRE>
 
 </PRE>
-To simply accept non-TLS connections for SQL clients while keeping
-the cluster secure, consider using --accept-sql-without-tls instead.
-Also see: ` + build.MakeIssueURL(53404) + `
+A secure node takes --config instead.
 `,
 	}
 
@@ -785,116 +759,22 @@ implicit credentials (machine account/role providers) when running operations li
 Note: that --external-io-disable-http or --external-io-disable-implicit-credentials still apply, this only removes the admin-user requirement.`,
 	}
 
-	// KeySize, CertificateLifetime, AllowKeyReuse, and OverwriteFiles are used for
-	// certificate generation functions.
-	KeySize = FlagInfo{
-		Name:        "key-size",
-		Description: `Key size in bits for CA/Node/Client certificates.`,
-	}
-
-	CertificateLifetime = FlagInfo{
-		Name:        "lifetime",
-		Description: `Certificate lifetime.`,
-	}
-
-	AllowCAKeyReuse = FlagInfo{
-		Name:        "allow-ca-key-reuse",
-		Description: `Use the CA key if it exists.`,
-	}
-
-	OverwriteFiles = FlagInfo{
-		Name:        "overwrite",
-		Description: `Certificate and key files are overwritten if they exist.`,
-	}
-
-	TenantScope = FlagInfo{
-		Name: "tenant-scope",
-		Description: `Assign a tenant scope to the certificate.
-This will restrict the certificate to only be valid for the specified tenants.
-This flag is optional. When omitted, the certificate is not scoped; i.e.
-it can be used with all tenants.`,
-	}
-
-	GeneratePKCS8Key = FlagInfo{
-		Name:        "also-generate-pkcs8-key",
-		Description: `Also write the key in pkcs8 format to <certs-dir>/client.<username>.key.pk8.`,
-	}
-
-	DisableUsernameValidation = FlagInfo{
-		Name: "disable-username-validation",
-		Description: `Do not validate that the provided identity has a valid structure for
-a SQL identifier. If passed, and the identity is not a valid SQL identifier, the generated
-certificate can only be used if an identity map has been configured server-side.`,
-	}
-
-	Password = FlagInfo{
-		Name:        "password",
-		Description: `Prompt for the new user's password.`,
-	}
-
-	InitToken = FlagInfo{
-		Name: "init-token",
-		Description: `Shared token for initialization of node TLS certificates.
-
-This flag is optional for the 'start' command. When omitted, the 'start'
-command expects the operator to prepare TLS certificates beforehand using
-the 'cert' command.
-
-This flag must be combined with --num-expected-initial-nodes.`,
-	}
-
-	NumExpectedInitialNodes = FlagInfo{
-		Name: "num-expected-initial-nodes",
-		Description: `Number of expected nodes during TLS certificate creation,
-including the node where the connect command is run.
-
-This flag must be combined with --init-token.`,
-	}
-
-	SingleNode = FlagInfo{
-		Name: "single-node",
-		Description: `Prepare the certificates for a subsequent 'start-single-node'
-command. The 'connect' command only runs cursory checks on the network
-configuration and does not wait for peers to auto-negotiate a common
-set of credentials.
-
-The --single-node flag is exclusive with the --init-num-peers and --init-token
-flags.`,
-	}
-
-	CertsDir = FlagInfo{
-		Name:        "certs-dir",
-		EnvVar:      "COCKROACH_CERTS_DIR",
-		Description: `Path to the directory containing SSL certificates and keys.`,
-	}
-
-	// Server version of the certs directory flag, cannot be set through environment.
-	ServerCertsDir = FlagInfo{
-		Name:        "certs-dir",
-		Description: CertsDir.Description,
-	}
-
-	CertPrincipalMap = FlagInfo{
-		Name: "cert-principal-map",
+	ConfigFile = FlagInfo{
+		Name:   "config",
+		EnvVar: "COCKROACH_CONFIG",
 		Description: `
-A comma separated list of <cert-principal>:<db-principal> mappings. This allows
-mapping the principal in a cert to a DB principal such as "node" or "root" or
-any SQL user. This is intended for use in situations where the certificate
-management system places restrictions on the Subject.CommonName or
-SubjectAlternateName fields in the certificate (e.g. disallowing a CommonName
-such as "node" or "root"). If multiple mappings are provided for the same
-<cert-principal>, the last one specified in the list takes precedence. A
-principal not specified in the map is passed through as-is via the identity
-function. A cert is allowed to authenticate a DB principal if the DB principal
-name is contained in the mapped CommonName or DNS-type SubjectAlternateName
-fields. It is permissible for the <cert-principal> string to contain colons.
-`,
+Path to the config file. It names the node certificate and key, the node CA,
+the client CA, the identity rules file, and optionally a client certificate
+and key. Admin commands use the node certificate for RPCs and the client
+certificate for SQL.`,
 	}
 
-	CAKey = FlagInfo{
-		Name:        "ca-key",
-		EnvVar:      "COCKROACH_CA_KEY",
-		Description: `Path to the CA key.`,
+	// Server version of the config file flag, cannot be set through environment.
+	ServerConfigFile = FlagInfo{
+		Name: "config",
+		Description: `
+Path to the config file. It names the node certificate and key, the node CA,
+the client CA and the identity rules file. A secure node needs it.`,
 	}
 
 	MaxOffset = FlagInfo{
@@ -1144,14 +1024,17 @@ For example, postgresql://myuser@localhost:26257/mydb.
 
 </PRE>
 If left empty, the discrete connection flags are used: host, port,
-user, database, insecure, certs-dir.`,
+user, database, insecure, config.`,
 	}
 
 	User = FlagInfo{
-		Name:        "user",
-		Shorthand:   "u",
-		EnvVar:      "COCKROACH_USER",
-		Description: `Database user name.`,
+		Name:      "user",
+		Shorthand: "u",
+		EnvVar:    "COCKROACH_USER",
+		Description: `
+Database user name. Without it, a command with --config connects as the role
+of the first client rule that matches the config's client cert, and
+otherwise as root.`,
 	}
 
 	From = FlagInfo{

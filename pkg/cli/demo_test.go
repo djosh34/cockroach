@@ -15,7 +15,6 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/cockroach/pkg/cli/democluster"
-	"github.com/cockroachdb/cockroach/pkg/security/securityassets"
 	"github.com/cockroachdb/cockroach/pkg/testutils/datapathutils"
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
@@ -30,11 +29,6 @@ func TestDemo(t *testing.T) {
 	defer democluster.TestingForceRandomizeDemoPorts()()
 
 	setCLIDefaultsForTests()
-	// We must reset the security asset loader here, otherwise the dummy
-	// asset loader that is set by default in tests will not be able to
-	// find the certs that demo sets up.
-	securityassets.ResetLoader()
-	defer ResetTest()
 
 	// Using datadriven allows TESTFLAGS=-rewrite.
 	datadriven.RunTest(t, datapathutils.TestDataPath(t, "demo", "test_demo"), func(t *testing.T, td *datadriven.TestData) string {

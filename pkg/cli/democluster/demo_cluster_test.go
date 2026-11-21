@@ -16,15 +16,12 @@ import (
 	"io"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/cli/clisqlclient"
 	"github.com/cockroachdb/cockroach/pkg/cli/clisqlexec"
 	"github.com/cockroachdb/cockroach/pkg/multitenant/tenantcapabilities"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
-	"github.com/cockroachdb/cockroach/pkg/security/securityassets"
-	"github.com/cockroachdb/cockroach/pkg/security/securitytest"
 	"github.com/cockroachdb/cockroach/pkg/server"
 	"github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/testutils"
@@ -40,12 +37,9 @@ import (
 
 func newDemoCtx() *Context {
 	return &Context{
-		NumNodes:            1,
-		SQLPoolMemorySize:   256 << 20, // 256MiB, chosen to fit 9 nodes on 4GB machine.
-		CacheSize:           64 << 20,  // 64MiB, chosen to fit 9 nodes on 4GB machine.
-		DefaultKeySize:      1024,
-		DefaultCALifetime:   24 * time.Hour,
-		DefaultCertLifetime: 2 * time.Hour,
+		NumNodes:          1,
+		SQLPoolMemorySize: 256 << 20, // 256MiB, chosen to fit 9 nodes on 4GB machine.
+		CacheSize:         64 << 20,  // 64MiB, chosen to fit 9 nodes on 4GB machine.
 	}
 }
 
@@ -72,6 +66,7 @@ func TestTestServerArgsForTransientCluster(t *testing.T) {
 				DefaultTestTenant:             base.TODOTestTenantDisabled,
 				PartOfCluster:                 true,
 				JoinAddr:                      "127.0.0.1",
+				Insecure:                      true,
 				DisableTLSForHTTP:             true,
 				Addr:                          "127.0.0.1:1334",
 				SQLAddr:                       "127.0.0.1:1234",
@@ -102,6 +97,7 @@ func TestTestServerArgsForTransientCluster(t *testing.T) {
 				HTTPAddr:                      "127.0.0.1:4569",
 				ApplicationInternalRPCPortMin: 1334,
 				ApplicationInternalRPCPortMax: 2358,
+				Insecure:                      true,
 				DisableTLSForHTTP:             true,
 				SQLMemoryPoolSize:             4 << 10,
 				CacheSize:                     4 << 10,
@@ -159,13 +155,6 @@ func TestTransientClusterSimulateLatencies(t *testing.T) {
 	demoCtx.Localities = defaultLocalities
 
 	certsDir := t.TempDir()
-
-	cleanupFunc := securitytest.CreateTestCerts(certsDir)
-	defer func() {
-		if err := cleanupFunc(); err != nil {
-			t.Fatal(err)
-		}
-	}()
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	defer cancelCtx()
@@ -277,7 +266,6 @@ func TestTransientClusterMultitenant(t *testing.T) {
 		{Tiers: []roachpb.Tier{{Key: "prize-winner", Value: "otan"}}},
 	}
 
-	securityassets.ResetLoader()
 	certsDir := t.TempDir()
 
 	ctx := context.Background()
@@ -297,7 +285,6 @@ func TestTransientClusterMultitenant(t *testing.T) {
 	// cancels everything controlled by the stopper.
 	defer c.Close(ctx)
 
-	require.NoError(t, c.generateCerts(ctx, certsDir))
 	require.NoError(t, c.Start(ctx))
 
 	// Also ensure the context gets canceled when the stopper
@@ -341,7 +328,6 @@ func TestTenantCapabilities(t *testing.T) {
 	demoCtx.NumNodes = 1
 	demoCtx.Multitenant = true
 
-	securityassets.ResetLoader()
 	certsDir := t.TempDir()
 
 	ctx := context.Background()
@@ -361,7 +347,6 @@ func TestTenantCapabilities(t *testing.T) {
 	// cancels everything controlled by the stopper.
 	defer c.Close(ctx)
 
-	require.NoError(t, c.generateCerts(ctx, certsDir))
 	require.NoError(t, c.Start(ctx))
 
 	// Also ensure the context gets canceled when the stopper

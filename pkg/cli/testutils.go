@@ -30,8 +30,8 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/cli/clisqlexec"
 	"github.com/cockroachdb/cockroach/pkg/cli/exit"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
-	"github.com/cockroachdb/cockroach/pkg/security/certnames"
-	"github.com/cockroachdb/cockroach/pkg/security/securitytest"
+	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
+	"github.com/cockroachdb/cockroach/pkg/security/securityassets"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql/sqlstats"
@@ -54,9 +54,11 @@ type TestCLI struct {
 	// Insecure is a copy of the insecure mode parameter.
 	Insecure bool
 
-	Server      serverutils.TestServerInterface
-	tenant      serverutils.ApplicationLayerInterface
-	certsDir    string
+	Server   serverutils.TestServerInterface
+	tenant   serverutils.ApplicationLayerInterface
+	certsDir string
+	// configFile is the --config file in certsDir, empty in insecure mode.
+	configFile  string
 	cleanupFunc func() error
 	prevStderr  *os.File
 
@@ -156,17 +158,24 @@ func newCLITestWithArgs(params TestCLIParams, argsFn func(args *base.TestServerA
 		stats.AutomaticStatisticsClusterMode.Override(context.Background(), &settings.SV, false)
 	}
 
+	var certs certconfig.Config
 	if !params.NoServer {
 		if !params.Insecure {
-			c.cleanupFunc = securitytest.CreateTestCerts(certsDir)
+			if c.configFile, err = writeTestCerts(certsDir); err != nil {
+				c.fail(err)
+			}
+			if certs, err = certconfig.Load(c.configFile); err != nil {
+				c.fail(err)
+			}
 		}
+		c.cleanupFunc = func() error { return os.RemoveAll(certsDir) }
 
 		args := base.TestServerArgs{
 			DefaultTestTenant: base.TestControlsTenantsExplicitly,
 
 			Insecure:      params.Insecure,
 			Settings:      settings,
-			SSLCertsDir:   c.certsDir,
+			Certs:         certs,
 			StoreSpecs:    params.StoreSpecs,
 			Locality:      params.Locality,
 			ExternalIODir: filepath.Join(certsDir, "extern"),
@@ -255,10 +264,17 @@ func (c *TestCLI) stopServer() {
 func (c *TestCLI) RestartServer(params TestCLIParams) {
 	c.stopServer()
 	log.Info(context.Background(), "restarting server")
+	var certs certconfig.Config
+	if c.configFile != "" {
+		var err error
+		if certs, err = certconfig.Load(c.configFile); err != nil {
+			c.fail(err)
+		}
+	}
 	s, err := serverutils.StartServerOnlyE(params.T, base.TestServerArgs{
-		Insecure:    params.Insecure,
-		SSLCertsDir: c.certsDir,
-		StoreSpecs:  params.StoreSpecs,
+		Insecure:   params.Insecure,
+		Certs:      certs,
+		StoreSpecs: params.StoreSpecs,
 	})
 	if err != nil {
 		c.fail(err)
@@ -413,7 +429,7 @@ func (c TestCLI) RunWithArgs(origArgs []string) {
 				args = append(args, "--insecure=true")
 			} else {
 				args = append(args, "--insecure=false")
-				args = append(args, fmt.Sprintf("--certs-dir=%s", c.certsDir))
+				args = append(args, fmt.Sprintf("--config=%s", c.configFile))
 			}
 		}
 
@@ -452,27 +468,6 @@ func (c TestCLI) RunWithArgs(origArgs []string) {
 		if c.reportExitCode {
 			fmt.Fprintln(os.Stdout, "exit code:", exit.Success())
 		}
-	}
-}
-
-// RunWithCAArgs adds ca args at run time.
-func (c TestCLI) RunWithCAArgs(origArgs []string) {
-	TestingReset()
-
-	if err := func() error {
-		args := append([]string(nil), origArgs[:1]...)
-		if c.Server != nil {
-			args = append(args, fmt.Sprintf("--ca-key=%s", filepath.Join(c.certsDir, certnames.EmbeddedCAKey)))
-			args = append(args, fmt.Sprintf("--certs-dir=%s", c.certsDir))
-		}
-		args = append(args, origArgs[1:]...)
-
-		fmt.Fprintf(os.Stderr, "%s\n", args)
-		fmt.Println(strings.Join(origArgs, " "))
-
-		return Run(args)
-	}(); err != nil {
-		fmt.Println(err)
 	}
 }
 
@@ -574,4 +569,32 @@ func MatchCSV(csvStr string, matchColRow [][]string) (err error) {
 		}
 	}
 	return err
+}
+
+// writeTestCerts copies the test certificates, which the securitytest
+// package serves from memory, to dir, and writes a config file for them
+// with root's client cert. It returns the config file path.
+func writeTestCerts(dir string) (string, error) {
+	embedded := certconfig.Embedded()
+	files := map[string]string{
+		embedded.NodeCA:     "ca.crt",
+		embedded.Cert:       "node.crt",
+		embedded.Key:        "node.key",
+		embedded.Rules:      "rules",
+		embedded.ClientCert: "client.crt",
+		embedded.ClientKey:  "client.key",
+	}
+	for src, dst := range files {
+		b, err := securityassets.GetLoader().ReadFile(src)
+		if err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(filepath.Join(dir, dst), b, 0600); err != nil {
+			return "", err
+		}
+	}
+	config := "cert: node.crt\nkey: node.key\nnode-ca: ca.crt\nclient-ca: ca.crt\n" +
+		"rules: rules\nclient-cert: client.crt\nclient-key: client.key\n"
+	path := filepath.Join(dir, "config.yaml")
+	return path, os.WriteFile(path, []byte(config), 0600)
 }

@@ -139,7 +139,6 @@ pkg/rpc/nodedialer 1
 pkg/scheduledjobs 1
 pkg/scheduledjobs/schedulebase 1
 pkg/security 8
-pkg/security/certmgr 1
 pkg/security/password 3
 pkg/security/username 1
 pkg/server 301

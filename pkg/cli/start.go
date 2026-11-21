@@ -340,6 +340,10 @@ func runStartJoin(cmd *cobra.Command, args []string) error {
 // runStart, runStartSingleNode and runStartSingleNodeCmd.
 func runStart(cmd *cobra.Command, args []string, startSingleNode bool) error {
 	const serverType redact.SafeString = "node"
+	if !serverCfg.Insecure && startCtx.serverConfigFile == "" {
+		return errors.Newf("a secure node needs --%s, or --%s",
+			cliflags.ServerConfigFile.Name, cliflags.ServerInsecure.Name)
+	}
 
 	newServerFn := func(_ context.Context, serverCfg server.Config, stopper *stop.Stopper) (serverctl.ServerStartupInterface, error) {
 		// Beware of not writing simply 'return server.NewServer()'. This is
@@ -781,7 +785,7 @@ func createAndStartServerAsync(
 			}
 
 			// Run one-off cluster initialization.
-			if err := s.RunInitialSQL(ctx, startSingleNode, "" /* adminUser */, "" /* adminPassword */); err != nil {
+			if err := s.RunInitialSQL(ctx, startSingleNode); err != nil {
 				return err
 			}
 
@@ -1252,7 +1256,7 @@ func clientFlagsRPC() string {
 	if startCtx.serverInsecure {
 		flags = append(flags, "--insecure")
 	} else {
-		flags = append(flags, "--certs-dir="+startCtx.serverSSLCertsDir)
+		flags = append(flags, "--config="+startCtx.serverConfigFile)
 	}
 	return strings.Join(flags, " ")
 }
@@ -1371,13 +1375,7 @@ func setupAndInitializeLoggingAndProfiling(
 				"- Intruders can consume all your server's resources and cause unavailability.",
 			log.SafeManaged(addr))
 		log.Ops.Shoutf(ctx, severity.INFO,
-			"To start a secure server without mandating TLS for clients,\n"+
-				"consider --accept-sql-without-tls instead. For other options, see:\n\n"+
-				"- %s\n"+
-				"- %s",
-			redact.Safe(build.MakeIssueURL(53404)),
-			redact.Safe(docs.URL("secure-a-cluster.html")),
-		)
+			"To start a secure server, pass --config with your certificates and rules instead.")
 	}
 
 	maybeWarnMemorySizes(ctx)

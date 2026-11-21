@@ -243,13 +243,10 @@ func init() {
 	cockroachCmd.AddCommand(
 		startCmd,
 		startSingleNodeCmd,
-		connectCmd,
 		initCmd,
-		certCmd,
 
 		sqlShellCmd,
 		stmtDiagCmd,
-		authCmd,
 		nodeCmd,
 		nodeLocalCmd,
 		userFileCmd,

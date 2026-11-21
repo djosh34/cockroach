@@ -159,8 +159,6 @@ type Context struct {
 
 	Tenant TenantOperator
 
-	JoinTokenCreator JoinTokenCreator
-
 	Gossip GossipOperator
 
 	PreparedStatementState PreparedStatementState

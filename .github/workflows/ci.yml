@@ -31,6 +31,14 @@ jobs:
       - uses: ./.github/actions/setup-go
       - name: Build without cgo
         run: GOARCH=${{ matrix.goarch }} go build ./...
+      # The test certificates must never ship: they come from a public seed.
+      - name: The binary does not link the test certificates
+        run: |
+          if GOARCH=${{ matrix.goarch }} go list -deps ./pkg/cmd/patchroaddb |
+            grep -x github.com/cockroachdb/cockroach/pkg/security/securitytest; then
+            echo "patchroaddb links the test certificate package"
+            exit 1
+          fi
 
   generate:
     runs-on: ubuntu-24.04

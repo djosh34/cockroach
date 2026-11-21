@@ -16,6 +16,7 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
+	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
@@ -42,8 +43,8 @@ type ClientConnConfig struct {
 	// Insecure specifies whether to use an insecure connection.
 	Insecure bool
 
-	// SSLCertsDir is the directory containing the SSL certificates to use.
-	SSLCertsDir string
+	// Certs names the cert, key, CA and rules files.
+	Certs certconfig.Config
 
 	// User is the username to use.
 	User username.SQLUsername
@@ -91,7 +92,7 @@ func MakeClientConnConfigFromBaseConfig(
 		Clock:                          clock,
 		ServerAddr:                     cfg.AdvertiseAddr,
 		Insecure:                       cfg.Insecure,
-		SSLCertsDir:                    cfg.SSLCertsDir,
+		Certs:                          cfg.Certs,
 		ClusterName:                    cfg.ClusterName,
 		DisableClusterNameVerification: cfg.DisableClusterNameVerification,
 		RPCHeartbeatInterval:           cfg.RPCHeartbeatInterval,
@@ -119,7 +120,7 @@ func NewClientContext(ctx context.Context, cfg ClientConnConfig) (*Context, *sto
 
 		ClientOnly:                     true,
 		Insecure:                       cfg.Insecure,
-		SSLCertsDir:                    cfg.SSLCertsDir,
+		Certs:                          cfg.Certs,
 		ClusterName:                    cfg.ClusterName,
 		DisableClusterNameVerification: cfg.DisableClusterNameVerification,
 		RPCHeartbeatInterval:           cfg.RPCHeartbeatInterval,

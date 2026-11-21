@@ -886,9 +886,8 @@ func TestUsernameUserfileInteraction(t *testing.T) {
 			err = conn.Exec(ctx, privsUserQuery)
 			require.NoError(t, err)
 
-			userURL, cleanup2 := sqlutils.PGUrlWithOptionalClientCerts(t,
-				c.Server.AdvSQLAddr(), t.Name(),
-				url.UserPassword(tc.username, "a"), false, "")
+			userURL, cleanup2 := sqlutils.PGUrl(t,
+				c.Server.AdvSQLAddr(), t.Name(), url.User(tc.username))
 			defer cleanup2()
 
 			_, err := c.RunWithCapture(fmt.Sprintf("userfile upload %s %s --url=%s",

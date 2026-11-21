@@ -515,7 +515,6 @@ var functions = func() *functionsMu {
 		for _, substr := range []string{
 			"crdb_internal.force_",
 			"crdb_internal.unsafe_",
-			"crdb_internal.create_join_token",
 			"crdb_internal.reset_index_usage_stats",
 			"crdb_internal.revalidate_unique_constraint",
 			"crdb_internal.request_statement_bundle",

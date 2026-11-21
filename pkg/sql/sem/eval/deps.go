@@ -570,16 +570,6 @@ type TenantOperator interface {
 	LookupTenantID(ctx context.Context, tenantName roachpb.TenantName) (roachpb.TenantID, error)
 }
 
-// JoinTokenCreator is capable of creating and persisting join tokens, allowing
-// SQL builtin functions to create join tokens. The methods will return errors
-// when run on multi-tenant clusters or with this functionality unavailable.
-type JoinTokenCreator interface {
-	// CreateJoinToken creates a new ephemeral join token and persists it
-	// across the cluster. This join token can then be used to have new nodes
-	// join the cluster and exchange certificates securely.
-	CreateJoinToken(ctx context.Context) (string, error)
-}
-
 // GossipOperator is capable of manipulating the cluster's gossip network. The
 // methods will return errors when run by any tenant other than the system
 // tenant.

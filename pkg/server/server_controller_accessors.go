@@ -60,18 +60,3 @@ func (c *serverController) getServers() (res []onDemandServer) {
 	}
 	return res
 }
-
-// getCurrentTenantNames returns the names of the tenants for which we
-// already have a tenant server running.
-func (c *serverController) getCurrentTenantNames() []roachpb.TenantName {
-	var serverNames []roachpb.TenantName
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	for name, e := range c.mu.servers {
-		if _, isReady := e.getServer(); !isReady {
-			continue
-		}
-		serverNames = append(serverNames, name)
-	}
-	return serverNames
-}

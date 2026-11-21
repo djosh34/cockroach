@@ -11,51 +11,22 @@
 package authserver
 
 import (
-	"context"
 	"net/http"
 
-	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/sql/isql"
 	"github.com/cockroachdb/cockroach/pkg/sql/roleoption"
 )
-
-type ServerV2 interface {
-	http.Handler
-}
-
-type AuthV2Mux interface {
-	http.Handler
-}
 
 type RoleAuthzMux interface {
 	http.Handler
 }
 
-// NewV2Server creates a new ServerV2 for the given outer Server,
-// and base path.
-func NewV2Server(
-	ctx context.Context, s SQLServerInterface, cfg *base.Config, basePath string,
-) ServerV2 {
-	simpleMux := http.NewServeMux()
-
-	innerServer := NewServer(cfg, s).(*authenticationServer)
-	authServer := &authenticationV2Server{
-		sqlServer:  s,
-		authServer: innerServer,
-		mux:        simpleMux,
-		ctx:        ctx,
-		basePath:   basePath,
-	}
-
-	authServer.registerRoutes()
-	return authServer
-}
-
-// NewV2Mux creates a new AuthV2Mux for the given ServerV2.
-func NewV2Mux(s ServerV2, inner http.Handler, allowAnonymous bool) AuthV2Mux {
-	as := s.(*authenticationV2Server)
+// NewV2Mux returns a handler for the v2 API that authenticates each
+// request by its client certificate, like NewMux. If allowAnonymous is set,
+// as in insecure mode, every request runs as root without a check.
+func NewV2Mux(s Server, inner http.Handler, allowAnonymous bool) http.Handler {
 	return &authenticationV2Mux{
-		s:              as,
+		server:         s.(*authenticationServer),
 		inner:          inner,
 		allowAnonymous: allowAnonymous,
 	}

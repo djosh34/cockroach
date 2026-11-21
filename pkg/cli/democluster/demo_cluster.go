@@ -30,8 +30,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/multitenant"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/rpc"
-	"github.com/cockroachdb/cockroach/pkg/security"
-	"github.com/cockroachdb/cockroach/pkg/security/certnames"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server"
 	"github.com/cockroachdb/cockroach/pkg/server/pgurl"
@@ -53,14 +51,12 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/retry"
 	"github.com/cockroachdb/cockroach/pkg/util/stop"
 	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
-	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/cockroach/pkg/workload"
 	"github.com/cockroachdb/cockroach/pkg/workload/histogram"
 	"github.com/cockroachdb/cockroach/pkg/workload/workloadsql"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/errors/oserror"
 	"github.com/cockroachdb/logtags"
-	"github.com/nightlyone/lockfile"
 	"golang.org/x/time/rate"
 )
 
@@ -83,8 +79,7 @@ type transientCluster struct {
 	tenantServers []serverutils.ApplicationLayerInterface
 	defaultDB     string
 
-	adminPassword string
-	adminUser     username.SQLUsername
+	adminUser username.SQLUsername
 
 	stickyVFSRegistry server.StickyVFSRegistry
 
@@ -106,9 +101,6 @@ const maxNodeInitTime = 60 * time.Second
 // secondaryTenantID is the ID of the secondary tenant to use when
 // --multitenant=true.
 const secondaryTenantID = 2
-
-// demoUsername is the name of the predefined non-root user.
-const demoUsername = "demo"
 
 // demoTenantName is the name of the demo tenant.
 const demoTenantName = "demoapp"
@@ -197,12 +189,6 @@ func NewDemoCluster(
 	}
 	if err := os.Mkdir(c.demoDir, 0700); err != nil && !oserror.IsExist(err) {
 		return c, err
-	}
-
-	if !c.demoCtx.Insecure {
-		if err := c.generateCerts(ctx, c.demoDir); err != nil {
-			return c, err
-		}
 	}
 
 	c.stickyVFSRegistry = server.NewStickyVFSRegistry()
@@ -376,8 +362,6 @@ func (c *transientCluster) Start(ctx context.Context) (err error) {
 		return err
 	}
 
-	demoPassword := genDemoPassword(demoUsername)
-
 	// Step 8: initialize tenant servers, if enabled.
 	phaseCtx = logtags.AddTag(ctx, "phase", 8)
 	if err := func(ctx context.Context) error {
@@ -408,34 +392,12 @@ func (c *transientCluster) Start(ctx context.Context) (err error) {
 		srv := c.firstServer
 		ctx = srv.AnnotateCtx(ctx)
 
-		if err := srv.RunInitialSQL(ctx, c.demoCtx.NumNodes < 3, demoUsername, demoPassword); err != nil {
+		if err := srv.RunInitialSQL(ctx, c.demoCtx.NumNodes < 3); err != nil {
 			return err
 		}
-		if c.demoCtx.Insecure {
-			c.adminUser = username.RootUserName()
-			c.adminPassword = "unused"
-		} else {
-			c.adminUser = username.MakeSQLUsernameFromPreNormalizedString(demoUsername)
-			c.adminPassword = demoPassword
-		}
+		c.adminUser = username.RootUserName()
 
 		if c.demoCtx.Multitenant {
-			if !c.demoCtx.Insecure {
-				// Also create the user/password for the secondary tenant.
-				ts := c.tenantServers[0]
-				tctx := ts.AnnotateCtx(ctx)
-				ieTenant := ts.InternalExecutor().(isql.Executor)
-				_, err = ieTenant.Exec(tctx, "tenant-password", nil,
-					fmt.Sprintf("CREATE USER %s WITH PASSWORD '%s'", demoUsername, demoPassword))
-				if err != nil {
-					return err
-				}
-				_, err = ieTenant.Exec(tctx, "tenant-grant", nil, fmt.Sprintf("GRANT admin TO %s", demoUsername))
-				if err != nil {
-					return err
-				}
-			}
-
 			ie := c.firstServer.InternalExecutor().(isql.Executor)
 
 			// Grant full capabilities.
@@ -489,17 +451,6 @@ func (c *transientCluster) Start(ctx context.Context) (err error) {
 		return err
 	}
 
-	// Step 10: restore web sessions.
-	phaseCtx = logtags.AddTag(ctx, "phase", 10)
-	if err := func(ctx context.Context) error {
-		if err := c.restoreWebSessions(ctx); err != nil {
-			c.warnLog(ctx, "unable to restore web sessions: %v", err)
-		}
-		return nil
-	}(phaseCtx); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -528,8 +479,7 @@ func (c *transientCluster) startTenantService(
 			TenantName:            demoTenantName,
 			TenantID:              roachpb.MustMakeTenantID(secondaryTenantID),
 			Stopper:               tenantStopper,
-			ForceInsecure:         c.demoCtx.Insecure,
-			SSLCertsDir:           c.demoDir,
+			ForceInsecure:         true,
 			DisableTLSForHTTP:     true,
 			StartingRPCAndSQLPort: c.demoCtx.sqlPort(serverIdx, true) - secondaryTenantID,
 			StartingHTTPPort:      c.demoCtx.httpPort(serverIdx, true) - secondaryTenantID,
@@ -959,12 +909,8 @@ func (demoCtx *Context) testServerArgsForTransientCluster(
 	if len(demoCtx.Localities) > serverIdx {
 		args.Locality = demoCtx.Localities[serverIdx]
 	}
-	if demoCtx.Insecure {
-		args.Insecure = true
-	} else {
-		args.Insecure = false
-		args.SSLCertsDir = demoDir
-	}
+	// A demo cluster is always insecure: it creates no certificates.
+	args.Insecure = true
 
 	return args
 }
@@ -979,14 +925,6 @@ func TestingForceRandomizeDemoPorts() func() {
 }
 
 func (c *transientCluster) Close(ctx context.Context) {
-	if err := timeutil.RunWithTimeout(ctx, "save-web-sessions", 10*time.Second, func(ctx context.Context) error {
-		if err := c.saveWebSessions(ctx); err != nil {
-			return err
-		}
-		return nil
-	}); err != nil {
-		c.warnLog(ctx, "unable to save web sessions: %v", err)
-	}
 	if c.stopper != nil {
 		if r := recover(); r != nil {
 			// A panic here means some of the async tasks may still be
@@ -1290,249 +1228,6 @@ This server is running at increased risk of memory-related failures.`,
 	}
 }
 
-// generateCerts generates some temporary certificates for cockroach demo.
-func (c *transientCluster) generateCerts(ctx context.Context, certsDir string) (err error) {
-	// Prevent concurrent access while we write the certificates.
-	cleanup, err := c.lockDir(ctx, certsDir, "certgen")
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-
-	// Make a CA key/cert pair.
-	caKeyPath := filepath.Join(certsDir, certnames.CAKeyFilename())
-	caKeyExists, err := fileExists(caKeyPath)
-	if err != nil {
-		return err
-	}
-	caCertPath := filepath.Join(certsDir, certnames.CACertFilename())
-	caCertExists, err := fileExists(caCertPath)
-	if err != nil {
-		return err
-	}
-	nodeKeyPath := filepath.Join(certsDir, certnames.NodeKeyFilename())
-	nodeKeyExists, err := fileExists(nodeKeyPath)
-	if err != nil {
-		return err
-	}
-	nodeCertPath := filepath.Join(certsDir, certnames.NodeCertFilename())
-	nodeCertExists, err := fileExists(nodeCertPath)
-	if err != nil {
-		return err
-	}
-	tenantKeyPath := filepath.Join(certsDir, certnames.TenantKeyFilename("2"))
-	tenantKeyExists, err := fileExists(tenantKeyPath)
-	if err != nil {
-		return err
-	}
-	tenantCertPath := filepath.Join(certsDir, certnames.TenantCertFilename("2"))
-	tenantCertExists, err := fileExists(tenantCertPath)
-	if err != nil {
-		return err
-	}
-	rootClientCertPath := filepath.Join(certsDir, certnames.ClientCertFilename(username.RootUserName()))
-	rootClientCertExists, err := fileExists(rootClientCertPath)
-	if err != nil {
-		return err
-	}
-	rootClientKeyPath := filepath.Join(certsDir, certnames.ClientKeyFilename(username.RootUserName()))
-	rootClientKeyExists, err := fileExists(rootClientKeyPath)
-	if err != nil {
-		return err
-	}
-	demoUser := username.MakeSQLUsernameFromPreNormalizedString(demoUsername)
-	demoClientCertPath := filepath.Join(certsDir, certnames.ClientCertFilename(demoUser))
-	demoClientCertExists, err := fileExists(demoClientCertPath)
-	if err != nil {
-		return err
-	}
-	demoClientKeyPath := filepath.Join(certsDir, certnames.ClientKeyFilename(demoUser))
-	demoClientKeyExists, err := fileExists(demoClientKeyPath)
-	if err != nil {
-		return err
-	}
-	tenantSigningCertPath := filepath.Join(certsDir, certnames.TenantSigningCertFilename("2"))
-	tenantSigningCertExists, err := fileExists(tenantSigningCertPath)
-	if err != nil {
-		return err
-	}
-	tenantSigningKeyPath := filepath.Join(certsDir, certnames.TenantSigningKeyFilename("2"))
-	tenantSigningKeyExists, err := fileExists(tenantSigningKeyPath)
-	if err != nil {
-		return err
-	}
-
-	// Do we have everything we need to run a cluster?
-	// NB: we do not need the CA key in this test - it's not needed to
-	// _run_ a cluster, only to generate new certs. See below for that.
-	if caCertExists &&
-		nodeKeyExists && nodeCertExists &&
-		rootClientKeyExists && rootClientCertExists &&
-		demoClientKeyExists && demoClientCertExists &&
-		(!c.demoCtx.Multitenant || (tenantSigningKeyExists && tenantSigningCertExists &&
-			(c.demoCtx.DisableServerController || (tenantKeyExists && tenantCertExists)))) {
-		// All good.
-		return nil
-	}
-
-	allFilenamesCreatedFromCA := []string{
-		nodeKeyPath, nodeCertPath,
-		tenantKeyPath, tenantCertPath,
-		rootClientKeyPath, rootClientKeyPath + ".pk8", rootClientCertPath,
-		demoClientKeyPath, demoClientKeyPath + ".pk8", demoClientCertPath,
-	}
-
-	// Here we will need to create _some_ certs. Do we have a CA key to go with?
-	if !caKeyExists || !caCertExists {
-		// If there's some certificate left over from a previous session, we
-		// can't exclude that a demo session is still running and is using
-		// them; and we can't regenerate them piecemeal without invalidating
-		// the others. Bail out in that case.
-		//
-		// Note: the tenant signing key/cert pair is independent from the CA
-		// so we do not need to check this here.
-		if caCertExists ||
-			nodeKeyExists || nodeCertExists ||
-			tenantKeyExists || tenantCertExists ||
-			rootClientKeyExists || rootClientCertExists ||
-			demoClientKeyExists || demoClientCertExists {
-			err := errors.Newf("cannot create demo TLS certs: stray certificates left over in %q", certsDir)
-			err = errors.WithHint(err, "Remove them manually before trying again.")
-			for _, f := range allFilenamesCreatedFromCA {
-				if exists, _ := fileExists(f); exists {
-					err = errors.WithDetailf(err, "Stray file: %q", f)
-				}
-			}
-			return err
-		}
-
-		if !(caKeyExists && caCertExists) {
-			// We need to regenerate CA cert/key pair. This will invalidate
-			// any pre-existing cert in the directory, so we will need to
-			// regenerate them below.
-			for _, f := range allFilenamesCreatedFromCA {
-				err := os.Remove(f)
-				if err != nil && !oserror.IsNotExist(err) {
-					return err
-				}
-				if err == nil {
-					c.infoLog(ctx, "removed stray file: %q", f)
-				}
-			}
-			nodeKeyExists = false
-			nodeCertExists = false
-			tenantKeyExists = false
-			tenantCertExists = false
-			rootClientKeyExists = false
-			rootClientCertExists = false
-			demoClientKeyExists = false
-			demoClientCertExists = false
-			// Actually create the key/cert pair.
-			c.infoLog(ctx, "generating CA key/cert pair in %q", certsDir)
-			if err := security.CreateCAPair(
-				certsDir,
-				caKeyPath,
-				c.demoCtx.DefaultKeySize,
-				c.demoCtx.DefaultCALifetime,
-				true,  /* allowKeyReuse */
-				false, /*overwrite */
-			); err != nil {
-				return err
-			}
-		}
-	}
-
-	// At this point we have a CA cert/key pair, and we need to re-generate
-	// some of the certs. Do it now.
-
-	tlsServerNames := []string{
-		"127.0.0.1", "*.local", "::1", "localhost",
-	}
-
-	if !(nodeKeyExists && nodeCertExists) {
-		// Generate a certificate for the demo nodes.
-		c.infoLog(ctx, "generating node key/cert pair in %q", certsDir)
-		if err := security.CreateNodePair(
-			certsDir,
-			caKeyPath,
-			c.demoCtx.DefaultKeySize,
-			c.demoCtx.DefaultCertLifetime,
-			true, /* overwrite */
-			tlsServerNames,
-		); err != nil {
-			return err
-		}
-	}
-
-	if !(rootClientKeyExists && rootClientCertExists) {
-		c.infoLog(ctx, "generating root client key/cert pair in %q", certsDir)
-		if err := security.CreateClientPair(
-			certsDir,
-			caKeyPath,
-			c.demoCtx.DefaultKeySize,
-			c.demoCtx.DefaultCertLifetime,
-			true, /* overwrite */
-			username.RootUserName(),
-			nil,  /* tenantIDs - this makes it valid for all tenants */
-			true, /* generatePKCS8Key */
-		); err != nil {
-			return err
-		}
-	}
-
-	if !(demoClientKeyExists && demoClientCertExists) {
-		c.infoLog(ctx, "generating demo client key/cert pair in %q", certsDir)
-		if err := security.CreateClientPair(
-			certsDir,
-			caKeyPath,
-			c.demoCtx.DefaultKeySize,
-			c.demoCtx.DefaultCertLifetime,
-			true, /* overwrite */
-			demoUser,
-			nil,  /* tenantIDs - this makes it valid for all tenants */
-			true, /* generatePKCS8Key */
-		); err != nil {
-			return err
-		}
-	}
-
-	if c.demoCtx.Multitenant {
-		if !(tenantSigningKeyExists && tenantSigningCertExists) {
-			c.infoLog(ctx, "generating tenant signing key/cert pair in %q", certsDir)
-			if err := security.CreateTenantSigningPair(
-				certsDir,
-				c.demoCtx.DefaultCertLifetime,
-				true, /* overwrite */
-				2,
-			); err != nil {
-				return err
-			}
-		}
-
-		if c.demoCtx.DisableServerController {
-			if !(tenantKeyExists && tenantCertExists) {
-				c.infoLog(ctx, "generating tenant server key/cert pair in %q", certsDir)
-				pair, err := security.CreateTenantPair(
-					certsDir,
-					caKeyPath,
-					c.demoCtx.DefaultKeySize,
-					c.demoCtx.DefaultCertLifetime,
-					2,
-					tlsServerNames,
-				)
-				if err != nil {
-					return err
-				}
-				if err := security.WriteTenantPair(certsDir, pair, true /* overwrite */); err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
 func (c *transientCluster) getNetworkURLForServer(
 	ctx context.Context, serverIdx int, includeAppName bool, target serverSelection,
 ) (*pgurl.URL, error) {
@@ -1560,20 +1255,7 @@ func (c *transientCluster) getNetworkURLForServer(
 		WithDatabase(database).
 		WithUsername(c.adminUser.Normalized())
 
-	// For a demo cluster we don't use client TLS certs and instead use
-	// password-based authentication with the password pre-filled in the
-	// URL.
-	if c.demoCtx.Insecure {
-		u.WithInsecure()
-	} else {
-		caCert := certnames.CACertFilename()
-		u.
-			WithAuthn(pgurl.AuthnPassword(true, c.adminPassword)).
-			WithTransport(pgurl.TransportTLS(
-				pgurl.TLSRequire,
-				filepath.Join(c.demoDir, caCert),
-			))
-	}
+	u.WithInsecure()
 	return u, nil
 }
 
@@ -1594,13 +1276,6 @@ func (c *transientCluster) extendURLWithTargetCluster(u *pgurl.URL, target serve
 
 func (c *transientCluster) GetConnURL() string {
 	return c.connURL
-}
-
-func (c *transientCluster) GetSQLCredentials() (
-	adminUser username.SQLUsername,
-	adminPassword, certsDir string,
-) {
-	return c.adminUser, c.adminPassword, c.demoDir
 }
 
 func (c *transientCluster) SetClusterSetting(
@@ -1820,7 +1495,6 @@ func (c *transientCluster) sockForServer(
 	u := pgurl.New().
 		WithNet(pgurl.NetUnix(c.demoDir, port)).
 		WithUsername(c.adminUser.Normalized()).
-		WithAuthn(pgurl.AuthnPassword(true, c.adminPassword)).
 		WithDatabase(databaseName)
 	if err := c.extendURLWithTargetCluster(u, target); err != nil {
 		return unixSocketDetails{}, err
@@ -1955,10 +1629,7 @@ func (c *transientCluster) printURLs(
 	if port != fmt.Sprint(base.DefaultPort) {
 		portArg = " -p " + port
 	}
-	secArgs := " --certs-dir=" + c.demoDir + " -u " + demoUsername
-	if c.demoCtx.Insecure {
-		secArgs = " --insecure"
-	}
+	secArgs := " --insecure"
 	db := sqlURL.GetDatabase()
 	if opt := sqlURL.GetOption("options"); strings.HasPrefix(opt, "-ccluster=") {
 		db = "cluster:" + opt[10:] + "/" + db
@@ -1973,84 +1644,6 @@ func (c *transientCluster) printURLs(
 		}
 		fmt.Fprintln(w, "   (rpc)     ", rpcAddr)
 	}
-}
-
-// genDemoPassword generates a password that prevents accidental
-// misuse of the DB console started by demo shells.
-// It also prevents beginner or naive programmers from scripting the
-// demo shell, before they fully understand the notion of API
-// stability and the lack of forward or backward compatibility in
-// features of 'cockroach demo'. (What we are saying here is that
-// someone needs to be "advanced enough" to script the derivation of
-// the demo password, at which point we're expecting them to properly
-// weigh the trade-off between working to script "demo" which may
-// require non-trivial changes to their script from one version to the
-// next, and starting a regular server with "start-single-node".)
-//
-// The password can be overridden via the env var
-// COCKROACH_DEMO_PASSWORD for the benefit of test automation.
-func genDemoPassword(username string) string {
-	mypid := os.Getpid()
-	candidatePassword := fmt.Sprintf("%s%d", username, mypid)
-	return envutil.EnvOrDefaultString("COCKROACH_DEMO_PASSWORD", candidatePassword)
-}
-
-// lockDir uses a file lock to prevent concurrent writes to the
-// demo directory.
-func (c *transientCluster) lockDir(
-	ctx context.Context, dir, operation string,
-) (cleanup func(), err error) {
-	defer func() {
-		if err != nil && cleanup != nil {
-			cleanup()
-			cleanup = nil
-		}
-	}()
-
-	// Prevent concurrent generation.
-	lockPath := filepath.Join(dir, operation+".lock")
-	// The lockfile package wants an absolute path.
-	absLockPath, err := filepath.Abs(lockPath)
-	if err != nil {
-		return cleanup, errors.Wrap(err, "computing absolute path")
-	}
-	tlsLock, err := lockfile.New(absLockPath)
-	if err != nil {
-		// This should only fail on non-absolute paths, but we
-		// just made it absolute above.
-		return cleanup, errors.NewAssertionErrorWithWrappedErrf(err, "creating lock")
-	}
-	cleanup = func() {
-		if err := tlsLock.Unlock(); err != nil {
-			c.warnLog(ctx, "removing lock: %v", err)
-		}
-	}
-
-	every := log.Every(1 * time.Second)
-	for retry := retry.StartWithCtx(ctx, retry.Options{MaxRetries: 20}); retry.Next(); {
-		if err := tlsLock.TryLock(); err != nil {
-			if errors.Is(err, lockfile.ErrBusy) {
-				if every.ShouldLog() {
-					c.warnLog(ctx, "lock busy; waiting to try again: %q", lockPath)
-				}
-				// Retry later.
-				continue
-			}
-			return cleanup, errors.Wrap(err, "acquiring lock")
-		}
-		// Lock succeeded.
-		return cleanup, nil
-	}
-	return cleanup, errors.Newf("timeout while acquiring lock: %q", lockPath)
-}
-
-func fileExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	exists := err == nil
-	if oserror.IsNotExist(err) {
-		err = nil
-	}
-	return exists, err
 }
 
 func (c *transientCluster) TenantName() string {

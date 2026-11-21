@@ -9,8 +9,6 @@ eexpect "Welcome"
 # Warn the user that they won't get persistence.
 eexpect "your changes to data stored in the demo session will not be saved!"
 # Check that the connection URL is printed.
-eexpect "(webui)"
-eexpect "http://127.0.0.1:8080"
 eexpect "(sql)"
 eexpect "root"
 eexpect ":26257/movr"
@@ -31,8 +29,6 @@ start_test "Check that demo insecure says hello properly, singletenant"
 spawn $argv demo --no-line-editor --insecure=true --multitenant=false --log-dir=logs
 # Check that the connection URL is printed; and that we're still
 # using default ports.
-eexpect "(webui)"
-eexpect "http://127.0.0.1:8080"
 eexpect "(sql)"
 eexpect "root"
 eexpect ":26257/movr"
@@ -55,9 +51,6 @@ start_test "Check the detailed URLs, insecure mode"
 # Show the URLs.
 # Also check that the default port is used.
 send "\\demo ls\r"
-eexpect "(webui)"
-eexpect "http://"
-eexpect ":8080"
 eexpect "Application tenant"
 eexpect "(sql)"
 eexpect "root@"
@@ -70,7 +63,7 @@ eexpect "root@"
 eexpect ":26257"
 eexpect "sslmode=disable"
 eexpect "(sql/unix)"
-eexpect "root:unused@"
+eexpect "root@"
 eexpect "=26257"
 
 eexpect "defaultdb>"
@@ -87,117 +80,18 @@ eexpect "defaultdb>"
 
 # Show the URLs.
 send "\\demo ls\r"
-eexpect "(webui)"
-eexpect "http://"
 eexpect "(sql)"
 eexpect "root@"
 eexpect "sslmode=disable"
 eexpect "(sql/unix)"
-eexpect "root:unused@"
+eexpect "root@"
 eexpect "defaultdb>"
 
 send_eof
 eexpect eof
 
-end_test
-start_test "Check that demo secure says hello properly, singletenant"
-
-# With env var.
-set ::env(COCKROACH_INSECURE) "false"
-spawn $argv demo --no-line-editor --no-example-database --log-dir=logs --multitenant=false
-eexpect "Welcome"
-
-eexpect "(webui)"
-eexpect "http://127.0.0.1:8080/demologin"
-eexpect "(sql)"
-eexpect "postgresql://demo:"
-eexpect "sslmode=require"
-eexpect "Username: \"demo\", password"
-eexpect "Directory with certificate files"
-
-eexpect "defaultdb>"
-
-send_eof
-eexpect eof
-
-end_test
-
-start_test "Check that demo secure says hello properly, multitenant"
-
-# With env var.
-set ::env(COCKROACH_INSECURE) "false"
-spawn $argv demo --no-line-editor --no-example-database --log-dir=logs --multitenant=true
-eexpect "Welcome"
-
-eexpect "(webui)"
-eexpect "http://127.0.0.1:8080/demologin"
-eexpect "(sql)"
-eexpect "postgresql://demo:"
-eexpect "sslmode=require"
-eexpect "Username: \"demo\", password"
-eexpect "Directory with certificate files"
-
-eexpect "defaultdb>"
-
-# Show the URLs.
-# Also check that the default port is used.
-send "\\demo ls\r"
-eexpect "(webui)"
-eexpect "http://127.0.0.1:8080/demologin"
-eexpect "Application tenant"
-eexpect "(sql)"
-eexpect "postgresql://demo:"
-eexpect ":26257"
-eexpect "sslmode=require"
-eexpect "sslrootcert="
-
-eexpect "System tenant"
-eexpect "(sql)"
-eexpect "postgresql://demo:"
-eexpect ":26257"
-eexpect "sslmode=require"
-eexpect "sslrootcert="
-eexpect "(sql/unix)"
-eexpect "demo:"
-eexpect "=26257"
-eexpect "defaultdb>"
-
-send_eof
-eexpect eof
-
-# With command-line override.
+# A demo cluster is always insecure.
 set ::env(COCKROACH_INSECURE) "true"
-spawn $argv demo --no-line-editor --insecure=false --no-example-database --log-dir=logs
-eexpect "Welcome"
-eexpect "Username: \"demo\", password"
-eexpect "defaultdb>"
-
-# Show the URLs.
-send "\\demo ls\r"
-eexpect "(webui)"
-eexpect "http://"
-eexpect "(sql)"
-eexpect "demo:"
-eexpect "sslmode=require"
-eexpect "sslrootcert="
-eexpect "(sql/unix)"
-eexpect "demo:"
-eexpect "defaultdb>"
-
-send_eof
-eexpect eof
-
-end_test
-
-start_test "Check that the user can override the password."
-set ::env(COCKROACH_DEMO_PASSWORD) "hunter2"
-spawn $argv demo --no-line-editor --insecure=false --no-example-database --log-dir=logs
-eexpect "Connection parameters"
-eexpect "(sql)"
-eexpect "postgresql://demo:hunter2@"
-eexpect "defaultdb>"
-send_eof
-eexpect eof
 end_test
 
 # Test that demo displays connection URLs for nodes in the cluster.
@@ -205,7 +99,6 @@ start_test "Check that node URLs are displayed"
 spawn $argv demo --no-line-editor --insecure --no-example-database --log-dir=logs
 # Check that we see our message.
 eexpect "Connection parameters"
-eexpect "(webui)"
 eexpect "(sql)"
 expect "root@"
 send_eof
@@ -216,21 +109,17 @@ spawn $argv demo --no-line-editor --insecure --nodes 3 --no-example-database --l
 
 # Check that we get a message for each node.
 eexpect "Connection parameters"
-eexpect "(webui)"
 eexpect "(sql)"
 eexpect "defaultdb>"
 
 send "\\demo ls\r"
 eexpect "node 1"
-eexpect "(webui)"
 eexpect "(sql)"
 eexpect "(sql/unix)"
 eexpect "node 2"
-eexpect "(webui)"
 eexpect "(sql)"
 eexpect "(sql/unix)"
 eexpect "node 3"
-eexpect "(webui)"
 eexpect "(sql)"
 eexpect "(sql/unix)"
 eexpect "defaultdb>"
@@ -238,11 +127,10 @@ eexpect "defaultdb>"
 send_eof
 eexpect eof
 
-spawn $argv demo --no-line-editor --insecure=false --no-example-database --log-dir=logs
-# Expect that security related tags are part of the connection URL.
+spawn $argv demo --no-line-editor --no-example-database --log-dir=logs
+# A demo cluster is insecure.
 eexpect "(sql)"
-eexpect "sslmode=require"
-eexpect "sslrootcert="
+eexpect "sslmode=disable"
 eexpect "defaultdb>"
 
 end_test
@@ -254,7 +142,6 @@ eexpect "Cluster ID:"
 eexpect "You are connected to database \"defaultdb\""
 eexpect "You are connected to a demo cluster"
 eexpect "Connection parameters"
-eexpect "(webui)"
 eexpect "(sql)"
 eexpect "defaultdb>"
 end_test
@@ -272,23 +159,7 @@ end_test
 
 start_test "Check that the port numbers can be overridden from the command line."
 
-spawn $argv demo --no-line-editor --no-example-database --nodes 3 --http-port 8000 --log-dir=logs
-eexpect "Welcome"
-eexpect "defaultdb>"
-
-# Show the URLs.
-send "\\demo ls\r"
-eexpect "http://"
-eexpect ":8000"
-eexpect "http://"
-eexpect ":8001"
-eexpect "http://"
-eexpect ":8002"
-eexpect "defaultdb>"
-
-send_eof
-eexpect eof
-
+# demo ls no longer prints HTTP addresses, so only the SQL port is checked.
 spawn $argv demo --no-line-editor --no-example-database --nodes 3 --sql-port 23000 --log-dir=logs --multitenant=true
 eexpect "Welcome"
 eexpect "defaultdb>"

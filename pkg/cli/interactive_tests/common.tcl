@@ -203,3 +203,16 @@ proc stop_tenant {tenant_id argv} {
 
     report "END STOP TENANT $tenant_id"
 }
+
+# write_config writes config.yaml and rules into certs_dir, for the node,
+# root and test certs there, and returns the config path.
+proc write_config {certs_dir} {
+    set f [open "$certs_dir/rules" w]
+    puts $f "node cn=node\nclient cn=root role=root\nclient cn=testuser role=testuser"
+    close $f
+    set config "$certs_dir/config.yaml"
+    set f [open $config w]
+    puts $f "cert: node.crt\nkey: node.key\nnode-ca: ca.crt\nclient-ca: ca.crt\nrules: rules\nclient-cert: client.root.crt\nclient-key: client.root.key"
+    close $f
+    return $config
+}

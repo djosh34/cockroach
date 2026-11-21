@@ -1,4 +1,4 @@
-// Copyright 2017 The Cockroach Authors.
+// Copyright 2023 The Cockroach Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this
 // file except in compliance with the License. You may obtain a copy of the License at
@@ -11,535 +11,101 @@
 package authserver
 
 import (
-	"bytes"
-	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
-	"fmt"
+	"crypto/x509"
 	"net/http"
-	"strconv"
-	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/base"
-	"github.com/cockroachdb/cockroach/pkg/clusterversion"
-	"github.com/cockroachdb/cockroach/pkg/security"
-	"github.com/cockroachdb/cockroach/pkg/security/password"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
-	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
-	"github.com/cockroachdb/cockroach/pkg/server/srverrors"
-	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/sql"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
-	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
-	"github.com/cockroachdb/cockroach/pkg/sql/types"
-	"github.com/cockroachdb/cockroach/pkg/util/grpcutil"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
-	"github.com/cockroachdb/cockroach/pkg/util/protoutil"
-	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
 	"github.com/cockroachdb/errors"
-	gwruntime "github.com/grpc-ecosystem/grpc-gateway/runtime"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
-const (
-	// LoginPath is the URL path to the login handler.
-	LoginPath = "/login"
+// ForwardedUserHeader carries the user of an HTTP request that one node
+// forwards to another, for example to serve a request for a remote node's
+// status. The receiving node trusts it only from a peer that presents a
+// node certificate. An empty value means the request had no user.
+const ForwardedUserHeader = "X-Patchroaddb-Forwarded-User"
 
-	// LogoutPath is the URL path to the logout handler.
-	LogoutPath = "/logout"
-
-	// secretLength is the number of random bytes generated for session secrets.
-	secretLength = 16
-)
-
-// WebSessionTimeout is the cluster setting for web session TTL.
-var WebSessionTimeout = settings.RegisterDurationSetting(
-	settings.ApplicationLevel,
-	"server.web_session_timeout",
-	"the duration that a newly created web session will be valid",
-	7*24*time.Hour,
-	settings.NonNegativeDuration,
-	settings.WithName("server.web_session.timeout"),
-	settings.WithPublic)
+// errNoUser is returned for a request without a user.
+var errNoUser = errors.New("a client certificate is required")
 
 type authenticationServer struct {
 	cfg       *base.Config
 	sqlServer SQLServerInterface
-
-	// dummyHash is the hash of a random password. A login with no stored
-	// hash to check, such as for a user who doesn't exist, is checked against
-	// it, so that the reply takes about as long as for a real user.
-	dummyHash struct {
-		syncutil.Mutex
-		method password.HashMethod
-		cost   int
-		hash   password.PasswordHash
-	}
 }
 
-// RegisterService registers the GRPC service.
-func (s *authenticationServer) RegisterService(g *grpc.Server) {
-	serverpb.RegisterLogInServer(g, s)
-	serverpb.RegisterLogOutServer(g, s)
-}
-
-// RegisterGateway starts the gateway (i.e. reverse proxy) that proxies HTTP requests
-// to the appropriate gRPC endpoints.
-func (s *authenticationServer) RegisterGateway(
-	ctx context.Context, mux *gwruntime.ServeMux, conn *grpc.ClientConn,
-) error {
-	if err := serverpb.RegisterLogInHandler(ctx, mux, conn); err != nil {
-		return err
-	}
-	return serverpb.RegisterLogOutHandler(ctx, mux, conn)
-}
-
-// UserLogin is part of the Server interface.
-func (s *authenticationServer) UserLogin(
-	ctx context.Context, req *serverpb.UserLoginRequest,
-) (*serverpb.UserLoginResponse, error) {
-	if req.Username == "" {
-		return nil, status.Errorf(
-			codes.Unauthenticated,
-			"no username was provided",
-		)
-	}
-
-	// In CockroachDB SQL, unlike in PostgreSQL, usernames are
-	// case-insensitive. Therefore we need to normalize the username
-	// here, so that the normalized username is retained in the session
-	// table: the APIs extract the username from the session table
-	// without further normalization.
-	username, _ := username.MakeSQLUsernameFromUserInput(req.Username, username.PurposeValidation)
-
-	// Verify the provided username/password pair.
-	verified, err := s.VerifyPasswordDBConsole(ctx, username, req.Password)
-	if err != nil {
-		return nil, srverrors.APIInternalError(ctx, err)
-	}
-	if !verified {
-		return nil, errWebAuthenticationFailure
-	}
-
-	cookie, err := s.createSessionFor(ctx, username)
-	if err != nil {
-		return nil, srverrors.APIInternalError(ctx, err)
-	}
-
-	// Set the cookie header on the outgoing response.
-	if err := grpc.SetHeader(ctx, metadata.Pairs("set-cookie", cookie.String())); err != nil {
-		return nil, srverrors.APIInternalError(ctx, err)
-	}
-
-	return &serverpb.UserLoginResponse{}, nil
-}
-
-var errWebAuthenticationFailure = status.Errorf(
-	codes.Unauthenticated,
-	"the provided credentials did not match any account on the server",
-)
-
-// createSessionFor creates a login cookie for the given user.
+// UserFromRequest returns the user that an HTTP request authenticates as.
 //
-// The caller is responsible to ensure the username has been normalized already.
-func (s *authenticationServer) createSessionFor(
-	ctx context.Context, userName username.SQLUsername,
-) (*http.Cookie, error) {
-	// Create a new database session, generating an ID and secret key.
-	id, secret, err := s.NewAuthSession(ctx, userName)
+// A client certificate that chains to the client CA is the role of the
+// first client rule it matches. A node certificate is root, unless the
+// request carries ForwardedUserHeader: then it is the user named there,
+// which the forwarding node has authenticated. The user must exist and be
+// allowed to log in.
+func (s *authenticationServer) UserFromRequest(r *http.Request) (username.SQLUsername, error) {
+	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+		return username.SQLUsername{}, errNoUser
+	}
+	execCfg := s.sqlServer.ExecutorConfig()
+	cm, err := execCfg.RPCContext.GetCertificateManager()
 	if err != nil {
-		return nil, srverrors.APIInternalError(ctx, err)
+		return username.SQLUsername{}, err
 	}
-
-	// Generate and set a session cookie for the response. Because HTTP cookies
-	// must be strings, the cookie value (a marshaled protobuf) is encoded in
-	// base64.
-	cookieValue := &serverpb.SessionCookie{
-		ID:     id,
-		Secret: secret,
-	}
-	return EncodeSessionCookie(cookieValue, !s.cfg.DisableTLSForHTTP)
-}
-
-// UserLogout is part of the Server interface.
-func (s *authenticationServer) UserLogout(
-	ctx context.Context, req *serverpb.UserLogoutRequest,
-) (*serverpb.UserLogoutResponse, error) {
-	md, ok := grpcutil.FastFromIncomingContext(ctx)
-	if !ok {
-		return nil, srverrors.APIInternalError(ctx, fmt.Errorf("couldn't get incoming context"))
-	}
-	sessionIDs := md.Get(webSessionIDKeyStr)
-	if len(sessionIDs) != 1 {
-		return nil, srverrors.APIInternalError(ctx, fmt.Errorf("couldn't get incoming context"))
-	}
-
-	sessionID, err := strconv.Atoi(sessionIDs[0])
-	if err != nil {
-		return nil, status.Errorf(
-			codes.InvalidArgument,
-			"invalid session id: %d", sessionID)
-	}
-
-	// Revoke the session.
-	if n, err := s.sqlServer.InternalExecutor().ExecEx(
-		ctx,
-		"revoke-auth-session",
-		nil, /* txn */
-		sessiondata.RootUserSessionDataOverride,
-		`UPDATE system.web_sessions SET "revokedAt" = now() WHERE id = $1`,
-		sessionID,
-	); err != nil {
-		return nil, srverrors.APIInternalError(ctx, err)
-	} else if n == 0 {
-		err := status.Errorf(
-			codes.InvalidArgument,
-			"session with id %d nonexistent", sessionID)
-		log.Infof(ctx, "%v", err)
-		return nil, err
-	}
-
-	// Send back a header which will cause the browser to destroy the cookie.
-	// See https://tools.ietf.org/search/rfc6265, page 7.
-	cookie := makeCookieWithValue("", false /* forHTTPSOnly */)
-	cookie.MaxAge = -1
-
-	// Set the cookie header on the outgoing response.
-	if err := grpc.SetHeader(ctx, metadata.Pairs("set-cookie", cookie.String())); err != nil {
-		return nil, srverrors.APIInternalError(ctx, err)
-	}
-
-	return &serverpb.UserLogoutResponse{}, nil
-}
-
-// VerifySession is part of the Server interface.
-func (s *authenticationServer) VerifySession(
-	ctx context.Context, cookie *serverpb.SessionCookie,
-) (bool, string, error) {
-	// Look up session in database and verify hashed secret value.
-	const sessionQuery = `
-SELECT "hashedSecret", "username", "expiresAt", "revokedAt"
-FROM system.web_sessions
-WHERE id = $1`
-
-	var (
-		hashedSecret []byte
-		userName     string
-		expiresAt    time.Time
-		isRevoked    bool
-	)
-
-	row, err := s.sqlServer.InternalExecutor().QueryRowEx(
-		ctx,
-		"lookup-auth-session",
-		nil, /* txn */
-		sessiondata.RootUserSessionDataOverride,
-		sessionQuery, cookie.ID)
-	if row == nil || err != nil {
-		return false, "", err
-	}
-
-	if row.Len() != 4 ||
-		row[0].ResolvedType().Family() != types.BytesFamily ||
-		row[1].ResolvedType().Family() != types.StringFamily ||
-		row[2].ResolvedType().Family() != types.TimestampFamily {
-		return false, "", errors.Errorf("values returned from auth session lookup do not match expectation")
-	}
-
-	// Extract datum values.
-	hashedSecret = []byte(*row[0].(*tree.DBytes))
-	userName = string(*row[1].(*tree.DString))
-	expiresAt = row[2].(*tree.DTimestamp).Time
-	isRevoked = row[3].ResolvedType().Family() != types.UnknownFamily
-
-	if isRevoked {
-		return false, "", nil
-	}
-
-	if now := s.sqlServer.ExecutorConfig().Clock.PhysicalTime(); !now.Before(expiresAt) {
-		return false, "", nil
-	}
-
-	hasher := sha256.New()
-	_, _ = hasher.Write(cookie.Secret)
-	hashedCookieSecret := hasher.Sum(nil)
-	if !bytes.Equal(hashedSecret, hashedCookieSecret) {
-		return false, "", nil
-	}
-
-	return true, userName, nil
-}
-
-// VerifyPasswordDBConsole is part of the Server interface.
-// (CockroachDB has case-insensitive usernames, unlike PostgreSQL.)
-func (s *authenticationServer) VerifyPasswordDBConsole(
-	ctx context.Context, userName username.SQLUsername, passwordStr string,
-) (valid bool, err error) {
-	exists, _, canLoginDBConsole, _, _, _, pwRetrieveFn, err := sql.GetUserSessionInitInfo(
-		ctx,
-		s.sqlServer.ExecutorConfig(),
-		userName,
-		"", /* databaseName */
-	)
-	if err != nil {
-		return false, err
-	}
-	// A user who doesn't exist, may not log in, has no password or whose
-	// password expired fails like a wrong password, after the same work, so
-	// that the reply doesn't tell which users exist.
-	canLogin := exists && canLoginDBConsole
-	hashedPassword := password.MissingPasswordHash
-	if canLogin {
-		var expired bool
-		expired, hashedPassword, err = pwRetrieveFn(ctx)
-		if err != nil {
-			return false, err
+	certs := r.TLS.PeerCertificates
+	var user username.SQLUsername
+	if cm.VerifyNode(certs, x509.ExtKeyUsageClientAuth) == nil {
+		user = username.RootUserName()
+		if v, forwarded := r.Header[http.CanonicalHeaderKey(ForwardedUserHeader)]; forwarded {
+			if len(v) != 1 || v[0] == "" {
+				return username.SQLUsername{}, errNoUser
+			}
+			user = username.MakeSQLUsernameFromPreNormalizedString(v[0])
 		}
-		canLogin = !expired && hashedPassword.Method() != password.HashMissingPassword
+	} else {
+		roles, err := cm.ClientRoles(certs)
+		if err != nil {
+			return username.SQLUsername{}, err
+		}
+		user = roles[0]
+	}
+	exists, _, canLogin, _, _, _, err := sql.GetUserSessionInitInfo(
+		r.Context(), execCfg, user, "" /* databaseName */)
+	if err != nil {
+		return username.SQLUsername{}, err
+	}
+	if !exists {
+		return username.SQLUsername{}, errors.Newf("user %s does not exist", user)
 	}
 	if !canLogin {
-		hashedPassword, err = s.getDummyHash(ctx)
-		if err != nil {
-			return false, err
-		}
+		return username.SQLUsername{}, errors.Newf("%s does not have login privilege", user)
 	}
-
-	ok, err := password.CompareHashAndCleartextPassword(
-		ctx, hashedPassword, passwordStr, security.GetExpensiveHashComputeSem(ctx),
-	)
-	if err != nil || !canLogin {
-		return false, err
-	}
-	if ok {
-		// Password authentication succeeded using cleartext.  If the
-		// stored hash was encoded using crdb-bcrypt, we might want to
-		// upgrade it to SCRAM instead.
-		//
-		// This auto-conversion is a CockroachDB-specific feature, which
-		// pushes clusters upgraded from a previous version into using
-		// SCRAM-SHA-256.
-		sql.MaybeConvertStoredPasswordHash(ctx,
-			s.sqlServer.ExecutorConfig(),
-			userName,
-			passwordStr, hashedPassword)
-	}
-	return ok, nil
+	return user, nil
 }
 
-// getDummyHash returns the hash of a random password, made with the
-// configured hash method and cost.
-func (s *authenticationServer) getDummyHash(ctx context.Context) (password.PasswordHash, error) {
-	sv := &s.sqlServer.ExecutorConfig().Settings.SV
-	method := security.GetConfiguredPasswordHashMethod(sv)
-	cost, err := security.GetConfiguredPasswordCost(ctx, sv, method)
-	if err != nil {
-		return nil, err
-	}
-	d := &s.dummyHash
-	d.Lock()
-	defer d.Unlock()
-	if d.hash == nil || d.method != method || d.cost != cost {
-		var random [16]byte
-		if _, err := rand.Read(random[:]); err != nil {
-			return nil, err
-		}
-		hash, err := password.HashPassword(ctx, cost, method,
-			base64.StdEncoding.EncodeToString(random[:]), security.GetExpensiveHashComputeSem(ctx))
-		if err != nil {
-			return nil, err
-		}
-		d.method, d.cost, d.hash = method, cost, password.LoadPasswordHash(ctx, hash)
-	}
-	return d.hash, nil
-}
-
-// CreateAuthSecret creates a secret, hash pair to populate a session auth token.
-func CreateAuthSecret() (secret, hashedSecret []byte, err error) {
-	secret = make([]byte, secretLength)
-	if _, err := rand.Read(secret); err != nil {
-		return nil, nil, err
-	}
-
-	hasher := sha256.New()
-	_, _ = hasher.Write(secret)
-	hashedSecret = hasher.Sum(nil)
-	return secret, hashedSecret, nil
-}
-
-// NewAuthSession attempts to create a new authentication session for
-// the given user. If successful, returns the ID and secret value for
-// the new session.
-//
-// The caller is responsible to ensure the username has been
-// normalized already.
-func (s *authenticationServer) NewAuthSession(
-	ctx context.Context, userName username.SQLUsername,
-) (int64, []byte, error) {
-	st := s.sqlServer.ExecutorConfig().Settings
-	webSessionsTableHasUserIDCol := st.Version.IsActive(ctx,
-		clusterversion.V23_1WebSessionsTableHasUserIDColumn)
-
-	secret, hashedSecret, err := CreateAuthSecret()
-	if err != nil {
-		return 0, nil, err
-	}
-
-	expiration := s.sqlServer.ExecutorConfig().Clock.PhysicalTime().Add(WebSessionTimeout.Get(&st.SV))
-
-	insertSessionStmt := `
-INSERT INTO system.web_sessions ("hashedSecret", username, "expiresAt")
-VALUES($1, $2, $3)
-RETURNING id
-`
-	if webSessionsTableHasUserIDCol {
-		insertSessionStmt = `
-INSERT INTO system.web_sessions ("hashedSecret", username, "expiresAt", user_id)
-VALUES($1, $2, $3, (SELECT user_id FROM system.users WHERE username = $2))
-RETURNING id
-`
-	}
-	var id int64
-
-	row, err := s.sqlServer.InternalExecutor().QueryRowEx(
-		ctx,
-		"create-auth-session",
-		nil, /* txn */
-		sessiondata.RootUserSessionDataOverride,
-		insertSessionStmt,
-		hashedSecret,
-		userName.Normalized(),
-		expiration,
-	)
-	if err != nil {
-		return 0, nil, err
-	}
-	if row.Len() != 1 || row[0].ResolvedType().Family() != types.IntFamily {
-		return 0, nil, errors.Errorf(
-			"expected create auth session statement to return exactly one integer, returned %v",
-			row,
-		)
-	}
-
-	// Extract integer value from single datum.
-	id = int64(*row[0].(*tree.DInt))
-
-	return id, secret, nil
-}
-
-// authenticationMux implements http.Handler, and is used to provide session
-// authentication for an arbitrary "inner" handler.
+// authenticationMux implements http.Handler. It authenticates each request
+// by its client certificate before it calls its inner handler.
 type authenticationMux struct {
 	server *authenticationServer
 	inner  http.Handler
 
 	// allowAnonymous, if true, indicates that the authentication mux should
-	// call its inner HTTP handler even if the request doesn't have a valid
-	// session. If there is a valid session, the mux calls its inner handler
-	// with a context containing the username and session ID.
+	// call its inner HTTP handler even if the request has no user. If there
+	// is a user, the mux calls its inner handler with a context containing
+	// the username.
 	//
 	// If allowAnonymous is false, the mux returns an error if there is no
-	// valid session.
+	// user.
 	allowAnonymous bool
 }
 
 func (am *authenticationMux) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	username, cookie, err := am.getSession(w, req)
+	user, err := am.server.UserFromRequest(req)
 	if err == nil {
-		req = req.WithContext(
-			ContextWithHTTPAuthInfo(req.Context(), username, cookie.ID))
+		req = req.WithContext(ContextWithHTTPAuthInfo(req.Context(), user.Normalized(), 0))
 	} else if !am.allowAnonymous {
-		if log.V(1) {
-			log.Infof(req.Context(), "web session error: %v", err)
-		}
-		http.Error(w, "a valid authentication cookie is required", http.StatusUnauthorized)
+		log.VInfof(req.Context(), 1, "HTTP authentication failed: %v", err)
+		http.Error(w, "a valid client certificate is required", http.StatusUnauthorized)
 		return
 	}
 	am.inner.ServeHTTP(w, req)
-}
-
-// EncodeSessionCookie encodes a SessionCookie proto into an http.Cookie.
-// The flag forHTTPSOnly, if set, produces the "Secure" flag on the
-// resulting HTTP cookie, which means the cookie should only be
-// transmitted over HTTPS channels. Note that a cookie without
-// the "Secure" flag can be transmitted over either HTTP or HTTPS channels.
-func EncodeSessionCookie(
-	sessionCookie *serverpb.SessionCookie, forHTTPSOnly bool,
-) (*http.Cookie, error) {
-	cookieValueBytes, err := protoutil.Marshal(sessionCookie)
-	if err != nil {
-		return nil, errors.Wrap(err, "session cookie could not be encoded")
-	}
-	value := base64.StdEncoding.EncodeToString(cookieValueBytes)
-	return makeCookieWithValue(value, forHTTPSOnly), nil
-}
-
-func makeCookieWithValue(value string, forHTTPSOnly bool) *http.Cookie {
-	return &http.Cookie{
-		Name:     SessionCookieName,
-		Value:    value,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   forHTTPSOnly,
-	}
-}
-
-// getSession decodes the cookie from the request, looks up the corresponding session, and
-// returns the logged in user name. If there's an error, it returns an error value and the
-// HTTP error code.
-func (am *authenticationMux) getSession(
-	w http.ResponseWriter, req *http.Request,
-) (string, *serverpb.SessionCookie, error) {
-	st := am.server.sqlServer.ExecutorConfig().Settings
-	cookie, err := FindAndDecodeSessionCookie(req.Context(), st, req.Cookies())
-	if err != nil {
-		return "", nil, err
-	}
-
-	valid, username, err := am.server.VerifySession(req.Context(), cookie)
-	if err != nil {
-		err := srverrors.APIInternalError(req.Context(), err)
-		return "", nil, err
-	}
-	if !valid {
-		err := errors.New("the provided authentication session could not be validated")
-		return "", nil, err
-	}
-
-	return username, cookie, nil
-}
-
-func decodeSessionCookie(encodedCookie *http.Cookie) (*serverpb.SessionCookie, error) {
-	// Cookie value should be a base64 encoded protobuf.
-	cookieBytes, err := base64.StdEncoding.DecodeString(encodedCookie.Value)
-	if err != nil {
-		return nil, errors.Wrap(err, "session cookie could not be decoded")
-	}
-	var sessionCookieValue serverpb.SessionCookie
-	if err := protoutil.Unmarshal(cookieBytes, &sessionCookieValue); err != nil {
-		return nil, errors.Wrap(err, "session cookie could not be unmarshaled")
-	}
-	return &sessionCookieValue, nil
-}
-
-// AuthenticationHeaderMatcher is a GRPC header matcher function, which provides
-// a conversion from GRPC headers to HTTP headers. This function is needed to
-// attach the "set-cookie" header to the response; by default, Grpc-Gateway
-// adds a prefix to all GRPC headers before adding them to the response.
-func AuthenticationHeaderMatcher(key string) (string, bool) {
-	// GRPC converts all headers to lower case.
-	if key == "set-cookie" {
-		return key, true
-	}
-	// This is the default behavior of GRPC Gateway when matching headers -
-	// it adds a constant prefix to the HTTP header so that by default they
-	// do not conflict with any HTTP headers that might be used by the
-	// browser.
-	// TODO(mrtracy): A function "DefaultOutgoingHeaderMatcher" should
-	// likely be added to GRPC Gateway so that the logic does not have to be
-	// duplicated here.
-	return fmt.Sprintf("%s%s", gwruntime.MetadataHeaderPrefix, key), true
 }

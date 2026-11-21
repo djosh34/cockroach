@@ -52,8 +52,7 @@ type ServerStartupInterface interface {
 	// if the cluster is being started for the first time.
 	// The arguments are:
 	// - startSingleNode is used by 'demo' and 'start-single-node'.
-	// - adminUser/adminPassword is used for 'demo'.
-	RunInitialSQL(ctx context.Context, startSingleNode bool, adminUser, adminPassword string) error
+	RunInitialSQL(ctx context.Context, startSingleNode bool) error
 }
 
 // ServerShutdownInterface is the subset of the APIs on a server

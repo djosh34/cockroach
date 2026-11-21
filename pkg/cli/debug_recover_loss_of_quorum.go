@@ -201,9 +201,9 @@ has two stores and they are numbered as 1,2 on node 1; 3,4 on node 2 etc.
 Recovery commands to recover unavailable ranges would be (most command output
 is omitted for brevity):
 
-[patchroaddb@admin ~]$ patchroaddb debug recover make-plan --host node1.example.com --certs-dir=root_certs -o recovery-plan.json
+[patchroaddb@admin ~]$ patchroaddb debug recover make-plan --host node1.example.com --config=config.yaml -o recovery-plan.json
 
-[patchroaddb@admin ~]$ patchroaddb debug recover apply-plan --host node1.example.com --certs-dir=root_certs recovery-plan.json
+[patchroaddb@admin ~]$ patchroaddb debug recover apply-plan --host node1.example.com --config=config.yaml recovery-plan.json
 
 Proceed with staging plan [y/N] y
 
@@ -211,7 +211,7 @@ Plan staged. To complete recovery restart nodes n2, n3.
 
 [patchroaddb@admin ~]$ # restart-nodes 2 3 as instructed by apply-plan.
 
-[patchroaddb@admin ~]$ patchroaddb debug recover verify --host node1.example.com --certs-dir=root_certs recovery-plan.json
+[patchroaddb@admin ~]$ patchroaddb debug recover verify --host node1.example.com --config=config.yaml recovery-plan.json
 
 Loss of quorum recovery is complete.
 
@@ -1160,7 +1160,7 @@ func formatNodeStores(locations []loqrecovery.NodeStores, indent string) string 
 // discarding any flags that filter returns true for.
 func getCLIClusterFlags(fromCfg bool, cmd *cobra.Command, filter func(flag string) bool) string {
 	if !fromCfg {
-		return " --host <node-hostname>[:<port>] [--certs-dir <certificates-dir>|--insecure]"
+		return " --host <node-hostname>[:<port>] [--config <config-file>|--insecure]"
 	}
 	var buf strings.Builder
 	cmd.Flags().VisitAll(func(f *pflag.Flag) {

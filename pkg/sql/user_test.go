@@ -59,9 +59,7 @@ func TestUserLoginAfterGC(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify that newuser can still log in.
-	newUserURL, cleanup := sqlutils.PGUrlWithOptionalClientCerts(
-		t, s.AdvSQLAddr(), t.Name(), url.UserPassword("newuser", "123"), false, /* withClientCerts */
-		"")
+	newUserURL, cleanup := sqlutils.PGUrl(t, s.AdvSQLAddr(), t.Name(), url.User("newuser"))
 	defer cleanup()
 
 	newUserConn, err := sqltestutils.PGXConn(t, newUserURL)
@@ -106,7 +104,7 @@ func TestGetUserTimeout(t *testing.T) {
 		s, db, _ := serverutils.StartServer(t, params)
 		defer s.Stopper().Stop(ctx)
 
-		// Make a user that must use a password to authenticate.
+		// Make a user that is not root.
 		// Default privileges on defaultdb are needed to run simple queries.
 		if _, err := db.Exec(`
 CREATE USER foo WITH PASSWORD 'testabc';
@@ -119,11 +117,9 @@ GRANT admin TO foo`); err != nil {
 		require.NoError(t, err)
 
 		// We'll attempt connections on gateway node 0.
-		fooURL, fooCleanupFn := sqlutils.PGUrlWithOptionalClientCerts(t,
-			s.AdvSQLAddr(), t.Name(), url.UserPassword("foo", "testabc"), false, "" /* withClientCerts */)
+		fooURL, fooCleanupFn := sqlutils.PGUrl(t, s.AdvSQLAddr(), t.Name(), url.User("foo"))
 		defer fooCleanupFn()
-		barURL, barCleanupFn := sqlutils.PGUrlWithOptionalClientCerts(t,
-			s.AdvSQLAddr(), t.Name(), url.UserPassword("bar", "testabc"), false, "" /* withClientCerts */)
+		barURL, barCleanupFn := sqlutils.PGUrl(t, s.AdvSQLAddr(), t.Name(), url.User("bar"))
 		defer barCleanupFn()
 		rootURL, rootCleanupFn := sqlutils.PGUrl(t,
 			s.AdvSQLAddr(), t.Name(), url.User(username.RootUser))
@@ -141,23 +137,24 @@ GRANT admin TO foo`); err != nil {
 		// before the rest of the test.
 
 		func() {
-			// Sanity check: verify that secure mode is enabled: password is
-			// required. If this part fails, this means the test cluster is
+			// Sanity check: verify that secure mode is enabled: a client cert
+			// is required. If this part fails, this means the test cluster is
 			// not properly configured, and the remainder of the test below
 			// would report false positives.
-			unauthURL := fooURL
-			unauthURL.User = url.User("foo")
+			unauthURL, cleanup := sqlutils.PGUrlWithOptionalClientCerts(t,
+				s.AdvSQLAddr(), t.Name(), url.User("foo"), false /* withClientCerts */, "")
+			defer cleanup()
 			dbSQL, err := sqltestutils.PGXConn(t, unauthURL)
 			if err == nil {
 				defer func() { _ = dbSQL.Close(ctx) }()
 			}
-			if !testutils.IsError(err, "failed SASL auth") {
-				t.Fatalf("expected password error, got %v", err)
+			if !testutils.IsError(err, "certificate required") {
+				t.Fatalf("expected a client cert error, got %v", err)
 			}
 		}()
 
 		func() {
-			// Sanity check: verify that the new user is able to log in with password.
+			// Sanity check: verify that the new user is able to log in.
 			dbSQL, err := sqltestutils.PGXConn(t, fooURL)
 			if err != nil {
 				t.Fatal(err)

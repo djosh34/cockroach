@@ -60,7 +60,6 @@ func runTerm(cmd *cobra.Command, args []string) (resErr error) {
 	}
 	defer func() { resErr = errors.CombineErrors(resErr, conn.Close()) }()
 
-	sqlCtx.ShellCtx.CertsDir = baseCfg.SSLCertsDir
 	sqlCtx.ShellCtx.ParseURL = clienturl.MakeURLParserFn(cmd, cliCtx.clientOpts)
 	return sqlCtx.Run(ctx, conn)
 }

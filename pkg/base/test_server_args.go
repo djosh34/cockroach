@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
+	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/server/autoconfig/acprovider"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/testutils/listenerutil"
@@ -96,13 +97,15 @@ type TestServerArgs struct {
 	ExternalIODirConfig ExternalIODirConfig
 
 	// Fields copied to the server.Config.
-	Insecure                    bool
-	RetryOptions                retry.Options // TODO(tbg): make testing knob.
-	SocketFile                  string
-	ScanInterval                time.Duration
-	ScanMinIdleTime             time.Duration
-	ScanMaxIdleTime             time.Duration
-	SSLCertsDir                 string
+	Insecure        bool
+	RetryOptions    retry.Options // TODO(tbg): make testing knob.
+	SocketFile      string
+	ScanInterval    time.Duration
+	ScanMinIdleTime time.Duration
+	ScanMaxIdleTime time.Duration
+	// Certs names the cert, key, CA and rules files. If empty, the server
+	// uses the default test certificates.
+	Certs                       certconfig.Config
 	TimeSeriesQueryWorkerMax    int
 	TimeSeriesQueryMemoryBudget int64
 	SQLMemoryPoolSize           int64
@@ -594,9 +597,9 @@ type TestTenantArgs struct {
 	// struct.
 	Locality roachpb.Locality
 
-	// SSLCertsDir is a path to a custom certs dir. If empty, will use the default
-	// embedded certs.
-	SSLCertsDir string
+	// Certs names the cert, key, CA and rules files. If empty, the server
+	// uses the default test certificates.
+	Certs certconfig.Config
 
 	// DisableTLSForHTTP, if set, disables TLS for the HTTP listener.
 	DisableTLSForHTTP bool

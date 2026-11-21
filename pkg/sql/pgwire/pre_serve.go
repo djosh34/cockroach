@@ -22,7 +22,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/hba"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgwirebase"
@@ -272,7 +271,7 @@ type PreServeStatus struct {
 	State PreServeState
 
 	// ConnType is the type of incoming connection.
-	ConnType hba.ConnType
+	ConnType ConnType
 
 	// CancelKey is the data sufficient to serve a cancel request.
 	// Defined only if State == PreServeCancel.
@@ -414,7 +413,7 @@ func (s *PreServeConnHandler) PreServe(
 		st.Reserved.Clear(ctx)
 		return conn, st, s.sendErr(ctx, s.st, conn, err)
 	}
-	st.clientParameters.IsSSL = st.ConnType == hba.ConnHostSSL
+	st.clientParameters.IsSSL = st.ConnType == ConnHostSSL
 
 	st.State = PreServeReady
 	return conn, st, nil
@@ -423,12 +422,8 @@ func (s *PreServeConnHandler) PreServe(
 // maybeUpgradeToSecureConn upgrades the connection to TLS/SSL if
 // requested by the client, and available in the server configuration.
 func (s *PreServeConnHandler) maybeUpgradeToSecureConn(
-	ctx context.Context,
-	conn net.Conn,
-	connType hba.ConnType,
-	version uint32,
-	buf *pgwirebase.ReadBuffer,
-) (newConn net.Conn, newConnType hba.ConnType, newVersion uint32, clientErr, serverErr error) {
+	ctx context.Context, conn net.Conn, connType ConnType, version uint32, buf *pgwirebase.ReadBuffer,
+) (newConn net.Conn, newConnType ConnType, newVersion uint32, clientErr, serverErr error) {
 	// By default, this is a no-op.
 	newConn = conn
 	newConnType = connType
@@ -445,15 +440,14 @@ func (s *PreServeConnHandler) maybeUpgradeToSecureConn(
 			return
 		}
 
-		// Secure mode: disallow if TCP and the user did not opt into
-		// non-TLS SQL conns.
-		if !s.cfg.AcceptSQLWithoutTLS && connType != hba.ConnLocal && connType != hba.ConnInternalLoopback {
+		// Secure mode: TCP connections must use TLS.
+		if connType != ConnLocal && connType != ConnInternalLoopback {
 			clientErr = pgerror.New(pgcode.ProtocolViolation, ErrSSLRequired)
 		}
 		return
 	}
 
-	if connType == hba.ConnLocal || connType == hba.ConnInternalLoopback {
+	if connType == ConnLocal || connType == ConnInternalLoopback {
 		// No existing PostgreSQL driver ever tries to activate TLS over a unix
 		// socket. Similarly, internal loopback connections don't use TLS. But in
 		// case someone, sometime, somewhere, makes that mistake, let them know that
@@ -492,7 +486,7 @@ func (s *PreServeConnHandler) maybeUpgradeToSecureConn(
 			return
 		}
 		newConn = tls.Server(conn, tlsConfig)
-		newConnType = hba.ConnHostSSL
+		newConnType = ConnHostSSL
 	}
 	s.tenantIndependentMetrics.PreServeBytesOutCount.Inc(int64(n))
 

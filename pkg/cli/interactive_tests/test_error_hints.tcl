@@ -6,6 +6,7 @@ set fakeserv [file join [file dirname $argv0] netcat.py]
 
 # We'll override security defaults below.
 set certs_dir "/certs"
+set config [write_config $certs_dir]
 set ::env(COCKROACH_INSECURE) "false"
 
 spawn /bin/bash
@@ -18,11 +19,11 @@ eexpect ":/# "
 
 start_test "Connecting a RPC client to a non-started server"
 send "$argv node drain 1\r"
-eexpect "ERROR: cannot load certificates.\r\nCheck your certificate settings"
+eexpect "ERROR: cannot load certificates.\r\nCheck the files named by --config"
 eexpect "or use --insecure"
 eexpect ":/# "
 
-send "$argv node drain 1 --certs-dir=$certs_dir\r"
+send "$argv node drain 1 --config=$config\r"
 eexpect "ERROR: cannot dial server.\r\nIs the server running?"
 eexpect "connection refused"
 eexpect ":/# "
@@ -34,7 +35,7 @@ eexpect "ERROR: cannot dial server.\r\nIs the server running?"
 eexpect "connection refused"
 eexpect ":/# "
 
-send "$argv sql -e 'select 1' --certs-dir=$certs_dir\r"
+send "$argv sql -e 'select 1' --config=$config\r"
 eexpect "ERROR: cannot dial server.\r\nIs the server running?"
 eexpect "connection refused"
 eexpect ":/# "
@@ -53,14 +54,14 @@ send "PS1=':''/# '\r"
 eexpect ":/# "
 
 start_test "Connecting a secure RPC client to an insecure server"
-send "$argv node drain 1 --certs-dir=$certs_dir\r"
+send "$argv node drain 1 --config=$config\r"
 eexpect "ERROR: cannot establish secure connection to insecure server."
 eexpect "Maybe use --insecure?"
 eexpect ":/# "
 end_test
 
 start_test "Connecting a secure SQL client to an insecure server"
-send "$argv sql -e 'select 1' --certs-dir=$certs_dir\r"
+send "$argv sql -e 'select 1' --config=$config\r"
 eexpect "ERROR: cannot establish secure connection to insecure server."
 eexpect ":/# "
 end_test
@@ -73,7 +74,7 @@ interrupt
 interrupt
 eexpect ":/# "
 
-send "$argv start-single-node --listen-addr=localhost --certs-dir=$certs_dir --store=logs/db\r"
+send "$argv start-single-node --listen-addr=localhost --config=$config --store=logs/db\r"
 eexpect "restarted pre-existing node"
 
 set spawn_id $client_spawn_id

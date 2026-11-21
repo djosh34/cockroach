@@ -29,7 +29,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/kv"
 	"github.com/cockroachdb/cockroach/pkg/multitenant/tenantcapabilities"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
-	"github.com/cockroachdb/cockroach/pkg/security/securitytest"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/testutils/skip"
 	"github.com/cockroachdb/cockroach/pkg/testutils/sqlutils"
@@ -404,24 +403,21 @@ func StartSharedProcessTenant(
 }
 
 // TestTenantID returns a roachpb.TenantID that can be used when
-// starting a test Tenant. The returned tenant IDs match those built
-// into the test certificates.
+// starting a test Tenant.
 func TestTenantID() roachpb.TenantID {
-	return roachpb.MustMakeTenantID(securitytest.EmbeddedTenantIDs()[0])
+	return roachpb.MustMakeTenantID(10)
 }
 
 // TestTenantID2 returns another roachpb.TenantID that can be used when
-// starting a test Tenant. The returned tenant IDs match those built
-// into the test certificates.
+// starting a test Tenant.
 func TestTenantID2() roachpb.TenantID {
-	return roachpb.MustMakeTenantID(securitytest.EmbeddedTenantIDs()[1])
+	return roachpb.MustMakeTenantID(11)
 }
 
 // TestTenantID3 returns another roachpb.TenantID that can be used when
-// starting a test Tenant. The returned tenant IDs match those built
-// into the test certificates.
+// starting a test Tenant.
 func TestTenantID3() roachpb.TenantID {
-	return roachpb.MustMakeTenantID(securitytest.EmbeddedTenantIDs()[2])
+	return roachpb.MustMakeTenantID(20)
 }
 
 // GetJSONProto uses the supplied client to GET the URL specified by the parameters
@@ -435,7 +431,7 @@ func GetJSONProto(ts ApplicationLayerInterface, path string, response protoutil.
 func GetJSONProtoWithAdminOption(
 	ts ApplicationLayerInterface, path string, response protoutil.Message, isAdmin bool,
 ) error {
-	httpClient, err := ts.GetAuthenticatedHTTPClient(isAdmin, SingleTenantSession)
+	httpClient, err := ts.GetAuthenticatedHTTPClient(isAdmin)
 	if err != nil {
 		return err
 	}
@@ -454,7 +450,7 @@ func GetJSONProtoWithAdminAndTimeoutOption(
 	isAdmin bool,
 	additionalTimeout time.Duration,
 ) error {
-	httpClient, err := ts.GetAuthenticatedHTTPClient(isAdmin, SingleTenantSession)
+	httpClient, err := ts.GetAuthenticatedHTTPClient(isAdmin)
 	if err != nil {
 		return err
 	}
@@ -480,7 +476,7 @@ func PostJSONProto(
 func PostJSONProtoWithAdminOption(
 	ts ApplicationLayerInterface, path string, request, response protoutil.Message, isAdmin bool,
 ) error {
-	httpClient, err := ts.GetAuthenticatedHTTPClient(isAdmin, SingleTenantSession)
+	httpClient, err := ts.GetAuthenticatedHTTPClient(isAdmin)
 	if err != nil {
 		return err
 	}

@@ -17,7 +17,6 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
-	"github.com/cockroachdb/cockroach/pkg/server/authserver"
 	"github.com/cockroachdb/cockroach/pkg/sql/isql"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
 	"github.com/cockroachdb/cockroach/pkg/testutils/serverutils"
@@ -39,13 +38,12 @@ func TestPurgeSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, hashedSecret, err := authserver.CreateAuthSecret()
-	if err != nil {
-		t.Fatal(err)
-	}
+	// The purge only looks at the expiry and revocation times.
+	hashedSecret := []byte("hashed secret")
 
 	// Customize the cluster settings to lower values than the defaults.
-	if _, err := db.Exec(`SET CLUSTER SETTING server.web_session.purge.ttl = '5s'`); err != nil {
+	var err error
+	if _, err = db.Exec(`SET CLUSTER SETTING server.web_session.purge.ttl = '5s'`); err != nil {
 		t.Fatal(err)
 	}
 

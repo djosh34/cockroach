@@ -54,7 +54,7 @@ func TestAdminAPIStatementDiagnosticsBundle(t *testing.T) {
 	}
 
 	reqBundle := func(isAdmin bool, expectedStatusCode int) {
-		client, err := ts.GetAuthenticatedHTTPClient(isAdmin, serverutils.SingleTenantSession)
+		client, err := ts.GetAuthenticatedHTTPClient(isAdmin)
 		require.NoError(t, err)
 		resp, err := client.Get(ts.AdminURL().WithPath("/_admin/v1/stmtbundle/" + diagnosticRow).String())
 		require.NoError(t, err)

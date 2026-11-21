@@ -70,7 +70,7 @@ func TestAdminAPIDatabases(t *testing.T) {
 	// We have to create the non-admin user before calling
 	// "GRANT ... TO apiconstants.TestingUserNameNoAdmin".
 	// This is done in "GetAuthenticatedHTTPClient".
-	if _, err := ts.GetAuthenticatedHTTPClient(false, serverutils.SingleTenantSession); err != nil {
+	if _, err := ts.GetAuthenticatedHTTPClient(false); err != nil {
 		t.Fatal(err)
 	}
 

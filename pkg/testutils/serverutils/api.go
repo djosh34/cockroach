@@ -132,11 +132,8 @@ type TestServerController interface {
 	// TestingKnobs.
 	BinaryVersionOverride() roachpb.Version
 
-	// RunInitialSQL is used by 'cockroach demo' to initialize
-	// an admin user.
-	// TODO(knz): Migrate this logic to a demo-specific init task
-	// or config profile.
-	RunInitialSQL(ctx context.Context, startSingleNode bool, adminUser, adminPassword string) error
+	// RunInitialSQL is used by 'cockroach demo' to set up a new cluster.
+	RunInitialSQL(ctx context.Context, startSingleNode bool) error
 }
 
 // ApplicationLayerInterface defines accessors to the application
@@ -349,25 +346,13 @@ type ApplicationLayerInterface interface {
 	// with verbose method name.
 	GetUnauthenticatedHTTPClient() (http.Client, error)
 
-	// GetAdminHTTPClient returns an http client which has been
-	// authenticated to access Admin API methods (via a cookie).
-	// The user has admin privileges.
+	// GetAdminHTTPClient returns an http client which presents the client
+	// cert of a user with admin privileges.
 	GetAdminHTTPClient() (http.Client, error)
 
-	// GetAuthenticatedHTTPClient returns an http client which has been
-	// authenticated to access Admin API methods (via a cookie).
-	GetAuthenticatedHTTPClient(isAdmin bool, sessionType SessionType) (http.Client, error)
-
-	// GetAuthenticatedHTTPClientAndCookie returns an http client which
-	// has been authenticated to access Admin API methods and
-	// the corresponding session cookie.
-	GetAuthenticatedHTTPClientAndCookie(
-		authUser username.SQLUsername, isAdmin bool, session SessionType,
-	) (http.Client, *serverpb.SessionCookie, error)
-
-	// GetAuthSession returns a byte array containing a valid auth
-	// session.
-	GetAuthSession(isAdmin bool) (*serverpb.SessionCookie, error)
+	// GetAuthenticatedHTTPClient returns an http client which presents the
+	// client cert of a test user, an admin if isAdmin is set.
+	GetAuthenticatedHTTPClient(isAdmin bool) (http.Client, error)
 
 	// CreateAuthUser is exported for use in tests.
 	CreateAuthUser(userName username.SQLUsername, isAdmin bool) error
@@ -439,9 +424,6 @@ type ApplicationLayerInterface interface {
 
 	// SetReady changes the SQL readiness.
 	SetReady(bool)
-
-	// SetAcceptSQLWithoutTLS changes the corresponding configuration parameter.
-	SetAcceptSQLWithoutTLS(bool)
 
 	// PrivilegeChecker returns the privilege checker in use by the HTTP
 	// server. The concrete return value is of type

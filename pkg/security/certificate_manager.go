@@ -13,143 +13,87 @@ package security
 import (
 	"context"
 	"crypto/tls"
-	"strconv"
+	"crypto/x509"
+	"os"
+	"runtime"
+	"sync/atomic"
+	"time"
 
-	"github.com/cockroachdb/cockroach/pkg/security/certnames"
+	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
+	"github.com/cockroachdb/cockroach/pkg/security/securityassets"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
+	"github.com/cockroachdb/cockroach/pkg/util/envutil"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/log/eventpb"
-	"github.com/cockroachdb/cockroach/pkg/util/metric"
-	"github.com/cockroachdb/cockroach/pkg/util/stop"
 	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
 	"github.com/cockroachdb/cockroach/pkg/util/sysutil"
+	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/errors"
 )
 
-// CertificateManager lives for the duration of the process and manages certificates and keys.
-// It reloads all certificates when triggered and construct tls.Config objects for
-// servers or clients.
+// CertificateManager holds the certificates, keys, CAs and identity rules
+// named by the --config file, and builds the TLS configs from them.
 //
-// Important note: Load() performs some sanity checks (file pairs match, CA certs don't disappear),
-// but these are by no means complete. Completeness is not required as nodes restarting have
-// no fallback if invalid certs/keys are present.
+// There are two trust pools. The node CA verifies nodes, on the RPC port
+// and when a node dials another node. The client CA verifies SQL clients.
+// A peer is admitted only if its certificate also matches a rule.
 //
-// The nomenclature for certificates is as follows, all within the certs-dir.
-//   - ca.crt             main CA certificate.
-//     Used to verify everything unless overridden by more specific CAs.
-//   - ca-client.crt      CA certificate to verify client certificates. If it does not exist,
-//     fall back on 'ca.crt'.
-//   - node.crt           node certificate.
-//     Server-side certificate (always) and client-side certificate unless
-//     client.node.crt is found.
-//     Verified using 'ca.crt'.
-//   - client.<user>.crt  client certificate for 'user'. Verified using 'ca.crt', or 'ca-client.crt'.
-//   - client.node.crt    client certificate for the 'node' user. If it does not exist,
-//     fall back on 'node.crt'.
+// Reload swaps in a new set of files only if every file parses and the keys
+// match their certs. The TLS configs read the current set on every
+// handshake, so a reload applies to new connections in both directions.
 type CertificateManager struct {
-	tenantIdentifier uint64
-	certnames.Locator
-
+	cfg         certconfig.Config
 	tlsSettings TLSSettings
-
-	// The metrics struct is initialized at init time and metrics do their
-	// own locking.
 	certMetrics Metrics
 
 	// Client cert expiration cache.
 	clientCertExpirationCache *ClientCertExpirationCache
 
-	// mu protects all remaining fields.
-	mu syncutil.RWMutex
+	// reloadMu serializes reloads and protects onReload.
+	reloadMu syncutil.Mutex
+	// onReload is called after each successful reload.
+	onReload []func()
 
-	// If false, this is the first load. Needed to ensure we do not drop certain certs.
-	initialized bool
-
-	// Set of certs. These are swapped in during Load(), and never mutated afterwards.
-	caCert         *CertInfo // default CA certificate
-	clientCACert   *CertInfo // optional: certificate to verify client certificates
-	uiCACert       *CertInfo // optional: certificate to verify UI certificates
-	nodeCert       *CertInfo // certificate for nodes (always server cert, sometimes client cert)
-	nodeClientCert *CertInfo // optional: client certificate for 'node' user. Also included in 'clientCerts'
-	uiCert         *CertInfo // optional: server certificate for the admin UI.
-	clientCerts    map[username.SQLUsername]*CertInfo
-
-	// Certs only used with multi-tenancy.
-	tenantCACert, tenantCert, tenantSigningCert *CertInfo
-
-	// TLS configs. Initialized lazily. Wiped on every successful Load().
-	// Server-side config.
-	serverConfig *tls.Config
-	// Server-side config for the Admin UI.
-	uiServerConfig *tls.Config
-	// Client-side config for the cockroach node.
-	// All other client tls.Config objects are built as requested and not cached.
-	clientConfig *tls.Config
-	// Client config for the tenant (if running in a SQL tenant server).
-	tenantConfig *tls.Config
+	cur atomic.Pointer[certSet]
 }
 
-func makeCertificateManager(
-	certsDir string, tlsSettings TLSSettings, opts ...Option,
-) *CertificateManager {
-	var o cmOptions
-	for _, fn := range opts {
-		fn(&o)
-	}
+// ErrCertManagement marks errors from loading the certificate, key, CA and
+// rules files, for errors.Is.
+var ErrCertManagement = errors.New("cannot load certificates")
 
-	return &CertificateManager{
-		Locator:          certnames.MakeLocator(certsDir),
-		tenantIdentifier: o.tenantIdentifier,
-		tlsSettings:      tlsSettings,
-		certMetrics:      makeMetrics(),
-	}
+// certSet is one loaded set of files. It is never changed after loading.
+type certSet struct {
+	// node is the node cert with its key, nil if the config has none.
+	node *tls.Certificate
+	// nodeCAs and clientCAs are the trust pools, nil if not configured.
+	nodeCAs, clientCAs *x509.CertPool
+	// nodeCACerts and clientCACerts are the certificates in the pools.
+	nodeCACerts, clientCACerts []*x509.Certificate
+	// client is the optional client cert with its key.
+	client *tls.Certificate
+	// rules are the identity rules, empty if not configured.
+	rules *certconfig.Rules
+	// files holds the raw contents of every cert file, for ListCertificates.
+	files []CertFile
 }
 
-type cmOptions struct {
-	// tenantIdentifier, if set, specifies the tenant to use for loading tenant
-	// client certs.
-	tenantIdentifier uint64
-}
-
-// Option is an option to NewCertificateManager.
-type Option func(*cmOptions)
-
-// ForTenant is an option to NewCertificateManager which ties the manager to
-// the provided tenant. Without this option, tenant client certs are not
-// available.
-func ForTenant(tenantIdentifier uint64) Option {
-	return func(opts *cmOptions) {
-		opts.tenantIdentifier = tenantIdentifier
-	}
-}
-
-// NewCertificateManager creates a new certificate manager.
+// NewCertificateManager loads the files named by cfg. Fields of cfg may be
+// empty; the methods that need a missing file return an error.
 func NewCertificateManager(
-	certsDir string, tlsSettings TLSSettings, opts ...Option,
+	cfg certconfig.Config, tlsSettings TLSSettings,
 ) (*CertificateManager, error) {
-	cm := makeCertificateManager(certsDir, tlsSettings, opts...)
-	return cm, cm.LoadCertificates()
-}
-
-// NewCertificateManagerFirstRun creates a new certificate manager.
-// The certsDir is created if it does not exist.
-// This should only be called when generating certificates, the server has
-// no business creating the certs directory.
-func NewCertificateManagerFirstRun(
-	certsDir string, tlsSettings TLSSettings, opts ...Option,
-) (*CertificateManager, error) {
-	cm := makeCertificateManager(certsDir, tlsSettings, opts...)
-	if err := NewCertificateLoader(cm.CertsDir()).MaybeCreateCertsDir(); err != nil {
-		return nil, err
+	cm := &CertificateManager{
+		cfg:         cfg,
+		tlsSettings: tlsSettings,
+		certMetrics: makeMetrics(),
 	}
-
-	return cm, cm.LoadCertificates()
-}
-
-// IsForTenant returns true iff this certificate manager is handling certs
-// for a SQL-only server process.
-func (cm *CertificateManager) IsForTenant() bool {
-	return cm.tenantIdentifier != 0
+	s, err := loadCertSet(cfg)
+	if err != nil {
+		return nil, errors.Mark(err, ErrCertManagement)
+	}
+	cm.cur.Store(s)
+	cm.updateMetrics(s)
+	return cm, nil
 }
 
 // Metrics returns the metrics struct.
@@ -157,31 +101,40 @@ func (cm *CertificateManager) Metrics() Metrics {
 	return cm.certMetrics
 }
 
-// RegisterSignalHandler registers a signal handler for SIGHUP, triggering a
-// refresh of the certificates directory on notification.
-func (cm *CertificateManager) RegisterSignalHandler(
-	ctx context.Context, stopper *stop.Stopper,
-) error {
-	return stopper.RunAsyncTask(ctx, "refresh-certs", func(ctx context.Context) {
-		ch := sysutil.RefreshSignaledChan()
-		for {
-			select {
-			case <-stopper.ShouldQuiesce():
-				return
-			case sig := <-ch:
-				log.Ops.Infof(ctx, "received signal %q, triggering certificate reload", sig)
-				if cache := cm.clientCertExpirationCache; cache != nil {
-					cache.Clear()
-				}
-				if err := cm.LoadCertificates(); err != nil {
-					log.Ops.Warningf(ctx, "could not reload certificates: %v", err)
-					log.StructuredEvent(ctx, &eventpb.CertsReload{Success: false, ErrorMessage: err.Error()})
-				} else {
-					log.StructuredEvent(ctx, &eventpb.CertsReload{Success: true})
-				}
-			}
-		}
-	})
+// Rules returns the current identity rules.
+func (cm *CertificateManager) Rules() *certconfig.Rules {
+	return cm.cur.Load().rules
+}
+
+// OnReload registers f to run after each successful reload.
+func (cm *CertificateManager) OnReload(f func()) {
+	cm.reloadMu.Lock()
+	defer cm.reloadMu.Unlock()
+	cm.onReload = append(cm.onReload, f)
+}
+
+// Reload reads every file again. It swaps in the new set only if all of it
+// loads; otherwise it keeps the old set, logs the error and counts it.
+func (cm *CertificateManager) Reload(ctx context.Context) error {
+	cm.reloadMu.Lock()
+	defer cm.reloadMu.Unlock()
+	s, err := loadCertSet(cm.cfg)
+	if err != nil {
+		cm.certMetrics.ReloadFailures.Inc(1)
+		log.Ops.Errorf(ctx, "kept the old certificates and rules: %v", err)
+		log.StructuredEvent(ctx, &eventpb.CertsReload{Success: false, ErrorMessage: err.Error()})
+		return err
+	}
+	cm.cur.Store(s)
+	cm.updateMetrics(s)
+	if cache := cm.clientCertExpirationCache; cache != nil {
+		cache.Clear()
+	}
+	log.StructuredEvent(ctx, &eventpb.CertsReload{Success: true})
+	for _, f := range cm.onReload {
+		f()
+	}
+	return nil
 }
 
 // RegisterExpirationCache registers a cache for client certificate expiration.
@@ -205,687 +158,435 @@ func (cm *CertificateManager) MaybeUpsertClientExpiration(
 	}
 }
 
-// CACert returns the CA cert. May be nil.
-// Callers should check for an internal Error field.
-func (cm *CertificateManager) CACert() *CertInfo {
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
-	return cm.caCert
-}
-
-// ClientCACert returns the CA cert used to verify client certificates. May be nil.
-// Callers should check for an internal Error field.
-func (cm *CertificateManager) ClientCACert() *CertInfo {
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
-	return cm.clientCACert
-}
-
-// UICACert returns the CA cert used to verify the Admin UI certificate. May be nil.
-// Callers should check for an internal Error field.
-func (cm *CertificateManager) UICACert() *CertInfo {
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
-	return cm.uiCACert
-}
-
-// UICert returns the certificate used by the Admin UI. May be nil.
-// Callers should check for an internal Error field.
-func (cm *CertificateManager) UICert() *CertInfo {
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
-	return cm.uiCert
-}
-
-// checkCertIsValid returns an error if the passed cert is missing or has an error.
-func checkCertIsValid(cert *CertInfo) error {
-	if cert == nil {
-		return errors.New("not found")
-	}
-	return cert.Error
-}
-
-// NodeCert returns the Node cert. May be nil.
-// Callers should check for an internal Error field.
-func (cm *CertificateManager) NodeCert() *CertInfo {
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
-	return cm.nodeCert
-}
-
-// ClientCerts returns the Client certs.
-// Callers should check for internal Error fields.
-func (cm *CertificateManager) ClientCerts() map[username.SQLUsername]*CertInfo {
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
-	return cm.clientCerts
-}
-
-// ErrCertManagement is a marker error for errors produced in this package that
-// can be identified with errors.Is().
-var ErrCertManagement error = errCertManagement{}
-
-type errCertManagement struct{}
-
-func (errCertManagement) Error() string { return "error " }
-
-// makeErrorf constructs an Error and returns it.
-func makeErrorf(err error, format string, args ...interface{}) error {
-	return errors.Mark(errors.Wrapf(err, format, args...), ErrCertManagement)
-}
-
-// LoadCertificates creates a CertificateLoader to load all certs and keys.
-// Upon success, it swaps the existing certificates for the new ones.
-func (cm *CertificateManager) LoadCertificates() error {
-	cl := NewCertificateLoader(cm.CertsDir())
-	if err := cl.Load(); err != nil {
-		return makeErrorf(err, "problem loading certs directory %s", cm.CertsDir())
-	}
-
-	var caCert, clientCACert, uiCACert, nodeCert, uiCert, nodeClientCert *CertInfo
-	var tenantCACert, tenantCert, tenantSigningCert *CertInfo
-	clientCerts := make(map[username.SQLUsername]*CertInfo)
-	for _, ci := range cl.Certificates() {
-		switch ci.FileUsage {
-		case CAPem:
-			caCert = ci
-		case ClientCAPem:
-			clientCACert = ci
-		case UICAPem:
-			uiCACert = ci
-		case NodePem:
-			nodeCert = ci
-		case TenantPem:
-			// When there are multiple tenant client certs, pick the one we need only.
-			// In practice, this is expected only during testing, when we share a certs
-			// dir between multiple tenants.
-			tenantID, err := strconv.ParseUint(ci.Name, 10, 64)
-			if err != nil {
-				return errors.Errorf("invalid tenant id %s", ci.Name)
+func (cm *CertificateManager) updateMetrics(s *certSet) {
+	earliest := func(certs []*x509.Certificate) int64 {
+		var t time.Time
+		for _, c := range certs {
+			if t.IsZero() || c.NotAfter.Before(t) {
+				t = c.NotAfter
 			}
-			if tenantID == cm.tenantIdentifier {
-				tenantCert = ci
-			}
-		case TenantSigningPem:
-			// When there are multiple tenant signing certs, pick the one we need only.
-			// In practice, this is expected only during testing, when we share a certs
-			// dir between multiple tenants.
-			tenantID, err := strconv.ParseUint(ci.Name, 10, 64)
-			if err != nil {
-				return errors.Errorf("invalid tenant id %s", ci.Name)
-			}
-			if tenantID == cm.tenantIdentifier {
-				tenantSigningCert = ci
-			}
-		case TenantCAPem:
-			tenantCACert = ci
-		case UIPem:
-			uiCert = ci
-		case ClientPem:
-			username := username.MakeSQLUsernameFromPreNormalizedString(ci.Name)
-			clientCerts[username] = ci
-			if username.IsNodeUser() {
-				nodeClientCert = ci
-			}
-		default:
-			return errors.Errorf("unsupported certificate %v", ci.Filename)
 		}
+		if t.IsZero() {
+			return 0
+		}
+		return t.Unix()
 	}
-
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
-	if cm.initialized {
-		// If we ran before, make sure we don't reload with missing/bad certificates.
-		if err := checkCertIsValid(caCert); checkCertIsValid(cm.caCert) == nil && err != nil {
-			return makeErrorf(err, "reload would lose valid CA cert")
-		}
-		if err := checkCertIsValid(nodeCert); checkCertIsValid(cm.nodeCert) == nil && err != nil {
-			return makeErrorf(err, "reload would lose valid node cert")
-		}
-		if err := checkCertIsValid(nodeClientCert); checkCertIsValid(cm.nodeClientCert) == nil && err != nil {
-			return makeErrorf(err, "reload would lose valid client cert for '%s'", username.NodeUser)
-		}
-		if err := checkCertIsValid(clientCACert); checkCertIsValid(cm.clientCACert) == nil && err != nil {
-			return makeErrorf(err, "reload would lose valid CA certificate for client verification")
-		}
-		if err := checkCertIsValid(uiCACert); checkCertIsValid(cm.uiCACert) == nil && err != nil {
-			return makeErrorf(err, "reload would lose valid CA certificate for UI")
-		}
-		if err := checkCertIsValid(uiCert); checkCertIsValid(cm.uiCert) == nil && err != nil {
-			return makeErrorf(err, "reload would lose valid UI certificate")
-		}
-
-		if err := checkCertIsValid(tenantCACert); checkCertIsValid(cm.tenantCACert) == nil && err != nil {
-			return makeErrorf(err, "reload would lose valid tenant client CA certificate")
-		}
-		if err := checkCertIsValid(tenantCert); checkCertIsValid(cm.tenantCert) == nil && err != nil {
-			return makeErrorf(err, "reload would lose valid tenant client certificate")
-		}
+	cm.certMetrics.CAExpiration.Update(earliest(s.nodeCACerts))
+	cm.certMetrics.ClientCAExpiration.Update(earliest(s.clientCACerts))
+	var node int64
+	if s.node != nil {
+		node = s.node.Leaf.NotAfter.Unix()
 	}
+	cm.certMetrics.NodeExpiration.Update(node)
+}
 
-	if tenantCert == nil && cm.tenantIdentifier != 0 {
-		return makeErrorf(errors.New("tenant client cert not found"), "for %d in %s", cm.tenantIdentifier, cm.CertsDir())
+// PemUsage says what a certificate file is for.
+type PemUsage uint32
+
+const (
+	_ PemUsage = iota
+	// CAPem is the node CA file.
+	CAPem
+	// ClientCAPem is the client CA file.
+	ClientCAPem
+	// NodePem is the node cert file.
+	NodePem
+	// ClientPem is the client cert file.
+	ClientPem
+)
+
+// CertFile is one loaded certificate file.
+type CertFile struct {
+	Usage    PemUsage
+	Filename string
+	Contents []byte
+}
+
+// ListCertificates returns the certificate files of the current set.
+func (cm *CertificateManager) ListCertificates() []CertFile {
+	return cm.cur.Load().files
+}
+
+// NodeCert returns the leaf of the node cert, or nil.
+func (cm *CertificateManager) NodeCert() *x509.Certificate {
+	if n := cm.cur.Load().node; n != nil {
+		return n.Leaf
 	}
-
-	if nodeClientCert == nil && nodeCert != nil {
-		// No client certificate for node, but we have a node certificate. Check that
-		// if it is a valid certificate and can be used as a client node cert.
-		if nodeCert.Error != nil {
-			return makeErrorf(nodeCert.Error, "validating node cert")
-		}
-	}
-
-	// Swap everything.
-	cm.caCert = caCert
-	cm.clientCACert = clientCACert
-	cm.uiCACert = uiCACert
-
-	cm.nodeCert = nodeCert
-	cm.nodeClientCert = nodeClientCert
-	cm.uiCert = uiCert
-	cm.clientCerts = clientCerts
-
-	cm.initialized = true
-
-	cm.serverConfig = nil
-	cm.uiServerConfig = nil
-	cm.clientConfig = nil
-
-	cm.tenantConfig = nil
-	cm.tenantCACert = tenantCACert
-	cm.tenantCert = tenantCert
-	cm.tenantSigningCert = tenantSigningCert
-
-	cm.updateMetricsLocked()
 	return nil
 }
 
-// updateMetricsLocked updates the values on the certificate metrics.
-// The metrics may not exist (eg: in tests that build their own CertificateManager).
-// If the corresponding certificate is missing or invalid (Error != nil), we reset the
-// metric to zero.
-// cm.mu must be held to protect the certificates. Metrics do their own atomicity.
-func (cm *CertificateManager) updateMetricsLocked() {
-	maybeSetMetric := func(m *metric.Gauge, ci *CertInfo) {
-		if m == nil {
-			return
-		}
-		if ci != nil && ci.Error == nil {
-			m.Update(ci.ExpirationTime.Unix())
-		} else {
-			m.Update(0)
-		}
+var skipPermissionChecks = runtime.GOOS == "windows" ||
+	envutil.EnvOrDefaultBool("COCKROACH_SKIP_KEY_PERMISSION_CHECK", false)
+
+const (
+	// maxKeyPermissions is the maximum permissions for a key file. It
+	// applies when the key file is not owned by root.
+	maxKeyPermissions os.FileMode = 0700
+	// maxGroupKeyPermissions is the maximum permissions for a key file owned
+	// by root and by the group of this process.
+	maxGroupKeyPermissions os.FileMode = 0740
+)
+
+func readFile(path string) ([]byte, error) {
+	b, err := securityassets.GetLoader().ReadFile(path)
+	if err != nil {
+		return nil, errors.Wrapf(err, "reading %s", path)
 	}
-
-	// CA certificate expiration.
-	maybeSetMetric(cm.certMetrics.CAExpiration, cm.caCert)
-
-	// Client CA certificate expiration.
-	maybeSetMetric(cm.certMetrics.ClientCAExpiration, cm.clientCACert)
-
-	// UI CA certificate expiration.
-	maybeSetMetric(cm.certMetrics.UICAExpiration, cm.uiCACert)
-
-	// Node certificate expiration.
-	// TODO(marc): we need to examine the entire certificate chain here, if the CA cert
-	// used to sign the node cert expires sooner, then that is the expiration time to report.
-	maybeSetMetric(cm.certMetrics.NodeExpiration, cm.nodeCert)
-
-	// Node client certificate expiration.
-	maybeSetMetric(cm.certMetrics.NodeClientExpiration, cm.nodeClientCert)
-
-	// UI certificate expiration.
-	maybeSetMetric(cm.certMetrics.UIExpiration, cm.uiCert)
+	return b, nil
 }
 
-// GetServerTLSConfig returns a server TLS config with a callback to fetch the
-// latest TLS config. We still attempt to get the config to make sure
-// the initial call has a valid config loaded.
-func (cm *CertificateManager) GetServerTLSConfig() (*tls.Config, error) {
-	if _, err := cm.getEmbeddedServerTLSConfig(nil); err != nil {
+// readKeyFile reads a key file after checking that only its owner can read
+// it.
+func readKeyFile(path string) ([]byte, error) {
+	info, err := securityassets.GetLoader().Stat(path)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not stat key file %s", path)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.Errorf("key file %s is not a regular file", path)
+	}
+	if !skipPermissionChecks {
+		if err := checkFilePermissions(os.Getgid(), path, sysutil.GetFileACLInfo(info)); err != nil {
+			return nil, err
+		}
+	}
+	return readFile(path)
+}
+
+// loadKeyPair loads a cert file, leaf first, with its key.
+func loadKeyPair(certPath, keyPath string) (*tls.Certificate, []byte, error) {
+	certPEM, err := readFile(certPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	// tls.X509KeyPair parses only the leaf; check the whole chain.
+	if _, err := PEMContentsToX509(certPEM); err != nil {
+		return nil, nil, errors.Wrapf(err, "parsing %s", certPath)
+	}
+	keyPEM, err := readKeyFile(keyPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	pair, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "loading %s with key %s", certPath, keyPath)
+	}
+	return &pair, certPEM, nil
+}
+
+func loadCAFile(path string) (*x509.CertPool, []*x509.Certificate, []byte, error) {
+	b, err := readFile(path)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	certs, err := PEMContentsToX509(b)
+	if err != nil {
+		return nil, nil, nil, errors.Wrapf(err, "parsing CA file %s", path)
+	}
+	if len(certs) == 0 {
+		return nil, nil, nil, errors.Errorf("no certificates in CA file %s", path)
+	}
+	pool := x509.NewCertPool()
+	for _, c := range certs {
+		pool.AddCert(c)
+	}
+	return pool, certs, b, nil
+}
+
+func hasExtKeyUsage(c *x509.Certificate, u x509.ExtKeyUsage) bool {
+	for _, have := range c.ExtKeyUsage {
+		if have == u || have == x509.ExtKeyUsageAny {
+			return true
+		}
+	}
+	return false
+}
+
+func loadCertSet(cfg certconfig.Config) (*certSet, error) {
+	s := &certSet{rules: &certconfig.Rules{}}
+	var err error
+	if cfg.NodeCA != "" {
+		var b []byte
+		if s.nodeCAs, s.nodeCACerts, b, err = loadCAFile(cfg.NodeCA); err != nil {
+			return nil, err
+		}
+		s.files = append(s.files, CertFile{Usage: CAPem, Filename: cfg.NodeCA, Contents: b})
+	}
+	if cfg.ClientCA != "" {
+		var b []byte
+		if s.clientCAs, s.clientCACerts, b, err = loadCAFile(cfg.ClientCA); err != nil {
+			return nil, err
+		}
+		s.files = append(s.files, CertFile{Usage: ClientCAPem, Filename: cfg.ClientCA, Contents: b})
+	}
+	if cfg.Cert != "" {
+		var b []byte
+		if s.node, b, err = loadKeyPair(cfg.Cert, cfg.Key); err != nil {
+			return nil, err
+		}
+		leaf := s.node.Leaf
+		if !hasExtKeyUsage(leaf, x509.ExtKeyUsageServerAuth) || !hasExtKeyUsage(leaf, x509.ExtKeyUsageClientAuth) {
+			return nil, errors.Errorf("node cert %s needs both server and client extended key usage", cfg.Cert)
+		}
+		if s.nodeCAs != nil {
+			// The same check a peer makes: one chain allows both uses.
+			chains, err := verifyChain(s.node.Leaf, s.node.Certificate, s.nodeCAs, x509.ExtKeyUsageServerAuth)
+			if err != nil {
+				return nil, errors.Wrapf(err, "node cert %s does not verify against node CA %s", cfg.Cert, cfg.NodeCA)
+			}
+			if !someChainAllowsBoth(chains) {
+				return nil, errors.Errorf("node cert %s has no chain to node CA %s that allows both server and client use",
+					cfg.Cert, cfg.NodeCA)
+			}
+		}
+		s.files = append(s.files, CertFile{Usage: NodePem, Filename: cfg.Cert, Contents: b})
+	}
+	if cfg.ClientCert != "" {
+		var b []byte
+		if s.client, b, err = loadKeyPair(cfg.ClientCert, cfg.ClientKey); err != nil {
+			return nil, err
+		}
+		s.files = append(s.files, CertFile{Usage: ClientPem, Filename: cfg.ClientCert, Contents: b})
+	}
+	if cfg.Rules != "" {
+		b, err := readFile(cfg.Rules)
+		if err != nil {
+			return nil, err
+		}
+		if s.rules, err = certconfig.ParseRules(b); err != nil {
+			return nil, errors.Wrapf(err, "parsing %s", cfg.Rules)
+		}
+	}
+	return s, nil
+}
+
+// verifyChain verifies leaf, with the intermediates in rawChain[1:],
+// against roots for the given usage.
+func verifyChain(
+	leaf *x509.Certificate, rawChain [][]byte, roots *x509.CertPool, usage x509.ExtKeyUsage,
+) ([][]*x509.Certificate, error) {
+	inter := x509.NewCertPool()
+	for _, raw := range rawChain[1:] {
+		c, err := x509.ParseCertificate(raw)
+		if err != nil {
+			return nil, err
+		}
+		inter.AddCert(c)
+	}
+	return leaf.Verify(x509.VerifyOptions{
+		Roots:         roots,
+		Intermediates: inter,
+		KeyUsages:     []x509.ExtKeyUsage{usage},
+		CurrentTime:   timeutil.Now(),
+	})
+}
+
+// verifyChainCerts verifies certs, leaf first, against roots for usage.
+func verifyChainCerts(
+	certs []*x509.Certificate, roots *x509.CertPool, usage x509.ExtKeyUsage,
+) ([][]*x509.Certificate, error) {
+	inter := x509.NewCertPool()
+	for _, c := range certs[1:] {
+		inter.AddCert(c)
+	}
+	return certs[0].Verify(x509.VerifyOptions{
+		Roots:         roots,
+		Intermediates: inter,
+		KeyUsages:     []x509.ExtKeyUsage{usage},
+		CurrentTime:   timeutil.Now(),
+	})
+}
+
+// verifyPeer verifies a peer's chain against roots, runs the OCSP check and
+// returns the verified chains.
+func (cm *CertificateManager) verifyPeer(
+	certs []*x509.Certificate, roots *x509.CertPool, usage x509.ExtKeyUsage,
+) ([][]*x509.Certificate, error) {
+	if len(certs) == 0 {
+		return nil, errors.New("peer sent no certificate")
+	}
+	if roots == nil {
+		return nil, errors.New("no CA file configured")
+	}
+	chains, err := verifyChainCerts(certs, roots, usage)
+	if err != nil {
 		return nil, err
 	}
-	return &tls.Config{
-		GetConfigForClient: cm.getEmbeddedServerTLSConfig,
-		// NB: this is needed to use (*http.Server).ServeTLS, which tries to load
-		// a certificate eagerly from the supplied strings (which are empty in
-		// our case) unless:
-		//
-		// 	(len(config.Certificates) > 0 || config.GetCertificate != nil) == true
-		//
-		// TODO(tbg): should we generally do this for all server certs? The docs
-		// are not clear whether this is a bug or feature.
-		GetCertificate: func(hi *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			return nil, nil
+	return chains, makeOCSPVerifier(cm.tlsSettings)(nil, chains)
+}
+
+// someChainAllowsBoth reports whether one of the chains allows both server
+// and client use.
+func someChainAllowsBoth(chains [][]*x509.Certificate) bool {
+	for _, chain := range chains {
+		if chainAllows(chain, x509.ExtKeyUsageServerAuth) && chainAllows(chain, x509.ExtKeyUsageClientAuth) {
+			return true
+		}
+	}
+	return false
+}
+
+// chainAllows reports whether every cert of a chain allows usage, the way
+// x509 checks it: no extended key usage allows all.
+func chainAllows(chain []*x509.Certificate, usage x509.ExtKeyUsage) bool {
+	for _, c := range chain {
+		if len(c.ExtKeyUsage) > 0 && !hasExtKeyUsage(c, usage) {
+			return false
+		}
+	}
+	return true
+}
+
+// VerifyNode checks that certs, leaf first, is a node: it chains to the node
+// CA with the given usage and matches a node rule.
+func (cm *CertificateManager) VerifyNode(certs []*x509.Certificate, usage x509.ExtKeyUsage) error {
+	s := cm.cur.Load()
+	chains, err := cm.verifyPeer(certs, s.nodeCAs, usage)
+	if err != nil {
+		return errors.Wrap(err, "verifying node certificate")
+	}
+	// A node serves and dials, so the leaf must name both uses, and one
+	// verified chain must allow both: a CA above it may restrict either.
+	if !someChainAllowsBoth(chains) || !hasExtKeyUsage(certs[0], x509.ExtKeyUsageServerAuth) || !hasExtKeyUsage(certs[0], x509.ExtKeyUsageClientAuth) {
+		return errors.Errorf("certificate %s needs both server and client extended key usage to be a node",
+			certconfig.DescribeCert(certs[0]))
+	}
+	if !s.rules.MatchesNode(certs[0]) {
+		return errors.Errorf("certificate %s matches no node rule", certconfig.DescribeCert(certs[0]))
+	}
+	return nil
+}
+
+// ClientRoles returns the roles that a SQL or HTTP client certificate maps
+// to through the client rules, in rule order. It returns an error if the
+// certificate does not chain to the client CA or matches no client rule.
+func (cm *CertificateManager) ClientRoles(
+	certs []*x509.Certificate,
+) ([]username.SQLUsername, error) {
+	s := cm.cur.Load()
+	if _, err := cm.verifyPeer(certs, s.clientCAs, x509.ExtKeyUsageClientAuth); err != nil {
+		return nil, errors.Wrap(err, "verifying client certificate")
+	}
+	roles := s.rules.ClientRoles(certs[0])
+	if len(roles) == 0 {
+		return nil, errors.Errorf("certificate %s matches no client rule", certconfig.DescribeCert(certs[0]))
+	}
+	return roles, nil
+}
+
+func (cm *CertificateManager) baseTLSConfig() *tls.Config {
+	cfg := &tls.Config{
+		CipherSuites: RecommendedCipherSuites(),
+		MinVersion:   tls.VersionTLS12,
+	}
+	if cm.tlsSettings.oldCipherSuitesEnabled() {
+		cfg.CipherSuites = append(cfg.CipherSuites, OldCipherSuites()...)
+	}
+	return cfg
+}
+
+func (cm *CertificateManager) nodeCertOrError() (*tls.Certificate, error) {
+	if n := cm.cur.Load().node; n != nil {
+		return n, nil
+	}
+	return nil, errors.Mark(errors.New("the config file names no node cert"), ErrCertManagement)
+}
+
+// serverTLSConfig returns a server config that presents the node cert and
+// asks for a client cert. verify checks the client's certificates; nil
+// means the client cert is optional and checked later.
+func (cm *CertificateManager) serverTLSConfig(
+	pool func(*certSet) *x509.CertPool, verify func([]*x509.Certificate) error,
+) (*tls.Config, error) {
+	if _, err := cm.nodeCertOrError(); err != nil {
+		return nil, err
+	}
+	cfg := cm.baseTLSConfig()
+	// A resumed session skips the CA check, so a CA removed by a reload
+	// would still be trusted. Tickets are off so every connection is
+	// checked against the current set.
+	cfg.SessionTicketsDisabled = true
+	cfg.GetCertificate = func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+		return cm.nodeCertOrError()
+	}
+	base := cfg.Clone()
+	cfg.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+		c := base.Clone()
+		// The pool only tells the client which CAs we accept; verify does
+		// the check against the current set.
+		c.ClientCAs = pool(cm.cur.Load())
+		if verify == nil {
+			c.ClientAuth = tls.RequestClientCert
+			return c, nil
+		}
+		c.ClientAuth = tls.RequireAnyClientCert
+		c.VerifyConnection = func(cs tls.ConnectionState) error {
+			return verify(cs.PeerCertificates)
+		}
+		return c, nil
+	}
+	return cfg, nil
+}
+
+// RPCServerTLSConfig is the config of the RPC port. It admits only peers
+// whose cert chains to the node CA and matches a node rule.
+func (cm *CertificateManager) RPCServerTLSConfig() (*tls.Config, error) {
+	return cm.serverTLSConfig(
+		func(s *certSet) *x509.CertPool { return s.nodeCAs },
+		func(certs []*x509.Certificate) error {
+			return cm.VerifyNode(certs, x509.ExtKeyUsageClientAuth)
+		})
+}
+
+// SQLServerTLSConfig is the config of the SQL port. It admits only clients
+// whose cert chains to the client CA; pgwire then maps it to a role with
+// ClientRoles.
+func (cm *CertificateManager) SQLServerTLSConfig() (*tls.Config, error) {
+	return cm.serverTLSConfig(
+		func(s *certSet) *x509.CertPool { return s.clientCAs },
+		func(certs []*x509.Certificate) error {
+			s := cm.cur.Load()
+			_, err := cm.verifyPeer(certs, s.clientCAs, x509.ExtKeyUsageClientAuth)
+			return err
+		})
+}
+
+// HTTPServerTLSConfig is the config of the HTTP port. The client cert is
+// optional here: /health and /_status/vars need none. The HTTP auth layer
+// checks it (see authserver's UserFromRequest).
+func (cm *CertificateManager) HTTPServerTLSConfig() (*tls.Config, error) {
+	return cm.serverTLSConfig(
+		func(s *certSet) *x509.CertPool {
+			if s.nodeCAs == nil || s.clientCAs == nil {
+				return nil
+			}
+			pool := s.nodeCAs.Clone()
+			for _, c := range s.clientCACerts {
+				pool.AddCert(c)
+			}
+			return pool
 		},
-	}, nil
+		nil)
 }
 
-// getEmbeddedServerTLSConfig returns the most up-to-date server tls.Config.
-// This is the callback set in tls.Config.GetConfigForClient. We currently
-// ignore the ClientHelloInfo object.
-func (cm *CertificateManager) getEmbeddedServerTLSConfig(
-	_ *tls.ClientHelloInfo,
-) (*tls.Config, error) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
-
-	if cm.serverConfig != nil {
-		return cm.serverConfig, nil
-	}
-
-	ca, err := cm.getCACertLocked()
-	if err != nil {
+// NodeClientTLSConfig is the config a node, or an admin CLI command, uses
+// to dial a node. It presents the node cert and admits the server only if
+// its cert chains to the node CA and matches a node rule. The server's host
+// name is not checked: the node rules say which certs are nodes.
+func (cm *CertificateManager) NodeClientTLSConfig() (*tls.Config, error) {
+	if _, err := cm.nodeCertOrError(); err != nil {
 		return nil, err
 	}
-
-	var nodeCert *CertInfo
-	if !cm.IsForTenant() {
-		// Host cluster.
-		nodeCert, err = cm.getNodeCertLocked()
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// Tenant server.
-		nodeCert, err = cm.getTenantCertLocked()
-		if err != nil {
-			return nil, err
-		}
+	cfg := cm.baseTLSConfig()
+	cfg.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+		return cm.nodeCertOrError()
 	}
-
-	clientCA, err := cm.getClientCACertLocked()
-	if err != nil {
-		return nil, err
+	// The standard check would verify the host name against a fixed pool.
+	// VerifyConnection checks the chain against the current node CA and the
+	// node rules instead.
+	cfg.InsecureSkipVerify = true
+	cfg.VerifyConnection = func(cs tls.ConnectionState) error {
+		return cm.VerifyNode(cs.PeerCertificates, x509.ExtKeyUsageServerAuth)
 	}
-
-	tenantCA, err := cm.getTenantCACertLocked()
-	if err != nil {
-		return nil, err
-	}
-
-	cfg, err := newServerTLSConfig(
-		cm.tlsSettings,
-		nodeCert.FileContents,
-		nodeCert.KeyFileContents,
-		ca.FileContents,
-		clientCA.FileContents,
-		tenantCA.FileContents,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	cm.serverConfig = cfg
 	return cfg, nil
-}
-
-// GetNodeClientTLSConfig returns a client TLS config suitable for
-// dialing other KV nodes.
-func (cm *CertificateManager) GetNodeClientTLSConfig() (*tls.Config, error) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
-
-	// Return the cached config if we have one.
-	if cm.clientConfig != nil {
-		return cm.clientConfig, nil
-	}
-
-	ca, err := cm.getCACertLocked()
-	if err != nil {
-		return nil, err
-	}
-
-	clientCert, err := cm.getNodeClientCertLocked()
-	if err != nil {
-		return nil, err
-	}
-
-	cfg, err := newClientTLSConfig(
-		cm.tlsSettings,
-		clientCert.FileContents,
-		clientCert.KeyFileContents,
-		ca.FileContents)
-	if err != nil {
-		return nil, err
-	}
-
-	// Cache the config.
-	cm.clientConfig = cfg
-	return cfg, nil
-}
-
-// GetUIServerTLSConfig returns a server TLS config for the Admin UI with a
-// callback to fetch the latest TLS config. We still attempt to get the config to make sure
-// the initial call has a valid config loaded.
-func (cm *CertificateManager) GetUIServerTLSConfig() (*tls.Config, error) {
-	if _, err := cm.getEmbeddedUIServerTLSConfig(nil); err != nil {
-		return nil, err
-	}
-	return &tls.Config{
-		GetConfigForClient: cm.getEmbeddedUIServerTLSConfig,
-	}, nil
-}
-
-// getEmbeddedUIServerTLSConfig returns the most up-to-date server tls.Config for the Admin UI.
-// This is the callback set in tls.Config.GetConfigForClient. We currently
-// ignore the ClientHelloInfo object.
-func (cm *CertificateManager) getEmbeddedUIServerTLSConfig(
-	_ *tls.ClientHelloInfo,
-) (*tls.Config, error) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
-
-	if cm.uiServerConfig != nil {
-		return cm.uiServerConfig, nil
-	}
-
-	uiCert, err := cm.getUICertLocked()
-	if err != nil {
-		return nil, err
-	}
-
-	cfg, err := newUIServerTLSConfig(
-		cm.tlsSettings,
-		uiCert.FileContents,
-		uiCert.KeyFileContents)
-	if err != nil {
-		return nil, err
-	}
-
-	cm.uiServerConfig = cfg
-	return cfg, nil
-}
-
-// getCACertLocked returns the general CA cert.
-// cm.mu must be held.
-func (cm *CertificateManager) getCACertLocked() (*CertInfo, error) {
-	if err := checkCertIsValid(cm.caCert); err != nil {
-		return nil, makeErrorf(err, "problem with CA certificate")
-	}
-	return cm.caCert, nil
-}
-
-// getClientCACertLocked returns the CA cert used to verify client certificates.
-// Use the client CA if it exists, otherwise fall back on the general CA.
-// cm.mu must be held.
-func (cm *CertificateManager) getClientCACertLocked() (*CertInfo, error) {
-	if cm.clientCACert == nil {
-		// No client CA: use general CA.
-		return cm.getCACertLocked()
-	}
-
-	if err := checkCertIsValid(cm.clientCACert); err != nil {
-		return nil, makeErrorf(err, "problem with client CA certificate")
-	}
-	return cm.clientCACert, nil
-}
-
-// getUICACertLocked returns the CA cert for the Admin UI.
-// Use the UI CA if it exists, otherwise fall back on the general CA.
-// cm.mu must be held.
-func (cm *CertificateManager) getUICACertLocked() (*CertInfo, error) {
-	if cm.uiCACert == nil {
-		// No UI CA: use general CA.
-		return cm.getCACertLocked()
-	}
-
-	if err := checkCertIsValid(cm.uiCACert); err != nil {
-		return nil, makeErrorf(err, "problem with UI CA certificate")
-	}
-	return cm.uiCACert, nil
-}
-
-// getNodeCertLocked returns the node certificate.
-// cm.mu must be held.
-func (cm *CertificateManager) getNodeCertLocked() (*CertInfo, error) {
-	if err := checkCertIsValid(cm.nodeCert); err != nil {
-		return nil, makeErrorf(err, "problem with node certificate")
-	}
-	return cm.nodeCert, nil
-}
-
-// getUICertLocked returns the UI certificate if present, otherwise returns
-// the node certificate.
-// cm.mu must be held.
-func (cm *CertificateManager) getUICertLocked() (*CertInfo, error) {
-	if cm.uiCert == nil {
-		// No UI certificate: use node certificate.
-		if !cm.IsForTenant() {
-			// Host cluster.
-			return cm.getNodeCertLocked()
-		}
-		// Tenant server.
-		return cm.getTenantCertLocked()
-	}
-	if err := checkCertIsValid(cm.uiCert); err != nil {
-		return nil, makeErrorf(err, "problem with UI certificate")
-	}
-	return cm.uiCert, nil
-}
-
-// getClientCertLocked returns the client cert/key for the specified user,
-// or an error if not found.
-// This is used both to connect to KV nodes and SQL servers.
-// cm.mu must be held.
-//
-// TODO(catj): split the logic here into two functions.
-func (cm *CertificateManager) getClientCertLocked(user username.SQLUsername) (*CertInfo, error) {
-	ci := cm.clientCerts[user]
-	if err := checkCertIsValid(ci); err != nil {
-		return nil, makeErrorf(err, "problem with client cert for user %s", user)
-	}
-
-	return ci, nil
-}
-
-// getNodeClientCertLocked returns the client cert/key for the node user.
-// Use the client certificate for 'node' if it exists, otherwise use
-// the node certificate which should be a combined client/server certificate.
-// cm.mu must be held.
-func (cm *CertificateManager) getNodeClientCertLocked() (*CertInfo, error) {
-	if cm.nodeClientCert == nil {
-		return cm.getNodeCertLocked()
-	}
-
-	if err := checkCertIsValid(cm.nodeClientCert); err != nil {
-		return nil, makeErrorf(err, "problem with node client certificate")
-	}
-	return cm.nodeClientCert, nil
-}
-
-// getTenantCACertLocked returns the CA cert used to verify tenant client
-// certificates. Use the tenant client CA if it exists, otherwise fall back to
-// client CA. cm.mu must be held.
-func (cm *CertificateManager) getTenantCACertLocked() (*CertInfo, error) {
-	if cm.tenantCACert == nil {
-		return cm.getClientCACertLocked()
-	}
-	c := cm.tenantCACert
-	if err := checkCertIsValid(c); err != nil {
-		return nil, makeErrorf(err, "problem with tenant client CA certificate")
-	}
-	return c, nil
-}
-
-// getTenantCertLocked returns the tenant node cert.
-// cm.mu must be held.
-func (cm *CertificateManager) getTenantCertLocked() (*CertInfo, error) {
-	c := cm.tenantCert
-	if err := checkCertIsValid(c); err != nil {
-		return nil, makeErrorf(err, "problem with tenant client certificate")
-	}
-	return c, nil
-}
-
-// GetTenantTLSConfig returns the most up-to-date tenant client
-// tls.Config.
-func (cm *CertificateManager) GetTenantTLSConfig() (*tls.Config, error) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
-
-	if cm.tenantConfig != nil {
-		return cm.tenantConfig, nil
-	}
-
-	// CA used to validate certs provided by KV nodes.
-	ca, err := cm.getCACertLocked()
-	if err != nil {
-		return nil, err
-	}
-
-	caBlob := ca.FileContents
-
-	if cm.tenantCACert != nil {
-		// If it's available, we also include the tenant CA.
-		tenantCA, err := cm.getTenantCACertLocked()
-		if err == nil {
-			caBlob = AppendCertificatesToBlob(caBlob, tenantCA.FileContents)
-		}
-	}
-
-	// Client cert presented to KV nodes.
-	tenantCert, err := cm.getTenantCertLocked()
-	if err != nil {
-		return nil, err
-	}
-
-	cfg, err := newClientTLSConfig(
-		cm.tlsSettings,
-		tenantCert.FileContents,
-		tenantCert.KeyFileContents,
-		caBlob)
-	if err != nil {
-		return nil, err
-	}
-
-	cm.tenantConfig = cfg
-	return cfg, nil
-}
-
-// GetTenantSigningCert returns the most up-to-date tenant signing certificate.
-func (cm *CertificateManager) GetTenantSigningCert() (*CertInfo, error) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
-
-	c := cm.tenantSigningCert
-	if err := checkCertIsValid(c); err != nil {
-		return nil, makeErrorf(err, "problem with tenant signing certificate")
-	}
-	return c, nil
-}
-
-// GetClientTLSConfig returns the most up-to-date client tls.Config.
-// Returns the dual-purpose node certs if user == NodeUser and there is no
-// separate client cert for 'node'.
-func (cm *CertificateManager) GetClientTLSConfig(user username.SQLUsername) (*tls.Config, error) {
-	if user.IsNodeUser() {
-		return cm.GetNodeClientTLSConfig()
-	}
-
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
-
-	// The client could be connecting to a KV node or a tenant server.
-	// We need at least one of the two CAs. If none is available, we
-	// won't be able to verify the server's identity.
-	if cm.caCert == nil && cm.tenantCACert == nil {
-		return nil, makeErrorf(errors.New("no CA certificate found, cannot authenticate remote server"),
-			"problem loading CA certificate")
-	}
-	var caBlob []byte
-	if cm.caCert != nil {
-		ca, err := cm.getCACertLocked()
-		if err != nil {
-			return nil, err
-		}
-		caBlob = AppendCertificatesToBlob(caBlob, ca.FileContents)
-	}
-	if cm.tenantCACert != nil {
-		ca, err := cm.getTenantCACertLocked()
-		if err != nil {
-			return nil, err
-		}
-		caBlob = AppendCertificatesToBlob(caBlob, ca.FileContents)
-	}
-
-	clientCert, err := cm.getClientCertLocked(user)
-	if err != nil {
-		return nil, err
-	}
-
-	cfg, err := newClientTLSConfig(
-		cm.tlsSettings,
-		clientCert.FileContents,
-		clientCert.KeyFileContents,
-		caBlob)
-	if err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
-}
-
-// GetUIClientTLSConfig returns the most up-to-date client tls.Config for Admin UI clients.
-// It does not include a client certificate and uses the UI CA certificate if present.
-func (cm *CertificateManager) GetUIClientTLSConfig() (*tls.Config, error) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
-
-	// We always need the CA cert.
-	uiCA, err := cm.getUICACertLocked()
-	if err != nil {
-		return nil, err
-	}
-
-	caBlob := uiCA.FileContents
-
-	if cm.tenantCACert != nil {
-		// If it's available, we also include the tenant CA.
-		tenantCA, err := cm.getTenantCACertLocked()
-		if err == nil {
-			caBlob = AppendCertificatesToBlob(caBlob, tenantCA.FileContents)
-		}
-	}
-
-	cfg, err := newUIClientTLSConfig(cm.tlsSettings, caBlob)
-	if err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
-}
-
-// ListCertificates returns all loaded certificates, or an error if not yet initialized.
-func (cm *CertificateManager) ListCertificates() ([]*CertInfo, error) {
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
-
-	if !cm.initialized {
-		return nil, errors.AssertionFailedf("certificate manager has not been initialized")
-	}
-
-	ret := make([]*CertInfo, 0, 2+len(cm.clientCerts))
-	if cm.caCert != nil {
-		ret = append(ret, cm.caCert)
-	}
-	if cm.clientCACert != nil {
-		ret = append(ret, cm.clientCACert)
-	}
-	if cm.uiCACert != nil {
-		ret = append(ret, cm.uiCACert)
-	}
-	if cm.nodeCert != nil {
-		ret = append(ret, cm.nodeCert)
-	}
-	if cm.uiCert != nil {
-		ret = append(ret, cm.uiCert)
-	}
-	if cm.clientCerts != nil {
-		for _, cert := range cm.clientCerts {
-			ret = append(ret, cert)
-		}
-	}
-
-	return ret, nil
 }

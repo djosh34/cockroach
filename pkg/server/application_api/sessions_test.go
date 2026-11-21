@@ -340,7 +340,7 @@ func TestListClosedSessions(t *testing.T) {
 
 	getUserConn := func(t *testing.T, username string, server serverutils.ApplicationLayerInterface) *gosql.DB {
 		return server.SQLConn(
-			t, serverutils.UserPassword(username, "hunter2"), serverutils.ClientCerts(false),
+			t, serverutils.User(username),
 		)
 	}
 

@@ -11,8 +11,6 @@
 package democluster
 
 import (
-	"time"
-
 	"github.com/cockroachdb/cockroach/pkg/cli/clicfg"
 	"github.com/cockroachdb/cockroach/pkg/server/autoconfig/acprovider"
 	"github.com/cockroachdb/cockroach/pkg/workload"
@@ -67,21 +65,6 @@ type Context struct {
 	// SimulateLatency requests that cross-region latencies be simulated
 	// across region localities.
 	SimulateLatency bool
-
-	// DefaultKeySize is the default size of TLS private keys to use.
-	DefaultKeySize int
-
-	// DefaultCALifetime is the default lifetime of CA certs that are
-	// generated for the transient cluster.
-	DefaultCALifetime time.Duration
-
-	// DefaultCertLifetime is the default lifetime of client certs that
-	// are generated for the transient cluster.
-	DefaultCertLifetime time.Duration
-
-	// insecure requests that the server be started in "insecure mode".
-	// NB: This is obsolete.
-	Insecure bool
 
 	// SQLPort is the first SQL port number to use when instantiating
 	// servers. Use zero for auto-allocated random ports.

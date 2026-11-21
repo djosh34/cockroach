@@ -165,7 +165,7 @@ func TestAdminDebugAuth(t *testing.T) {
 	}
 
 	// Authenticated as non-admin.
-	client, err = ts.GetAuthenticatedHTTPClient(false, serverutils.SingleTenantSession)
+	client, err = ts.GetAuthenticatedHTTPClient(false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestAdminDebugAuth(t *testing.T) {
 	}
 
 	// Authenticated as admin.
-	client, err = ts.GetAuthenticatedHTTPClient(true, serverutils.SingleTenantSession)
+	client, err = ts.GetAuthenticatedHTTPClient(true)
 	if err != nil {
 		t.Fatal(err)
 	}

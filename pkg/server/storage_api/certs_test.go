@@ -34,25 +34,22 @@ func TestCertificatesResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// We expect 6 certificates: CA, node, and client certs for root, testuser,
-	// testuser2, testuser3, testuser_cn_only, testuser_san_only,
-	// testuser_cn_and_san.
-	if a, e := len(response.Certificates), 9; a != e {
-		t.Errorf("expected %d certificates, found %d", e, a)
+	// The test config names a node CA, a client CA, a node cert and a
+	// client cert, in that order.
+	want := []serverpb.CertificateDetails_CertificateType{
+		serverpb.CertificateDetails_CA,
+		serverpb.CertificateDetails_CLIENT_CA,
+		serverpb.CertificateDetails_NODE,
+		serverpb.CertificateDetails_CLIENT,
 	}
-
-	// The response is ordered: CA cert followed by node cert.
-	cert := response.Certificates[0]
-	if a, e := cert.Type, serverpb.CertificateDetails_CA; a != e {
-		t.Errorf("wrong type %s, expected %s", a, e)
-	} else if cert.ErrorMessage != "" {
-		t.Errorf("expected cert without error, got %v", cert.ErrorMessage)
+	if a, e := len(response.Certificates), len(want); a != e {
+		t.Fatalf("expected %d certificates, found %d", e, a)
 	}
-
-	cert = response.Certificates[1]
-	if a, e := cert.Type, serverpb.CertificateDetails_NODE; a != e {
-		t.Errorf("wrong type %s, expected %s", a, e)
-	} else if cert.ErrorMessage != "" {
-		t.Errorf("expected cert without error, got %v", cert.ErrorMessage)
+	for i, cert := range response.Certificates {
+		if a, e := cert.Type, want[i]; a != e {
+			t.Errorf("wrong type %s, expected %s", a, e)
+		} else if cert.ErrorMessage != "" {
+			t.Errorf("expected cert without error, got %v", cert.ErrorMessage)
+		}
 	}
 }
