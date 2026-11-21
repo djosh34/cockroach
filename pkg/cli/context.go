@@ -184,6 +184,9 @@ var cliCtx = cliContext{
 // function is called by initCLIDefaults() and thus re-called in every
 // test that exercises command-line parsing.
 func setCliContextDefaults() {
+	backupConfigFile = ""
+	backupCheckName = ""
+	backupRestoreTarget = ""
 	// isInteractive is only set to `true` by `cockroach sql` -- all
 	// other client commands are non-interactive, regardless of whether
 	// the standard input is a terminal.

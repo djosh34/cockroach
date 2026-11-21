@@ -9,8 +9,9 @@
 // governing permissions and limitations under the License.
 
 // Package certconfig reads the --config file. The file names the PEM files
-// that patchroaddb uses for TLS and the identity rules file. patchroaddb
-// never writes any of these files.
+// that patchroaddb uses for TLS and the identity rules file, and holds the
+// optional backup section (see Backup). patchroaddb never writes any of
+// these files.
 //
 // Example:
 //
@@ -21,6 +22,10 @@
 //	rules: rules            # identity rules
 //	client-cert: client.crt # optional, used by the CLI for SQL
 //	client-key: client.key
+//	backup:                 # optional, see Backup
+//	  bucket: backups
+//	  full-schedule: "0 3 * * *"
+//	  keep-full: 2
 //
 // Relative paths are relative to the directory of the config file.
 package certconfig
@@ -43,6 +48,8 @@ type Config struct {
 	Rules      string `yaml:"rules"`
 	ClientCert string `yaml:"client-cert"`
 	ClientKey  string `yaml:"client-key"`
+	// Backup is the backup section, nil if the file has none.
+	Backup *Backup `yaml:"backup"`
 }
 
 // Load reads and checks the config file at path.
@@ -65,6 +72,11 @@ func Load(path string) (Config, error) {
 	}
 	if (c.ClientCert == "") != (c.ClientKey == "") {
 		return Config{}, errors.Newf("config file %s: client-cert and client-key go together", path)
+	}
+	if c.Backup != nil {
+		if err := c.Backup.check(); err != nil {
+			return Config{}, errors.Wrapf(err, "config file %s", path)
+		}
 	}
 	return c, nil
 }

@@ -35,7 +35,7 @@ items() {
       go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.Dir}}{{end}}' ./pkg/... |
         sed "s|^$PWD/||" |
         grep -v -e '^pkg/sql/logictest/tests/' -e '^pkg/sql/opt/exec/execbuilder/tests/' \
-          -e '^pkg/testutils/lint$' |
+          -e '^pkg/testutils/lint$' -e '^pkg/backup$' |
         while read -r p; do
           if [[ -n ${SPLIT[$p]:-} ]]; then
             for ((k = 0; k < SPLIT[$p]; k++)); do echo "$p#$k"; done

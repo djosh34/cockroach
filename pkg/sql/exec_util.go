@@ -48,6 +48,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/obs"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/rpc"
+	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/autoconfig/acprovider"
 	"github.com/cockroachdb/cockroach/pkg/server/pgurl"
@@ -1378,6 +1379,10 @@ type ExecutorConfig struct {
 	// InternalDB is used to create an isql.Executor bound with SessionData and
 	// other ExtraTxnState.
 	InternalDB *InternalDB
+
+	// BackupConfig is the backup section of this node's --config, nil if
+	// it has none.
+	BackupConfig *certconfig.Backup
 
 	// SpanStatsConsumer is used by the key visualizer job.
 	SpanStatsConsumer keyvisualizer.SpanStatsConsumer

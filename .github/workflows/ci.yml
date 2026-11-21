@@ -102,6 +102,16 @@ jobs:
       - run: go build -o bin/patchroaddb ./pkg/cmd/patchroaddb
       - run: sudo build/ci/no-outbound.sh bin/patchroaddb
 
+  # Runs the backup tests against a real S3 server, versitygw in a
+  # container. See build/ci/s3.sh.
+  s3:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+      - run: build/ci/s3.sh -v
+
   # Fails on any known vulnerability in a package that this module or its
   # tests import, from a module or from the Go standard library. This is
   # stricter than checking only reachable functions.
@@ -115,7 +125,7 @@ jobs:
 
   ci-ok:
     if: always()
-    needs: [build, generate, lint, test, logic, no-outbound, vuln]
+    needs: [build, generate, lint, test, logic, no-outbound, s3, vuln]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

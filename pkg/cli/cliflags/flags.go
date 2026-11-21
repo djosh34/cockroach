@@ -765,8 +765,23 @@ Note: that --external-io-disable-http or --external-io-disable-implicit-credenti
 		Description: `
 Path to the config file. It names the node certificate and key, the node CA,
 the client CA, the identity rules file, and optionally a client certificate
-and key. Admin commands use the node certificate for RPCs and the client
-certificate for SQL.`,
+and key and a backup section. Admin commands use the node certificate for
+RPCs and the client certificate for SQL; the backup commands use the backup
+section.`,
+	}
+
+	BackupName = FlagInfo{
+		Name: "backup",
+		Description: `
+The name of the full backup to check, as 'backup info' shows it. The last
+one if empty.`,
+	}
+
+	RestoreTarget = FlagInfo{
+		Name: "target",
+		Description: `
+The time to restore to, as RFC 3339 or as an HLC decimal. The last
+restorable time if empty.`,
 	}
 
 	// Server version of the config file flag, cannot be set through environment.
@@ -774,7 +789,9 @@ certificate for SQL.`,
 		Name: "config",
 		Description: `
 Path to the config file. It names the node certificate and key, the node CA,
-the client CA and the identity rules file. A secure node needs it.`,
+the client CA and the identity rules file, and optionally holds a backup
+section. A secure node needs it; an insecure node reads only the backup
+section.`,
 	}
 
 	MaxOffset = FlagInfo{

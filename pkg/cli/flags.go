@@ -514,6 +514,7 @@ func init() {
 	clientCmds = append(clientCmds, stmtDiagCmds...)
 	clientCmds = append(clientCmds, debugResetQuorumCmd)
 	clientCmds = append(clientCmds, recoverCommands...)
+	clientCmds = append(clientCmds, backupRestoreCmd)
 	for _, cmd := range clientCmds {
 		clientflags.AddBaseFlags(cmd, &cliCtx.clientOpts, &baseCfg.Insecure, &cliCtx.configFile)
 	}
@@ -605,6 +606,7 @@ func init() {
 		statementBundleRecreateCmd,
 		lsNodesCmd,
 		statusNodeCmd,
+		backupRestoreCmd,
 	}
 	sqlCmds = append(sqlCmds, demoCmd.Commands()...)
 	sqlCmds = append(sqlCmds, stmtDiagCmds...)
@@ -800,6 +802,17 @@ func init() {
 		}
 	}
 
+	// backup commands.
+	{
+		// These commands read only the backup section, so they do not use
+		// cliCtx.configFile, whose certificates the client setup reads.
+		for _, cmd := range []*cobra.Command{backupInfoCmd, backupCheckCmd, backupExpireCmd} {
+			cliflagcfg.StringFlag(cmd.Flags(), &backupConfigFile, cliflags.ConfigFile)
+		}
+		cliflagcfg.StringFlag(backupCheckCmd.Flags(), &backupCheckName, cliflags.BackupName)
+		cliflagcfg.StringFlag(backupRestoreCmd.Flags(), &backupRestoreTarget, cliflags.RestoreTarget)
+	}
+
 	// userfile upload command.
 	{
 		cliflagcfg.BoolFlag(userFileUploadCmd.Flags(), &userfileCtx.recursive, cliflags.Recursive)
@@ -811,12 +824,15 @@ func init() {
 func extraServerFlagInit(cmd *cobra.Command) error {
 	serverCfg.User = username.NodeUserName()
 	serverCfg.Insecure = startCtx.serverInsecure
-	if !serverCfg.Insecure && startCtx.serverConfigFile != "" {
+	if startCtx.serverConfigFile != "" {
 		c, err := certconfig.Load(startCtx.serverConfigFile)
 		if err != nil {
 			return err
 		}
-		if err := c.CheckNode(); err != nil {
+		if serverCfg.Insecure {
+			// An insecure node uses only the backup section.
+			c = certconfig.Config{Backup: c.Backup}
+		} else if err := c.CheckNode(); err != nil {
 			return errors.Wrapf(err, "config file %s", startCtx.serverConfigFile)
 		}
 		serverCfg.Certs = c

@@ -53,6 +53,8 @@ var (
 	_ Details = AutoConfigTaskDetails{}
 	_ Details = AutoUpdateSQLActivityDetails{}
 	_ Details = MVCCStatisticsJobDetails{}
+	_ Details = AutoBackupDetails{}
+	_ Details = ClusterRestoreDetails{}
 )
 
 // ProgressDetails is a marker interface for job progress details proto structs.
@@ -78,6 +80,8 @@ var (
 	_ ProgressDetails = AutoConfigTaskProgress{}
 	_ ProgressDetails = AutoUpdateSQLActivityProgress{}
 	_ ProgressDetails = MVCCStatisticsJobProgress{}
+	_ ProgressDetails = AutoBackupProgress{}
+	_ ProgressDetails = ClusterRestoreProgress{}
 )
 
 // Type returns the payload's job type and panics if the type is invalid.
@@ -162,6 +166,7 @@ var AutomaticJobTypes = [...]Type{
 	TypeKeyVisualizer,
 	TypeAutoUpdateSQLActivity,
 	TypeMVCCStatisticsUpdate,
+	TypeAutoBackup,
 }
 
 // DetailsType returns the type for a payload detail.
@@ -217,6 +222,10 @@ func DetailsType(d isPayload_Details) (Type, error) {
 		return TypeAutoUpdateSQLActivity, nil
 	case *Payload_MvccStatisticsDetails:
 		return TypeMVCCStatisticsUpdate, nil
+	case *Payload_AutoBackup:
+		return TypeAutoBackup, nil
+	case *Payload_ClusterRestore:
+		return TypeClusterRestore, nil
 	default:
 		return TypeUnspecified, errors.Newf("Payload.Type called on a payload with an unknown details type: %T", d)
 	}
@@ -262,6 +271,8 @@ var JobDetailsForEveryJobType = map[Type]Details{
 	TypeAutoConfigTask:               AutoConfigTaskDetails{},
 	TypeAutoUpdateSQLActivity:        AutoUpdateSQLActivityDetails{},
 	TypeMVCCStatisticsUpdate:         MVCCStatisticsJobDetails{},
+	TypeAutoBackup:                   AutoBackupDetails{},
+	TypeClusterRestore:               ClusterRestoreDetails{},
 }
 
 // WrapProgressDetails wraps a ProgressDetails object in the protobuf wrapper
@@ -319,6 +330,10 @@ func WrapProgressDetails(details ProgressDetails) interface {
 		return &Progress_UpdateSqlActivity{UpdateSqlActivity: &d}
 	case MVCCStatisticsJobProgress:
 		return &Progress_MvccStatisticsProgress{MvccStatisticsProgress: &d}
+	case AutoBackupProgress:
+		return &Progress_AutoBackup{AutoBackup: &d}
+	case ClusterRestoreProgress:
+		return &Progress_ClusterRestore{ClusterRestore: &d}
 	default:
 		panic(errors.AssertionFailedf("WrapProgressDetails: unknown progress type %T", d))
 	}
@@ -374,6 +389,10 @@ func (p *Payload) UnwrapDetails() Details {
 		return *d.AutoUpdateSqlActivities
 	case *Payload_MvccStatisticsDetails:
 		return *d.MvccStatisticsDetails
+	case *Payload_AutoBackup:
+		return *d.AutoBackup
+	case *Payload_ClusterRestore:
+		return *d.ClusterRestore
 	default:
 		return nil
 	}
@@ -429,6 +448,10 @@ func (p *Progress) UnwrapDetails() ProgressDetails {
 		return *d.UpdateSqlActivity
 	case *Progress_MvccStatisticsProgress:
 		return *d.MvccStatisticsProgress
+	case *Progress_AutoBackup:
+		return *d.AutoBackup
+	case *Progress_ClusterRestore:
+		return *d.ClusterRestore
 	default:
 		return nil
 	}
@@ -508,6 +531,10 @@ func WrapPayloadDetails(details Details) interface {
 		return &Payload_AutoUpdateSqlActivities{AutoUpdateSqlActivities: &d}
 	case MVCCStatisticsJobDetails:
 		return &Payload_MvccStatisticsDetails{MvccStatisticsDetails: &d}
+	case AutoBackupDetails:
+		return &Payload_AutoBackup{AutoBackup: &d}
+	case ClusterRestoreDetails:
+		return &Payload_ClusterRestore{ClusterRestore: &d}
 	default:
 		panic(errors.AssertionFailedf("jobs.WrapPayloadDetails: unknown details type %T", d))
 	}
@@ -540,7 +567,7 @@ const (
 func (Type) SafeValue() {}
 
 // NumJobTypes is the number of jobs types.
-const NumJobTypes = 25
+const NumJobTypes = 27
 
 // MarshalJSONPB implements jsonpb.JSONPBMarshaller. Changefeed jobs can only
 // come from upstream data, and their sink URIs can hold credentials, so this

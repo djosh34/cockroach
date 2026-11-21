@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/cockroach/pkg/backup"
 	"github.com/cockroachdb/cockroach/pkg/base"
 	"github.com/cockroachdb/cockroach/pkg/cloud"
 	"github.com/cockroachdb/cockroach/pkg/cloud/externalconn"
@@ -53,6 +54,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/rpc/nodedialer"
 	"github.com/cockroachdb/cockroach/pkg/scheduledjobs"
 	"github.com/cockroachdb/cockroach/pkg/security"
+	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/security/clientsecopts"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/autoconfig"
@@ -947,6 +949,7 @@ func newSQLServer(ctx context.Context, cfg sqlServerArgs) (*SQLServer, error) {
 		AmbientCtx:              cfg.AmbientCtx,
 		DB:                      cfg.db,
 		Gossip:                  cfg.gossip,
+		BackupConfig:            backupConfig(cfg),
 		NodeLiveness:            cfg.nodeLiveness,
 		SystemConfig:            cfg.systemConfigWatcher,
 		MetricsRecorder:         cfg.recorder,
@@ -1714,6 +1717,12 @@ func (s *SQLServer) preStart(
 
 	s.waitForActiveAutoConfigEnvironments(ctx)
 
+	if s.execCfg.BackupConfig != nil {
+		if err := backup.StartAutoBackup(ctx, stopper, s.execCfg); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -2076,4 +2085,13 @@ func (s *SQLServer) InternalExecutor() isql.Executor {
 // MetricsRegistry returns the application-level metrics registry.
 func (s *SQLServer) MetricsRegistry() *metric.Registry {
 	return s.metricsRegistry
+}
+
+// backupConfig returns the backup section of --config for the system
+// tenant. Virtual clusters take no backups.
+func backupConfig(cfg sqlServerArgs) *certconfig.Backup {
+	if !cfg.SQLConfig.TenantID.IsSystem() {
+		return nil
+	}
+	return cfg.Config.Certs.Backup
 }
