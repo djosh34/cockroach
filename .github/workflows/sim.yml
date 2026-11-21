@@ -78,6 +78,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-go
+      # gosim keeps its translation of each package in this database, so a
+      # build translates only the packages that changed since the last one.
+      - uses: actions/cache@v4
+        with:
+          path: .gosim/cache.sqlite3
+          key: sim-gosim-${{ github.sha }}
+          restore-keys: sim-gosim-
       - run: build/sim-build.sh bin/sim
         env:
           PLANTED: ${{ inputs.planted == 'all' && '1' || '' }}
