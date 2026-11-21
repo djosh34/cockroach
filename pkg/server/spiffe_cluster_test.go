@@ -42,7 +42,7 @@ func TestSPIFFEIdentityCluster(t *testing.T) {
 	defer log.Scope(t).Close(t)
 	ctx := context.Background()
 
-	g := securitytest.NewGenerator(11)
+	g := securitytest.NewGenerator(11, func(err error) { t.Fatal(err) })
 	nodeRoot := g.RootCA("node CA")
 	nodeCA := nodeRoot.IntermediateCA("node intermediate")
 	clientCA := g.RootCA("client CA")

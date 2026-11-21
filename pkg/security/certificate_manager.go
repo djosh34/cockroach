@@ -404,6 +404,10 @@ func (cm *CertificateManager) VerifyNode(certs []*x509.Certificate, usage x509.E
 	if err := cm.verifyPeer(certs, s.nodeCAs, usage); err != nil {
 		return errors.Wrap(err, "verifying node certificate")
 	}
+	if !hasExtKeyUsage(certs[0], x509.ExtKeyUsageServerAuth) || !hasExtKeyUsage(certs[0], x509.ExtKeyUsageClientAuth) {
+		return errors.Errorf("certificate %s needs both server and client extended key usage to be a node",
+			DescribeCert(certs[0]))
+	}
 	if !s.rules.MatchesNode(certs[0]) {
 		return errors.Errorf("certificate %s matches no node rule", DescribeCert(certs[0]))
 	}

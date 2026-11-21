@@ -11,6 +11,7 @@
 package security
 
 import (
+	"bytes"
 	"crypto/x509"
 	"encoding/pem"
 
@@ -26,6 +27,11 @@ func PEMToCertificates(contents []byte) ([]*pem.Block, error) {
 		var block *pem.Block
 		block, contents = pem.Decode(contents)
 		if block == nil {
+			// Text that is not PEM is allowed, as in openssl's output, but
+			// a broken block is not: it may be a half-written file.
+			if bytes.Contains(contents, []byte("-----BEGIN")) {
+				return nil, errors.Errorf("block #%d is not a complete PEM block", len(certs))
+			}
 			break
 		}
 		if block.Type != "CERTIFICATE" {

@@ -20,8 +20,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func makePKI(seed int64) [][]byte {
-	g := securitytest.NewGenerator(seed)
+func makePKI(t *testing.T, seed int64) [][]byte {
+	g := securitytest.NewGenerator(seed, func(err error) { t.Fatal(err) })
 	root := g.RootCA("root")
 	inter := root.IntermediateCA("intermediate")
 	node := inter.NodeCert(securitytest.Identity{CN: "node", SPIFFE: securitytest.SPIFFEID("node")}, "localhost", "127.0.0.1")
@@ -33,8 +33,8 @@ func makePKI(seed int64) [][]byte {
 // and keys, and another seed gives others.
 func TestSameSeedSameCerts(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	require.Equal(t, makePKI(1), makePKI(1))
-	a, b := makePKI(1), makePKI(2)
+	require.Equal(t, makePKI(t, 1), makePKI(t, 1))
+	a, b := makePKI(t, 1), makePKI(t, 2)
 	for i := range a {
 		require.NotEqual(t, a[i], b[i])
 	}
@@ -42,7 +42,7 @@ func TestSameSeedSameCerts(t *testing.T) {
 
 func TestCertsVerify(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	g := securitytest.NewGenerator(3)
+	g := securitytest.NewGenerator(3, func(err error) { t.Fatal(err) })
 	root := g.RootCA("root")
 	inter := root.IntermediateCA("intermediate")
 	node := inter.NodeCert(securitytest.Identity{SPIFFE: securitytest.SPIFFEID("node")}, "localhost", "::1")

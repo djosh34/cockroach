@@ -68,7 +68,7 @@ func (s *authenticationServer) UserFromRequest(r *http.Request) (username.SQLUse
 		}
 		user = roles[0]
 	}
-	exists, canLogin, _, _, _, _, _, err := sql.GetUserSessionInitInfo(
+	exists, _, canLogin, _, _, _, _, err := sql.GetUserSessionInitInfo(
 		r.Context(), execCfg, user, "" /* databaseName */)
 	if err != nil {
 		return username.SQLUsername{}, err

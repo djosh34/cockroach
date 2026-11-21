@@ -46,11 +46,15 @@ var (
 // Generator makes certificates from a seed.
 type Generator struct {
 	seed int64
+	// fail reports an error. A method that fails returns empty values.
+	fail func(error)
 }
 
-// NewGenerator returns a Generator for the seed.
-func NewGenerator(seed int64) *Generator {
-	return &Generator{seed: seed}
+// NewGenerator returns a Generator for the seed. It calls fail on an error,
+// such as a SPIFFE ID that does not parse; a test passes a function that
+// calls t.Fatal.
+func NewGenerator(seed int64, fail func(error)) *Generator {
+	return &Generator{seed: seed, fail: fail}
 }
 
 // derive returns 32 bytes that depend only on the seed and the label.
@@ -108,7 +112,7 @@ func (g *Generator) RootCA(cn string) *CA {
 		IsCA:                  true,
 	}
 	ca := &CA{g: g, label: label, key: key}
-	ca.Cert, ca.CertPEM = mustCreate(tmpl, tmpl, key.Public(), key)
+	ca.Cert, ca.CertPEM = g.create(tmpl, tmpl, key.Public(), key)
 	return ca
 }
 
@@ -126,7 +130,7 @@ func (ca *CA) IntermediateCA(cn string) *CA {
 		IsCA:                  true,
 	}
 	sub := &CA{g: ca.g, label: label, key: key}
-	sub.Cert, sub.CertPEM = mustCreate(tmpl, ca.Cert, key.Public(), ca.key)
+	sub.Cert, sub.CertPEM = ca.g.create(tmpl, ca.Cert, key.Public(), ca.key)
 	sub.chainPEM = append(append([]byte(nil), sub.CertPEM...), ca.chainPEM...)
 	return sub
 }
@@ -167,7 +171,8 @@ func (ca *CA) leaf(kind string, id Identity, hosts []string, usage []x509.ExtKey
 	if id.SPIFFE != "" {
 		u, err := url.Parse(id.SPIFFE)
 		if err != nil {
-			panic(err)
+			ca.g.fail(err)
+			return Pair{}
 		}
 		tmpl.URIs = []*url.URL{u}
 	}
@@ -178,10 +183,14 @@ func (ca *CA) leaf(kind string, id Identity, hosts []string, usage []x509.ExtKey
 			tmpl.DNSNames = append(tmpl.DNSNames, h)
 		}
 	}
-	_, certPEM := mustCreate(tmpl, ca.Cert, key.Public(), ca.key)
+	_, certPEM := ca.g.create(tmpl, ca.Cert, key.Public(), ca.key)
+	if certPEM == nil {
+		return Pair{}
+	}
 	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
-		panic(err)
+		ca.g.fail(err)
+		return Pair{}
 	}
 	return Pair{
 		CertPEM: append(certPEM, ca.chainPEM...),
@@ -189,19 +198,21 @@ func (ca *CA) leaf(kind string, id Identity, hosts []string, usage []x509.ExtKey
 	}
 }
 
-// mustCreate signs a certificate. Ed25519 signatures need no randomness, so
-// the result depends only on the inputs. It panics on error: the inputs
-// come from this package, so an error is a bug in it.
-func mustCreate(
+// create signs a certificate. Ed25519 signatures need no randomness, so
+// the result depends only on the inputs. On an error it calls g.fail and
+// returns nil values.
+func (g *Generator) create(
 	tmpl, parent *x509.Certificate, pub any, signer ed25519.PrivateKey,
 ) (*x509.Certificate, []byte) {
 	der, err := x509.CreateCertificate(nil, tmpl, parent, pub, signer)
 	if err != nil {
-		panic(err)
+		g.fail(err)
+		return nil, nil
 	}
 	cert, err := x509.ParseCertificate(der)
 	if err != nil {
-		panic(err)
+		g.fail(err)
+		return nil, nil
 	}
 	return cert, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 }

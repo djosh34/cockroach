@@ -132,7 +132,7 @@ func (r *identityRulesGossip) compare(ctx context.Context) {
 			return nil
 		}
 		mismatched++
-		if r.mu.warned[nodeID] == theirText {
+		if warned, ok := r.mu.warned[nodeID]; ok && warned == theirText {
 			return nil
 		}
 		r.mu.warned[nodeID] = theirText

@@ -62,7 +62,7 @@ func TestParseRulesErrors(t *testing.T) {
 
 func TestRulesMatch(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	g := securitytest.NewGenerator(7)
+	g := securitytest.NewGenerator(7, func(err error) { t.Fatal(err) })
 	ca := g.RootCA("ca")
 	cert := func(cn, spiffe string) *x509.Certificate {
 		return parseLeaf(t, ca.ClientCert(securitytest.Identity{CN: cn, SPIFFE: spiffe}))

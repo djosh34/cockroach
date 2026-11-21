@@ -35,7 +35,7 @@ func TestAdminCommandsWithConfig(t *testing.T) {
 	defer log.Scope(t).Close(t)
 	ctx := context.Background()
 
-	g := securitytest.NewGenerator(21)
+	g := securitytest.NewGenerator(21, func(err error) { t.Fatal(err) })
 	nodeCA := g.RootCA("node CA")
 	clientCA := g.RootCA("client CA")
 	dir := t.TempDir()

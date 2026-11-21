@@ -41,8 +41,8 @@ type testPKI struct {
 	rules                      string
 }
 
-func newTestPKI(seed int64) testPKI {
-	g := securitytest.NewGenerator(seed)
+func newTestPKI(t *testing.T, seed int64) testPKI {
+	g := securitytest.NewGenerator(seed, func(err error) { t.Fatal(err) })
 	nodeRoot := g.RootCA("node CA")
 	return testPKI{
 		nodeRoot: nodeRoot,
@@ -134,7 +134,7 @@ func presenting(t *testing.T, p securitytest.Pair) *tls.Config {
 // server the same way, without a host name.
 func TestTwoTrustPools(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	p := newTestPKI(1)
+	p := newTestPKI(t, 1)
 	dir := t.TempDir()
 	server := newManager(t, p.writeNode(t, filepath.Join(dir, "a"), p.nodeCA.NodeCert(nodeID)))
 	other := newManager(t, p.writeNode(t, filepath.Join(dir, "b"), p.nodeCA.NodeCert(nodeID)))
@@ -168,6 +168,11 @@ func TestTwoTrustPools(t *testing.T) {
 	require.ErrorContains(t, sErr, "matches no node rule")
 	cErr, _ = handshake(t, rpcClient, &tls.Config{Certificates: []tls.Certificate{pairConfig(t, stranger)}})
 	require.ErrorContains(t, cErr, "matches no node rule")
+
+	// A node identity without server usage is not a node.
+	clientUsage := p.nodeCA.ClientCert(nodeID)
+	_, sErr = handshake(t, presenting(t, clientUsage), rpcServer)
+	require.ErrorContains(t, sErr, "needs both server and client extended key usage")
 
 	// A SQL client cert from the client CA passes TLS and maps to its role.
 	alice := p.clientCA.ClientCert(securitytest.Identity{CN: "alice"})
@@ -213,7 +218,7 @@ func certChain(t *testing.T, p securitytest.Pair) []*x509.Certificate {
 
 func TestLoadChecks(t *testing.T) {
 	defer leaktest.AfterTest(t)()
-	p := newTestPKI(2)
+	p := newTestPKI(t, 2)
 	dir := t.TempDir()
 	cfg := p.writeNode(t, dir, p.nodeCA.NodeCert(nodeID))
 
@@ -231,6 +236,12 @@ func TestLoadChecks(t *testing.T) {
 	writeFile(t, cfg.Key, wrongCA.KeyPEM)
 	_, err = security.NewCertificateManager(cfg, security.ClusterTLSSettings(cluster.MakeTestingClusterSettings()))
 	require.ErrorContains(t, err, "does not verify against node CA")
+
+	// A CA bundle whose second root is cut off does not load.
+	writeFile(t, cfg.NodeCA, append(append([]byte(nil), p.nodeRoot.CertPEM...), p.clientCA.CertPEM[:100]...))
+	_, err = security.NewCertificateManager(cfg, security.ClusterTLSSettings(cluster.MakeTestingClusterSettings()))
+	require.ErrorContains(t, err, "not a complete PEM block")
+	writeFile(t, cfg.NodeCA, p.nodeRoot.CertPEM)
 
 	// The key file must not be readable by others.
 	good := p.nodeCA.NodeCert(nodeID)
@@ -250,7 +261,7 @@ func TestReload(t *testing.T) {
 	stopper := stop.NewStopper()
 	defer stopper.Stop(ctx)
 
-	p := newTestPKI(3)
+	p := newTestPKI(t, 3)
 	certs := []securitytest.Pair{p.nodeCA.NodeCert(nodeID)}
 	for _, h := range []string{"v2", "v3"} {
 		// Each cert differs by its host name.

@@ -24,9 +24,9 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// reloadDelay is how long Watch waits after a file event for more events
-// before it reloads. A Kubernetes secret update, for example, is several
-// events in a row.
+// reloadDelay is how long Watch waits after the first file event before it
+// reloads, so that one reload covers the events that follow. A Kubernetes
+// secret update, for example, is several events in a row.
 const reloadDelay = 200 * time.Millisecond
 
 // Watch reloads the files on SIGHUP and whenever something changes in the
@@ -67,8 +67,14 @@ func (cm *CertificateManager) Watch(ctx context.Context, stopper *stop.Stopper) 
 	sighup := sysutil.RefreshSignaledChan()
 	err = stopper.RunAsyncTask(ctx, "watch-certs", func(ctx context.Context) {
 		defer func() { _ = watcher.Close() }()
+		// A file may have changed between the first load and the watch.
+		_ = cm.Reload(ctx)
 		var timer timeutil.Timer
 		defer timer.Stop()
+		// pending is set while a reload waits for the timer. The timer is
+		// not reset by later events, so a busy directory cannot postpone the
+		// reload.
+		pending := false
 		for {
 			select {
 			case <-stopper.ShouldQuiesce():
@@ -81,9 +87,13 @@ func (cm *CertificateManager) Watch(ctx context.Context, stopper *stop.Stopper) 
 					return
 				}
 				log.Ops.VInfof(ctx, 1, "certificate directory event: %s", ev)
-				timer.Reset(reloadDelay)
+				if !pending {
+					pending = true
+					timer.Reset(reloadDelay)
+				}
 			case <-timer.C:
 				timer.Read = true
+				pending = false
 				log.Ops.Infof(ctx, "files changed, reloading certificates and rules")
 				_ = cm.Reload(ctx)
 			case err, ok := <-watcher.Errors:

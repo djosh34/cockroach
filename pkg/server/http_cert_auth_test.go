@@ -46,7 +46,8 @@ func TestHTTPCertAuth(t *testing.T) {
 	})
 	defer tc.Stopper().Stop(ctx)
 	ts := tc.Server(0)
-	_, err := tc.ServerConn(0).Exec("CREATE USER testuser")
+	// NOSQLLOGIN blocks SQL only: testuser still uses the HTTP API.
+	_, err := tc.ServerConn(0).Exec("CREATE USER testuser NOSQLLOGIN")
 	require.NoError(t, err)
 
 	read := func(name string) []byte {
@@ -110,6 +111,10 @@ func TestHTTPCertAuth(t *testing.T) {
 		{"node cert forwarding no user", node, adminOnly, forward(""), http.StatusUnauthorized},
 		{"root through another node", root, remote, nil, http.StatusOK},
 		{"non-admin through another node", testuser, remote, nil, http.StatusForbidden},
+		// The proxy drops headers that Connection names; the forwarded user
+		// must survive that.
+		{"hop-by-hop header through another node", testuser, remote,
+			map[string]string{"Connection": authserver.ForwardedUserHeader}, http.StatusForbidden},
 		{"no cert through another node", none, remote, nil, http.StatusUnauthorized},
 	} {
 		t.Run(c.name, func(t *testing.T) {

@@ -36,19 +36,29 @@ var TestUsers = []string{
 	"test_user_a", "test_user_b", "test_user_c", "123foo", "foo.foo",
 }
 
-// Default test PKI: one root CA, one intermediate that signs every leaf.
-// Both CAs in certconfig.Embedded() are the root.
+// defaultCAs makes the default test PKI: one root CA, and one intermediate
+// that signs every leaf. Both CAs in certconfig.Embedded() are the root.
+func defaultCAs(fail func(error)) (root, inter *CA) {
+	g := NewGenerator(Seed, fail)
+	root = g.RootCA("patchroaddb test CA")
+	return root, root.IntermediateCA("patchroaddb test intermediate CA")
+}
+
+// embedded caches the default test files.
 var embedded struct {
 	once  sync.Once
 	files map[string][]byte
-	inter *CA
+	err   error
 }
 
-func initEmbedded() {
+func initEmbedded() error {
 	embedded.once.Do(func() {
-		g := NewGenerator(Seed)
-		root := g.RootCA("patchroaddb test CA")
-		inter := root.IntermediateCA("patchroaddb test intermediate CA")
+		fail := func(err error) {
+			if embedded.err == nil {
+				embedded.err = err
+			}
+		}
+		root, inter := defaultCAs(fail)
 		node := inter.NodeCert(
 			Identity{CN: "node", SPIFFE: SPIFFEID("node")}, "localhost", "127.0.0.1", "::1")
 		rules := "# Default test rules.\n" +
@@ -66,27 +76,40 @@ func initEmbedded() {
 		}
 		files["rules"] = []byte(rules)
 		embedded.files = files
-		embedded.inter = inter
 	})
+	return embedded.err
 }
 
 // File returns a default test file by name, such as "ca.crt" or
 // "client.root.key". It makes client certs for users not in TestUsers on
-// demand.
-func File(name string) ([]byte, bool) {
-	initEmbedded()
+// demand. It returns an error that oserror.IsNotExist accepts for an
+// unknown name.
+func File(name string) ([]byte, error) {
+	if err := initEmbedded(); err != nil {
+		return nil, err
+	}
 	if b, ok := embedded.files[name]; ok {
-		return b, true
+		return b, nil
 	}
-	if user, ok := strings.CutPrefix(name, "client."); ok {
-		if u, ok := strings.CutSuffix(user, ".crt"); ok {
-			return embedded.inter.ClientCert(Identity{CN: u}).CertPEM, true
-		}
-		if u, ok := strings.CutSuffix(user, ".key"); ok {
-			return embedded.inter.ClientCert(Identity{CN: u}).KeyPEM, true
-		}
+	user, ok := strings.CutPrefix(name, "client.")
+	if !ok {
+		return nil, oserror.ErrNotExist
 	}
-	return nil, false
+	var err error
+	_, inter := defaultCAs(func(e error) {
+		if err == nil {
+			err = e
+		}
+	})
+	if u, ok := strings.CutSuffix(user, ".crt"); ok {
+		b := inter.ClientCert(Identity{CN: u}).CertPEM
+		return b, err
+	}
+	if u, ok := strings.CutSuffix(user, ".key"); ok {
+		b := inter.ClientCert(Identity{CN: u}).KeyPEM
+		return b, err
+	}
+	return nil, oserror.ErrNotExist
 }
 
 // embeddedName returns the file name for a path in certconfig.EmbeddedDir.
@@ -102,19 +125,20 @@ var EmbeddedAssets = securityassets.Loader{
 		if !ok {
 			return os.ReadFile(path)
 		}
-		if b, ok := File(name); ok {
-			return b, nil
+		b, err := File(name)
+		if err != nil {
+			return nil, &fs.PathError{Op: "read", Path: path, Err: err}
 		}
-		return nil, &fs.PathError{Op: "read", Path: path, Err: oserror.ErrNotExist}
+		return b, nil
 	},
 	Stat: func(path string) (os.FileInfo, error) {
 		name, ok := embeddedName(path)
 		if !ok {
 			return os.Stat(path)
 		}
-		b, ok := File(name)
-		if !ok {
-			return nil, &fs.PathError{Op: "stat", Path: path, Err: oserror.ErrNotExist}
+		b, err := File(name)
+		if err != nil {
+			return nil, &fs.PathError{Op: "stat", Path: path, Err: err}
 		}
 		return fileInfo{name: name, size: int64(len(b))}, nil
 	},

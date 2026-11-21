@@ -436,6 +436,7 @@ func newTenantServer(
 
 	// Create the HTTP authentication server.
 	sAuth := authserver.NewServer(baseCfg.Config, sqlServer)
+	sHTTP.proxy.authServer = sAuth
 
 	// Create a drain server.
 	drainServer := newDrainServer(baseCfg, args.stopper, args.stopTrigger, args.grpc, sqlServer)

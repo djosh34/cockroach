@@ -11,6 +11,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
@@ -37,8 +38,8 @@ const RemoteNodeID = "remote_node_id"
 type nodeProxy struct {
 	scheme     string
 	rpcContext *rpc.Context
-	// authServer finds the user of a request before it is forwarded. Set by
-	// setupRoutes; nil in insecure mode.
+	// authServer finds the user of a request before it is forwarded. It is
+	// set when the server is made, before the HTTP listener starts.
 	authServer           authserver.Server
 	parseNodeID          ParseNodeIDFn
 	getNodeIDHTTPAddress GetNodeIDHTTPAddressFn
@@ -132,14 +133,28 @@ func (np *nodeProxy) routeToNode(
 		http.Error(w, httpErr.Error(), http.StatusBadRequest)
 		return
 	}
+	var forwardedUser *string
+	if r.TLS != nil {
+		// The other node sees this node's certificate, which is root. Name
+		// the request's own user, or none, so that it does not run as root.
+		if np.authServer == nil {
+			http.Error(w, "server: HTTP authentication is not set up yet", http.StatusServiceUnavailable)
+			return
+		}
+		var user string
+		if u, err := np.authServer.UserFromRequest(r); err == nil {
+			user = u.Normalized()
+		}
+		forwardedUser = &user
+	}
+	r = r.WithContext(context.WithValue(r.Context(), forwardedUserKey{}, forwardedUser))
+
 	proxy, ok := np.proxyCache.get(*addr)
 	if !ok {
 		u := url.URL{
 			Scheme: np.scheme,
 			Host:   addr.AddressField,
 		}
-		proxy = httputil.NewSingleHostReverseProxy(&u)
-
 		// This client is initialized with the TLS config we require in
 		// order to make requests to the HTTP server.
 		httpClient, err := np.rpcContext.GetHTTPClient()
@@ -149,21 +164,29 @@ func (np *nodeProxy) routeToNode(
 			}
 			panic(errors.Wrapf(err, "server: failed to get httpClient"))
 		}
-		proxy.Transport = httpClient.Transport
-		np.proxyCache.put(*addr, proxy)
-	}
-	if np.authServer != nil && r.TLS != nil {
-		// The other node sees this node's certificate, which is root. Name the
-		// request's own user, or none, so that it does not run as root.
-		var user string
-		if u, err := np.authServer.UserFromRequest(r); err == nil {
-			user = u.Normalized()
+		proxy = &httputil.ReverseProxy{
+			// Rewrite runs after the proxy has removed the hop-by-hop
+			// headers, so a client cannot make it drop the forwarded user
+			// by naming that header in Connection.
+			Rewrite: func(pr *httputil.ProxyRequest) {
+				pr.SetURL(&u)
+				pr.Out.Host = pr.In.Host
+				pr.Out.Header.Del(authserver.ForwardedUserHeader)
+				if user, _ := pr.In.Context().Value(forwardedUserKey{}).(*string); user != nil {
+					pr.Out.Header[authserver.ForwardedUserHeader] = []string{*user}
+				}
+			},
+			Transport: httpClient.Transport,
 		}
-		r = r.Clone(r.Context())
-		r.Header.Set(authserver.ForwardedUserHeader, user)
+		np.proxyCache.put(*addr, proxy)
 	}
 	proxy.ServeHTTP(w, r)
 }
+
+// forwardedUserKey is the context key of the user that routeToNode names in
+// the forwarded request: nil without TLS, where the other node has no
+// certificate to trust either.
+type forwardedUserKey struct{}
 
 // resetCookie only resets the cookie if one exists on the request
 func resetCookie(w http.ResponseWriter, req *http.Request) {

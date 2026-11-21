@@ -1148,6 +1148,7 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 
 	// Create the HTTP authentication server.
 	sAuth := authserver.NewServer(cfg.Config, sqlServer)
+	sHTTP.proxy.authServer = sAuth
 
 	// Create a drain server.
 	drain := newDrainServer(cfg.BaseConfig, stopper, stopTrigger, grpcServer, sqlServer)

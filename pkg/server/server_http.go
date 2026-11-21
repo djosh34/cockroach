@@ -106,7 +106,6 @@ func (s *httpServer) setupRoutes(
 	// if not disabled by configuration.
 	var authenticatedHandler = handleRequestsUnauthenticated
 	if !s.cfg.InsecureWebAccess() {
-		s.proxy.authServer = authnServer
 		authenticatedHandler = authserver.NewMux(authnServer, authenticatedHandler, false /* allowAnonymous */)
 	}
 
