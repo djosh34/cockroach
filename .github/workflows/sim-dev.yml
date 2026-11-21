@@ -1,0 +1,28 @@
+# Temporary: translates pkg/sim for gosim and runs its spike while outcome 10
+# is built. Removed before the PR merges.
+name: sim-dev
+
+on:
+  push:
+    branches: [work/58-simulation]
+
+permissions:
+  contents: read
+
+jobs:
+  spike:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+      - run: go build -C tools/gosim -o "$PWD/.gosim/bin/gosim" github.com/jellevandenhooff/gosim/cmd/gosim
+      - name: Translate
+        run: /usr/bin/time -v .gosim/bin/gosim translate -unimplemented "$RUNNER_TEMP/unimplemented.txt" ./pkg/sim
+      - name: Run the spike
+        run: /usr/bin/time -v .gosim/bin/gosim test -v -run TestSpike ./pkg/sim 2>&1 | tail -400
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spike
+          path: ${{ runner.temp }}/unimplemented.txt
