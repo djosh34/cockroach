@@ -86,6 +86,10 @@ func TestStmtProblems(t *testing.T) {
 		{"SELECT 1 FROM t JOIN u ON t.w::public.geometry IS NOT NULL WHERE t.w IS OF (defaultdb.public.geography)",
 			[]string{"uses the removed types GEOGRAPHY, GEOMETRY"}},
 		{"SELECT a::pg_catalog.box2d, b::other.geometry FROM t", []string{"uses the removed types BOX2D, GEOMETRY"}},
+		{"SELECT a::GEOMETRY FROM t", []string{"uses the removed type GEOMETRY"}},
+		// A quoted name in other case never named a spatial type.
+		{`SELECT a::my."Geometry", b::public."Geography" FROM t`, nil},
+		{"SELECT a::public.geometry FROM t", []string{"uses the removed type GEOMETRY"}},
 	} {
 		t.Run(tc.stmts, func(t *testing.T) {
 			require.Equal(t, tc.want, stmtProblems(tc.stmts, isMyFunc, isMyGeometry))
@@ -207,12 +211,29 @@ func TestCatalogProblems(t *testing.T) {
 	mc.UpsertDescriptor(typedesc.NewBuilder(&descpb.TypeDescriptor{
 		ID: 117, Name: "geometry", ParentID: 100, ParentSchemaID: 116, Kind: descpb.TypeDescriptor_ENUM,
 	}).BuildImmutable())
+	mc.UpsertDescriptor(typedesc.NewBuilder(&descpb.TypeDescriptor{
+		ID: 119, Name: "Geometry", ParentID: 100, ParentSchemaID: 116, Kind: descpb.TypeDescriptor_ENUM,
+	}).BuildImmutable())
+	// A type moved into public does not hide the spatial type of that name.
+	mc.UpsertDescriptor(typedesc.NewBuilder(&descpb.TypeDescriptor{
+		ID: 122, Name: "geography", ParentID: 100, ParentSchemaID: 101, Kind: descpb.TypeDescriptor_ENUM,
+	}).BuildImmutable())
+	// A type in another database does not hide the spatial type for a name
+	// without a database.
+	mc.UpsertDescriptor(schemadesc.NewBuilder(&descpb.SchemaDescriptor{
+		ID: 120, Name: "shop", ParentID: 110,
+	}).BuildImmutable())
+	mc.UpsertDescriptor(typedesc.NewBuilder(&descpb.TypeDescriptor{
+		ID: 121, Name: "geometry", ParentID: 110, ParentSchemaID: 120, Kind: descpb.TypeDescriptor_ENUM,
+	}).BuildImmutable())
 	mc.UpsertDescriptor(tabledesc.NewBuilder(&descpb.TableDescriptor{
 		ID: 118, Name: "casts", ParentID: 100, UnexposedParentSchemaID: 101,
 		Columns:      []descpb.ColumnDescriptor{{ID: 1, Name: "a", Type: types.Int}},
 		PrimaryIndex: primary,
 		ViewQuery: "SELECT 1 AS a FROM shop.public.customers AS c JOIN shop.public.customers AS d " +
-			"ON 'x'::my.geometry IS NOT NULL AND 'y'::shop.my.geometry IS NOT NULL AND 'z'::public.geometry IS NULL",
+			"ON 'x'::my.geometry IS NOT NULL AND 'y'::shop.my.geometry IS NOT NULL " +
+			`AND 'w'::shop.my."Geometry" IS NOT NULL AND 'v'::world.shop.geometry IS NOT NULL ` +
+			`AND 'z'::shop.geometry IS NULL AND 'u'::public.geography IS NULL`,
 	}).BuildImmutable())
 
 	require.Equal(t, []string{
@@ -233,7 +254,7 @@ func TestCatalogProblems(t *testing.T) {
 		`type world.public.crdb_internal_region: is a multi-region enum`,
 		`view shop.public.checks: the query calls the removed function fips_ready`,
 		`function shop.public.calls_other: the body calls the removed functions fips_ready, my_func, other.my_func`,
-		`view shop.public.casts: the query uses the removed type GEOMETRY`,
+		`view shop.public.casts: the query uses the removed types GEOGRAPHY, GEOMETRY`,
 	}, catalogProblems(mc.Catalog))
 }
 

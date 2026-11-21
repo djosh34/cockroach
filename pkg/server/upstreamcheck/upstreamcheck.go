@@ -33,6 +33,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/nstree"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
 	_ "github.com/cockroachdb/cockroach/pkg/sql/sem/builtins" // registers the builtins that names resolve to
+	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
 	"github.com/cockroachdb/cockroach/pkg/sql/types"
@@ -144,7 +145,6 @@ func catalogProblems(c nstree.Catalog) []string {
 		}
 		return nil
 	})
-	udt := udtMatcher(c, spatialNamed)
 	var found []string
 	_ = c.ForEachDescriptor(func(d catalog.Descriptor) error {
 		var problems []string
@@ -161,12 +161,12 @@ func catalogProblems(c nstree.Catalog) []string {
 					calls = append(calls, fn)
 				}
 			}
-			problems = tableProblems(d, udfMatcher(c, calls), udt)
+			problems = tableProblems(d, udfMatcher(c, calls), udtMatcher(c, spatialNamed, d.GetParentID()))
 		case catalog.TypeDescriptor:
 			problems = typeProblems(d)
 		case catalog.FunctionDescriptor:
 			// CockroachDB v23.2 lets no routine call a user-defined function.
-			problems = functionProblems(d, noUDFs, udt)
+			problems = functionProblems(d, noUDFs, udtMatcher(c, spatialNamed, d.GetParentID()))
 		}
 		if len(problems) == 0 {
 			return nil
@@ -215,17 +215,21 @@ type isUDT func(*tree.UnresolvedObjectName) bool
 // types by OID instead of by name.
 func noUDTs(*tree.UnresolvedObjectName) bool { return false }
 
-// udtMatcher returns an isUDT that matches the types typs. In CockroachDB
-// v23.2 an unqualified geometry, geography or box2d is the spatial type, a
-// keyword of the grammar, so only a name with a schema can match.
-func udtMatcher(c nstree.Catalog, typs []catalog.Descriptor) isUDT {
+// udtMatcher returns an isUDT that matches the types typs, for a view or
+// routine in database db. In CockroachDB v23.2 an unqualified geometry,
+// geography or box2d is the spatial type, a keyword of the grammar, and so is
+// one in public or pg_catalog, even when a user-defined type of that name was
+// moved into public. A name without a database is in db.
+func udtMatcher(c nstree.Catalog, typs []catalog.Descriptor, db descpb.ID) isUDT {
 	return func(n *tree.UnresolvedObjectName) bool {
-		if n.NumParts == 1 {
+		if n.NumParts == 1 || n.Schema() == catconstants.PublicSchemaName ||
+			n.Schema() == catconstants.PgCatalogName {
 			return false
 		}
 		for _, typ := range typs {
 			if typ.GetName() == n.Object() && schemaName(c, typ) == n.Schema() &&
-				(n.NumParts < 3 || dbName(c, typ) == n.Catalog()) {
+				(n.NumParts == 3 && dbName(c, typ) == n.Catalog() ||
+					n.NumParts == 2 && typ.GetParentID() == db) {
 				return true
 			}
 		}
@@ -357,7 +361,9 @@ func stmtProblems(s string, udf isUDF, udt isUDT) []string {
 	return callProblems(asts, udf, udt)
 }
 
-// removedTypes are the names of the removed spatial types.
+// removedTypes are the names of the removed spatial types. The parser
+// lowercases unquoted names, and a quoted name in other case, such as
+// "Geometry", never named a spatial type, so names compare exactly.
 var removedTypes = map[string]bool{"geometry": true, "geography": true, "box2d": true}
 
 // callProblems describes the functions that the syntax tree node calls and
@@ -401,8 +407,8 @@ func callProblems(node interface{}, udf isUDF, udt isUDT) []string {
 		}
 		switch t := ref.(type) {
 		case *tree.UnresolvedObjectName:
-			if name := strings.ToLower(t.Object()); removedTypes[name] && !udt(t) {
-				removed[strings.ToUpper(name)] = true
+			if removedTypes[t.Object()] && !udt(t) {
+				removed[strings.ToUpper(t.Object())] = true
 			}
 		case *types.T:
 			if t.ContainsRemovedSpatialType() {
