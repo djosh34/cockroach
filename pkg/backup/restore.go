@@ -71,8 +71,8 @@ import (
 
 // restoredSystemTables are the system tables whose rows a cluster restore
 // brings back, by name. descriptor and namespace are handled on their own.
-// descriptor_id_seq is not copied: the claim raised it past the backup's
-// value.
+// descriptor_id_seq is not copied: the claim raised it to at least the
+// backup's value.
 var restoredSystemTables = []catconstants.SystemTableName{
 	catconstants.UsersTableName,
 	catconstants.RoleMembersTableName,
@@ -182,8 +182,8 @@ func (r *restoreResumer) CollectProfile(context.Context, interface{}) error { re
 // writes into this cluster's catalog. The claim is the descriptor ID
 // sequence: a cluster can be claimed only while the sequence is where a new
 // cluster has it, so no table was ever created in it and no other restore
-// claimed it, and claiming it raises the sequence past that value and past
-// the backup's next ID, raiseTo. The check and the raise are one
+// claimed it, and claiming it raises the sequence past that value and to
+// at least the backup's next ID, raiseTo. The check and the raise are one
 // transaction, so of a concurrent CREATE TABLE or restore one fails. The
 // job marks itself as the owner in the same transaction (a fraction
 // completed above 0) and does not check again when it resumes. With
