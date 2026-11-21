@@ -324,6 +324,18 @@ func TestRestoreToPointsInTime(t *testing.T) {
 			b.Bucket, b.Prefix, b.Endpoint, b.Region, "")
 	})
 
+	t.Run("a cluster with a re-created postgres", func(t *testing.T) {
+		dst, dstDB := startServer(t, nil)
+		defer dst.Stopper().Stop(ctx)
+		// The new postgres takes new IDs, so the cluster is not new.
+		dstDB.Exec(t, `DROP DATABASE postgres`)
+		dstDB.Exec(t, `CREATE DATABASE postgres`)
+		sys := sqlutils.MakeSQLRunner(dst.ApplicationLayer().SQLConn(t, serverutils.DBName("system")))
+		sys.ExpectErr(t, "this cluster has handed out descriptor IDs",
+			`SELECT crdb_internal.restore_cluster($1, $2, $3, $4, $5)`,
+			b.Bucket, b.Prefix, b.Endpoint, b.Region, "")
+	})
+
 	t.Run("a cluster that is not empty", func(t *testing.T) {
 		dst, dstDB := startServer(t, nil)
 		defer dst.Stopper().Stop(ctx)
