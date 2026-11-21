@@ -86,15 +86,6 @@ func (c Config) CheckNode() error {
 	return nil
 }
 
-// CheckSQLClient returns an error if a field that a SQL client needs is
-// empty.
-func (c Config) CheckSQLClient() error {
-	if c.ClientCert == "" || c.NodeCA == "" {
-		return errors.New("the config file needs client-cert, client-key and node-ca to connect to SQL")
-	}
-	return nil
-}
-
 // EmbeddedDir is the directory of the test certificates that the
 // securitytest package serves from memory.
 const EmbeddedDir = "test_certs"

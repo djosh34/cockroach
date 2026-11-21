@@ -361,8 +361,6 @@ gen_mocks() {
     InternalClient,Internal_RangeFeedClient,Internal_MuxRangeFeedClient
   mockgen -package rpc -self_package $p/rpc \
     -destination pkg/rpc/mocks_generated_test.go $p/rpc Dialbacker
-  mockgen -package certmgr \
-    -destination pkg/security/certmgr/mocks_generated_test.go $p/security/certmgr Cert
   mockgen -package scexec_test \
     -destination pkg/sql/schemachanger/scexec/mocks_generated_test.go $p/sql/schemachanger/scexec \
     Catalog,Dependencies,Backfiller,Merger,BackfillerTracker,IndexSpanSplitter,PeriodicProgressFlusher

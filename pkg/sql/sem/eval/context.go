@@ -159,7 +159,6 @@ type Context struct {
 
 	Tenant TenantOperator
 
-
 	Gossip GossipOperator
 
 	PreparedStatementState PreparedStatementState

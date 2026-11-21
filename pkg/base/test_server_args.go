@@ -97,12 +97,12 @@ type TestServerArgs struct {
 	ExternalIODirConfig ExternalIODirConfig
 
 	// Fields copied to the server.Config.
-	Insecure                    bool
-	RetryOptions                retry.Options // TODO(tbg): make testing knob.
-	SocketFile                  string
-	ScanInterval                time.Duration
-	ScanMinIdleTime             time.Duration
-	ScanMaxIdleTime             time.Duration
+	Insecure        bool
+	RetryOptions    retry.Options // TODO(tbg): make testing knob.
+	SocketFile      string
+	ScanInterval    time.Duration
+	ScanMinIdleTime time.Duration
+	ScanMaxIdleTime time.Duration
 	// Certs names the cert, key, CA and rules files. If empty, the server
 	// uses the default test certificates.
 	Certs                       certconfig.Config

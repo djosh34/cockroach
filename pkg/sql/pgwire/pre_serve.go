@@ -422,11 +422,7 @@ func (s *PreServeConnHandler) PreServe(
 // maybeUpgradeToSecureConn upgrades the connection to TLS/SSL if
 // requested by the client, and available in the server configuration.
 func (s *PreServeConnHandler) maybeUpgradeToSecureConn(
-	ctx context.Context,
-	conn net.Conn,
-	connType ConnType,
-	version uint32,
-	buf *pgwirebase.ReadBuffer,
+	ctx context.Context, conn net.Conn, connType ConnType, version uint32, buf *pgwirebase.ReadBuffer,
 ) (newConn net.Conn, newConnType ConnType, newVersion uint32, clientErr, serverErr error) {
 	// By default, this is a no-op.
 	newConn = conn

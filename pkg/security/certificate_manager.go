@@ -96,11 +96,6 @@ func NewCertificateManager(
 	return cm, nil
 }
 
-// Config returns the config the manager was made from.
-func (cm *CertificateManager) Config() certconfig.Config {
-	return cm.cfg
-}
-
 // Metrics returns the metrics struct.
 func (cm *CertificateManager) Metrics() Metrics {
 	return cm.certMetrics
@@ -216,17 +211,6 @@ func (cm *CertificateManager) ListCertificates() []CertFile {
 func (cm *CertificateManager) NodeCert() *x509.Certificate {
 	if n := cm.cur.Load().node; n != nil {
 		return n.Leaf
-	}
-	return nil
-}
-
-// NodeCAPEM returns the contents of the node CA file. SQL and HTTP clients
-// verify nodes with it.
-func (cm *CertificateManager) NodeCAPEM() []byte {
-	for _, f := range cm.cur.Load().files {
-		if f.Usage == CAPem {
-			return f.Contents
-		}
 	}
 	return nil
 }
@@ -429,7 +413,9 @@ func (cm *CertificateManager) VerifyNode(certs []*x509.Certificate, usage x509.E
 // ClientRoles returns the roles that a SQL or HTTP client certificate maps
 // to through the client rules, in rule order. It returns an error if the
 // certificate does not chain to the client CA or matches no client rule.
-func (cm *CertificateManager) ClientRoles(certs []*x509.Certificate) ([]username.SQLUsername, error) {
+func (cm *CertificateManager) ClientRoles(
+	certs []*x509.Certificate,
+) ([]username.SQLUsername, error) {
 	s := cm.cur.Load()
 	if err := cm.verifyPeer(certs, s.clientCAs, x509.ExtKeyUsageClientAuth); err != nil {
 		return nil, errors.Wrap(err, "verifying client certificate")
@@ -573,30 +559,4 @@ func (cm *CertificateManager) NodeClientTLSConfig() (*tls.Config, error) {
 		return cm.VerifyNode(cs.PeerCertificates, x509.ExtKeyUsageServerAuth)
 	}
 	return cfg, nil
-}
-
-// SQLClientTLSConfig is the config of a SQL or HTTP client that uses the
-// client cert from the config file. It verifies the server's cert against
-// the node CA and the host name, like sslmode=verify-full.
-func (cm *CertificateManager) SQLClientTLSConfig(serverName string) (*tls.Config, error) {
-	s := cm.cur.Load()
-	if s.client == nil {
-		return nil, errors.New("the config file names no client cert")
-	}
-	if s.nodeCAs == nil {
-		return nil, errors.New("the config file names no node CA")
-	}
-	cfg := cm.baseTLSConfig()
-	cfg.Certificates = []tls.Certificate{*s.client}
-	cfg.RootCAs = s.nodeCAs
-	cfg.ServerName = serverName
-	return cfg, nil
-}
-
-// ClientCert returns the leaf of the client cert, or nil.
-func (cm *CertificateManager) ClientCert() *x509.Certificate {
-	if c := cm.cur.Load().client; c != nil {
-		return c.Leaf
-	}
-	return nil
 }

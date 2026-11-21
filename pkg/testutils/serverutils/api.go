@@ -425,7 +425,6 @@ type ApplicationLayerInterface interface {
 	// SetReady changes the SQL readiness.
 	SetReady(bool)
 
-
 	// PrivilegeChecker returns the privilege checker in use by the HTTP
 	// server. The concrete return value is of type
 	// privchecker.SQLPrivilegeChecker (interface).

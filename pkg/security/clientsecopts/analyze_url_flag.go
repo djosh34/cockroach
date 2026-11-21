@@ -10,9 +10,7 @@
 
 package clientsecopts
 
-import (
-	"github.com/cockroachdb/cockroach/pkg/server/pgurl"
-)
+import "github.com/cockroachdb/cockroach/pkg/server/pgurl"
 
 // CLIFlagInterfaceForClientURL is an interface to the state of the
 // variables attached to discrete flags (e.g. --host, --insecure)
