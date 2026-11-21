@@ -63,6 +63,18 @@ func openStore(t *testing.T, b *certconfig.Backup) *backup.Store {
 	return s
 }
 
+// waitFirstFull waits for the first full backup, which the AUTO BACKUP job
+// takes when it starts.
+func waitFirstFull(t *testing.T, s *backup.Store) {
+	testutils.SucceedsWithin(t, func() error {
+		fulls, _, err := backup.FullBackups(context.Background(), s)
+		if err == nil && len(fulls) == 0 {
+			err = errors.New("no full backup yet")
+		}
+		return err
+	}, time.Minute)
+}
+
 // waitRestorable waits until the repository can restore to ts.
 func waitRestorable(t *testing.T, s *backup.Store, ts hlc.Timestamp) {
 	testutils.SucceedsWithin(t, func() error {
@@ -139,6 +151,7 @@ func TestRestoreToPointsInTime(t *testing.T) {
 
 	src, db := startServer(t, b)
 	defer src.Stopper().Stop(ctx)
+	waitFirstFull(t, store)
 
 	type point struct {
 		ts   hlc.Timestamp

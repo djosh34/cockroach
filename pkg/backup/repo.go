@@ -122,12 +122,12 @@ func FormatTime(ts hlc.Timestamp) string {
 func claim(ctx context.Context, s *Store, clusterID string) error {
 	o, err := readOwner(ctx, s)
 	if errors.Is(err, ErrNotFound) {
-		b, err := json.Marshal(owner{ClusterID: clusterID})
-		if err != nil {
-			return err
+		b, merr := json.Marshal(owner{ClusterID: clusterID})
+		if merr != nil {
+			return merr
 		}
-		if err := s.Put(ctx, ownerName, strings.NewReader(string(b))); err != nil {
-			return err
+		if perr := s.Put(ctx, ownerName, strings.NewReader(string(b))); perr != nil {
+			return perr
 		}
 		o, err = readOwner(ctx, s)
 	}

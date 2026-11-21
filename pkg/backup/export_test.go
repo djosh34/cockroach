@@ -10,5 +10,15 @@
 
 package backup
 
+import "context"
+
 // FullBackups exports fullBackups to the tests.
 var FullBackups = fullBackups
+
+// SegmentNumbers exports segmentNumbers to the tests.
+var SegmentNumbers = segmentNumbers
+
+// ReadSegmentHeader reads the header of segment n.
+func ReadSegmentHeader(ctx context.Context, s *Store, n int64) (SegmentHeader, error) {
+	return readSegment(ctx, s, n, true /* headerOnly */, nil)
+}
