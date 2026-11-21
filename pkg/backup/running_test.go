@@ -31,8 +31,9 @@ import (
 // TestRestoreRunningChanges restores to a time when schema changes, an
 // IMPORT INTO and an ALTER TYPE were running. The restored cluster must
 // finish the schema changes, bring the import's table back with its rows
-// from before the import, and keep a materialized view's rows and a TTL
-// table's schedule.
+// from before the import, leave out the CREATE TABLE AS and materialized
+// view that were being created, and keep a materialized view's rows and a
+// TTL table's schedule.
 func TestRestoreRunningChanges(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	defer log.Scope(t).Close(t)
@@ -53,6 +54,8 @@ func TestRestoreRunningChanges(t *testing.T) {
 	db.Exec(t, `INSERT INTO b SELECT generate_series(1, 20)`)
 	db.Exec(t, `CREATE TABLE p (k INT PRIMARY KEY)`)
 	db.Exec(t, `INSERT INTO p VALUES (1)`)
+	db.Exec(t, `CREATE TABLE s (k INT PRIMARY KEY)`)
+	db.Exec(t, `INSERT INTO s SELECT generate_series(1, 10)`)
 	db.Exec(t, `CREATE MATERIALIZED VIEW mv AS SELECT k, v FROM a WHERE k <= 5`)
 	db.Exec(t, `CREATE TABLE ttl (k INT PRIMARY KEY) WITH (ttl_expire_after = '10 hours')`)
 	db.Exec(t, `CREATE TABLE imp (k INT PRIMARY KEY)`)
@@ -74,6 +77,9 @@ func TestRestoreRunningChanges(t *testing.T) {
 		`SET use_declarative_schema_changer = off; ALTER TABLE b ADD COLUMN w INT NOT NULL DEFAULT 5`,
 		// A table in the ADD state, with a reference from its parent.
 		`CREATE TABLE child (k INT PRIMARY KEY, p_k INT REFERENCES p (k))`,
+		// Tables being created and filled by a query: left out.
+		`CREATE TABLE ctas AS SELECT k FROM s`,
+		`CREATE MATERIALIZED VIEW mv2 AS SELECT k FROM s WHERE k <= 3`,
 		// A legacy type change.
 		`ALTER TYPE e ADD VALUE 'y'`,
 		// An import that has written its rows.
@@ -122,6 +128,9 @@ func TestRestoreRunningChanges(t *testing.T) {
 		return nil
 	})
 	dstDB.CheckQueryResults(t, `SELECT count(*) FROM crdb_internal.invalid_objects`, [][]string{{"0"}})
+	dstDB.CheckQueryResults(t,
+		`SELECT count(*) FROM [SHOW TABLES] WHERE table_name IN ('ctas', 'mv2')`, [][]string{{"0"}})
+	dstDB.Exec(t, `DROP TABLE s`)
 	dstDB.CheckQueryResults(t, `SELECT count(*), sum(v) FROM a@a_v`, [][]string{{"50", "12750"}})
 	dstDB.CheckQueryResults(t, `SELECT count(*) FROM b WHERE w = 5`, [][]string{{"20"}})
 	dstDB.Exec(t, `INSERT INTO child VALUES (1, 1)`)

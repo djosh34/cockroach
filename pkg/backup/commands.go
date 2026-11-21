@@ -114,10 +114,10 @@ func Check(ctx context.Context, s *Store, name string, w io.Writer) error {
 		have[n] = true
 	}
 	// restart reports whether a full backup starts the archive again at
-	// segment n, at time start.
-	restart := func(n int64, start hlc.Timestamp) bool {
+	// segment n, at time start, after a gap that follows prevEnd.
+	restart := func(n int64, start, prevEnd hlc.Timestamp) bool {
 		for _, f := range fulls {
-			if f.AfterSegment == n-1 && f.EndTime == start {
+			if f.AfterSegment == n-1 && f.EndTime == start && prevEnd.Less(start) {
 				return true
 			}
 		}
@@ -131,7 +131,7 @@ func Check(ctx context.Context, s *Store, name string, w io.Writer) error {
 			return err
 		}
 		if h.Start != prevEnd {
-			if !restart(n, h.Start) {
+			if !restart(n, h.Start, prevEnd) {
 				return errors.Newf("segment %d starts at %s, but segment %d ended at %s",
 					n, FormatTime(h.Start), n-1, FormatTime(prevEnd))
 			}

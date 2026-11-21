@@ -28,6 +28,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catalogkeys"
+	"github.com/cockroachdb/cockroach/pkg/sql/catalog/dbdesc"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descbuilder"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
@@ -36,6 +37,8 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/typedesc"
 	"github.com/cockroachdb/cockroach/pkg/sql/schemachanger/scbackup"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
+	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
+	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
 	"github.com/cockroachdb/cockroach/pkg/storage"
 	"github.com/cockroachdb/cockroach/pkg/util/encoding"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
@@ -58,7 +61,8 @@ import (
 // catalog and the system tables in one transaction.
 //
 // Objects that were being dropped at the target time are left out, since
-// they were not visible then. A table that was taken offline by an IMPORT
+// they were not visible then, and so are CREATE TABLE AS tables and
+// materialized views that were being created; references to them go. A table that was taken offline by an IMPORT
 // INTO comes back online with the data it had before the import; a table
 // that the import itself created is left out. Schema changes that were
 // running at the target time, including tables being created, get new jobs
@@ -129,7 +133,8 @@ func (r *restoreResumer) Resume(ctx context.Context, execCtx interface{}) error 
 		return errors.Newf("the backup has cluster version %s and this cluster %s; they must be the same",
 			c.full.ClusterVersion, v)
 	}
-	if err := checkEmpty(ctx, execCfg); err != nil {
+	// Fail early; claimCluster checks again before any row is written.
+	if err := claimCluster(ctx, execCfg, r.job, 0); err != nil {
 		return err
 	}
 	log.Infof(ctx, "restoring to %s from full backup %s and %d segments",
@@ -150,7 +155,11 @@ func (r *restoreResumer) Resume(ctx context.Context, execCtx interface{}) error 
 	if err != nil {
 		return err
 	}
-	if err := reserveIDs(ctx, execCfg, eng, src); err != nil {
+	backupNext, err := src.nextDescID(ctx, eng)
+	if err != nil {
+		return err
+	}
+	if err := claimCluster(ctx, execCfg, r.job, backupNext); err != nil {
 		return err
 	}
 	if err := ingestTables(ctx, execCfg, eng, src); err != nil {
@@ -160,22 +169,62 @@ func (r *restoreResumer) Resume(ctx context.Context, execCtx interface{}) error 
 }
 
 // OnFailOrCancel implements jobs.Resumer. The rows written so far have no
-// descriptors and stay invisible: the descriptor ID sequence was raised past
-// their IDs before they were written, so no new object gets them.
+// descriptors. No new object gets their IDs, since the descriptor ID
+// sequence was raised past them first, and no other restore can run in
+// this cluster; restore into a new cluster instead.
 func (r *restoreResumer) OnFailOrCancel(context.Context, interface{}, error) error { return nil }
 
 // CollectProfile implements jobs.Resumer.
 func (r *restoreResumer) CollectProfile(context.Context, interface{}) error { return nil }
 
-// checkEmpty returns an error if the cluster has user objects other than
-// the pre-loaded defaultdb and postgres.
-func checkEmpty(ctx context.Context, execCfg *sql.ExecutorConfig) error {
+// claimCluster makes sure that this restore is the only thing that
+// writes into this cluster's catalog: that the cluster has no user objects
+// besides the pre-loaded defaultdb and postgres, and that no other restore
+// is running or has claimed the cluster, even one that failed later and
+// left rows behind. With raiseTo > 0 it claims the cluster: in the same
+// transaction, before any row is written, it marks the job as claimed (a
+// fraction completed above 0) and raises the descriptor ID sequence to
+// raiseTo, so that no object created later gets the ID of a restored table.
+func claimCluster(
+	ctx context.Context, execCfg *sql.ExecutorConfig, job *jobs.Job, raiseTo int64,
+) error {
 	return execCfg.InternalDB.DescsTxn(ctx, func(ctx context.Context, txn descs.Txn) error {
 		all, err := txn.Descriptors().GetAllDescriptors(ctx, txn.KV())
 		if err != nil {
 			return err
 		}
-		return onlyPreloaded(all)
+		if err := onlyPreloaded(all); err != nil {
+			return err
+		}
+		row, err := txn.QueryRowEx(ctx, "other-cluster-restores", txn.KV(), sessiondata.NodeUserSessionDataOverride,
+			`SELECT count(*) FROM crdb_internal.jobs WHERE job_type = $1 AND job_id != $2
+			 AND (status NOT IN ('failed', 'canceled') OR fraction_completed > 0)`,
+			jobspb.TypeClusterRestore.String(), job.ID())
+		if err != nil {
+			return err
+		}
+		if n := tree.MustBeDInt(row[0]); n > 0 {
+			return errors.New("another restore is running or has written into this cluster; restore into a new cluster")
+		}
+		if raiseTo == 0 {
+			return nil
+		}
+		if err := job.WithTxn(txn).FractionProgressed(ctx, jobs.FractionUpdater(claimedFraction)); err != nil {
+			return err
+		}
+		key := codec.SequenceKey(keys.DescIDSequenceID)
+		res, err := txn.KV().Get(ctx, key)
+		if err != nil {
+			return err
+		}
+		next, err := res.Value.GetInt()
+		if err != nil {
+			return err
+		}
+		if next >= raiseTo {
+			return nil
+		}
+		return txn.KV().Put(ctx, key, raiseTo)
 	})
 }
 
@@ -201,42 +250,25 @@ func onlyPreloaded(all nstree.Catalog) error {
 	})
 }
 
-// reserveIDs raises this cluster's descriptor ID sequence to the backup's
-// value before any row is written, so that no object created during or
-// after the restore gets the ID of a restored table.
-func reserveIDs(
-	ctx context.Context, execCfg *sql.ExecutorConfig, eng storage.Engine, src *sourceCatalog,
-) error {
+// claimedFraction is the fraction completed of a restore that has claimed
+// its cluster.
+const claimedFraction = 0.01
+
+// nextDescID returns the value of the backup's descriptor ID sequence at
+// the target: the first ID that no object of the backup has.
+func (src *sourceCatalog) nextDescID(ctx context.Context, eng storage.Engine) (int64, error) {
 	srcID, ok := src.systemIDs[string(catconstants.DescIDSequenceTableName)]
 	if !ok {
-		return errors.New("the backup has no descriptor ID sequence")
+		return 0, errors.New("the backup has no descriptor ID sequence")
 	}
 	res, err := storage.MVCCGet(ctx, eng, codec.SequenceKey(uint32(srcID)), src.target, storage.MVCCGetOptions{})
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if res.Value == nil {
-		return errors.New("the backup's descriptor ID sequence has no value")
+		return 0, errors.New("the backup's descriptor ID sequence has no value")
 	}
-	backupNext, err := res.Value.GetInt()
-	if err != nil {
-		return err
-	}
-	return execCfg.DB.Txn(ctx, func(ctx context.Context, txn *kv.Txn) error {
-		key := codec.SequenceKey(keys.DescIDSequenceID)
-		kv, err := txn.Get(ctx, key)
-		if err != nil {
-			return err
-		}
-		next, err := kv.Value.GetInt()
-		if err != nil {
-			return err
-		}
-		if next >= backupNext {
-			return nil
-		}
-		return txn.Put(ctx, key, backupNext)
-	})
+	return res.Value.GetInt()
 }
 
 // removeAll removes a temporary folder and logs a failure.
@@ -381,7 +413,46 @@ func readCatalog(
 		}); err != nil {
 		return nil, errors.Wrap(err, "reading the descriptors of the backup")
 	}
+	for _, desc := range src.restored {
+		src.dropReferences(desc)
+	}
 	return src, nil
+}
+
+// dropReferences removes from desc the references to objects that are not
+// restored.
+func (src *sourceCatalog) dropReferences(desc catalog.MutableDescriptor) {
+	switch d := desc.(type) {
+	case *tabledesc.Mutable:
+		refs := d.DependedOnBy[:0]
+		for _, r := range d.DependedOnBy {
+			if !src.skipped[r.ID] {
+				refs = append(refs, r)
+			}
+		}
+		d.DependedOnBy = refs
+		fks := d.InboundFKs[:0]
+		for _, fk := range d.InboundFKs {
+			if !src.skipped[fk.OriginTableID] {
+				fks = append(fks, fk)
+			}
+		}
+		d.InboundFKs = fks
+	case *typedesc.Mutable:
+		ids := d.ReferencingDescriptorIDs[:0]
+		for _, id := range d.ReferencingDescriptorIDs {
+			if !src.skipped[id] {
+				ids = append(ids, id)
+			}
+		}
+		d.ReferencingDescriptorIDs = ids
+	case *dbdesc.Mutable:
+		for name, sc := range d.Schemas {
+			if src.skipped[sc.ID] {
+				delete(d.Schemas, name)
+			}
+		}
+	}
 }
 
 // restore decides whether desc is restored and changes it as needed.
@@ -390,7 +461,12 @@ func (src *sourceCatalog) restore(desc catalog.MutableDescriptor) bool {
 	case desc.Dropped():
 		return false
 	case desc.Adding():
-		// Its schema change job writes its rows, if it has any.
+		if tbl, ok := desc.(*tabledesc.Mutable); ok && (tbl.IsAs() || tbl.MaterializedView()) {
+			// A CREATE TABLE AS or materialized view that had not returned:
+			// its job would run its query at a time of the source cluster.
+			return false
+		}
+		// Its schema change job finishes it; it has no rows yet.
 		src.noRows[desc.GetID()] = true
 	case desc.Offline():
 		tbl, ok := desc.(*tabledesc.Mutable)

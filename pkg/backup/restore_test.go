@@ -297,6 +297,14 @@ func TestRestoreToPointsInTime(t *testing.T) {
 		sys.ExpectErr(t, "is after the last restorable time",
 			`SELECT crdb_internal.restore_cluster($1, $2, $3, $4, $5)`,
 			b.Bucket, b.Prefix, b.Endpoint, b.Region, future.AsOfSystemTime())
+		// That job failed before it wrote anything, so it does not stop a
+		// restore into this cluster. A second restore after that one is
+		// refused.
+		sys.Exec(t, `SELECT crdb_internal.restore_cluster($1, $2, $3, $4, $5)`,
+			b.Bucket, b.Prefix, b.Endpoint, b.Region, "")
+		sys.ExpectErr(t, "the cluster is not empty",
+			`SELECT crdb_internal.restore_cluster($1, $2, $3, $4, $5)`,
+			b.Bucket, b.Prefix, b.Endpoint, b.Region, "")
 	})
 
 	t.Run("a cluster that is not empty", func(t *testing.T) {
