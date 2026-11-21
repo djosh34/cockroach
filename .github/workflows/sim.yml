@@ -80,7 +80,8 @@ jobs:
       - uses: ./.github/actions/setup-go
       # gosim keeps its translation of each package in this database, so a
       # build translates only the packages that changed since the last one.
-      - uses: actions/cache@v4
+      # It is saved even when the build fails, for the next try.
+      - uses: actions/cache/restore@v4
         with:
           path: .gosim/cache.sqlite3
           key: sim-gosim-${{ github.sha }}
@@ -88,6 +89,11 @@ jobs:
       - run: build/sim-build.sh bin/sim
         env:
           PLANTED: ${{ inputs.planted == 'all' && '1' || '' }}
+      - if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .gosim/cache.sqlite3
+          key: sim-gosim-${{ github.sha }}
       - uses: actions/upload-artifact@v4
         with:
           name: sim-bin
