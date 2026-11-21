@@ -790,7 +790,8 @@ restorable time if empty.`,
 		Description: `
 Path to the config file. It names the node certificate and key, the node CA,
 the client CA and the identity rules file, and optionally holds a backup
-section. A secure node needs it.`,
+section. A secure node needs it; an insecure node reads only the backup
+section.`,
 	}
 
 	MaxOffset = FlagInfo{

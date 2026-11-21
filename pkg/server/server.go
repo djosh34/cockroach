@@ -1817,13 +1817,13 @@ func (s *topLevelServer) PreStart(ctx context.Context) error {
 		); err != nil {
 			return err
 		}
-		mismatched := metric.NewGauge(metaBackupConfigMismatchedNodes)
-		s.nodeRegistry.AddMetric(mismatched)
-		if err := startBackupConfigGossip(
-			workersCtx, s.stopper, s.gossip, s.NodeID(), s.cfg.Certs.Backup, mismatched,
-		); err != nil {
-			return err
-		}
+	}
+	mismatched := metric.NewGauge(metaBackupConfigMismatchedNodes)
+	s.nodeRegistry.AddMetric(mismatched)
+	if err := startBackupConfigGossip(
+		workersCtx, s.stopper, s.gossip, s.NodeID(), s.cfg.Certs.Backup, mismatched,
+	); err != nil {
+		return err
 	}
 	s.replicationReporter.Start(workersCtx, s.stopper)
 

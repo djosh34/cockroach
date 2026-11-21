@@ -147,15 +147,27 @@ func parseRestoreTarget(s string) (hlc.Timestamp, error) {
 	return ts, nil
 }
 
+// backupConfigFile is the --config of backup info, check and expire.
+var backupConfigFile string
+
 // withBackupStore opens the repository named in the backup section of the
 // --config file and calls f.
 func withBackupStore(f func(context.Context, *backup.Store, *certconfig.Backup) error) error {
-	if cliCtx.configFile == "" {
+	path := backupConfigFile
+	if path == "" {
+		// backup restore, a client command.
+		path = cliCtx.configFile
+	}
+	if path == "" {
 		return errors.New("--config is required")
 	}
-	b := baseCfg.Certs.Backup
+	c, err := certconfig.Load(path)
+	if err != nil {
+		return err
+	}
+	b := c.Backup
 	if b == nil {
-		return errors.Newf("%s has no backup section", cliCtx.configFile)
+		return errors.Newf("%s has no backup section", path)
 	}
 	ctx := context.Background()
 	s, err := backup.OpenStore(ctx, backup.RepositoryOf(b))

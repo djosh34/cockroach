@@ -116,7 +116,8 @@ backup:
   keep-full: 2                       # full backups to keep
 ```
 
-S3 credentials come from each node's environment through the AWS SDK's
+An insecure node reads only the backup section of `--config`. S3
+credentials come from each node's environment through the AWS SDK's
 default chain (`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, a profile, or
 an instance role). With an `endpoint` the client uses path-style requests.
 Every node should have the same section: nodes share it, and a node whose
