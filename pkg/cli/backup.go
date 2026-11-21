@@ -121,12 +121,9 @@ func runBackupRestore(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 		defer func() { _ = conn.Close() }()
-		var targetArg string
-		if !target.IsEmpty() {
-			targetArg = target.AsOfSystemTime()
-		}
+		// Send the time printed above, not "latest", which may have moved.
 		row, err := conn.QueryRow(ctx, `SELECT crdb_internal.restore_cluster($1, $2, $3, $4, $5)`,
-			b.Bucket, b.Prefix, b.Endpoint, b.Region, targetArg)
+			b.Bucket, b.Prefix, b.Endpoint, b.Region, to.AsOfSystemTime())
 		if err != nil {
 			return err
 		}

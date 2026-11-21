@@ -49,14 +49,18 @@ func backupSection(t *testing.T) *certconfig.Backup {
 }
 
 func startServer(
-	t *testing.T, b *certconfig.Backup,
+	t *testing.T, b *certconfig.Backup, opts ...func(*base.TestServerArgs),
 ) (serverutils.TestServerInterface, *sqlutils.SQLRunner) {
 	certs := certconfig.Embedded()
 	certs.Backup = b
-	s, db, _ := serverutils.StartServer(t, base.TestServerArgs{
+	args := base.TestServerArgs{
 		Certs:             certs,
 		DefaultTestTenant: base.TestIsSpecificToStorageLayerAndNeedsASystemTenant,
-	})
+	}
+	for _, o := range opts {
+		o(&args)
+	}
+	s, db, _ := serverutils.StartServer(t, args)
 	return s, sqlutils.MakeSQLRunner(db)
 }
 

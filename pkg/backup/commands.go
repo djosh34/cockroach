@@ -14,6 +14,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"path"
 
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
 	"github.com/cockroachdb/errors"
@@ -75,7 +76,9 @@ func Info(ctx context.Context, s *Store, w io.Writer) error {
 
 // Check reads the full backup named name, or the last one if name is
 // empty, and every segment of its chain, and verifies their checksums and
-// that the segments follow each other.
+// that the segments follow each other. The chain may end only at the last
+// segment, or where a later full backup starts the archive again; any
+// other gap is an error.
 func Check(ctx context.Context, s *Store, name string, w io.Writer) error {
 	fulls, _, err := fullBackups(ctx, s)
 	if err != nil {
@@ -110,6 +113,16 @@ func Check(ctx context.Context, s *Store, name string, w io.Writer) error {
 	for _, n := range nums {
 		have[n] = true
 	}
+	// restart reports whether a full backup starts the archive again at
+	// segment n, at time start.
+	restart := func(n int64, start hlc.Timestamp) bool {
+		for _, f := range fulls {
+			if f.AfterSegment == n-1 && f.EndTime == start {
+				return true
+			}
+		}
+		return false
+	}
 	prevEnd := m.EndTime
 	n := m.AfterSegment + 1
 	for ; have[n]; n++ {
@@ -118,21 +131,30 @@ func Check(ctx context.Context, s *Store, name string, w io.Writer) error {
 			return err
 		}
 		if h.Start != prevEnd {
-			fmt.Fprintf(w, "segment %d starts at %s, not where the one before ended; the chain ends there\n",
-				n, FormatTime(h.Start))
+			if !restart(n, h.Start) {
+				return errors.Newf("segment %d starts at %s, but segment %d ended at %s",
+					n, FormatTime(h.Start), n-1, FormatTime(prevEnd))
+			}
 			break
 		}
 		prevEnd = h.End
 	}
-	fmt.Fprintf(w, "segments %d to %d OK; restorable up to %s\n", m.AfterSegment+1, n-1, FormatTime(prevEnd))
+	if !have[n] && len(nums) > 0 && n < nums[len(nums)-1] {
+		return errors.Newf("segment %d is missing; segments up to %d exist", n, nums[len(nums)-1])
+	}
+	if n == m.AfterSegment+1 {
+		fmt.Fprintf(w, "no segments after it; restorable up to %s\n", FormatTime(prevEnd))
+	} else {
+		fmt.Fprintf(w, "segments %d to %d OK; restorable up to %s\n", m.AfterSegment+1, n-1, FormatTime(prevEnd))
+	}
 	return nil
 }
 
 // Expire deletes the full backups older than the keep newest ones, the
-// segments only those needed, and the files of full backups that never
-// finished and are older than the newest complete one. The manifest of a
-// full backup is deleted first, so a backup stops existing before its
-// files go.
+// segments that only those needed, and the files of full backups that
+// never finished and are older than the newest complete one. The manifest
+// of a full backup is deleted first, so a backup stops existing before its
+// files go. Expire finishes the work of one that failed half way.
 func Expire(ctx context.Context, s *Store, keep int, w io.Writer) error {
 	if keep < 1 {
 		return errors.New("keep at least one full backup")
@@ -141,17 +163,16 @@ func Expire(ctx context.Context, s *Store, keep int, w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if len(fulls) <= keep {
+	if len(fulls) == 0 {
 		return nil
 	}
-	oldestKept := fulls[len(fulls)-keep]
 	deleteDir := func(name string, manifestFirst bool) error {
-		files, err := s.List(ctx, join(fullDir, name))
+		files, err := s.List(ctx, path.Join(fullDir, name))
 		if err != nil {
 			return err
 		}
 		if manifestFirst {
-			if err := s.Delete(ctx, join(fullDir, name, manifestName)); err != nil {
+			if err := s.Delete(ctx, path.Join(fullDir, name, manifestName)); err != nil {
 				return err
 			}
 		}
@@ -159,13 +180,17 @@ func Expire(ctx context.Context, s *Store, keep int, w io.Writer) error {
 			if f == manifestName && manifestFirst {
 				continue
 			}
-			if err := s.Delete(ctx, join(fullDir, name, f)); err != nil {
+			if err := s.Delete(ctx, path.Join(fullDir, name, f)); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
-	for _, m := range fulls[:len(fulls)-keep] {
+	expired := 0
+	if len(fulls) > keep {
+		expired = len(fulls) - keep
+	}
+	for _, m := range fulls[:expired] {
 		if err := deleteDir(m.Name, true); err != nil {
 			return err
 		}
@@ -180,6 +205,8 @@ func Expire(ctx context.Context, s *Store, keep int, w io.Writer) error {
 			fmt.Fprintf(w, "deleted incomplete full backup %s\n", name)
 		}
 	}
+	// No full backup left needs the segments up to the oldest one.
+	oldestKept := fulls[expired]
 	nums, err := segmentNumbers(ctx, s)
 	if err != nil {
 		return err

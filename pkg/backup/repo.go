@@ -38,11 +38,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/cockroach/pkg/util/ctxgroup"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
 	"github.com/cockroachdb/errors"
 )
@@ -98,12 +100,13 @@ func fullName(end hlc.Timestamp) string {
 	return end.GoTime().UTC().Format("20060102T150405.000000000Z")
 }
 
-func fullFile(name string, i int) string {
-	return join(fullDir, name, fmt.Sprintf("%06d.sst.gz", i))
+// fullFileName is the name of file i of a full backup, in its folder.
+func fullFileName(i int) string {
+	return fmt.Sprintf("%06d.sst.gz", i)
 }
 
 func segmentName(n int64) string {
-	return join(archiveDir, fmt.Sprintf("%016d%s", n, segmentExt))
+	return path.Join(archiveDir, fmt.Sprintf("%016d%s", n, segmentExt))
 }
 
 func sha(b []byte) string {
@@ -120,17 +123,16 @@ func FormatTime(ts hlc.Timestamp) string {
 // claim records clusterID as the owner of the repository if it has none,
 // and fails if another cluster owns it.
 func claim(ctx context.Context, s *Store, clusterID string) error {
-	o, err := readOwner(ctx, s)
-	if errors.Is(err, ErrNotFound) {
-		b, merr := json.Marshal(owner{ClusterID: clusterID})
-		if merr != nil {
-			return merr
-		}
-		if perr := s.Put(ctx, ownerName, strings.NewReader(string(b))); perr != nil {
-			return perr
-		}
-		o, err = readOwner(ctx, s)
+	b, err := json.Marshal(owner{ClusterID: clusterID})
+	if err != nil {
+		return err
 	}
+	// Of two clusters that claim a new repository at once, only one can
+	// create the file.
+	if err := s.Create(ctx, ownerName, strings.NewReader(string(b))); err != nil && !errors.Is(err, ErrExists) {
+		return err
+	}
+	o, err := readOwner(ctx, s)
 	if err != nil {
 		return err
 	}
@@ -193,7 +195,7 @@ func fullBackups(
 			continue
 		}
 		var m Manifest
-		if err := getJSON(ctx, s, join(fullDir, dir, manifestName), &m); err != nil {
+		if err := getJSON(ctx, s, path.Join(fullDir, dir, manifestName), &m); err != nil {
 			return nil, nil, err
 		}
 		m.Name = dir
@@ -235,8 +237,10 @@ func writeSegment(
 		return err
 	}
 	pr, pw := io.Pipe()
-	go func() {
-		pw.CloseWithError(func() error {
+	g := ctxgroup.WithContext(ctx)
+	g.GoCtx(func(ctx context.Context) error {
+		// Closing the pipe with the writer's result ends the upload with it.
+		return pw.CloseWithError(func() error {
 			gz := gzip.NewWriter(pw)
 			tw := tar.NewWriter(gz)
 			add := func(name string, size int64, r io.Reader) error {
@@ -269,11 +273,16 @@ func writeSegment(
 			}
 			return gz.Close()
 		}())
-	}()
-	err = s.Put(ctx, segmentName(h.Number), pr)
-	// Stop the writer if the upload ended early.
-	_ = pr.CloseWithError(errors.New("upload ended"))
-	return err
+	})
+	g.GoCtx(func(ctx context.Context) error {
+		// Create, so that a segment that another job instance uploaded is
+		// never replaced.
+		err := s.Create(ctx, segmentName(h.Number), pr)
+		// Stop the writer if the upload ended early.
+		_ = pr.CloseWithError(errors.New("upload ended"))
+		return err
+	})
+	return g.Wait()
 }
 
 // readSegment reads segment n. It calls file for each SST, in order, after
@@ -342,7 +351,7 @@ func readSegment(
 
 // readFullFile reads file f of full backup m and checks its checksum.
 func readFullFile(ctx context.Context, s *Store, m Manifest, f FileInfo) ([]byte, error) {
-	name := join(fullDir, m.Name, f.Name)
+	name := path.Join(fullDir, m.Name, f.Name)
 	r, err := s.Get(ctx, name)
 	if err != nil {
 		return nil, err

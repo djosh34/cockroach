@@ -13,7 +13,6 @@ package backup
 import (
 	"context"
 	"io"
-	"path"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -21,12 +20,16 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/errors"
 )
 
 // ErrNotFound is returned by Store.Get for an object that does not exist.
 var ErrNotFound = errors.New("object not found")
+
+// ErrExists is returned by Store.Create for an object that exists.
+var ErrExists = errors.New("object exists")
 
 // partSize is the part size of multipart uploads. A smaller object is sent
 // with one PutObject call.
@@ -35,7 +38,8 @@ const partSize = 8 << 20
 // Store reads and writes the objects of one repository. It makes exactly
 // these S3 calls: PutObject, CreateMultipartUpload, UploadPart,
 // CompleteMultipartUpload, AbortMultipartUpload, GetObject, ListObjectsV2 and
-// DeleteObject. The contract tests check each of them against a real S3
+// DeleteObject. Create sends PutObject and CompleteMultipartUpload with
+// If-None-Match: *. The contract tests check each of them against a real S3
 // server.
 type Store struct {
 	client *s3.Client
@@ -109,12 +113,31 @@ func (s *Store) key(name string) string {
 // before. A large object is sent in parts; if that fails, the parts are
 // aborted.
 func (s *Store) Put(ctx context.Context, name string, r io.Reader) error {
-	//lint:ignore SA1019 the uploader of feature/s3/manager still works; its replacement transfermanager is new
-	_, err := s.uploader.Upload(ctx, &s3.PutObjectInput{
+	return s.upload(ctx, name, r, false)
+}
+
+// Create is Put for an object that must not exist yet. If it exists, the
+// upload changes nothing and Create returns ErrExists.
+func (s *Store) Create(ctx context.Context, name string, r io.Reader) error {
+	return s.upload(ctx, name, r, true)
+}
+
+func (s *Store) upload(ctx context.Context, name string, r io.Reader, create bool) error {
+	in := &s3.PutObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(s.key(name)),
 		Body:   r,
-	})
+	}
+	if create {
+		in.IfNoneMatch = aws.String("*")
+	}
+	//lint:ignore SA1019 the uploader of feature/s3/manager still works; its replacement transfermanager is new
+	_, err := s.uploader.Upload(ctx, in)
+	var apiErr smithy.APIError
+	if create && errors.As(err, &apiErr) &&
+		(apiErr.ErrorCode() == "PreconditionFailed" || apiErr.ErrorCode() == "ConditionalRequestConflict") {
+		return errors.Wrapf(ErrExists, "%s", name)
+	}
 	return errors.Wrapf(err, "uploading %s", name)
 }
 
@@ -167,9 +190,4 @@ func (s *Store) Delete(ctx context.Context, name string) error {
 		Key:    aws.String(s.key(name)),
 	})
 	return errors.Wrapf(err, "deleting %s", name)
-}
-
-// join joins object name parts.
-func join(parts ...string) string {
-	return path.Join(parts...)
 }

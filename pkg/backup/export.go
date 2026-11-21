@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/cockroachdb/cockroach/pkg/keys"
@@ -118,7 +119,7 @@ func takeFullBackup(
 		AfterSegment:   afterSegment,
 	}
 	if err := export(ctx, db, clusterSpan, hlc.Timestamp{}, end, false, func(sst []byte) error {
-		f := FileInfo{Name: filepath.Base(fullFile(m.Name, len(m.Files)+1)), SHA256: sha(sst), Size: int64(len(sst))}
+		f := FileInfo{Name: fullFileName(len(m.Files) + 1), SHA256: sha(sst), Size: int64(len(sst))}
 		var buf bytes.Buffer
 		gz := gzip.NewWriter(&buf)
 		if _, err := gz.Write(sst); err != nil {
@@ -127,7 +128,7 @@ func takeFullBackup(
 		if err := gz.Close(); err != nil {
 			return err
 		}
-		if err := s.Put(ctx, fullFile(m.Name, len(m.Files)+1), &buf); err != nil {
+		if err := s.Put(ctx, path.Join(fullDir, m.Name, f.Name), &buf); err != nil {
 			return err
 		}
 		m.Files = append(m.Files, f)
@@ -139,7 +140,7 @@ func takeFullBackup(
 	if err != nil {
 		return Manifest{}, err
 	}
-	if err := s.Put(ctx, join(fullDir, m.Name, manifestName), bytes.NewReader(b)); err != nil {
+	if err := s.Put(ctx, path.Join(fullDir, m.Name, manifestName), bytes.NewReader(b)); err != nil {
 		return Manifest{}, err
 	}
 	return m, nil
@@ -160,7 +161,7 @@ func makeSegment(
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.RemoveAll(dir) }()
+	defer removeAll(ctx, dir)
 	h := SegmentHeader{ClusterID: clusterID, Number: n, Start: start, End: end}
 	path := func(i int) string { return filepath.Join(dir, fmt.Sprintf("%06d.sst", i+1)) }
 	if err := export(ctx, db, clusterSpan, start, end, true, func(sst []byte) error {

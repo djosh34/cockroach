@@ -26,6 +26,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/isql"
+	"github.com/cockroachdb/cockroach/pkg/util/ctxgroup"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/stop"
@@ -228,8 +229,11 @@ func (a *archiver) protect(ctx context.Context, ts hlc.Timestamp) error {
 			return pts.UpdateTimestamp(ctx, id, ts)
 		}
 		id = uuid.MakeV4()
-		rec := jobsprotectedts.MakeRecord(id, int64(a.job.ID()), ts, nil,
-			jobsprotectedts.Jobs, ptpb.MakeClusterTarget())
+		target := ptpb.MakeClusterTarget()
+		// Tables marked exclude_data_from_backup are not backed up, so
+		// their history need not be kept.
+		target.IgnoreIfExcludedFromBackup = true
+		rec := jobsprotectedts.MakeRecord(id, int64(a.job.ID()), ts, nil, jobsprotectedts.Jobs, target)
 		if err := pts.Protect(ctx, rec); err != nil {
 			return err
 		}
@@ -325,7 +329,10 @@ func (a *archiver) run(ctx context.Context) error {
 		return err
 	}
 
-	if !protected || len(fulls) == 0 {
+	// The protected timestamp must be at or before where the archive goes
+	// on. It can be after it if the repository lost its newest segments or
+	// is not the one the timestamp was kept for.
+	if !protected || start.Less(a.ptsTime) || len(fulls) == 0 {
 		// History after the last segment may be gone. Protect from now
 		// and start again with a full backup.
 		now := a.execCfg.Clock.Now()
@@ -348,13 +355,13 @@ func (a *archiver) run(ctx context.Context) error {
 	}
 	nextFull := schedule.Next(fulls[len(fulls)-1].EndTime.GoTime())
 
+	// A full backup runs in g next to the archive, one at a time.
 	fullDone := make(chan fullResult, 1)
 	var running *hlc.Timestamp
+	g := ctxgroup.WithContext(ctx)
 	defer func() {
-		if running != nil {
-			cancel()
-			<-fullDone
-		}
+		cancel()
+		_ = g.Wait()
 	}()
 	tempDir := a.execCfg.DistSQLSrv.ServerConfig.TempStoragePath
 	for {
@@ -396,6 +403,11 @@ func (a *archiver) run(ctx context.Context) error {
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
+				if errors.Is(err, ErrExists) {
+					// Another instance of this job wrote it: start over from
+					// what the repository holds.
+					return err
+				}
 				a.warn(ctx, "segment %d failed, retrying: %v", next, err)
 				continue
 			}
@@ -403,10 +415,11 @@ func (a *archiver) run(ctx context.Context) error {
 			if running == nil && !timeutil.Now().Before(nextFull) {
 				at, after := start, next-1
 				running = &at
-				go func() {
+				g.GoCtx(func(ctx context.Context) error {
 					m, err := takeFullBackup(ctx, a.execCfg.DB, a.store, a.clusterID, a.clusterVersion, at, after)
 					fullDone <- fullResult{m: m, err: err}
-				}()
+					return nil
+				})
 			}
 		}
 	}

@@ -33,6 +33,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/nstree"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/tabledesc"
+	"github.com/cockroachdb/cockroach/pkg/sql/catalog/typedesc"
 	"github.com/cockroachdb/cockroach/pkg/sql/schemachanger/scbackup"
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
 	"github.com/cockroachdb/cockroach/pkg/storage"
@@ -56,11 +57,13 @@ import (
 // table data with AddSSTable at a new timestamp, then publishes the
 // catalog and the system tables in one transaction.
 //
-// Objects that were being dropped or created at the target time are left
-// out, since they were not visible then. A table that was taken offline by
-// an IMPORT INTO comes back online with the data it had before the import.
-// Schema changes that were running at the target time get new jobs and
-// carry on.
+// Objects that were being dropped at the target time are left out, since
+// they were not visible then. A table that was taken offline by an IMPORT
+// INTO comes back online with the data it had before the import; a table
+// that the import itself created is left out. Schema changes that were
+// running at the target time, including tables being created, get new jobs
+// and carry on; a table being created comes back without rows, which its
+// job writes.
 
 // restoredSystemTables are the system tables whose rows a cluster restore
 // brings back, by name. descriptor and namespace are handled on their own.
@@ -113,10 +116,15 @@ func (r *restoreResumer) Resume(ctx context.Context, execCtx interface{}) error 
 	if err != nil {
 		return err
 	}
-	target := d.Target
-	if target.IsEmpty() {
-		target = c.end()
+	if d.Target.IsEmpty() {
+		// Fix "latest" before writing anything, so that a retry restores to
+		// the same time.
+		d.Target = c.end()
+		if err := r.job.NoTxn().SetDetails(ctx, d); err != nil {
+			return err
+		}
 	}
+	target := d.Target
 	if v := execCfg.Settings.Version.ActiveVersion(ctx).String(); v != c.full.ClusterVersion {
 		return errors.Newf("the backup has cluster version %s and this cluster %s; they must be the same",
 			c.full.ClusterVersion, v)
@@ -131,7 +139,7 @@ func (r *restoreResumer) Resume(ctx context.Context, execCtx interface{}) error 
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.RemoveAll(dir) }()
+	defer removeAll(ctx, dir)
 	eng, err := load(ctx, execCfg.Settings, store, c, dir)
 	if err != nil {
 		return err
@@ -142,14 +150,18 @@ func (r *restoreResumer) Resume(ctx context.Context, execCtx interface{}) error 
 	if err != nil {
 		return err
 	}
+	if err := reserveIDs(ctx, execCfg, eng, src); err != nil {
+		return err
+	}
 	if err := ingestTables(ctx, execCfg, eng, src); err != nil {
 		return err
 	}
 	return publish(ctx, execCfg, eng, src, r.job)
 }
 
-// OnFailOrCancel implements jobs.Resumer. The data written so far has no
-// descriptors; restore again into a new empty cluster.
+// OnFailOrCancel implements jobs.Resumer. The rows written so far have no
+// descriptors and stay invisible: the descriptor ID sequence was raised past
+// their IDs before they were written, so no new object gets them.
 func (r *restoreResumer) OnFailOrCancel(context.Context, interface{}, error) error { return nil }
 
 // CollectProfile implements jobs.Resumer.
@@ -163,24 +175,75 @@ func checkEmpty(ctx context.Context, execCfg *sql.ExecutorConfig) error {
 		if err != nil {
 			return err
 		}
-		preloaded := map[descpb.ID]bool{}
-		return all.ForEachDescriptor(func(desc catalog.Descriptor) error {
-			if catalog.IsSystemDescriptor(desc) {
-				return nil
-			}
-			switch {
-			case desc.DescriptorType() == catalog.Database &&
-				(desc.GetName() == catalogkeys.DefaultDatabaseName || desc.GetName() == catalogkeys.PgDatabaseName):
-				preloaded[desc.GetID()] = true
-				return nil
-			case desc.DescriptorType() == catalog.Schema && desc.GetName() == catconstants.PublicSchemaName &&
-				preloaded[desc.GetParentID()]:
-				return nil
-			}
-			return errors.Newf("the cluster is not empty: it has %s %q; restore into a new cluster",
-				desc.DescriptorType(), desc.GetName())
-		})
+		return onlyPreloaded(all)
 	})
+}
+
+// onlyPreloaded returns an error if all has user objects other than the
+// pre-loaded defaultdb and postgres.
+func onlyPreloaded(all nstree.Catalog) error {
+	preloaded := map[descpb.ID]bool{}
+	return all.ForEachDescriptor(func(desc catalog.Descriptor) error {
+		if catalog.IsSystemDescriptor(desc) {
+			return nil
+		}
+		switch {
+		case desc.DescriptorType() == catalog.Database &&
+			(desc.GetName() == catalogkeys.DefaultDatabaseName || desc.GetName() == catalogkeys.PgDatabaseName):
+			preloaded[desc.GetID()] = true
+			return nil
+		case desc.DescriptorType() == catalog.Schema && desc.GetName() == catconstants.PublicSchemaName &&
+			preloaded[desc.GetParentID()]:
+			return nil
+		}
+		return errors.Newf("the cluster is not empty: it has %s %q; restore into a new cluster",
+			desc.DescriptorType(), desc.GetName())
+	})
+}
+
+// reserveIDs raises this cluster's descriptor ID sequence to the backup's
+// value before any row is written, so that no object created during or
+// after the restore gets the ID of a restored table.
+func reserveIDs(
+	ctx context.Context, execCfg *sql.ExecutorConfig, eng storage.Engine, src *sourceCatalog,
+) error {
+	srcID, ok := src.systemIDs[string(catconstants.DescIDSequenceTableName)]
+	if !ok {
+		return errors.New("the backup has no descriptor ID sequence")
+	}
+	res, err := storage.MVCCGet(ctx, eng, codec.SequenceKey(uint32(srcID)), src.target, storage.MVCCGetOptions{})
+	if err != nil {
+		return err
+	}
+	if res.Value == nil {
+		return errors.New("the backup's descriptor ID sequence has no value")
+	}
+	backupNext, err := res.Value.GetInt()
+	if err != nil {
+		return err
+	}
+	return execCfg.DB.Txn(ctx, func(ctx context.Context, txn *kv.Txn) error {
+		key := codec.SequenceKey(keys.DescIDSequenceID)
+		kv, err := txn.Get(ctx, key)
+		if err != nil {
+			return err
+		}
+		next, err := kv.Value.GetInt()
+		if err != nil {
+			return err
+		}
+		if next >= backupNext {
+			return nil
+		}
+		return txn.Put(ctx, key, backupNext)
+	})
+}
+
+// removeAll removes a temporary folder and logs a failure.
+func removeAll(ctx context.Context, dir string) {
+	if err := os.RemoveAll(dir); err != nil {
+		log.Warningf(ctx, "removing %s: %v", dir, err)
+	}
 }
 
 // load opens a Pebble engine in dir and ingests the files of chain c.
@@ -256,6 +319,8 @@ type sourceCatalog struct {
 	// readAt is the time to read a table's data at: before its import for
 	// a table that an IMPORT INTO had taken offline, else the target.
 	readAt map[descpb.ID]hlc.Timestamp
+	// noRows are the tables restored without rows: those being created.
+	noRows map[descpb.ID]bool
 }
 
 var codec = keys.SystemSQLCodec
@@ -276,6 +341,7 @@ func readCatalog(
 		skipped:   map[descpb.ID]bool{},
 		systemIDs: map[string]descpb.ID{},
 		readAt:    map[descpb.ID]hlc.Timestamp{},
+		noRows:    map[descpb.ID]bool{},
 	}
 	span := tableSpan(keys.NamespaceTableID)
 	if _, err := storage.MVCCIterate(ctx, eng, span.Key, span.EndKey, target, storage.MVCCScanOptions{},
@@ -321,22 +387,35 @@ func readCatalog(
 // restore decides whether desc is restored and changes it as needed.
 func (src *sourceCatalog) restore(desc catalog.MutableDescriptor) bool {
 	switch {
-	case desc.Dropped(), desc.Adding():
+	case desc.Dropped():
 		return false
+	case desc.Adding():
+		// Its schema change job writes its rows, if it has any.
+		src.noRows[desc.GetID()] = true
 	case desc.Offline():
 		tbl, ok := desc.(*tabledesc.Mutable)
-		if !ok || tbl.ImportStartWallTime == 0 {
+		if !ok || tbl.OfflineReason != importingReason {
+			return false
+		}
+		if tbl.ImportStartWallTime == 0 && tbl.Version == 1 {
+			// The import created the table: it did not exist before.
 			return false
 		}
 		// IMPORT INTO had taken the table offline: bring it back with the
-		// data from before the import.
-		src.readAt[tbl.ID] = hlc.Timestamp{WallTime: tbl.ImportStartWallTime - 1}
+		// data from before the import. The import writes no rows before it
+		// sets ImportStartWallTime.
+		if tbl.ImportStartWallTime != 0 {
+			src.readAt[tbl.ID] = hlc.Timestamp{WallTime: tbl.ImportStartWallTime - 1}
+		}
 		tbl.State = descpb.DescriptorState_PUBLIC
 		tbl.OfflineReason = ""
 		tbl.ImportStartWallTime = 0
 	}
 	return true
 }
+
+// importingReason is the offline reason of a table that IMPORT writes into.
+const importingReason = "importing"
 
 // ingestTables writes the data of the restored tables, as of the target
 // time, with AddSSTable at a new timestamp.
@@ -351,7 +430,7 @@ func ingestTables(
 	defer adder.Close(ctx)
 	for _, desc := range orderedByID(src.restored) {
 		tbl, ok := desc.(*tabledesc.Mutable)
-		if !ok || tbl.IsView() || tbl.IsVirtualTable() {
+		if !ok || !tbl.IsPhysicalTable() || src.noRows[tbl.ID] {
 			continue
 		}
 		if tbl.GetExcludeDataFromBackup() {
@@ -415,6 +494,9 @@ func publish(
 		// higher version, so that leases on the old ones end.
 		all, err := col.GetAllDescriptors(ctx, kvTxn)
 		if err != nil {
+			return err
+		}
+		if err := onlyPreloaded(all); err != nil {
 			return err
 		}
 		oldVersions := map[descpb.ID]descpb.DescriptorVersion{}
@@ -508,6 +590,9 @@ func publish(
 			return err
 		}
 		if err := ttlSchedules(ctx, execCfg, txn, tables); err != nil {
+			return err
+		}
+		if err := typeSchemaChangeJobs(ctx, execCfg, txn, mut.Catalog); err != nil {
 			return err
 		}
 		b = kvTxn.NewBatch()
@@ -629,13 +714,11 @@ func copyRows(
 	if keep == nil {
 		keep = func(roachpb.KeyValue) bool { return true }
 	}
-	const batchSize = 1000
+	// flushBytes is about how much a batch writes before it is sent.
+	const flushBytes = 100 << 10
 	b := txn.NewBatch()
 	flush := func(force bool) error {
-		if len(b.Results) == 0 && !force {
-			return nil
-		}
-		if !force && b.ApproximateMutationBytes() < batchSize*100 {
+		if !force && b.ApproximateMutationBytes() < flushBytes {
 			return nil
 		}
 		err := txn.Run(ctx, b)
@@ -678,23 +761,29 @@ func copyRows(
 }
 
 // legacySchemaChangeJobs makes a job for each mutation of a restored table
-// that the legacy schema changer was running at the target time.
+// that the legacy schema changer was running at the target time, and for
+// each table it was creating.
 func legacySchemaChangeJobs(
 	ctx context.Context, execCfg *sql.ExecutorConfig, txn descs.Txn, tables []*tabledesc.Mutable,
 ) error {
 	sd := sql.NewInternalSessionData(ctx, execCfg.Settings, "restore")
 	var records []*jobs.Record
 	for _, tbl := range tables {
-		if len(tbl.MutationJobs) == 0 {
+		if tbl.GetDeclarativeSchemaChangerState() != nil ||
+			(len(tbl.MutationJobs) == 0 && !tbl.Adding()) {
 			continue
 		}
-		tbl.MutationJobs = nil
-		seen := map[descpb.MutationID]bool{}
+		// The backfill resumes from one span list per mutation, as the
+		// legacy schema changer makes them.
+		var spans []jobspb.ResumeSpanList
 		for _, m := range tbl.Mutations {
-			if m.MutationID == descpb.InvalidMutationID || seen[m.MutationID] {
-				continue
+			span := tbl.PrimaryIndexSpan(codec)
+			if idx := m.GetIndex(); idx != nil && idx.UseDeletePreservingEncoding {
+				span = tbl.IndexSpan(codec, idx.ID)
 			}
-			seen[m.MutationID] = true
+			spans = append(spans, jobspb.ResumeSpanList{ResumeSpans: []roachpb.Span{span}})
+		}
+		record := func(mutationID descpb.MutationID) descpb.TableDescriptor_MutationJob {
 			id := execCfg.JobRegistry.MakeJobID()
 			records = append(records, &jobs.Record{
 				JobID:         id,
@@ -703,16 +792,70 @@ func legacySchemaChangeJobs(
 				DescriptorIDs: descpb.IDs{tbl.ID},
 				Details: jobspb.SchemaChangeDetails{
 					DescID:          tbl.ID,
-					TableMutationID: m.MutationID,
+					TableMutationID: mutationID,
+					ResumeSpanList:  spans,
 					FormatVersion:   jobspb.DatabaseJobFormatVersion,
 					SessionData:     &sd.SessionData,
 				},
 				Progress: jobspb.SchemaChangeProgress{},
 			})
-			tbl.MutationJobs = append(tbl.MutationJobs, descpb.TableDescriptor_MutationJob{
-				MutationID: m.MutationID, JobID: id,
-			})
+			return descpb.TableDescriptor_MutationJob{MutationID: mutationID, JobID: id}
 		}
+		if tbl.Adding() {
+			// This job makes the table public.
+			record(descpb.InvalidMutationID)
+		}
+		tbl.MutationJobs = nil
+		seen := map[descpb.MutationID]bool{}
+		for _, m := range tbl.Mutations {
+			if m.MutationID == descpb.InvalidMutationID || seen[m.MutationID] {
+				continue
+			}
+			seen[m.MutationID] = true
+			tbl.MutationJobs = append(tbl.MutationJobs, record(m.MutationID))
+		}
+	}
+	_, err := execCfg.JobRegistry.CreateJobsWithTxn(ctx, txn, records)
+	return err
+}
+
+// typeSchemaChangeJobs makes a job for each restored enum that the legacy
+// type schema changer was adding or dropping values of at the target time.
+func typeSchemaChangeJobs(
+	ctx context.Context, execCfg *sql.ExecutorConfig, txn descs.Txn, all nstree.Catalog,
+) error {
+	var records []*jobs.Record
+	if err := all.ForEachDescriptor(func(desc catalog.Descriptor) error {
+		typ, ok := desc.(*typedesc.Mutable)
+		if !ok || typ.GetDeclarativeSchemaChangerState() != nil {
+			return nil
+		}
+		var transitioning [][]byte
+		dropping := false
+		for _, m := range typ.EnumMembers {
+			if m.Capability != descpb.TypeDescriptor_EnumMember_ALL {
+				transitioning = append(transitioning, m.PhysicalRepresentation)
+				dropping = dropping || m.Direction == descpb.TypeDescriptor_EnumMember_REMOVE
+			}
+		}
+		if len(transitioning) == 0 {
+			return nil
+		}
+		records = append(records, &jobs.Record{
+			JobID:         execCfg.JobRegistry.MakeJobID(),
+			Description:   fmt.Sprintf("restored schema change on type %q", typ.Name),
+			Username:      username.NodeUserName(),
+			DescriptorIDs: descpb.IDs{typ.ID},
+			Details: jobspb.TypeSchemaChangeDetails{
+				TypeID:               typ.ID,
+				TransitioningMembers: transitioning,
+			},
+			Progress:      jobspb.TypeSchemaChangeProgress{},
+			NonCancelable: !dropping,
+		})
+		return nil
+	}); err != nil {
+		return err
 	}
 	_, err := execCfg.JobRegistry.CreateJobsWithTxn(ctx, txn, records)
 	return err

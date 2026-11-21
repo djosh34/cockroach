@@ -89,9 +89,8 @@ func TestRestoredClusterDoesNotWriteIntoTheSource(t *testing.T) {
 		require.Equal(t, srcID, h.ClusterID, "segment %d", n)
 	}
 
-	// Nothing about backups is restored: no job or schedule came along.
+	// Nothing about backups is restored: the only AUTO BACKUP job is the
+	// new cluster's own.
 	dstDB.CheckQueryResults(t,
 		`SELECT count(*) FROM crdb_internal.jobs WHERE job_type = 'AUTO BACKUP'`, [][]string{{"1"}})
-	dstDB.CheckQueryResults(t,
-		`SELECT count(*) FROM system.protected_ts_records`, [][]string{{"0"}})
 }

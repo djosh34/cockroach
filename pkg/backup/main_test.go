@@ -14,6 +14,7 @@ import (
 	"os"
 	"testing"
 
+	_ "github.com/cockroachdb/cockroach/pkg/cloud/impl" // register the storage providers that IMPORT uses
 	"github.com/cockroachdb/cockroach/pkg/security/securityassets"
 	"github.com/cockroachdb/cockroach/pkg/security/securitytest"
 	"github.com/cockroachdb/cockroach/pkg/server"

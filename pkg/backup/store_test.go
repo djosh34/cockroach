@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -93,6 +94,19 @@ func TestS3Contract(t *testing.T) {
 		out, err := s.client.ListMultipartUploads(ctx, &s3.ListMultipartUploadsInput{Bucket: aws.String(bucket)})
 		require.NoError(t, err)
 		require.Empty(t, out.Uploads)
+	})
+
+	t.Run("create only if absent", func(t *testing.T) {
+		for _, size := range []int{5, 2*partSize + 1} {
+			name := fmt.Sprintf("once-%d", size)
+			first, second := random(size), random(size)
+			require.NoError(t, s.Create(ctx, name, bytes.NewReader(first)))
+			err := s.Create(ctx, name, bytes.NewReader(second))
+			require.True(t, errors.Is(err, ErrExists), "size %d: %v", size, err)
+			b, err := get(name)
+			require.NoError(t, err)
+			require.True(t, bytes.Equal(first, b), "size %d: the second create changed the object", size)
+		}
 	})
 
 	t.Run("GetObject of a missing object", func(t *testing.T) {
