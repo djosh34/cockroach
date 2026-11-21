@@ -175,6 +175,12 @@ func TestTwoTrustPools(t *testing.T) {
 	_, sErr = handshake(t, presenting(t, clientUsage), rpcServer)
 	require.ErrorContains(t, sErr, "needs both server and client extended key usage")
 
+	// Nor is a leaf that lists no usage, which Go's chain check alone would
+	// accept for every use.
+	noUsage := p.nodeCA.CertWithUsage(nodeID)
+	_, sErr = handshake(t, presenting(t, noUsage), rpcServer)
+	require.ErrorContains(t, sErr, "needs both server and client extended key usage")
+
 	// Nor is a dual-use leaf under an intermediate restricted to client use.
 	clientOnlyCA := p.nodeRoot.IntermediateCA("client-only intermediate", x509.ExtKeyUsageClientAuth)
 	restricted := clientOnlyCA.NodeCert(nodeID)

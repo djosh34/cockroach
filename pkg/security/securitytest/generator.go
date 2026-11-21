@@ -161,6 +161,12 @@ func (ca *CA) ClientCert(id Identity) Pair {
 	return ca.leaf("client", id, nil, []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth})
 }
 
+// CertWithUsage makes a cert with the given extended key usages, none if
+// usage is empty.
+func (ca *CA) CertWithUsage(id Identity, usage ...x509.ExtKeyUsage) Pair {
+	return ca.leaf("usage", id, nil, usage)
+}
+
 func (ca *CA) leaf(kind string, id Identity, hosts []string, usage []x509.ExtKeyUsage) Pair {
 	if ca.Cert == nil {
 		// Making ca failed and was reported.
