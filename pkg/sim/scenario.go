@@ -8,8 +8,6 @@
 // ANY KIND, either express or implied. See the License for the specific language
 // governing permissions and limitations under the License.
 
-//go:build sim
-
 package sim
 
 import (
@@ -23,18 +21,46 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/backup"
-	"github.com/cockroachdb/cockroach/pkg/sim/fakes3"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
 	"github.com/cockroachdb/errors"
 	"github.com/jackc/pgx/v5"
-	"github.com/jellevandenhooff/gosim"
 )
+
+// env is where a scenario runs: simulated machines under gosim
+// (cluster.go), or real processes in the nightly chaos run (chaos.go).
+// Nodes are numbered from 0.
+type env interface {
+	// addrs are the SQL hosts of the nodes.
+	addrs() []string
+	// s3Endpoint is the URL of the S3 server.
+	s3Endpoint() string
+	// crash stops node i abruptly, losing what it has not synced, and
+	// reports false, doing nothing, if the node is down already.
+	crash(i int) bool
+	// restart starts a node that crash stopped. With partial, a random
+	// part of its unsynced writes reaches the disk, where supported.
+	restart(i int, partial bool)
+	// partition cuts node i off from the other nodes, or ends that.
+	partition(i int, on bool)
+	// delay sets the network delay between nodes i and j.
+	delay(i, j int, d time.Duration)
+	// s3Faults makes S3 fail and stall requests, or stop doing so.
+	s3Faults(on bool)
+	// syncFaults makes fsync crash node i at random, or stop doing so; it
+	// reports false where that is not supported.
+	syncFaults(i int, on bool) bool
+	// startRestoreNode starts a new single-node cluster for a restore and
+	// returns its SQL host.
+	startRestoreNode(ctx context.Context) (string, error)
+	// failed lists the nodes that stopped on their own.
+	failed() []string
+}
 
 // scenario is one seed's run: the generated schema and workload, the
 // faults, and what the checks need to know.
 type scenario struct {
 	rng    *rand.Rand
-	c      *cluster
+	env    env
 	tables []table
 
 	// Sizes, from the seed.
@@ -56,6 +82,60 @@ type scenario struct {
 }
 
 const bankTotal = 1000
+
+// newScenario draws a scenario's sizes and schema from rng.
+func newScenario(rng *rand.Rand, e env) *scenario {
+	s := &scenario{
+		rng:      rng,
+		env:      e,
+		tables:   genSchema(rng),
+		workers:  2 + rng.IntN(4),
+		accounts: 3 + rng.IntN(5),
+		runFor:   time.Duration(20+rng.IntN(40)) * time.Second,
+		ledger:   make(map[int]*ledgerKey),
+		stats:    make(map[string]int),
+	}
+	s.keys = s.workers * (2 + rng.IntN(8))
+	return s
+}
+
+// run sets up the schema and data, runs the workload with faults for
+// s.runFor, heals the cluster and checks it. It returns an error when the
+// run could not go on; the failures of the checks are in s.failures.
+func (s *scenario) run(ctx context.Context) error {
+	if err := s.setup(ctx); err != nil {
+		return errors.Wrap(err, "setup")
+	}
+	newRNG := func() *rand.Rand { return rand.New(rand.NewPCG(s.rng.Uint64(), s.rng.Uint64())) }
+	until := time.Now().Add(s.runFor)
+	var wg sync.WaitGroup
+	for w := 0; w < s.workers; w++ {
+		wrng := newRNG()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.worker(ctx, w, wrng, until)
+		}()
+	}
+	frng := newRNG()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.faults(frng, until)
+	}()
+	wg.Wait()
+
+	if err := s.heal(ctx); err != nil {
+		return errors.Wrap(err, "after the faults")
+	}
+	if err := s.check(ctx); err != nil {
+		return errors.Wrap(err, "check")
+	}
+	if err := s.checkPITR(ctx); err != nil {
+		return errors.Wrap(err, "PITR check")
+	}
+	return nil
+}
 
 func (s *scenario) fail(format string, args ...any) {
 	s.mu.Lock()
@@ -82,19 +162,25 @@ func (s *scenario) exec(ctx context.Context, conn *pgx.Conn, sql string, args ..
 // setup creates the schema, IMPORTs the data from the fake S3 and creates
 // the bank and ledger tables. No faults run yet.
 func (s *scenario) setup(ctx context.Context) error {
-	conn, err := connect(ctx, s.c.nodes[0].addr)
+	conn, err := connect(ctx, s.env.addrs()[0])
 	if err != nil {
 		return err
 	}
 	defer conn.Close(ctx)
+	store, err := backup.OpenStore(ctx, backup.Repository{Bucket: s3Bucket, Endpoint: s.env.s3Endpoint(), Region: s3Region})
+	if err != nil {
+		return err
+	}
 	for _, t := range s.tables {
 		if err := s.exec(ctx, conn, t.create()); err != nil {
 			return errors.Wrapf(err, "%s", t.create())
 		}
 		name := t.name + ".csv"
-		s.c.s3.Put(s3Bucket, "import/"+name, t.csv(s.rng))
-		uri := fmt.Sprintf("s3://%s/import/%s?AWS_ENDPOINT=http://%s:9000&AWS_ACCESS_KEY_ID=sim&AWS_SECRET_ACCESS_KEY=sim&AWS_REGION=us-east-1",
-			s3Bucket, name, s3Addr)
+		if err := store.Put(ctx, "import/"+name, bytes.NewReader(t.csv(s.rng))); err != nil {
+			return err
+		}
+		uri := fmt.Sprintf("s3://%s/import/%s?AWS_ENDPOINT=%s&AWS_ACCESS_KEY_ID=%s&AWS_SECRET_ACCESS_KEY=%s&AWS_REGION=%s",
+			s3Bucket, name, s.env.s3Endpoint(), s3Key, s3Secret, s3Region)
 		if err := s.exec(ctx, conn, fmt.Sprintf("IMPORT INTO %s CSV DATA ('%s')", t.name, uri)); err != nil {
 			return errors.Wrapf(err, "IMPORT INTO %s", t.name)
 		}
@@ -131,8 +217,8 @@ func (s *scenario) worker(ctx context.Context, w int, rng *rand.Rand, until time
 	next := int64(w) << 32
 	for time.Now().Before(until) {
 		if conn == nil {
-			nd := s.c.nodes[rng.IntN(len(s.c.nodes))]
-			c, err := connect(ctx, nd.addr)
+			addrs := s.env.addrs()
+			c, err := connect(ctx, addrs[rng.IntN(len(addrs))])
 			if err != nil {
 				time.Sleep(time.Duration(100+rng.IntN(900)) * time.Millisecond)
 				continue
@@ -245,69 +331,64 @@ func (s *scenario) writeLedger(ctx context.Context, conn *pgx.Conn, w int, rng *
 // partitions, network delay, a power loss of the whole cluster, crashes
 // in fsync, and S3 errors and stalls.
 func (s *scenario) faults(rng *rand.Rand, until time.Time) {
-	nodes := s.c.nodes
+	n := len(s.env.addrs())
 	powerLoss := rng.IntN(3) == 0
 	for {
 		time.Sleep(time.Duration(500+rng.IntN(4000)) * time.Millisecond)
 		if time.Now().After(until) {
 			return
 		}
-		nd := nodes[rng.IntN(len(nodes))]
+		i := rng.IntN(n)
 		hold := time.Duration(1000+rng.IntN(6000)) * time.Millisecond
-		switch f := rng.IntN(6); f {
+		switch rng.IntN(6) {
 		case 0:
-			if !s.c.crash(nd) {
+			if !s.env.crash(i) {
 				continue
 			}
 			s.count("fault: crash")
 			time.Sleep(hold)
-			s.c.restart(nd, rng.IntN(2) == 0)
+			s.env.restart(i, rng.IntN(2) == 0)
 		case 1:
 			s.count("fault: partition")
-			for _, o := range nodes {
-				if o != nd {
-					_ = gosim.SetConnected(nd.addr, o.addr, false)
-				}
-			}
+			s.env.partition(i, true)
 			time.Sleep(hold)
-			for _, o := range nodes {
-				if o != nd {
-					_ = gosim.SetConnected(nd.addr, o.addr, true)
-				}
-			}
+			s.env.partition(i, false)
 		case 2:
-			s.count("fault: delay")
-			o := nodes[rng.IntN(len(nodes))]
-			if o != nd {
-				_ = gosim.SetDelay(nd.addr, o.addr, time.Duration(10+rng.IntN(400))*time.Millisecond)
-				time.Sleep(hold)
-				_ = gosim.SetDelay(nd.addr, o.addr, 0)
+			j := rng.IntN(n)
+			if j == i {
+				continue
 			}
+			s.count("fault: delay")
+			s.env.delay(i, j, time.Duration(10+rng.IntN(400))*time.Millisecond)
+			time.Sleep(hold)
+			s.env.delay(i, j, 0)
 		case 3:
 			s.count("fault: s3")
-			s.c.s3.SetFaults(fakes3.Faults{ErrorRate: 0.3, StallRate: 0.2, Stall: 5 * time.Second})
+			s.env.s3Faults(true)
 			time.Sleep(hold)
-			s.c.s3.SetFaults(fakes3.Faults{})
+			s.env.s3Faults(false)
 		case 4:
+			if !s.env.syncFaults(i, true) {
+				continue
+			}
 			s.count("fault: crash in fsync")
-			s.c.syncFaults(nd, true)
 			time.Sleep(hold)
-			s.c.syncFaults(nd, false)
+			s.env.syncFaults(i, false)
 		case 5:
 			if !powerLoss {
 				continue
 			}
 			powerLoss = false
 			s.count("fault: power loss")
-			var down []*node
-			for _, o := range nodes {
-				if s.c.crash(o) {
+			var down []int
+			for o := 0; o < n; o++ {
+				if s.env.crash(o) {
 					down = append(down, o)
 				}
 			}
 			time.Sleep(hold)
 			for _, o := range down {
-				s.c.restart(o, rng.IntN(2) == 0)
+				s.env.restart(o, rng.IntN(2) == 0)
 			}
 		}
 	}
@@ -315,18 +396,19 @@ func (s *scenario) faults(rng *rand.Rand, until time.Time) {
 
 // heal ends every fault and waits until every node serves SQL again.
 func (s *scenario) heal(ctx context.Context) error {
-	s.c.s3.SetFaults(fakes3.Faults{})
-	for _, nd := range s.c.nodes {
-		s.c.syncFaults(nd, false)
-		for _, o := range s.c.nodes {
-			if o != nd {
-				_ = gosim.SetConnected(nd.addr, o.addr, true)
-				_ = gosim.SetDelay(nd.addr, o.addr, 0)
+	s.env.s3Faults(false)
+	n := len(s.env.addrs())
+	for i := 0; i < n; i++ {
+		s.env.syncFaults(i, false)
+		s.env.partition(i, false)
+		for j := 0; j < n; j++ {
+			if j != i {
+				s.env.delay(i, j, 0)
 			}
 		}
 	}
-	for _, nd := range s.c.nodes {
-		if err := s.c.waitSQL(ctx, nd, 3*time.Minute); err != nil {
+	for _, addr := range s.env.addrs() {
+		if err := waitSQL(ctx, addr, 3*time.Minute); err != nil {
 			return err
 		}
 	}
@@ -425,7 +507,8 @@ func (s *scenario) compareQueries(ctx context.Context, conn *pgx.Conn) error {
 
 // check runs the checks that need the healed cluster.
 func (s *scenario) check(ctx context.Context) error {
-	conn, err := connect(ctx, s.c.nodes[s.rng.IntN(len(s.c.nodes))].addr)
+	addrs := s.env.addrs()
+	conn, err := connect(ctx, addrs[s.rng.IntN(len(addrs))])
 	if err != nil {
 		return err
 	}
@@ -482,7 +565,7 @@ func (s *scenario) checkPITR(ctx context.Context) error {
 		return nil
 	}
 	store, err := backup.OpenStore(ctx, backup.Repository{
-		Bucket: s3Bucket, Prefix: "cluster", Endpoint: fmt.Sprintf("http://%s:9000", s3Addr), Region: "us-east-1",
+		Bucket: s3Bucket, Prefix: "cluster", Endpoint: s.env.s3Endpoint(), Region: s3Region,
 	})
 	if err != nil {
 		return err
@@ -504,7 +587,7 @@ func (s *scenario) checkPITR(ctx context.Context) error {
 	for _, t := range s.tables {
 		tables = append(tables, t.name)
 	}
-	src, err := connect(ctx, s.c.nodes[0].addr)
+	src, err := connect(ctx, s.env.addrs()[0])
 	if err != nil {
 		return err
 	}
@@ -518,17 +601,17 @@ func (s *scenario) checkPITR(ctx context.Context) error {
 		want[t] = r
 	}
 
-	nd, err := s.c.startRestoreNode(ctx)
+	addr, err := s.env.startRestoreNode(ctx)
 	if err != nil {
 		return err
 	}
-	dst, err := connect(ctx, nd.addr)
+	dst, err := connect(ctx, addr)
 	if err != nil {
 		return err
 	}
 	defer dst.Close(ctx)
 	if _, err := dst.Exec(ctx, "SELECT crdb_internal.restore_cluster($1, $2, $3, $4, $5)",
-		s3Bucket, "cluster", fmt.Sprintf("http://%s:9000", s3Addr), "us-east-1", s.pitr.AsOfSystemTime()); err != nil {
+		s3Bucket, "cluster", s.env.s3Endpoint(), s3Region, s.pitr.AsOfSystemTime()); err != nil {
 		s.fail("restoring to %s: %v", s.pitr, err)
 		return nil
 	}

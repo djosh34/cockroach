@@ -25,7 +25,6 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/cli"
 	"github.com/cockroachdb/cockroach/pkg/sim/fakes3"
-	"github.com/jackc/pgx/v5"
 	"github.com/jellevandenhooff/gosim"
 )
 
@@ -33,10 +32,8 @@ import (
 // own globals, disk and address; the test runs on the main machine.
 const (
 	s3Addr      = "10.0.2.1"
-	s3Bucket    = "backups"
 	initAddr    = "10.0.3.1"
 	restoreAddr = "10.0.1.1"
-	sqlPort     = 26257
 	httpPort    = 8080
 )
 
@@ -78,22 +75,14 @@ type cluster struct {
 // The --config of every node: only its backup section, since the nodes
 // run insecure. Full backups every 20 s of simulated time, archive
 // segments every 2 s.
-var nodeConfig = fmt.Sprintf(`backup:
-  bucket: %s
-  prefix: cluster
-  endpoint: http://%s:9000
-  region: us-east-1
-  full-schedule: "@every 20s"
-  archive-interval: 2s
-  keep-full: 100
-`, s3Bucket, s3Addr)
+var nodeConfig = backupConfig("http://" + s3Addr + ":9000")
 
 // s3Env gives a machine the S3 credentials of the fake server, which
 // checks none, and keeps the AWS SDK from looking elsewhere for them.
 func s3Env() {
-	os.Setenv("AWS_ACCESS_KEY_ID", "sim")
-	os.Setenv("AWS_SECRET_ACCESS_KEY", "sim")
-	os.Setenv("AWS_REGION", "us-east-1")
+	os.Setenv("AWS_ACCESS_KEY_ID", s3Key)
+	os.Setenv("AWS_SECRET_ACCESS_KEY", s3Secret)
+	os.Setenv("AWS_REGION", s3Region)
 	os.Setenv("AWS_EC2_METADATA_DISABLED", "true")
 }
 
@@ -171,7 +160,7 @@ func startCluster(ctx context.Context, n int, s3 *fakes3.Server) (*cluster, erro
 	initM.Wait()
 
 	for _, nd := range c.nodes {
-		if err := c.waitSQL(ctx, nd, 2*time.Minute); err != nil {
+		if err := waitSQL(ctx, nd.addr, 2*time.Minute); err != nil {
 			return c, err
 		}
 	}
@@ -219,7 +208,8 @@ func (c *cluster) watch(nd *node) {
 
 // crash stops the node abruptly: writes it has not synced are lost. It
 // reports false, and does nothing, if the node is down already.
-func (c *cluster) crash(nd *node) bool {
+func (c *cluster) crash(i int) bool {
+	nd := c.nodes[i]
 	c.mu.Lock()
 	if nd.state != up {
 		c.mu.Unlock()
@@ -233,7 +223,8 @@ func (c *cluster) crash(nd *node) bool {
 
 // restart starts a node that crash stopped. With partial, a random part of
 // the writes it had not synced reaches the disk.
-func (c *cluster) restart(nd *node, partial bool) {
+func (c *cluster) restart(i int, partial bool) {
+	nd := c.nodes[i]
 	if partial {
 		nd.m.RestartWithPartialDisk()
 	} else {
@@ -245,15 +236,47 @@ func (c *cluster) restart(nd *node, partial bool) {
 }
 
 // syncFaults turns on or off crashes of the node in fsync.
-func (c *cluster) syncFaults(nd *node, on bool) {
+func (c *cluster) syncFaults(i int, on bool) bool {
+	nd := c.nodes[i]
 	c.mu.Lock()
 	nd.syncFaults = on
 	c.mu.Unlock()
 	nd.m.SetSometimesCrashOnSync(on)
+	return true
+}
+
+func (c *cluster) addrs() []string {
+	var addrs []string
+	for _, nd := range c.nodes {
+		addrs = append(addrs, nd.addr)
+	}
+	return addrs
+}
+
+func (c *cluster) s3Endpoint() string { return "http://" + s3Addr + ":9000" }
+
+func (c *cluster) partition(i int, on bool) {
+	for j, o := range c.nodes {
+		if j != i {
+			_ = gosim.SetConnected(c.nodes[i].addr, o.addr, !on)
+		}
+	}
+}
+
+func (c *cluster) delay(i, j int, d time.Duration) {
+	_ = gosim.SetDelay(c.nodes[i].addr, c.nodes[j].addr, d)
+}
+
+func (c *cluster) s3Faults(on bool) {
+	var f fakes3.Faults
+	if on {
+		f = fakes3.Faults{ErrorRate: 0.3, StallRate: 0.2, Stall: 5 * time.Second}
+	}
+	c.s3.SetFaults(f)
 }
 
 // startRestoreNode starts a new single-node cluster for a restore.
-func (c *cluster) startRestoreNode(ctx context.Context) (*node, error) {
+func (c *cluster) startRestoreNode(ctx context.Context) (string, error) {
 	nd := &node{idx: len(c.nodes), addr: restoreAddr}
 	args := startArgs(nd.addr, "")
 	args[0] = "start-single-node"
@@ -264,42 +287,11 @@ func (c *cluster) startRestoreNode(ctx context.Context) (*node, error) {
 		MainFunc: nodeMain(args),
 	})
 	go c.watch(nd)
-	return nd, c.waitSQL(ctx, nd, 2*time.Minute)
+	return nd.addr, waitSQL(ctx, nd.addr, 2*time.Minute)
 }
 
 func (c *cluster) failed() []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return append([]string(nil), c.failures...)
-}
-
-func connString(addr string) string {
-	return fmt.Sprintf("postgresql://root@%s:%d/defaultdb?sslmode=disable&connect_timeout=5", addr, sqlPort)
-}
-
-func connect(ctx context.Context, addr string) (*pgx.Conn, error) {
-	cfg, err := pgx.ParseConfig(connString(addr))
-	if err != nil {
-		return nil, err
-	}
-	return pgx.ConnectConfig(ctx, cfg)
-}
-
-// waitSQL waits until SELECT 1 works on the node.
-func (c *cluster) waitSQL(ctx context.Context, nd *node, limit time.Duration) error {
-	deadline := time.Now().Add(limit)
-	for {
-		conn, err := connect(ctx, nd.addr)
-		if err == nil {
-			_, err = conn.Exec(ctx, "SELECT 1")
-			_ = conn.Close(ctx)
-			if err == nil {
-				return nil
-			}
-		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("n%d: SQL did not work within %s: %v", nd.idx+1, limit, err)
-		}
-		time.Sleep(time.Second)
-	}
 }

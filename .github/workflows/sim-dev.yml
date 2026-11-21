@@ -28,3 +28,21 @@ jobs:
         with:
           name: seed
           path: ${{ runner.temp }}/out
+
+  chaos:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-go
+      - run: go build -o bin/patchroaddb ./pkg/cmd/patchroaddb
+      - run: build/ci/chaos.sh bin/patchroaddb "$RUNNER_TEMP/chaos"
+        env:
+          CHAOS_MINUTES: "3"
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos
+          path: ${{ runner.temp }}/chaos

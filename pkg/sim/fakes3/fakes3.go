@@ -89,18 +89,6 @@ func (s *Server) CreateBucket(name string) {
 	}
 }
 
-// Put stores an object, as a PutObject request does, with no faults.
-func (s *Server) Put(bucketName, key string, data []byte) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	b := s.buckets[bucketName]
-	if b == nil {
-		b = &bucket{objects: make(map[string]object)}
-		s.buckets[bucketName] = b
-	}
-	b.objects[key] = newObject(data)
-}
-
 // SetFaults sets the faults of later requests.
 func (s *Server) SetFaults(f Faults) {
 	s.mu.Lock()
