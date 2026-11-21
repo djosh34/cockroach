@@ -106,13 +106,9 @@ func (s *httpServer) setupRoutes(
 	// if not disabled by configuration.
 	var authenticatedHandler = handleRequestsUnauthenticated
 	if !s.cfg.InsecureWebAccess() {
+		s.proxy.authServer = authnServer
 		authenticatedHandler = authserver.NewMux(authnServer, authenticatedHandler, false /* allowAnonymous */)
 	}
-
-	// Login and logout paths.
-	// The /login endpoint is, by definition, available pre-authentication.
-	s.mux.Handle(authserver.LoginPath, handleRequestsUnauthenticated)
-	s.mux.Handle(authserver.LogoutPath, authenticatedHandler)
 
 	// Admin/Status servers, served as JSON over HTTP.
 	s.mux.Handle(apiconstants.StatusPrefix, authenticatedHandler)

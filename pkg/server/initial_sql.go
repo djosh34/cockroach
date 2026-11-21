@@ -29,9 +29,7 @@ import (
 // and `cockroach demo` with 2 nodes or fewer.
 // If adminUser is non-empty, an admin user with that name is
 // created upon initialization. Its password is then also returned.
-func (s *topLevelServer) RunInitialSQL(
-	ctx context.Context, startSingleNode bool, adminUser, adminPassword string,
-) error {
+func (s *topLevelServer) RunInitialSQL(ctx context.Context, startSingleNode bool) error {
 	if s.cfg.ObsServiceAddr == base.ObsServiceEmbedFlagValue {
 		var knobs *obs.EventExporterTestingKnobs
 		if s.cfg.TestingKnobs.EventExporter != nil {
@@ -60,36 +58,12 @@ func (s *topLevelServer) RunInitialSQL(
 			"When/if adding nodes in the future, update zone configurations to increase the replication factor.")
 	}
 
-	if adminUser != "" && !s.Insecure() {
-		if err := s.createAdminUser(ctx, adminUser, adminPassword); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
 // RunInitialSQL implements cli.serverStartupInterface.
-func (s *SQLServerWrapper) RunInitialSQL(context.Context, bool, string, string) error {
+func (s *SQLServerWrapper) RunInitialSQL(context.Context, bool) error {
 	return nil
-}
-
-// createAdminUser creates an admin user with the given name.
-func (s *topLevelServer) createAdminUser(
-	ctx context.Context, adminUser, adminPassword string,
-) error {
-	ie := s.sqlServer.internalExecutor
-	_, err := ie.Exec(
-		ctx, "admin-user", nil,
-		fmt.Sprintf("CREATE USER %s WITH PASSWORD $1", adminUser),
-		adminPassword,
-	)
-	if err != nil {
-		return err
-	}
-	// TODO(knz): Demote the admin user to an operator privilege with fewer options.
-	_, err = ie.Exec(ctx, "admin-user", nil, fmt.Sprintf("GRANT admin TO %s", tree.Name(adminUser)))
-	return err
 }
 
 // disableReplication changes the replication factor on

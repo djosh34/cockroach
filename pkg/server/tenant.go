@@ -388,7 +388,7 @@ func newTenantServer(
 			baseCfg.AmbientCtx,
 			baseCfg.Config,
 			args.Settings,
-			args.rpcContext.GetServerTLSConfig,
+			args.rpcContext.GetSQLServerTLSConfig,
 			baseCfg.HistogramWindowInterval(),
 			args.monitorAndMetrics.rootSQLMemoryMonitor,
 			false, /* acceptTenantName */
@@ -434,7 +434,7 @@ func newTenantServer(
 		return p.(sql.AuthorizationAccessor), cleanup
 	})
 
-	// Create the authentication RPC server (login/logout).
+	// Create the HTTP authentication server.
 	sAuth := authserver.NewServer(baseCfg.Config, sqlServer)
 
 	// Create a drain server.
@@ -458,7 +458,7 @@ func newTenantServer(
 	)
 
 	// Connect the various servers to RPC.
-	for _, gw := range []grpcGatewayServer{sAdmin, sStatus, sAuth, args.tenantTimeSeriesServer} {
+	for _, gw := range []grpcGatewayServer{sAdmin, sStatus, args.tenantTimeSeriesServer} {
 		gw.RegisterService(args.grpc.Server)
 	}
 
@@ -477,7 +477,6 @@ func newTenantServer(
 	debugServer := debug.NewServer(
 		baseCfg.AmbientCtx,
 		args.Settings,
-		sqlServer.pgServer.HBADebugFn(),
 		sqlServer.execCfg.SQLStatusServer,
 		sqlCfg.TenantID,
 		processCapAuthz,
@@ -543,9 +542,8 @@ func (s *SQLServerWrapper) PreStart(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		// Ensure that SIGHUP will make this cert manager reload its certs
-		// from disk.
-		if err := cm.RegisterSignalHandler(workersCtx, s.stopper); err != nil {
+		// Reload the certs and rules on SIGHUP and when the files change.
+		if err := cm.Watch(workersCtx, s.stopper); err != nil {
 			return err
 		}
 	}
@@ -554,7 +552,7 @@ func (s *SQLServerWrapper) PreStart(ctx context.Context) error {
 	// routing performed by the serverController.
 	if !s.sqlServer.cfg.DisableHTTPListener {
 		// Load the TLS configuration for the HTTP server.
-		uiTLSConfig, err := s.rpcContext.GetUIServerTLSConfig()
+		uiTLSConfig, err := s.rpcContext.GetHTTPServerTLSConfig()
 		if err != nil {
 			return err
 		}
@@ -611,7 +609,7 @@ func (s *SQLServerWrapper) PreStart(ctx context.Context) error {
 	}
 
 	// Connect the various RPC handlers to the gRPC gateway.
-	for _, gw := range []grpcGatewayServer{s.tenantAdmin, s.tenantStatus, s.authentication, s.tenantTimeSeries} {
+	for _, gw := range []grpcGatewayServer{s.tenantAdmin, s.tenantStatus, s.tenantTimeSeries} {
 		if err := gw.RegisterGateway(gwCtx, gwMux, conn); err != nil {
 			return err
 		}
@@ -1066,7 +1064,6 @@ func makeTenantSQLServerArgs(
 
 	rpcCtxOpts := rpc.ServerContextOptionsFromBaseConfig(baseCfg.Config)
 	rpcCtxOpts.TenantID = sqlCfg.TenantID
-	rpcCtxOpts.UseNodeAuth = sqlCfg.LocalKVServerInfo != nil
 	rpcCtxOpts.NodeID = baseCfg.IDContainer
 	rpcCtxOpts.StorageClusterID = baseCfg.ClusterIDContainer
 	rpcCtxOpts.Clock = clock.WallClock()
@@ -1083,17 +1080,7 @@ func makeTenantSQLServerArgs(
 
 	if !baseCfg.Insecure {
 		// This check mirrors that done in NewServer().
-		// Needed for receiving RPC connections until
-		// this issue is fixed:
-		// https://github.com/cockroachdb/cockroach/issues/92524
-		if _, err := rpcContext.GetServerTLSConfig(); err != nil {
-			return sqlServerArgs{}, err
-		}
-		// Needed for outgoing connections.
-		if _, err := rpcContext.GetClientTLSConfig(); err != nil {
-			return sqlServerArgs{}, err
-		}
-		cm, err := rpcContext.GetCertificateManager()
+		cm, err := loadServerCertificates(rpcContext)
 		if err != nil {
 			return sqlServerArgs{}, err
 		}

@@ -18,6 +18,7 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/rpc"
+	"github.com/cockroachdb/cockroach/pkg/server/authserver"
 	"github.com/cockroachdb/cockroach/pkg/util"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
@@ -34,8 +35,11 @@ const RemoteNodeID = "remote_node_id"
 // value associated with the key. Otherwise, the request is handled
 // by this node as usual.
 type nodeProxy struct {
-	scheme               string
-	rpcContext           *rpc.Context
+	scheme     string
+	rpcContext *rpc.Context
+	// authServer finds the user of a request before it is forwarded. Set by
+	// setupRoutes; nil in insecure mode.
+	authServer           authserver.Server
 	parseNodeID          ParseNodeIDFn
 	getNodeIDHTTPAddress GetNodeIDHTTPAddressFn
 	proxyCache           reverseProxyCache
@@ -147,6 +151,16 @@ func (np *nodeProxy) routeToNode(
 		}
 		proxy.Transport = httpClient.Transport
 		np.proxyCache.put(*addr, proxy)
+	}
+	if np.authServer != nil && r.TLS != nil {
+		// The other node sees this node's certificate, which is root. Name the
+		// request's own user, or none, so that it does not run as root.
+		var user string
+		if u, err := np.authServer.UserFromRequest(r); err == nil {
+			user = u.Normalized()
+		}
+		r = r.Clone(r.Context())
+		r.Header.Set(authserver.ForwardedUserHeader, user)
 	}
 	proxy.ServeHTTP(w, r)
 }

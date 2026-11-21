@@ -66,16 +66,12 @@ type apiV2ServerOpts struct {
 	db               *kv.DB
 }
 
-// apiV2Server implements version 2 API endpoints, under apiconstants.APIV2Path. The
-// implementation of some endpoints is delegated to sub-servers (eg. auth
-// endpoints like `/login` and `/logout` are passed onto authServer), while
-// others are implemented directly by apiV2Server.
+// apiV2Server implements version 2 API endpoints, under apiconstants.APIV2Path.
 //
 // To register a new API endpoint, add it to the route definitions in
 // registerRoutes().
 type apiV2Server struct {
 	admin            *adminServer
-	authServer       authserver.ServerV2
 	status           *statusServer
 	promRuleExporter *metric.PrometheusRuleExporter
 	mux              *mux.Router
@@ -98,7 +94,7 @@ var _ http.Handler = &apiV2Server{}
 
 // newAPIV2Server returns a new apiV2Server.
 func newAPIV2Server(ctx context.Context, opts *apiV2ServerOpts) http.Handler {
-	authServer := authserver.NewV2Server(ctx, opts.sqlServer, opts.sqlServer.cfg.Config, apiconstants.APIV2Path)
+	authServer := authserver.NewServer(opts.sqlServer.cfg.Config, opts.sqlServer)
 	innerMux := mux.NewRouter()
 	allowAnonymous := opts.sqlServer.cfg.Insecure
 	authMux := authserver.NewV2Mux(authServer, innerMux, allowAnonymous)
@@ -109,7 +105,6 @@ func newAPIV2Server(ctx context.Context, opts *apiV2ServerOpts) http.Handler {
 	if saOk && ssOk {
 		inner := &apiV2Server{
 			admin:            systemAdmin.adminServer,
-			authServer:       authServer,
 			status:           systemStatus.statusServer,
 			mux:              outerMux,
 			promRuleExporter: opts.promRuleExporter,
@@ -126,7 +121,6 @@ func newAPIV2Server(ctx context.Context, opts *apiV2ServerOpts) http.Handler {
 	} else {
 		a := &apiV2Server{
 			admin:            opts.admin.(*adminServer),
-			authServer:       authServer,
 			status:           opts.status.(*statusServer),
 			mux:              outerMux,
 			promRuleExporter: opts.promRuleExporter,
@@ -169,8 +163,6 @@ func registerRoutes(
 		tenantEnabled bool
 	}{
 		// Pass through auth-related endpoints to the auth server.
-		{"login/", a.authServer.ServeHTTP, false /* requiresAuth */, authserver.RegularRole, noOption, false},
-		{"logout/", a.authServer.ServeHTTP, false /* requiresAuth */, authserver.RegularRole, noOption, false},
 
 		// Directly register other endpoints in the api server.
 		{"sessions/", a.listSessions, true /* requiresAuth */, authserver.AdminRole, noOption, false},

@@ -14,7 +14,6 @@ import (
 	"context"
 
 	democlusterapi "github.com/cockroachdb/cockroach/pkg/cli/democluster/api"
-	"github.com/cockroachdb/cockroach/pkg/security/username"
 )
 
 // DemoCluster represents a demo cluster.
@@ -30,13 +29,6 @@ type DemoCluster interface {
 
 	// GetConnURL retrieves the connection URL to the first node.
 	GetConnURL() string
-
-	// GetSQLCredentials retrieves the authentication credentials to
-	// establish SQL connections to the demo cluster.
-	// (These are already embedded in the connection URL produced
-	// by GetConnURL() however a client may wish to have them
-	// available as discrete values.)
-	GetSQLCredentials() (adminUser username.SQLUsername, adminPassword, certsDir string)
 
 	// Close shuts down the demo cluster.
 	Close(ctx context.Context)

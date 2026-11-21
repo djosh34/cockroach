@@ -781,7 +781,7 @@ func createAndStartServerAsync(
 			}
 
 			// Run one-off cluster initialization.
-			if err := s.RunInitialSQL(ctx, startSingleNode, "" /* adminUser */, "" /* adminPassword */); err != nil {
+			if err := s.RunInitialSQL(ctx, startSingleNode); err != nil {
 				return err
 			}
 
@@ -1252,7 +1252,7 @@ func clientFlagsRPC() string {
 	if startCtx.serverInsecure {
 		flags = append(flags, "--insecure")
 	} else {
-		flags = append(flags, "--certs-dir="+startCtx.serverSSLCertsDir)
+		flags = append(flags, "--config="+startCtx.serverConfigFile)
 	}
 	return strings.Join(flags, " ")
 }

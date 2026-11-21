@@ -46,6 +46,6 @@ func (f *wrap) BinaryVersionOverride() roachpb.Version {
 }
 
 // RunInitialSQL is part of the interface TestServerController.
-func (f *wrap) RunInitialSQL(ctx context.Context, startSingleNode bool, adminUser, adminPassword string) error {
-	return f.fwTestServerController("RunInitialSQL").RunInitialSQL(ctx, startSingleNode, adminUser, adminPassword)
+func (f *wrap) RunInitialSQL(ctx context.Context, startSingleNode bool) error {
+	return f.fwTestServerController("RunInitialSQL").RunInitialSQL(ctx, startSingleNode)
 }

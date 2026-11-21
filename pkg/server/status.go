@@ -1042,39 +1042,25 @@ func (s *statusServer) Certificates(
 		return nil, srverrors.ServerError(ctx, err)
 	}
 
-	// The certificate manager gives us a list of CertInfo objects to avoid
+	// The certificate manager gives us a list of CertFile objects to avoid
 	// making security depend on serverpb.
-	certs, err := cm.ListCertificates()
-	if err != nil {
-		return nil, srverrors.ServerError(ctx, err)
-	}
-
 	cr := &serverpb.CertificatesResponse{}
-	for _, cert := range certs {
+	for _, cert := range cm.ListCertificates() {
 		details := serverpb.CertificateDetails{}
-		switch cert.FileUsage {
+		switch cert.Usage {
 		case security.CAPem:
 			details.Type = serverpb.CertificateDetails_CA
 		case security.ClientCAPem:
 			details.Type = serverpb.CertificateDetails_CLIENT_CA
-		case security.UICAPem:
-			details.Type = serverpb.CertificateDetails_UI_CA
 		case security.NodePem:
 			details.Type = serverpb.CertificateDetails_NODE
-		case security.UIPem:
-			details.Type = serverpb.CertificateDetails_UI
 		case security.ClientPem:
 			details.Type = serverpb.CertificateDetails_CLIENT
 		default:
-			return nil, srverrors.ServerErrorf(ctx, "unknown certificate type %v for file %s", cert.FileUsage, cert.Filename)
+			return nil, srverrors.ServerErrorf(ctx, "unknown certificate type %v for file %s", cert.Usage, cert.Filename)
 		}
-
-		if cert.Error == nil {
-			if err := extractCertFields(cert.FileContents, &details); err != nil {
-				details.ErrorMessage = err.Error()
-			}
-		} else {
-			details.ErrorMessage = cert.Error.Error()
+		if err := extractCertFields(cert.Contents, &details); err != nil {
+			details.ErrorMessage = err.Error()
 		}
 		cr.Certificates = append(cr.Certificates, details)
 	}

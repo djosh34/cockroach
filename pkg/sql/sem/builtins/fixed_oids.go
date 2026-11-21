@@ -905,7 +905,6 @@ var builtinOidsArray = []string{
 	1300: `crdb_internal.node_id() -> int`,
 	1301: `crdb_internal.cluster_name() -> string`,
 	1302: `crdb_internal.create_tenant(id: int) -> int`,
-	1303: `crdb_internal.create_join_token() -> string`,
 	1304: `crdb_internal.destroy_tenant(id: int) -> int`,
 	1305: `crdb_internal.destroy_tenant(id: int, synchronous: bool) -> int`,
 	1306: `crdb_internal.unsafe_clear_gossip_info(key: string) -> bool`,

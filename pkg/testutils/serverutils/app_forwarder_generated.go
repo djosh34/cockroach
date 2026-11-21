@@ -293,18 +293,8 @@ func (f *wrap) GetAdminHTTPClient() (http.Client, error) {
 }
 
 // GetAuthenticatedHTTPClient is part of the interface ApplicationLayerInterface.
-func (f *wrap) GetAuthenticatedHTTPClient(isAdmin bool, sessionType SessionType) (http.Client, error) {
-	return f.fwApplicationLayerInterface("GetAuthenticatedHTTPClient").GetAuthenticatedHTTPClient(isAdmin, sessionType)
-}
-
-// GetAuthenticatedHTTPClientAndCookie is part of the interface ApplicationLayerInterface.
-func (f *wrap) GetAuthenticatedHTTPClientAndCookie(authUser username.SQLUsername, isAdmin bool, session SessionType) (http.Client, *serverpb.SessionCookie, error) {
-	return f.fwApplicationLayerInterface("GetAuthenticatedHTTPClientAndCookie").GetAuthenticatedHTTPClientAndCookie(authUser, isAdmin, session)
-}
-
-// GetAuthSession is part of the interface ApplicationLayerInterface.
-func (f *wrap) GetAuthSession(isAdmin bool) (*serverpb.SessionCookie, error) {
-	return f.fwApplicationLayerInterface("GetAuthSession").GetAuthSession(isAdmin)
+func (f *wrap) GetAuthenticatedHTTPClient(isAdmin bool) (http.Client, error) {
+	return f.fwApplicationLayerInterface("GetAuthenticatedHTTPClient").GetAuthenticatedHTTPClient(isAdmin)
 }
 
 // CreateAuthUser is part of the interface ApplicationLayerInterface.
@@ -395,11 +385,6 @@ func (f *wrap) DefaultZoneConfig() zonepb.ZoneConfig {
 // SetReady is part of the interface ApplicationLayerInterface.
 func (f *wrap) SetReady(arg0 bool) {
 	f.fwApplicationLayerInterface("SetReady").SetReady(arg0)
-}
-
-// SetAcceptSQLWithoutTLS is part of the interface ApplicationLayerInterface.
-func (f *wrap) SetAcceptSQLWithoutTLS(arg0 bool) {
-	f.fwApplicationLayerInterface("SetAcceptSQLWithoutTLS").SetAcceptSQLWithoutTLS(arg0)
 }
 
 // PrivilegeChecker is part of the interface ApplicationLayerInterface.

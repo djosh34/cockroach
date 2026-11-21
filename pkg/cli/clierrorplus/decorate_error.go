@@ -125,7 +125,7 @@ func MaybeDecorateError(
 			// Avoid errors.Wrapf here so that we have more control over the
 			// formatting of the message with error text.
 			const format = "cannot load certificates.\n" +
-				"Check your certificate settings, set --certs-dir, or use --insecure for insecure clusters.\n\n%v"
+				"Check the files named by --config, or use --insecure for insecure clusters.\n\n%v"
 			return errors.Errorf(format, err)
 		}
 

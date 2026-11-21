@@ -149,11 +149,6 @@ var _ clientsecopts.CLIFlagInterfaceForClientURL = (*urlParser)(nil)
 // StrictTLS implements the clientsecopts.CLIFlagInterfaceForClientURL interface.
 func (u *urlParser) StrictTLS() bool { return u.strictTLS }
 
-// UserFlag implements the clientsecopts.CLIFlagInterfaceForClientURL interface.
-func (u *urlParser) UserFlag() (hasConnUser bool, connUser string) {
-	return u.clientOpts.User != "", u.clientOpts.User
-}
-
 // SetUser implements the clientsecopts.CLIFlagInterfaceForClientURL interface.
 func (u *urlParser) SetUser(user string) {
 	// If the URL specifies a username, check whether a username was expected.
@@ -213,24 +208,6 @@ func (u *urlParser) SetDatabase(db string) {
 	} else {
 		u.clientOpts.Database = db
 		f.Changed = true
-	}
-}
-
-// CertsDirFlag implements the clientsecopts.CLIFlagInterfaceForClientURL interface.
-func (u *urlParser) CertsDirFlag() (bool, string) {
-	flCertsDir := u.fl.Lookup(cliflags.CertsDir.Name)
-	if flCertsDir == nil {
-		return false, ""
-	}
-	return flCertsDir.Changed, flCertsDir.Value.String()
-}
-
-// SetCertsDir implements the clientsecopts.CLIFlagInterfaceForClientURL interface.
-func (u *urlParser) SetCertsDir(certsDir string) {
-	flCertsDir := u.fl.Lookup(cliflags.CertsDir.Name)
-	if flCertsDir != nil {
-		_ = flCertsDir.Value.Set(certsDir)
-		flCertsDir.Changed = true
 	}
 }
 

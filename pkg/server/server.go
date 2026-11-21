@@ -12,6 +12,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"os"
 	"path/filepath"
@@ -65,6 +66,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/rpc"
 	"github.com/cockroachdb/cockroach/pkg/rpc/nodedialer"
+	"github.com/cockroachdb/cockroach/pkg/security"
 	"github.com/cockroachdb/cockroach/pkg/security/clientsecopts"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/authserver"
@@ -319,7 +321,6 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 	rpcCtxOpts := rpc.ServerContextOptionsFromBaseConfig(cfg.BaseConfig.Config)
 
 	rpcCtxOpts.TenantID = roachpb.SystemTenantID
-	rpcCtxOpts.UseNodeAuth = true
 	rpcCtxOpts.NodeID = nodeIDContainer
 	rpcCtxOpts.StorageClusterID = cfg.ClusterIDContainer
 	rpcCtxOpts.Clock = clock.WallClock()
@@ -363,18 +364,10 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 
 	// Attempt to load TLS configs right away, failures are permanent.
 	if !cfg.Insecure {
-		// TODO(peter): Call methods on CertificateManager directly. Need to call
-		// base.wrapError or similar on the resulting error.
-		if _, err := rpcContext.GetServerTLSConfig(); err != nil {
+		if err := cfg.Certs.CheckNode(); err != nil {
 			return nil, err
 		}
-		if _, err := rpcContext.GetUIServerTLSConfig(); err != nil {
-			return nil, err
-		}
-		if _, err := rpcContext.GetClientTLSConfig(); err != nil {
-			return nil, err
-		}
-		cm, err := rpcContext.GetCertificateManager()
+		cm, err := loadServerCertificates(rpcContext)
 		if err != nil {
 			return nil, err
 		}
@@ -1063,7 +1056,7 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 		cfg.AmbientCtx,
 		cfg.Config,
 		cfg.Settings,
-		rpcContext.GetServerTLSConfig,
+		rpcContext.GetSQLServerTLSConfig,
 		cfg.HistogramWindowInterval(),
 		sqlMonitorAndMetrics.rootSQLMemoryMonitor,
 		true, /* acceptTenantName */
@@ -1153,7 +1146,7 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 		return p.(sql.AuthorizationAccessor), cleanup
 	})
 
-	// Create the authentication RPC server (login/logout).
+	// Create the HTTP authentication server.
 	sAuth := authserver.NewServer(cfg.Config, sqlServer)
 
 	// Create a drain server.
@@ -1180,7 +1173,7 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 	)
 
 	// Connect the various servers to RPC.
-	for i, gw := range []grpcGatewayServer{sAdmin, sStatus, sAuth, &sTS} {
+	for i, gw := range []grpcGatewayServer{sAdmin, sStatus, &sTS} {
 		if reflect.ValueOf(gw).IsNil() {
 			return nil, errors.Errorf("%d: nil", i)
 		}
@@ -1213,7 +1206,6 @@ func NewServer(cfg Config, stopper *stop.Stopper) (serverctl.ServerStartupInterf
 	debugServer := debug.NewServer(
 		cfg.BaseConfig.AmbientCtx,
 		st,
-		sqlServer.pgServer.HBADebugFn(),
 		sqlServer.execCfg.SQLStatusServer,
 		roachpb.SystemTenantID,
 		authorizer,
@@ -1405,9 +1397,8 @@ func (s *topLevelServer) PreStart(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		// Ensure that SIGHUP will make this cert manager reload its certs
-		// from disk.
-		if err := cm.RegisterSignalHandler(workersCtx, s.stopper); err != nil {
+		// Reload the certs and rules on SIGHUP and when the files change.
+		if err := cm.Watch(workersCtx, s.stopper); err != nil {
 			return err
 		}
 	}
@@ -1425,7 +1416,7 @@ func (s *topLevelServer) PreStart(ctx context.Context) error {
 		s.grpc.serverInterceptorsInfo, s.rpcContext.ClientInterceptors())
 
 	// Load the TLS configuration for the HTTP server.
-	uiTLSConfig, err := s.rpcContext.GetUIServerTLSConfig()
+	uiTLSConfig, err := s.rpcContext.GetHTTPServerTLSConfig()
 	if err != nil {
 		return err
 	}
@@ -1573,7 +1564,7 @@ func (s *topLevelServer) PreStart(ctx context.Context) error {
 	}
 
 	// Connect the various RPC handlers to the gRPC gateway.
-	for _, gw := range []grpcGatewayServer{s.admin, s.status, s.authentication, s.tsServer} {
+	for _, gw := range []grpcGatewayServer{s.admin, s.status, s.tsServer} {
 		if err := gw.RegisterGateway(gwCtx, gwMux, conn); err != nil {
 			return err
 		}
@@ -2316,7 +2307,7 @@ func MakeServerOptionsForURL(
 ) (clientsecopts.ClientSecurityOptions, clientsecopts.ServerParameters) {
 	clientConnOptions := clientsecopts.ClientSecurityOptions{
 		Insecure: baseCfg.Insecure,
-		CertsDir: baseCfg.SSLCertsDir,
+		Certs:    baseCfg.Certs,
 	}
 	serverParams := clientsecopts.ServerParameters{
 		ServerAddr:      baseCfg.SQLAdvertiseAddr,
@@ -2324,4 +2315,20 @@ func MakeServerOptionsForURL(
 		DefaultDatabase: catalogkeys.DefaultDatabaseName,
 	}
 	return clientConnOptions, serverParams
+}
+
+// loadServerCertificates loads the cert files and builds every TLS config a
+// server uses, so that a bad file fails the start.
+func loadServerCertificates(rpcContext *rpc.Context) (*security.CertificateManager, error) {
+	for _, get := range []func() (*tls.Config, error){
+		rpcContext.GetServerTLSConfig,
+		rpcContext.GetSQLServerTLSConfig,
+		rpcContext.GetHTTPServerTLSConfig,
+		rpcContext.GetClientTLSConfig,
+	} {
+		if _, err := get(); err != nil {
+			return nil, err
+		}
+	}
+	return rpcContext.GetCertificateManager()
 }

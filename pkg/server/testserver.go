@@ -16,7 +16,6 @@ import (
 	gosql "database/sql"
 	"fmt"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -42,9 +41,8 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/multitenant/tenantcapabilities"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/rpc"
-	"github.com/cockroachdb/cockroach/pkg/security/certnames"
+	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
-	"github.com/cockroachdb/cockroach/pkg/server/authserver"
 	"github.com/cockroachdb/cockroach/pkg/server/serverpb"
 	"github.com/cockroachdb/cockroach/pkg/server/status"
 	"github.com/cockroachdb/cockroach/pkg/settings"
@@ -103,12 +101,11 @@ func makeTestBaseConfig(st *cluster.Settings, tr *tracing.Tracer) BaseConfig {
 	baseCfg.Insecure = false
 	// Configure test storage engine.
 	baseCfg.StorageEngine = storage.DefaultStorageEngine
-	// Load test certs. In addition, the tests requiring certs
-	// need to call securityassets.SetLoader(securitytest.EmbeddedAssets)
-	// in their init to mock out the file system calls for calls to AssetFS,
-	// which has the test certs compiled in. Typically this is done
-	// once per package, in main_test.go.
-	baseCfg.SSLCertsDir = certnames.EmbeddedCertsDir
+	// Use the test certs. The tests requiring certs need to call
+	// securityassets.SetLoader(securitytest.EmbeddedAssets) in their init,
+	// which serves the test certs from memory. Typically this is done once
+	// per package, in main_test.go.
+	baseCfg.Certs = certconfig.Embedded()
 	// Addr defaults to localhost with port set at time of call to
 	// Start() to an available port. May be overridden later (as in
 	// makeTestConfigFromParams). Call testServer.AdvRPCAddr() and
@@ -204,8 +201,8 @@ func makeTestConfigFromParams(params base.TestServerArgs) Config {
 	if params.ScanMaxIdleTime != 0 {
 		cfg.ScanMaxIdleTime = params.ScanMaxIdleTime
 	}
-	if params.SSLCertsDir != "" {
-		cfg.SSLCertsDir = params.SSLCertsDir
+	if params.Certs != (certconfig.Config{}) {
+		cfg.Certs = params.Certs
 	}
 	if params.TimeSeriesQueryWorkerMax != 0 {
 		cfg.TimeSeriesServerConfig.QueryWorkerMax = params.TimeSeriesQueryWorkerMax
@@ -624,7 +621,7 @@ func (ts *testServer) startDefaultTestTenant(
 		ExternalIODirConfig: ts.params.ExternalIODirConfig,
 		ForceInsecure:       ts.Insecure(),
 		UseDatabase:         ts.params.UseDatabase,
-		SSLCertsDir:         ts.params.SSLCertsDir,
+		Certs:               ts.params.Certs,
 		TestingKnobs:        ts.params.Knobs,
 		Settings:            tenantSettings,
 	}
@@ -803,9 +800,7 @@ func (ts *testServer) Activate(ctx context.Context) error {
 		return err
 	}
 	// In tests we need some, but not all of RunInitialSQL functionality.
-	if err := ts.topLevelServer.RunInitialSQL(
-		ctx, !ts.params.PartOfCluster, "" /* adminUser */, "", /* adminPassword */
-	); err != nil {
+	if err := ts.topLevelServer.RunInitialSQL(ctx, !ts.params.PartOfCluster); err != nil {
 		return err
 	}
 
@@ -1452,11 +1447,6 @@ func (t *testTenant) SetReady(ready bool) {
 	t.sql.isReady.Set(ready)
 }
 
-// SetAcceptSQLWithoutTLS is part of the serverutils.ApplicationLayerInterface.
-func (t *testTenant) SetAcceptSQLWithoutTLS(accept bool) {
-	t.Cfg.AcceptSQLWithoutTLS = accept
-}
-
 // PrivilegeChecker is part of the serverutils.ApplicationLayerInterface.
 func (t *testTenant) PrivilegeChecker() interface{} {
 	return t.t.admin.privilegeChecker
@@ -1705,8 +1695,8 @@ func (ts *testServer) StartTenant(
 	// in test servers.
 	baseCfg.SplitListenSQL = true
 
-	if params.SSLCertsDir != "" {
-		baseCfg.SSLCertsDir = params.SSLCertsDir
+	if params.Certs != (certconfig.Config{}) {
+		baseCfg.Certs = params.Certs
 	}
 	if params.StartingRPCAndSQLPort > 0 {
 		log.Infof(ctx, "computing tenant server sql/rpc addr from %d", params.StartingRPCAndSQLPort)
@@ -1875,17 +1865,6 @@ func (ts *testServer) WriteSummaries() error {
 // DiagnosticsReporter implements the serverutils.ApplicationLayerInterface.
 func (ts *testServer) DiagnosticsReporter() interface{} {
 	return ts.topLevelServer.sqlServer.diagnosticsReporter
-}
-
-type v2AuthDecorator struct {
-	http.RoundTripper
-
-	session string
-}
-
-func (v *v2AuthDecorator) RoundTrip(r *http.Request) (*http.Response, error) {
-	r.Header.Add(authserver.APIV2AuthHeader, v.session)
-	return v.RoundTripper.RoundTrip(r)
 }
 
 // MustGetSQLCounter implements serverutils.ApplicationLayerInterface.
@@ -2345,11 +2324,6 @@ func (ts *testServer) StatsForSpan(
 // SetReady is part of the serverutils.ApplicationLayerInterface.
 func (ts *testServer) SetReady(ready bool) {
 	ts.sqlServer.isReady.Set(ready)
-}
-
-// SetAcceptSQLWithoutTLS is part of the serverutils.ApplicationLayerInterface.
-func (ts *testServer) SetAcceptSQLWithoutTLS(accept bool) {
-	ts.Cfg.AcceptSQLWithoutTLS = accept
 }
 
 // PrivilegeChecker is part of the serverutils.ApplicationLayerInterface.

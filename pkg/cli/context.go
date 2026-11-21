@@ -23,9 +23,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/cli/clisqlexec"
 	"github.com/cockroachdb/cockroach/pkg/cli/clisqlshell"
 	"github.com/cockroachdb/cockroach/pkg/cli/democluster"
-	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/security/clientsecopts"
-	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server"
 	"github.com/cockroachdb/cockroach/pkg/server/autoconfig/acprovider"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
@@ -61,10 +59,8 @@ func initCLIDefaults() {
 	setConvContextDefaults()
 	setDemoContextDefaults()
 	setStmtDiagContextDefaults()
-	setAuthContextDefaults()
 	setImportContextDefaults()
 	setUserfileContextDefaults()
-	setCertContextDefaults()
 	setDebugRecoverContextDefaults()
 	setDebugSendKVBatchContextDefaults()
 
@@ -135,10 +131,9 @@ type cliContext struct {
 	// Commands that wish to use this must use cmdTimeoutContext().
 	cmdTimeout time.Duration
 
-	// certPrincipalMap is the cert-principal:db-principal map.
-	// This configuration flag is only used for client commands that establish
-	// a connection to a server.
-	certPrincipalMap []string
+	// configFile is the --config file of client commands. It names the
+	// node cert used for RPCs and the client cert used for SQL.
+	configFile string
 
 	// clientOpts is the set of client options to generate connection
 	// URLs. Note that the ClientSecurityOptions field in clientOpts is
@@ -197,9 +192,11 @@ func setCliContextDefaults() {
 	cliCtx.cmdTimeout = 0 // no timeout
 	cliCtx.clientOpts.ServerHost = getDefaultHost()
 	cliCtx.clientOpts.ServerPort = base.DefaultPort
-	cliCtx.certPrincipalMap = nil
+	cliCtx.configFile = ""
 	cliCtx.clientOpts.ExplicitURL = nil
-	cliCtx.clientOpts.User = username.RootUser
+	// An empty user means root, or with --config the role that the client
+	// cert maps to. See defaultClientUser.
+	cliCtx.clientOpts.User = ""
 	cliCtx.clientOpts.Database = ""
 	cliCtx.allowUnencryptedClientPassword = false
 	cliCtx.logConfigInput = settableString{s: ""}
@@ -225,58 +222,6 @@ func setSQLConnContextDefaults() {
 	sqlConnCtx.DebugMode = false
 	sqlConnCtx.Echo = false
 	sqlConnCtx.EnableServerExecutionTimings = false
-}
-
-// certCtx captures the command-line parameters of the various `cert` commands.
-// See below for defaults.
-var certCtx struct {
-	certsDir              string
-	caKey                 string
-	keySize               int
-	caCertificateLifetime time.Duration
-	certificateLifetime   time.Duration
-	allowCAKeyReuse       bool
-	overwriteFiles        bool
-	generatePKCS8Key      bool
-	// certPrincipalMap is the cert-principal:db-principal map.
-	// This configuration flag is only used for 'cert' commands
-	// that generate certificates.
-	certPrincipalMap []string
-	// tenantScope indicates a tenantID(s) that a certificate is being
-	// scoped to. By creating a tenant-scoped certicate, the usage of that certificate
-	// is restricted to a specific tenant.
-	tenantScope []roachpb.TenantID
-
-	// disableUsernameValidation removes the username syntax check on
-	// the input.
-	disableUsernameValidation bool
-}
-
-func setCertContextDefaults() {
-	certCtx.certsDir = base.DefaultCertsDirectory
-	certCtx.caKey = ""
-	certCtx.keySize = defaultKeySize
-	certCtx.caCertificateLifetime = defaultCALifetime
-	certCtx.certificateLifetime = defaultCertLifetime
-	certCtx.allowCAKeyReuse = false
-	certCtx.overwriteFiles = false
-	certCtx.generatePKCS8Key = false
-	certCtx.disableUsernameValidation = false
-	certCtx.certPrincipalMap = nil
-	// Note: we set tenantScope to nil so that by default, client certs
-	// are not scoped to a specific tenant and can be used to connect to
-	// any tenant.
-	//
-	// Note that the scoping is generally useful for security, and it is
-	// used in CockroachCloud. However, CockroachCloud does not use our
-	// CLI code to generate certs and sets its tenant scopes on its own.
-	//
-	// Given that our CLI code is provided for convenience and developer
-	// productivity, and we don't expect certs generated here to be used
-	// in multi-tenant deployments where tenants are adversarial to each
-	// other, defaulting to certs that are valid on every tenant is a
-	// good choice.
-	certCtx.tenantScope = nil
 }
 
 var sqlExecCtx = clisqlexec.Context{
@@ -411,21 +356,6 @@ func setDumpContextDefaults() {
 	dumpCtx.dumpAll = false
 }
 
-// authCtx captures the command-line parameters of the `auth-session`
-// command. See below for defaults.
-var authCtx struct {
-	onlyCookie     bool
-	validityPeriod time.Duration
-}
-
-// setAuthContextDefaults set the default values in authCtx.  This
-// function is called by initCLIDefaults() and thus re-called in every
-// test that exercises command-line parsing.
-func setAuthContextDefaults() {
-	authCtx.onlyCookie = false
-	authCtx.validityPeriod = 1 * time.Hour
-}
-
 // debugCtx captures the command-line parameters of the `debug` command.
 // See below for defaults.
 var debugCtx struct {
@@ -464,15 +394,9 @@ func setDebugContextDefaults() {
 // See below for defaults.
 var startCtx struct {
 	// server-specific values of some flags.
-	serverInsecure         bool
-	serverSSLCertsDir      string
-	serverCertPrincipalMap []string
-	serverListenAddr       string
-
-	// The TLS auto-handshake parameters.
-	initToken             string
-	numExpectedNodes      int
-	genCertsForSingleNode bool
+	serverInsecure   bool
+	serverConfigFile string
+	serverListenAddr string
 
 	// if specified, this forces the HTTP listen addr to localhost
 	// and disables TLS on the HTTP listener.
@@ -512,12 +436,8 @@ var startCtx struct {
 // test that exercises command-line parsing.
 func setStartContextDefaults() {
 	startCtx.serverInsecure = baseCfg.Insecure
-	startCtx.serverSSLCertsDir = base.DefaultCertsDirectory
-	startCtx.serverCertPrincipalMap = nil
+	startCtx.serverConfigFile = ""
 	startCtx.serverListenAddr = ""
-	startCtx.initToken = ""
-	startCtx.numExpectedNodes = 0
-	startCtx.genCertsForSingleNode = false
 	startCtx.unencryptedLocalhostHTTP = false
 	startCtx.tempDir = ""
 	startCtx.externalIODir = ""
@@ -638,10 +558,6 @@ func setDemoContextDefaults() {
 	demoCtx.SimulateLatency = false
 	demoCtx.RunWorkload = false
 	demoCtx.Localities = nil
-	demoCtx.DefaultKeySize = defaultKeySize
-	demoCtx.DefaultCALifetime = defaultCALifetime
-	demoCtx.DefaultCertLifetime = defaultCertLifetime
-	demoCtx.Insecure = false
 	demoCtx.SQLPort, _ = strconv.Atoi(base.DefaultPort)
 	demoCtx.HTTPPort, _ = strconv.Atoi(base.DefaultHTTPPort)
 	demoCtx.WorkloadMaxQPS = 25

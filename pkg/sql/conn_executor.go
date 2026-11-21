@@ -3506,7 +3506,6 @@ func (ex *connExecutor) initEvalCtx(ctx context.Context, evalCtx *extendedEvalCo
 			ClientNoticeSender:             p,
 			Sequence:                       p,
 			Tenant:                         p,
-			JoinTokenCreator:               p,
 			Gossip:                         p,
 			PreparedStatementState:         &ex.extraTxnState.prepStmtsNamespace,
 			SessionDataStack:               ex.sessionDataStack,

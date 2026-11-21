@@ -16,10 +16,10 @@ import (
 	"math/big"
 	"net"
 	"net/url"
-	"os"
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
+	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/util/envutil"
@@ -103,9 +103,6 @@ const (
 	// we should validate descriptors on lease renewals.
 	DefaultLeaseRenewalCrossValidate = false
 )
-
-// DefaultCertsDirectory is the default value for the cert directory flag.
-var DefaultCertsDirectory = os.ExpandEnv("${HOME}/.cockroach-certs")
 
 // DefaultHistogramWindowInterval returns the default rotation window for
 // histograms.
@@ -324,17 +321,9 @@ type Config struct {
 	// See: https://github.com/cockroachdb/cockroach/issues/53404
 	Insecure bool
 
-	// AcceptSQLWithoutTLS, when set, makes it possible for SQL
-	// clients to authenticate without TLS on a secure cluster.
-	//
-	// Authentication is, as usual, subject to the HBA configuration: in
-	// the default case, password authentication is still mandatory.
-	AcceptSQLWithoutTLS bool
-
-	// SSLCAKey is used to sign new certs.
-	SSLCAKey string
-	// SSLCertsDir is the path to the certificate/key directory.
-	SSLCertsDir string
+	// Certs names the cert, key, CA and rules files, from the --config
+	// file.
+	Certs certconfig.Config
 
 	// User running this process. It could be the user under which
 	// the server is running or the user passed in client calls.
@@ -481,12 +470,11 @@ func (cfg *Config) InitDefaults() {
 	cfg.SQLAddr = defaultSQLAddr
 	cfg.SQLAdvertiseAddr = cfg.SQLAddr
 	cfg.SocketFile = ""
-	cfg.SSLCertsDir = DefaultCertsDirectory
+	cfg.Certs = certconfig.Config{}
 	cfg.RPCHeartbeatInterval = PingInterval
 	cfg.RPCHeartbeatTimeout = DefaultRPCHeartbeatTimeout
 	cfg.ClusterName = ""
 	cfg.DisableClusterNameVerification = false
-	cfg.AcceptSQLWithoutTLS = false
 	cfg.ApplicationInternalRPCPortMin = 0
 	cfg.ApplicationInternalRPCPortMax = 0
 }

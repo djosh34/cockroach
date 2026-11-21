@@ -29,7 +29,7 @@ func AddBaseFlags(
 	cmd *cobra.Command,
 	clientOpts *clientsecopts.ClientOptions,
 	insecureBool *bool,
-	certsDirStr *string,
+	configFile *string,
 ) {
 	f := cmd.PersistentFlags()
 
@@ -47,8 +47,8 @@ func AddBaseFlags(
 	// NB: Insecure is deprecated. See #53404.
 	cliflagcfg.BoolFlagDepth(1, f, insecureBool, cliflags.ClientInsecure)
 
-	// --certs-dir.
-	cliflagcfg.StringFlagDepth(1, f, certsDirStr, cliflags.CertsDir)
+	// --config.
+	cliflagcfg.StringFlagDepth(1, f, configFile, cliflags.ConfigFile)
 }
 
 // AddSQLFlags adds command-line flags common to SQL client

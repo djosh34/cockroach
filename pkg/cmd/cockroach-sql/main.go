@@ -28,6 +28,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/cli/clisqlclient"
 	"github.com/cockroachdb/cockroach/pkg/cli/clisqlexec"
 	"github.com/cockroachdb/cockroach/pkg/cli/exit"
+	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/security/clientsecopts"
 	"github.com/cockroachdb/errors"
 	"github.com/spf13/cobra"
@@ -47,6 +48,10 @@ var cfg = func() *clisqlcfg.Context {
 // copts is the set of options that is used to configure the
 // connection URL.
 var copts clientsecopts.ClientOptions
+
+// configFile is the --config file. It names the client cert and the CA
+// that verifies servers.
+var configFile string
 
 func main() {
 	errCode := exit.Success()
@@ -84,7 +89,7 @@ func runMain() error {
 	cfg.ConnectTimeout = 15
 
 	// Configure the command-line flags.
-	clientflags.AddBaseFlags(sqlCmd, &copts, &copts.Insecure, &copts.CertsDir)
+	clientflags.AddBaseFlags(sqlCmd, &copts, &copts.Insecure, &configFile)
 	clientflags.AddSQLFlags(sqlCmd, &copts, cfg, true /* isShell */, false /* isDemo */)
 
 	// Apply the configuration defaults from environment variables.
@@ -152,6 +157,14 @@ func runSQL(cmd *cobra.Command, args []string) (resErr error) {
 		}
 	}
 
+	if configFile != "" {
+		c, err := certconfig.Load(configFile)
+		if err != nil {
+			return err
+		}
+		copts.Certs = c
+	}
+
 	// Translate the connection arguments to a connection URL.
 	connURL, err := clientsecopts.MakeClientConnURL(copts)
 	if err != nil {
@@ -190,7 +203,6 @@ func runSQL(cmd *cobra.Command, args []string) (resErr error) {
 	}
 	defer func() { resErr = errors.CombineErrors(resErr, conn.Close()) }()
 
-	cfg.ShellCtx.CertsDir = copts.CertsDir
 	cfg.ShellCtx.ParseURL = clienturl.MakeURLParserFn(cmd, copts)
 	return cfg.Run(context.Background(), conn)
 }

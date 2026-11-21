@@ -27,7 +27,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/multitenant/tenantcapabilities"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/security"
-	"github.com/cockroachdb/cockroach/pkg/security/certnames"
+	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
@@ -301,7 +301,7 @@ type ContextOptions struct {
 
 	// Fields from base.Config used by a rpc.Context, either in clients
 	// or servers.
-	SSLCertsDir                    string
+	Certs                          certconfig.Config
 	Insecure                       bool
 	ClusterName                    string
 	DisableClusterNameVerification bool
@@ -358,12 +358,6 @@ type ContextOptions struct {
 	// User is used in case ClientOnly is true.
 	User username.SQLUsername
 
-	// UseNodeAuth is only used when ClientOnly is not set.
-	// When set, it indicates that this rpc.Context is running inside
-	// the same process as a KV layer and thus should feel empowered
-	// to use its node cert to perform outgoing RPC dials.
-	UseNodeAuth bool
-
 	// TenantRPCAuthorizer provides a handle into the tenantcapabilities
 	// subsystem. It allows KV nodes to perform capability checks for incoming
 	// tenant requests.
@@ -386,7 +380,7 @@ type ContextOptions struct {
 // DefaultContextOptions are mostly used in tests.
 func DefaultContextOptions() ContextOptions {
 	return ContextOptions{
-		SSLCertsDir:             certnames.EmbeddedCertsDir,
+		Certs:                   certconfig.Embedded(),
 		TenantID:                roachpb.SystemTenantID,
 		User:                    username.NodeUserName(),
 		HistogramWindowInterval: base.DefaultHistogramWindowInterval(),
@@ -403,7 +397,7 @@ func DefaultContextOptions() ContextOptions {
 // a base.Config struct.
 func ServerContextOptionsFromBaseConfig(cfg *base.Config) ContextOptions {
 	return ContextOptions{
-		SSLCertsDir:                    cfg.SSLCertsDir,
+		Certs:                          cfg.Certs,
 		Insecure:                       cfg.Insecure,
 		ClusterName:                    cfg.ClusterName,
 		DisableClusterNameVerification: cfg.DisableClusterNameVerification,
@@ -522,7 +516,7 @@ func NewContext(ctx context.Context, opts ContextOptions) *Context {
 
 	secCtx := NewSecurityContext(
 		SecurityContextOptions{
-			SSLCertsDir:       opts.SSLCertsDir,
+			Certs:             opts.Certs,
 			Insecure:          opts.Insecure,
 			AdvertiseAddrH:    opts.AdvertiseAddrH,
 			SQLAdvertiseAddrH: opts.SQLAdvertiseAddrH,
@@ -532,7 +526,6 @@ func NewContext(ctx context.Context, opts ContextOptions) *Context {
 		opts.TenantID,
 		opts.TenantRPCAuthorizer,
 	)
-	secCtx.useNodeAuth = opts.UseNodeAuth
 
 	rpcCtx := &Context{
 		ContextOptions:  opts,
@@ -1610,40 +1603,11 @@ func (rpcCtx *Context) GetBreakerForAddr(
 	return p.b, true
 }
 
-// GetClientTLSConfig decides which TLS client configuration (&
-// certificates) to use to reach the remote node.
+// GetClientTLSConfig returns the TLS config for dialing a node, or nil in
+// insecure mode. Servers and CLI commands alike present the node cert. A
+// virtual cluster's server also names its tenant in the gRPC metadata.
 func (rpcCtx *Context) GetClientTLSConfig() (*tls.Config, error) {
-	if rpcCtx.config.Insecure {
-		return nil, nil
-	}
-
-	cm, err := rpcCtx.GetCertificateManager()
-	if err != nil {
-		return nil, wrapError(err)
-	}
-
-	switch {
-	case rpcCtx.ClientOnly:
-		// A CLI command is performing a remote RPC.
-		tlsCfg, err := cm.GetClientTLSConfig(rpcCtx.User)
-		return tlsCfg, wrapError(err)
-
-	case rpcCtx.UseNodeAuth || rpcCtx.tenID.IsSystem():
-		tlsCfg, err := cm.GetNodeClientTLSConfig()
-		return tlsCfg, wrapError(err)
-
-	case !rpcCtx.tenID.IsSystem():
-		// A SQL server running in a standalone server doesn't have access
-		// to the node certs, and thus must use the standalone tenant
-		// client cert.
-		tlsCfg, err := cm.GetTenantTLSConfig()
-		return tlsCfg, wrapError(err)
-
-	default:
-		// We don't currently support any other way to use the rpc context.
-		// go away.
-		return nil, errors.AssertionFailedf("programming error: rpc context not initialized correctly")
-	}
+	return rpcCtx.tlsConfig((*security.CertificateManager).NodeClientTLSConfig)
 }
 
 // dialOptsNetworkCredentials computes options that determines how the

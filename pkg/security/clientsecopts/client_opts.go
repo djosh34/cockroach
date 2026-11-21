@@ -13,8 +13,7 @@ package clientsecopts
 import (
 	"net/url"
 
-	"github.com/cockroachdb/cockroach/pkg/security/certnames"
-	"github.com/cockroachdb/cockroach/pkg/security/securityassets"
+	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/pgurl"
 	"github.com/cockroachdb/cockroach/pkg/util/netutil/addr"
@@ -26,8 +25,9 @@ type ClientSecurityOptions struct {
 	// Insecure corresponds to the --insecure flag.
 	Insecure bool
 
-	// CertsDir corresponds to the --certs-dir flag.
-	CertsDir string
+	// Certs comes from the --config file. The client verifies servers with
+	// its node CA and presents its client cert.
+	Certs certconfig.Config
 }
 
 // loadSecurityOptions extends a url.Values with SSL settings suitable for
@@ -48,60 +48,15 @@ func loadSecurityOptions(
 		if tlsMode == pgurl.TLSUnspecified {
 			tlsMode = pgurl.TLSVerifyFull
 		}
-
-		loader := securityassets.GetLoader()
-		cl := certnames.MakeLocator(opts.CertsDir)
-
-		// Only verify-full and verify-ca should be doing certificate verification.
-		if tlsMode == pgurl.TLSVerifyFull || tlsMode == pgurl.TLSVerifyCA {
-			if caCertPath == "" {
-				// We need a CA certificate.
-				// Try to use the cert locator to find one, and if that fails,
-				// assume that the Go TLS code will fall back to a OS-level
-				// common trust store.
-
-				exists, err := loader.FileExists(cl.CACertPath())
-				if err != nil {
-					return err
-				}
-				if exists {
-					// The CL has found a CA cert. Use that.
-					caCertPath = cl.CACertPath()
-				}
-			}
-			// Fallback: if caCertPath was not assigned above, either
-			// we did not have a certs dir, or it did not contain
-			// a CA cert. In that case, we rely on the OS trust store.
-			// Documentation of tls.Config:
-			//     https://pkg.go.dev/crypto/tls#Config
+		// Servers present node certs, so the node CA verifies them. Without
+		// one, the Go TLS code falls back to the OS trust store.
+		if caCertPath == "" && (tlsMode == pgurl.TLSVerifyFull || tlsMode == pgurl.TLSVerifyCA) {
+			caCertPath = opts.Certs.NodeCA
 		}
-
-		// (Re)populate the transport information.
 		u.WithTransport(pgurl.TransportTLS(tlsMode, caCertPath))
 
-		// Fetch client certs, but don't fail if they're absent, we may be
-		// using a password.
-		certPath := cl.ClientCertPath(user)
-		keyPath := cl.ClientKeyPath(user)
-		certsAvailable := checkCertAndKeyAvailable(certPath, keyPath)
-
-		// If the command specifies user node, and we did not find
-		// client.node.crt, try with just node.crt.
-		if !certsAvailable && user.IsNodeUser() {
-			certPath = cl.NodeCertPath()
-			keyPath = cl.NodeKeyPath()
-			certsAvailable = checkCertAndKeyAvailable(certPath, keyPath)
-		}
-
-		// If we found some certs, add them to the URL authentication
-		// method.
-		if certsAvailable {
-			pwEnabled, hasPw, pwd := u.GetAuthnPassword()
-			if !pwEnabled {
-				u.WithAuthn(pgurl.AuthnClientCert(certPath, keyPath))
-			} else {
-				u.WithAuthn(pgurl.AuthnPasswordAndCert(certPath, keyPath, hasPw, pwd))
-			}
+		if opts.Certs.ClientCert != "" {
+			u.WithAuthn(pgurl.AuthnClientCert(opts.Certs.ClientCert, opts.Certs.ClientKey))
 		}
 	}
 	return nil
@@ -220,11 +175,4 @@ func MakeClientConnURL(copts ClientOptions) (*pgurl.URL, error) {
 	}
 
 	return purl, nil
-}
-
-func checkCertAndKeyAvailable(certPath string, keyPath string) bool {
-	loader := securityassets.GetLoader()
-	_, err1 := loader.Stat(certPath)
-	_, err2 := loader.Stat(keyPath)
-	return err1 == nil && err2 == nil
 }

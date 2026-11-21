@@ -240,21 +240,6 @@ func runDemoInternal(
 #   - Connection parameters:
 #  `,
 			strings.ReplaceAll(strings.TrimSuffix(nodeList.String(), "\n"), "\n", "\n#   "))
-
-		if !demoCtx.Insecure {
-			adminUser, adminPassword, certsDir := c.GetSQLCredentials()
-
-			fmt.Printf(`#   - Username: %q, password: %q
-#   - Directory with certificate files (for certain SQL drivers/tools): %s
-#
-# You can enter \info to print these details again.
-#
-`,
-				adminUser,
-				adminPassword,
-				certsDir,
-			)
-		}
 	}
 
 	conn, err := sqlCtx.MakeConn(c.GetConnURL())
@@ -263,8 +248,6 @@ func runDemoInternal(
 	}
 	defer func() { resErr = errors.CombineErrors(resErr, conn.Close()) }()
 
-	_, _, certsDir := c.GetSQLCredentials()
-	sqlCtx.ShellCtx.CertsDir = certsDir
 	sqlCtx.ShellCtx.ParseURL = clienturl.MakeURLParserFn(cmd, cliCtx.clientOpts)
 
 	if err := extraInit(ctx, conn); err != nil {

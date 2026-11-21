@@ -886,7 +886,7 @@ func newSQLServer(ctx context.Context, cfg sqlServerArgs) (*SQLServer, error) {
 			}
 			ccopts := clientsecopts.ClientSecurityOptions{
 				Insecure: cfg.Config.Insecure,
-				CertsDir: cfg.Config.SSLCertsDir,
+				Certs:    cfg.Config.Certs,
 			}
 			sparams := clientsecopts.ServerParameters{
 				ServerAddr:      cfg.Config.SQLAdvertiseAddr,

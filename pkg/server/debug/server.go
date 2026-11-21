@@ -146,7 +146,6 @@ func setupProcessWideRoutes(
 func NewServer(
 	ambientContext log.AmbientContext,
 	st *cluster.Settings,
-	hbaConfDebugFn http.HandlerFunc,
 	profiler pprofui.Profiler,
 	tenantID roachpb.TenantID,
 	authorizer tenantcapabilities.Authorizer,
@@ -159,12 +158,6 @@ func NewServer(
 	// Debug routes that retrieve process-wide state.
 	vsrv := &vmoduleServer{}
 	setupProcessWideRoutes(mux, st, tenantID, authorizer, vsrv, profiler)
-
-	if hbaConfDebugFn != nil {
-		// Expose the processed HBA configuration through the debug
-		// interface for inspection during troubleshooting.
-		mux.HandleFunc("/debug/hba_conf", hbaConfDebugFn)
-	}
 
 	// Set up the log spy, a tool that allows inspecting filtered logs at high
 	// verbosity. We require the tenant ID from the ambientCtx to set the logSpy

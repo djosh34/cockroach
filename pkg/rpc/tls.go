@@ -11,7 +11,6 @@
 package rpc
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -26,7 +25,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/multitenant/tenantcapabilities"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/security"
-	"github.com/cockroachdb/cockroach/pkg/security/certnames"
+	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/log/severity"
 	"github.com/cockroachdb/errors"
@@ -48,37 +47,27 @@ func wrapError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, security.ErrCertManagement) {
-		err = errors.Wrap(err, "problem using security settings")
-	}
-	return err
+	return errors.Wrap(err, "problem using security settings")
 }
 
 // SecurityContextOptions contains the subset of base.Config
 // useful to define a SecurityContext.
 type SecurityContextOptions struct {
-	SSLCertsDir string
-	Insecure    bool
+	// Certs names the cert, key, CA and rules files.
+	Certs    certconfig.Config
+	Insecure bool
 
-	// DisableTLSForHTTP is only used by GetUIServerTLSConfig().
-	//
-	// TODO(kv): it's a bit strange that the 'rpc' package
-	// is responsible for the HTTP TLS config. Maybe move it
-	// elsewhere?
+	// DisableTLSForHTTP is only used by GetHTTPServerTLSConfig().
 	DisableTLSForHTTP bool
 	// AdvertiseAddrH is only used by CheckCertificateAddrs().
 	*base.AdvertiseAddrH
 	// SQLAdvertiseAddrH is only used by CheckCertificateAddrs().
-	//
-	// TODO(kv): it's a bit strange that the 'rpc' package is
-	// responsible for the SQL TLS config. Maybe move it elsewhere?
 	*base.SQLAdvertiseAddrH
 }
 
 // SecurityContext is a wrapper providing transport security helpers such as
 // the certificate manager.
 type SecurityContext struct {
-	certnames.Locator
 	security.TLSSettings
 	config                 SecurityContextOptions
 	tenID                  roachpb.TenantID
@@ -89,12 +78,9 @@ type SecurityContext struct {
 		// httpClient uses the client TLS config. It is initialized lazily.
 		httpClient lazyHTTPClient
 	}
-	useNodeAuth bool
 }
 
 // NewSecurityContext instantiates a SecurityContext.
-//
-// TODO(tbg): don't take a whole Config. This can be trimmed down significantly.
 func NewSecurityContext(
 	cfg SecurityContextOptions,
 	tlsSettings security.TLSSettings,
@@ -105,7 +91,6 @@ func NewSecurityContext(
 		panic(errors.AssertionFailedf("programming error: tenant ID not defined"))
 	}
 	return &SecurityContext{
-		Locator:                certnames.MakeLocator(cfg.SSLCertsDir),
 		TLSSettings:            tlsSettings,
 		config:                 cfg,
 		tenID:                  tenID,
@@ -113,192 +98,99 @@ func NewSecurityContext(
 	}
 }
 
-// GetCertificateManager returns the certificate manager, initializing it
-// on the first call. If certificates should be used but none are found,
-// fails eagerly.
+// GetCertificateManager returns the certificate manager, loading the files
+// on the first call.
 func (ctx *SecurityContext) GetCertificateManager() (*security.CertificateManager, error) {
 	ctx.lazy.certificateManager.Do(func() {
-		var opts []security.Option
-		if !(ctx.useNodeAuth || ctx.tenID == roachpb.SystemTenantID) {
-			opts = append(opts, security.ForTenant(ctx.tenID.ToUint64()))
-		}
 		ctx.lazy.certificateManager.cm, ctx.lazy.certificateManager.err =
-			security.NewCertificateManager(ctx.config.SSLCertsDir, ctx, opts...)
-
-		if ctx.lazy.certificateManager.err == nil && !ctx.config.Insecure {
-			infos, err := ctx.lazy.certificateManager.cm.ListCertificates()
-			if err != nil {
-				ctx.lazy.certificateManager.err = err
-			} else if len(infos) == 0 {
-				// If we know there should be certificates (we're in secure mode)
-				// but there aren't any, this likely indicates that the certs dir
-				// was misconfigured.
-				ctx.lazy.certificateManager.err = errNoCertificatesFound
-			}
-		}
+			security.NewCertificateManager(ctx.config.Certs, ctx)
 	})
 	return ctx.lazy.certificateManager.cm, ctx.lazy.certificateManager.err
 }
 
-var errNoCertificatesFound = errors.Mark(
-	errors.New("no certificates found; does certs dir exist?"),
-	security.ErrCertManagement)
+// tlsConfig returns nil in insecure mode, and otherwise the config that get
+// builds from the certificate manager.
+func (ctx *SecurityContext) tlsConfig(
+	get func(*security.CertificateManager) (*tls.Config, error),
+) (*tls.Config, error) {
+	if ctx.config.Insecure {
+		return nil, nil
+	}
+	cm, err := ctx.GetCertificateManager()
+	if err != nil {
+		return nil, wrapError(err)
+	}
+	tlsCfg, err := get(cm)
+	return tlsCfg, wrapError(err)
+}
 
-// GetServerTLSConfig returns the server TLS config, initializing it if needed.
-// If Insecure is true, return a nil config, otherwise ask the certificate
-// manager for a server TLS config.
+// GetServerTLSConfig returns the TLS config of the RPC port, or nil in
+// insecure mode. It admits only nodes.
 func (ctx *SecurityContext) GetServerTLSConfig() (*tls.Config, error) {
-	// Early out.
-	if ctx.config.Insecure {
-		return nil, nil
-	}
-
-	cm, err := ctx.GetCertificateManager()
-	if err != nil {
-		return nil, wrapError(err)
-	}
-
-	tlsCfg, err := cm.GetServerTLSConfig()
-	if err != nil {
-		return nil, wrapError(err)
-	}
-	return tlsCfg, nil
+	return ctx.tlsConfig((*security.CertificateManager).RPCServerTLSConfig)
 }
 
-// getUIClientTLSConfig returns the client TLS config for Admin UI clients, initializing it if needed.
-// If Insecure is true, return a nil config, otherwise ask the certificate
-// manager for a TLS config configured to talk to the Admin UI.
-// This TLSConfig is **NOT** suitable to talk to the GRPC or SQL servers, use GetClientTLSConfig instead.
-func (ctx *SecurityContext) getUIClientTLSConfig() (*tls.Config, error) {
-	// Early out.
-	if ctx.config.Insecure {
-		return nil, nil
-	}
-
-	cm, err := ctx.GetCertificateManager()
-	if err != nil {
-		return nil, wrapError(err)
-	}
-
-	tlsCfg, err := cm.GetUIClientTLSConfig()
-	if err != nil {
-		return nil, wrapError(err)
-	}
-	return tlsCfg, nil
+// GetSQLServerTLSConfig returns the TLS config of the SQL port, or nil in
+// insecure mode. It admits only clients of the client CA.
+func (ctx *SecurityContext) GetSQLServerTLSConfig() (*tls.Config, error) {
+	return ctx.tlsConfig((*security.CertificateManager).SQLServerTLSConfig)
 }
 
-// GetUIServerTLSConfig returns the server TLS config for the Admin UI, initializing it if needed.
-// If Insecure is true, return a nil config, otherwise ask the certificate
-// manager for a server UI TLS config.
-//
-// TODO(peter): This method is only used by `server.NewServer` and
-// `Server.Start`. Move it.
-func (ctx *SecurityContext) GetUIServerTLSConfig() (*tls.Config, error) {
-	// Early out.
-	if ctx.config.Insecure || ctx.config.DisableTLSForHTTP {
+// GetHTTPServerTLSConfig returns the TLS config of the HTTP port, or nil in
+// insecure mode or when TLS is disabled for HTTP.
+func (ctx *SecurityContext) GetHTTPServerTLSConfig() (*tls.Config, error) {
+	if ctx.config.DisableTLSForHTTP {
 		return nil, nil
 	}
-
-	cm, err := ctx.GetCertificateManager()
-	if err != nil {
-		return nil, wrapError(err)
-	}
-
-	tlsCfg, err := cm.GetUIServerTLSConfig()
-	if err != nil {
-		return nil, wrapError(err)
-	}
-	return tlsCfg, nil
+	return ctx.tlsConfig((*security.CertificateManager).HTTPServerTLSConfig)
 }
 
-// GetHTTPClient returns the http client, initializing it
-// if needed. It uses the client TLS config.
+// GetHTTPClient returns the http client, initializing it if needed. It
+// connects to other nodes with the node cert.
 func (ctx *SecurityContext) GetHTTPClient() (http.Client, error) {
 	ctx.lazy.httpClient.Do(func() {
 		ctx.lazy.httpClient.httpClient.Timeout = 10 * time.Second
 		var transport http.Transport
 		ctx.lazy.httpClient.httpClient.Transport = &transport
-		transport.TLSClientConfig, ctx.lazy.httpClient.err = ctx.getUIClientTLSConfig()
+		if !ctx.config.DisableTLSForHTTP {
+			transport.TLSClientConfig, ctx.lazy.httpClient.err = ctx.tlsConfig(
+				(*security.CertificateManager).NodeClientTLSConfig)
+		}
 	})
 
 	return ctx.lazy.httpClient.httpClient, ctx.lazy.httpClient.err
 }
 
-// CheckCertificateAddrs validates the addresses inside the configured
-// certificates to be compatible with the configured listen and
-// advertise addresses. This is an advisory function (to inform/educate
-// the user) and not a requirement for security.
-// This must also be called after ValidateAddrs() and after
-// the certificate manager was initialized.
+// CheckCertificateAddrs warns if the node cert does not name the advertised
+// addresses. SQL and HTTP clients check the host name with
+// sslmode=verify-full; nodes do not, they check the node rules.
+// This must be called after ValidateAddrs() and after the certificate
+// manager was initialized.
 func (ctx *SecurityContext) CheckCertificateAddrs(cctx context.Context) {
 	if ctx.config.Insecure {
 		return
 	}
-
-	// By now the certificate manager must be initialized.
-	cm, _ := ctx.GetCertificateManager()
-
-	// Verify that the listen and advertise addresses are compatible
-	// with the provided certificate.
-	certInfo := cm.NodeCert()
-	if certInfo.Error != nil {
-		log.Ops.Shoutf(cctx, severity.ERROR,
-			"invalid node certificate: %v", certInfo.Error)
-	} else {
-		cert := certInfo.ParsedCertificates[0]
-		addrInfo := certAddrs(cert)
-
-		// Log the certificate details in any case. This will aid during troubleshooting.
-		log.Ops.Infof(cctx, "server certificate addresses: %s", addrInfo)
-
-		var msg bytes.Buffer
-		// Verify the compatibility. This requires that ValidateAddrs() has
-		// been called already.
-		host, _, err := net.SplitHostPort(ctx.config.AdvertiseAddr)
-		if err != nil {
-			panic(errors.AssertionFailedf("programming error: call ValidateAddrs() first"))
-		}
-		if err := cert.VerifyHostname(host); err != nil {
-			fmt.Fprintf(&msg, "advertise address %q not in node certificate (%s)\n", host, addrInfo)
-		}
-		host, _, err = net.SplitHostPort(ctx.config.SQLAdvertiseAddr)
-		if err != nil {
-			panic(errors.AssertionFailedf("programming error: call ValidateAddrs() first"))
-		}
-		if err := cert.VerifyHostname(host); err != nil {
-			fmt.Fprintf(&msg, "advertise SQL address %q not in node certificate (%s)\n", host, addrInfo)
-		}
-		if msg.Len() > 0 {
-			log.Ops.Shoutf(cctx, severity.WARNING,
-				"%s"+
-					"Secure client connections are likely to fail.\n"+
-					"Consider extending the node certificate or tweak --listen-addr/--advertise-addr/--sql-addr/--advertise-sql-addr.",
-				msg.String())
-		}
+	cm, err := ctx.GetCertificateManager()
+	if err != nil {
+		return
 	}
-
-	// TODO(tbg): Verify that the tenant listen and advertise addresses are
-	// compatible with the provided certificate.
-
-	// Verify that the http listen and advertise addresses are
-	// compatible with the provided certificate.
-	certInfo = cm.UICert()
-	if certInfo == nil {
-		// A nil UI cert means use the node cert instead;
-		// see details in (*CertificateManager) getEmbeddedUIServerTLSConfig()
-		// and (*CertificateManager) getUICertLocked().
-		certInfo = cm.NodeCert()
+	cert := cm.NodeCert()
+	if cert == nil {
+		return
 	}
-	if certInfo.Error != nil {
-		log.Ops.Shoutf(cctx, severity.ERROR,
-			"invalid UI certificate: %v", certInfo.Error)
-	} else {
-		cert := certInfo.ParsedCertificates[0]
-		addrInfo := certAddrs(cert)
+	addrInfo := certAddrs(cert)
+	log.Ops.Infof(cctx, "node certificate addresses: %s", addrInfo)
 
-		// Log the certificate details in any case. This will aid during
-		// troubleshooting.
-		log.Ops.Infof(cctx, "web UI certificate addresses: %s", addrInfo)
+	host, _, err := net.SplitHostPort(ctx.config.SQLAdvertiseAddr)
+	if err != nil {
+		log.Ops.Errorf(cctx, "invalid SQL advertise address %q: %v", ctx.config.SQLAdvertiseAddr, err)
+		return
+	}
+	if err := cert.VerifyHostname(host); err != nil {
+		log.Ops.Shoutf(cctx, severity.WARNING,
+			"advertise SQL address %q not in node certificate (%s)\n"+
+				"SQL clients that use sslmode=verify-full will fail to connect.",
+			host, addrInfo)
 	}
 }
 

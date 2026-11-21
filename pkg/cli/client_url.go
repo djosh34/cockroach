@@ -20,7 +20,7 @@ func (cliCtx *cliContext) makeClientConnURL() (*pgurl.URL, error) {
 	copts := cliCtx.clientOpts
 	copts.ClientSecurityOptions = clientsecopts.ClientSecurityOptions{
 		Insecure: cliCtx.Config.Insecure,
-		CertsDir: cliCtx.Config.SSLCertsDir,
+		Certs:    cliCtx.Config.Certs,
 	}
 	return clientsecopts.MakeClientConnURL(copts)
 }

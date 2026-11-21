@@ -8,30 +8,34 @@
 // ANY KIND, either express or implied. See the License for the specific language
 // governing permissions and limitations under the License.
 
+// Package securityassets lets tests serve certificate files from memory.
+// The server reads every certificate, key and rules file through the
+// active Loader.
 package securityassets
 
 import (
-	"io/ioutil"
 	"os"
 
 	"github.com/cockroachdb/errors/oserror"
 )
 
-// Loader describes the functions necessary to read certificate and key files.
+// Loader reads certificate and key files.
 type Loader struct {
-	ReadDir  func(dirname string) ([]os.FileInfo, error)
 	ReadFile func(filename string) ([]byte, error)
 	Stat     func(name string) (os.FileInfo, error)
+	// InMemory, if set, reports whether a path is served from memory. There
+	// is nothing on disk to watch for such a path.
+	InMemory func(name string) bool
 }
 
 // defaultLoader uses real filesystem calls.
 var defaultLoader = Loader{
-	ReadDir:  ioutil.ReadDir,
 	ReadFile: os.ReadFile,
 	Stat:     os.Stat,
+	InMemory: func(string) bool { return false },
 }
 
-// loaderImpl is used to list/read/stat security assets.
+// loaderImpl is used to read and stat security assets.
 var loaderImpl = defaultLoader
 
 // GetLoader returns the active asset loader.

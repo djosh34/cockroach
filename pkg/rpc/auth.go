@@ -16,8 +16,6 @@ import (
 	"fmt"
 
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
-	"github.com/cockroachdb/cockroach/pkg/security"
-	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/util/grpcutil"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
@@ -55,17 +53,6 @@ func (a kvAuth) AuthStream() grpc.StreamServerInterceptor { return a.streamInter
 func (a kvAuth) unaryInterceptor(
 	ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler,
 ) (interface{}, error) {
-	// Allow unauthenticated requests for the inter-node CA public key as part
-	// of the Add/Join protocol. RFC: https://github.com/cockroachdb/cockroach/pull/51991
-	if info.FullMethod == "/cockroach.server.serverpb.Admin/RequestCA" {
-		return handler(ctx, req)
-	}
-	// Allow unauthenticated requests for the inter-node CA bundle as part
-	// of the Add/Join protocol. RFC: https://github.com/cockroachdb/cockroach/pull/51991
-	if info.FullMethod == "/cockroach.server.serverpb.Admin/RequestCertBundle" {
-		return handler(ctx, req)
-	}
-
 	// Perform authentication and authz selection.
 	authnRes, authz, err := a.authenticateAndSelectAuthzRule(ctx)
 	if err != nil {
@@ -279,12 +266,14 @@ func (a kvAuth) authenticateLocalRequest(
 	return authnSuccessPeerIsTenantServer(clientTenantID), nil
 }
 
-// authenticateNetworkRequest authenticates requests made over a TLS connection.
+// authenticateNetworkRequest authenticates requests made over a TLS
+// connection. The TLS handshake admitted the peer only if its cert chains to
+// the node CA and matches a node rule (see RPCServerTLSConfig), so every peer
+// is a node or an admin CLI command using a node cert. A virtual cluster's
+// server names its tenant in the gRPC metadata and gets only that tenant's
+// rights.
 func (a kvAuth) authenticateNetworkRequest(ctx context.Context) (authnResult, error) {
-	// We will need to look at the TLS cert in any case, so extract it
-	// first.
-	clientCert, err := getClientCert(ctx)
-	if err != nil {
+	if _, err := getClientCert(ctx); err != nil {
 		return nil, err
 	}
 
@@ -292,45 +281,6 @@ func (a kvAuth) authenticateNetworkRequest(ctx context.Context) (authnResult, er
 	if err != nil {
 		return nil, authErrorf("client provided invalid tenant ID: %v", err)
 	}
-
-	// Did the client peer use a tenant client cert?
-	if security.IsTenantCertificate(clientCert) {
-		// If the peer is using a client tenant cert, in any case we
-		// validate the tenant ID stored in the CN for correctness.
-		tlsID, err := tenantIDFromString(clientCert.Subject.CommonName, "Common Name (CN)")
-		if err != nil {
-			return nil, err
-		}
-		// If the peer is using a TenantCertificate and also
-		// provided a tenant ID via gRPC metadata, they must
-		// match.
-		if tenantIDFromMetadata.IsSet() && tenantIDFromMetadata != tlsID {
-			return nil, authErrorf(
-				"client wants to authenticate as tenant %v, but is using TLS cert for tenant %v",
-				tenantIDFromMetadata, tlsID)
-		}
-		return authnSuccessPeerIsTenantServer(tlsID), nil
-	}
-
-	// We are using TLS, but the peer is not using a client tenant cert.
-	// In that case, we only allow RPCs if the principal is 'node' or
-	// 'root' and the tenant scope in the cert matches this server
-	// (either the cert has scope "global" or its scope tenant ID
-	// matches our own).
-	//
-	// TODO(benesch): the vast majority of RPCs should be limited to
-	// just NodeUser. This is not a security concern, as RootUser has
-	// access to read and write all data, merely good hygiene. For
-	// example, there is no reason to permit the root user to send raw
-	// Raft RPCs.
-	certUserScope, err := security.GetCertificateUserScope(clientCert)
-	if err != nil {
-		return nil, err
-	}
-	if err := checkRootOrNodeInScope(certUserScope, a.tenant.tenantID); err != nil {
-		return nil, err
-	}
-
 	if tenantIDFromMetadata.IsSet() {
 		return authnSuccessPeerIsTenantServer(tenantIDFromMetadata), nil
 	}
@@ -388,28 +338,6 @@ func (a kvAuth) selectAuthzMethod(
 	default:
 		return nil, errors.AssertionFailedf("programming error: unhandled case %T", ar)
 	}
-}
-
-// checkRootOrNodeInScope checks that the root or node principals are
-// present in the cert user scopes.
-func checkRootOrNodeInScope(
-	certUserScope []security.CertificateUserScope, serverTenantID roachpb.TenantID,
-) error {
-	for _, scope := range certUserScope {
-		// Only consider global scopes or scopes that match this server.
-		if !(scope.Global || scope.TenantID == serverTenantID) {
-			continue
-		}
-
-		// If we get a scope that matches the Node user, immediately return.
-		if scope.Username == username.NodeUser || scope.Username == username.RootUser {
-			return nil
-		}
-	}
-
-	return authErrorf(
-		"need root or node client cert to perform RPCs on this server (this is tenant %v; cert is valid for %s)",
-		serverTenantID, security.FormatUserScopes(certUserScope))
 }
 
 // contextForRequest sets up the context.Context for use by

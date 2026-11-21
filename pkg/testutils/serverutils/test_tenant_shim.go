@@ -19,14 +19,6 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-type SessionType int
-
-const (
-	UnknownSession SessionType = iota
-	SingleTenantSession
-	MultiTenantSession
-)
-
 // PreventDisableSQLForTenantError is thrown by tests that attempt to set
 // DisableSQLServer but run with cluster virtualization. These modes are
 // incompatible since tenant operations require SQL during initialization.

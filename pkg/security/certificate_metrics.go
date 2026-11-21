@@ -19,23 +19,19 @@ const SQLUserLabel = "sql_user"
 
 // Metrics is a metric.Struct for certificates.
 type Metrics struct {
-	// CA certificate expirations.
+	// Expiration times. Each is 0 when the file is not configured.
 	CAExpiration       *metric.Gauge
 	ClientCAExpiration *metric.Gauge
-	UICAExpiration     *metric.Gauge
-	TenantCAExpiration *metric.Gauge
-
-	// Certificate expirations.
-	NodeExpiration       *metric.Gauge
-	NodeClientExpiration *metric.Gauge
-	UIExpiration         *metric.Gauge
-	TenantExpiration     *metric.Gauge
+	NodeExpiration     *metric.Gauge
 	// ClientExpiration is an aggregate metric, containing child metrics for all
 	// users that have done cert auth with this node.
 	// The children are labeled by SQL user.
 	// The top-level aggregated value for this metric is not meaningful
 	// (it sums up all the minimum expirations of all users).
 	ClientExpiration *aggmetric.AggGauge
+	// ReloadFailures counts reloads that kept the old files because a new
+	// file did not parse or did not match.
+	ReloadFailures *metric.Counter
 }
 
 var _ metric.Struct = (*Metrics)(nil)
@@ -46,13 +42,13 @@ func (m *Metrics) MetricStruct() {}
 var (
 	metaCAExpiration = metric.Metadata{
 		Name:        "security.certificate.expiration.ca",
-		Help:        "Expiration for the CA certificate. 0 means no certificate or error.",
+		Help:        "Earliest expiration of the node CA certificates. 0 means none.",
 		Measurement: "Certificate Expiration",
 		Unit:        metric.Unit_TIMESTAMP_SEC,
 	}
 	metaClientCAExpiration = metric.Metadata{
 		Name:        "security.certificate.expiration.client-ca",
-		Help:        "Expiration for the client CA certificate. 0 means no certificate or error.",
+		Help:        "Earliest expiration of the client CA certificates. 0 means none.",
 		Measurement: "Certificate Expiration",
 		Unit:        metric.Unit_TIMESTAMP_SEC,
 	}
@@ -63,57 +59,27 @@ var (
 		Measurement: "Certificate Expiration",
 		Unit:        metric.Unit_TIMESTAMP_SEC,
 	}
-	metaUICAExpiration = metric.Metadata{
-		Name:        "security.certificate.expiration.ui-ca",
-		Help:        "Expiration for the UI CA certificate. 0 means no certificate or error.",
-		Measurement: "Certificate Expiration",
-		Unit:        metric.Unit_TIMESTAMP_SEC,
-	}
 	metaNodeExpiration = metric.Metadata{
 		Name:        "security.certificate.expiration.node",
-		Help:        "Expiration for the node certificate. 0 means no certificate or error.",
+		Help:        "Expiration for the node certificate. 0 means no certificate.",
 		Measurement: "Certificate Expiration",
 		Unit:        metric.Unit_TIMESTAMP_SEC,
 	}
-	metaNodeClientExpiration = metric.Metadata{
-		Name:        "security.certificate.expiration.node-client",
-		Help:        "Expiration for the node's client certificate. 0 means no certificate or error.",
-		Measurement: "Certificate Expiration",
-		Unit:        metric.Unit_TIMESTAMP_SEC,
-	}
-	metaUIExpiration = metric.Metadata{
-		Name:        "security.certificate.expiration.ui",
-		Help:        "Expiration for the UI certificate. 0 means no certificate or error.",
-		Measurement: "Certificate Expiration",
-		Unit:        metric.Unit_TIMESTAMP_SEC,
-	}
-
-	metaTenantCAExpiration = metric.Metadata{
-		Name:        "security.certificate.expiration.ca-client-tenant",
-		Help:        "Expiration for the Tenant Client CA certificate. 0 means no certificate or error.",
-		Measurement: "Certificate Expiration",
-		Unit:        metric.Unit_TIMESTAMP_SEC,
-	}
-	metaTenantExpiration = metric.Metadata{
-		Name:        "security.certificate.expiration.client-tenant",
-		Help:        "Expiration for the Tenant Client certificate. 0 means no certificate or error.",
-		Measurement: "Certificate Expiration",
-		Unit:        metric.Unit_TIMESTAMP_SEC,
+	metaReloadFailures = metric.Metadata{
+		Name:        "security.certificate.reload.failures",
+		Help:        "Reloads of the certificate, key, CA and rules files that kept the old files because of an error",
+		Measurement: "Reloads",
+		Unit:        metric.Unit_COUNT,
 	}
 )
 
 func makeMetrics() Metrics {
 	b := aggmetric.MakeBuilder(SQLUserLabel)
-	m := Metrics{
-		CAExpiration:         metric.NewGauge(metaCAExpiration),
-		ClientCAExpiration:   metric.NewGauge(metaClientCAExpiration),
-		TenantCAExpiration:   metric.NewGauge(metaTenantCAExpiration),
-		UICAExpiration:       metric.NewGauge(metaUICAExpiration),
-		ClientExpiration:     b.Gauge(metaClientExpiration),
-		TenantExpiration:     metric.NewGauge(metaTenantExpiration),
-		NodeExpiration:       metric.NewGauge(metaNodeExpiration),
-		NodeClientExpiration: metric.NewGauge(metaNodeClientExpiration),
-		UIExpiration:         metric.NewGauge(metaUIExpiration),
+	return Metrics{
+		CAExpiration:       metric.NewGauge(metaCAExpiration),
+		ClientCAExpiration: metric.NewGauge(metaClientCAExpiration),
+		ClientExpiration:   b.Gauge(metaClientExpiration),
+		NodeExpiration:     metric.NewGauge(metaNodeExpiration),
+		ReloadFailures:     metric.NewCounter(metaReloadFailures),
 	}
-	return m
 }

@@ -27,8 +27,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/clusterunique"
 	"github.com/cockroachdb/cockroach/pkg/sql/parser"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/hba"
-	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/identmap"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgerror"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgwirebase"
@@ -251,12 +249,6 @@ type Server struct {
 		destinations map[string]*destinationMetrics
 	}
 
-	auth struct {
-		syncutil.RWMutex
-		conf        *hba.Conf
-		identityMap *identmap.Conf
-	}
-
 	// sqlMemoryPool is the parent memory pool for all SQL memory allocations
 	// for this tenant, including SQL query execution, etc.
 	sqlMemoryPool *mon.BytesMonitor
@@ -403,13 +395,6 @@ func MakeServer(
 	server.mu.destinations = make(map[string]*destinationMetrics)
 	server.mu.Unlock()
 	executorConfig.CidrLookup.SetOnChange(server.onCidrChange)
-
-	connAuthConf.SetOnChange(&st.SV, func(ctx context.Context) {
-		loadLocalHBAConfigUponRemoteSettingChange(ctx, server, st)
-	})
-	ConnIdentityMapConf.SetOnChange(&st.SV, func(ctx context.Context) {
-		loadLocalIdentityMapUponRemoteSettingChange(ctx, server, st)
-	})
 
 	return server
 }
@@ -738,14 +723,14 @@ const (
 	SocketInternalLoopback
 )
 
-func (s SocketType) asConnType() (hba.ConnType, error) {
+func (s SocketType) asConnType() (ConnType, error) {
 	switch s {
 	case SocketTCP:
-		return hba.ConnHostNoSSL, nil
+		return ConnHostNoSSL, nil
 	case SocketUnix:
-		return hba.ConnLocal, nil
+		return ConnLocal, nil
 	case SocketInternalLoopback:
-		return hba.ConnInternalLoopback, nil
+		return ConnInternalLoopback, nil
 	default:
 		return 0, errors.AssertionFailedf("unimplemented socket type: %v", errors.Safe(s))
 	}
@@ -861,8 +846,6 @@ func (s *Server) ServeConn(
 		testingAuthHook = k.AuthHook
 	}
 
-	hbaConf, identMap := s.GetAuthenticationConfiguration()
-
 	// Defer the rest of the processing to the connection handler.
 	// This includes authentication.
 	if log.V(2) {
@@ -888,8 +871,6 @@ func (s *Server) ServeConn(
 			connType:        preServeStatus.ConnType,
 			connDetails:     connDetails,
 			insecure:        s.cfg.Insecure,
-			auth:            hbaConf,
-			identMap:        identMap,
 			testingAuthHook: testingAuthHook,
 		},
 		sessionID,
@@ -1206,19 +1187,6 @@ func (s *Server) serveImpl(
 			}
 
 			if !authDone {
-				if typ == pgwirebase.ClientMsgPassword {
-					var pwd []byte
-					if pwd, err = c.readBuf.GetBytes(n - 4); err != nil {
-						return false, isSimpleQuery, err
-					}
-					// Pass the data to the authenticator. This hopefully causes it to finish
-					// authentication in the background and give us an intSizer when we loop
-					// around.
-					if err = authPipe.sendPwdData(pwd); err != nil {
-						return false, isSimpleQuery, err
-					}
-					return false, isSimpleQuery, nil
-				}
 				// Wait for the auth result.
 				if err = authPipe.authResult(); err != nil {
 					// The error has already been sent to the client.
@@ -1229,7 +1197,7 @@ func (s *Server) serveImpl(
 
 			switch typ {
 			case pgwirebase.ClientMsgPassword:
-				// This messages are only acceptable during the auth phase, handled above.
+				// Clients log in with a TLS client certificate, not a password.
 				err = pgwirebase.NewProtocolViolationErrorf("unexpected authentication data")
 				return true, isSimpleQuery, c.writeErr(ctx, err, &c.writerState.buf)
 			case pgwirebase.ClientMsgSimpleQuery:
@@ -1353,10 +1321,6 @@ func (s *Server) serveImpl(
 	c.stmtBuf.Close()
 	// Cancel the processor's context.
 	c.cancelConn()
-	// In case the authenticator is blocked on waiting for data from the client,
-	// tell it that there's no more data coming. This is a no-op if authentication
-	// was completed already.
-	authPipe.noMorePwdData()
 
 	// Wait for the processor goroutine to finish, if it hasn't already.
 	procWg.Wait()

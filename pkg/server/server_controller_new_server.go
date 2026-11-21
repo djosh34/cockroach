@@ -231,7 +231,6 @@ func makeSharedProcessTenantServerConfig(
 	baseCfg.Config.Insecure = kvServerCfg.Config.Insecure
 	baseCfg.Config.User = kvServerCfg.Config.User
 	baseCfg.Config.DisableTLSForHTTP = kvServerCfg.Config.DisableTLSForHTTP
-	baseCfg.Config.AcceptSQLWithoutTLS = kvServerCfg.Config.AcceptSQLWithoutTLS
 	baseCfg.Config.RPCHeartbeatInterval = kvServerCfg.Config.RPCHeartbeatInterval
 	baseCfg.Config.RPCHeartbeatTimeout = kvServerCfg.Config.RPCHeartbeatTimeout
 	baseCfg.Config.ClusterName = kvServerCfg.Config.ClusterName
@@ -279,19 +278,10 @@ func makeSharedProcessTenantServerConfig(
 	baseCfg.SQLAddr = kvServerCfg.Config.SQLAddr
 	baseCfg.SQLAdvertiseAddr = kvServerCfg.Config.SQLAdvertiseAddr
 
-	// Secondary tenant servers need access to the certs
-	// directory for two purposes:
-	// - to authenticate incoming RPC connections, until
-	//   this issue is resolved: https://github.com/cockroachdb/cockroach/issues/92524
-	// - to load client certs to present to the remote peer
-	//   on outgoing node-node connections.
-	//
-	// Regarding the second point, we currently still need a client
-	// tenant cert to be manually created. Error out if it's not ready.
-	// This check can go away when the following issue is resolved:
-	// https://github.com/cockroachdb/cockroach/issues/96215
-	baseCfg.SSLCertsDir = kvServerCfg.BaseConfig.SSLCertsDir
-	baseCfg.SSLCAKey = kvServerCfg.BaseConfig.SSLCAKey
+	// Secondary tenant servers use the node's certs: to authenticate
+	// incoming RPC and SQL connections, and as the client cert on outgoing
+	// connections to other nodes.
+	baseCfg.Certs = kvServerCfg.BaseConfig.Certs
 
 	// Don't let this SQL server take its own background heap/goroutine/CPU profile dumps.
 	// The system tenant's SQL server is doing this job.

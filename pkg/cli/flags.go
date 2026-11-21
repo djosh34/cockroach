@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -27,6 +28,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/configprofiles"
 	"github.com/cockroachdb/cockroach/pkg/roachpb"
 	"github.com/cockroachdb/cockroach/pkg/security"
+	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/telemetry"
 	"github.com/cockroachdb/cockroach/pkg/util/envutil"
@@ -261,11 +263,8 @@ func init() {
 		return extraClientFlagInit()
 	})
 
-	// Add a pre-run command for `start` and `start-single-node`, as well as the
-	// multi-tenancy related commands that start long-running servers.
-	// Also for `connect` which does not really start a server but uses
-	// all the networking flags.
-	for _, cmd := range append(serverCmds, connectInitCmd, connectJoinCmd) {
+	// Add a pre-run command for `start` and `start-single-node`.
+	for _, cmd := range serverCmds {
 		AddPersistentPreRunE(cmd, func(cmd *cobra.Command, _ []string) error {
 			// Finalize the configuration of network settings.
 			return extraServerFlagInit(cmd)
@@ -353,7 +352,7 @@ func init() {
 	_, startCtx.inBackground = envutil.EnvString(backgroundEnvVar, 1)
 
 	// Flags common to KV-only servers.
-	for _, cmd := range append(StartCmds, connectInitCmd, connectJoinCmd) {
+	for _, cmd := range StartCmds {
 		f := cmd.Flags()
 
 		// Cluster joining flags. We need to enable this both for 'start'
@@ -363,13 +362,6 @@ func init() {
 		cliflagcfg.VarFlag(f, &serverCfg.JoinList, cliflags.Join)
 		cliflagcfg.BoolFlag(f, &serverCfg.JoinPreferSRVRecords, cliflags.JoinPreferSRVRecords)
 
-		if cmd != connectJoinCmd {
-			// The initialization token and expected peers. For 'start' commands this is optional.
-			cliflagcfg.StringFlag(f, &startCtx.initToken, cliflags.InitToken)
-			cliflagcfg.IntFlag(f, &startCtx.numExpectedNodes, cliflags.NumExpectedInitialNodes)
-			cliflagcfg.BoolFlag(f, &startCtx.genCertsForSingleNode, cliflags.SingleNode)
-		}
-
 		if cmd == startSingleNodeCmd {
 			// Even though all server flags are supported for
 			// 'start-single-node', we intend that command to be used by
@@ -378,7 +370,6 @@ func init() {
 			// relevant when running a single node.
 			_ = f.MarkHidden(cliflags.Join.Name)
 			_ = f.MarkHidden(cliflags.JoinPreferSRVRecords.Name)
-			_ = f.MarkHidden(cliflags.InitToken.Name)
 		}
 
 		// Node attributes.
@@ -386,18 +377,15 @@ func init() {
 		// TODO(knz): do we want SQL-only servers to have node-level
 		// attributes too? Would this be useful for e.g. SQL query
 		// planning?
-		if cmd != connectInitCmd && cmd != connectJoinCmd {
-			cliflagcfg.StringFlag(f, &serverCfg.Attrs, cliflags.Attrs)
-			// Cluster initialization. We only do this for a regular start command;
-			// SQL-only servers get their initialization payload from their tenant
-			// configuration.
-			cliflagcfg.VarFlag(f, configprofiles.NewProfileSetter(&serverCfg.AutoConfigProvider), cliflags.ConfigProfile)
-		}
+		cliflagcfg.StringFlag(f, &serverCfg.Attrs, cliflags.Attrs)
+		// Cluster initialization. We only do this for a regular start command;
+		// SQL-only servers get their initialization payload from their tenant
+		// configuration.
+		cliflagcfg.VarFlag(f, configprofiles.NewProfileSetter(&serverCfg.AutoConfigProvider), cliflags.ConfigProfile)
 	}
 
-	// Flags common to the start commands, the connect command, and the node join
-	// command.
-	for _, cmd := range append(serverCmds, connectInitCmd, connectJoinCmd) {
+	// Flags common to the start commands.
+	for _, cmd := range serverCmds {
 		f := cmd.Flags()
 
 		// Use a separate variable to store the value of ServerInsecure.
@@ -406,7 +394,7 @@ func init() {
 		// NB: Insecure is deprecated. See #53404.
 		cliflagcfg.BoolFlag(f, &startCtx.serverInsecure, cliflags.ServerInsecure)
 
-		// NB: serverInsecure populates baseCfg.{Insecure,SSLCertsDir} in this the following method
+		// NB: serverInsecure populates baseCfg.{Insecure,Certs} in this the following method
 		// (which is a PreRun for this command):
 		_ = extraServerFlagInit // guru assignment
 
@@ -418,9 +406,8 @@ func init() {
 		cliflagcfg.VarFlag(f, addr.NewAddrSetter(&serverHTTPAddr, &serverHTTPPort), cliflags.ListenHTTPAddr)
 		cliflagcfg.VarFlag(f, addr.NewAddrSetter(&serverHTTPAdvertiseAddr, &serverHTTPAdvertisePort), cliflags.HTTPAdvertiseAddr)
 
-		// Certificates directory. Use a server-specific flag and value to ignore environment
-		// variables, but share the same default.
-		cliflagcfg.StringFlag(f, &startCtx.serverSSLCertsDir, cliflags.ServerCertsDir)
+		// The config file names the certificate, key, CA and rules files.
+		cliflagcfg.StringFlag(f, &startCtx.serverConfigFile, cliflags.ServerConfigFile)
 
 		if cmd == startSingleNodeCmd {
 			// Even though all server flags are supported for
@@ -457,67 +444,58 @@ func init() {
 			_ = f.MarkHidden(cliflags.ListenHTTPPort.Name)
 		}
 
-		if cmd != connectInitCmd && cmd != connectJoinCmd {
-			cliflagcfg.StringFlag(f, &serverSocketDir, cliflags.SocketDir)
-			cliflagcfg.BoolFlag(f, &startCtx.unencryptedLocalhostHTTP, cliflags.UnencryptedLocalhostHTTP)
+		cliflagcfg.StringFlag(f, &serverSocketDir, cliflags.SocketDir)
+		cliflagcfg.BoolFlag(f, &startCtx.unencryptedLocalhostHTTP, cliflags.UnencryptedLocalhostHTTP)
 
-			// The following flag is planned to become non-experimental in 21.1.
-			cliflagcfg.BoolFlag(f, &serverCfg.AcceptSQLWithoutTLS, cliflags.AcceptSQLWithoutTLS)
-			_ = f.MarkHidden(cliflags.AcceptSQLWithoutTLS.Name)
+		// More server flags.
 
-			// More server flags.
+		cliflagcfg.VarFlag(f, &localityAdvertiseHosts, cliflags.LocalityAdvertiseAddr)
 
-			cliflagcfg.VarFlag(f, &localityAdvertiseHosts, cliflags.LocalityAdvertiseAddr)
+		cliflagcfg.VarFlag(f, &serverCfg.Locality, cliflags.Locality)
 
-			cliflagcfg.VarFlag(f, &serverCfg.Locality, cliflags.Locality)
+		cliflagcfg.VarFlag(f, &storeSpecs, cliflags.Store)
+		cliflagcfg.VarFlag(f, &serverCfg.StorageEngine, cliflags.StorageEngine)
+		cliflagcfg.StringFlag(f, &serverCfg.SharedStorage, cliflags.SharedStorage)
+		cliflagcfg.VarFlag(f, &serverCfg.SecondaryCache, cliflags.SecondaryCache)
+		cliflagcfg.VarFlag(f, &serverCfg.MaxOffset, cliflags.MaxOffset)
+		cliflagcfg.BoolFlag(f, &serverCfg.DisableMaxOffsetCheck, cliflags.DisableMaxOffsetCheck)
 
-			cliflagcfg.VarFlag(f, &storeSpecs, cliflags.Store)
-			cliflagcfg.VarFlag(f, &serverCfg.StorageEngine, cliflags.StorageEngine)
-			cliflagcfg.StringFlag(f, &serverCfg.SharedStorage, cliflags.SharedStorage)
-			cliflagcfg.VarFlag(f, &serverCfg.SecondaryCache, cliflags.SecondaryCache)
-			cliflagcfg.VarFlag(f, &serverCfg.MaxOffset, cliflags.MaxOffset)
-			cliflagcfg.BoolFlag(f, &serverCfg.DisableMaxOffsetCheck, cliflags.DisableMaxOffsetCheck)
+		cliflagcfg.StringFlag(f, &startCtx.listeningURLFile, cliflags.ListeningURLFile)
 
-			cliflagcfg.StringFlag(f, &startCtx.listeningURLFile, cliflags.ListeningURLFile)
+		cliflagcfg.StringFlag(f, &startCtx.pidFile, cliflags.PIDFile)
 
-			cliflagcfg.StringFlag(f, &startCtx.pidFile, cliflags.PIDFile)
+		// Enable/disable various external storage endpoints.
+		cliflagcfg.BoolFlag(f, &serverCfg.ExternalIODirConfig.DisableHTTP, cliflags.ExternalIODisableHTTP)
+		cliflagcfg.BoolFlag(f, &serverCfg.ExternalIODirConfig.DisableOutbound, cliflags.ExternalIODisabled)
+		cliflagcfg.BoolFlag(f, &serverCfg.ExternalIODirConfig.DisableImplicitCredentials, cliflags.ExternalIODisableImplicitCredentials)
+		cliflagcfg.BoolFlag(f, &serverCfg.ExternalIODirConfig.EnableNonAdminImplicitAndArbitraryOutbound, cliflags.ExternalIOEnableNonAdminImplicitAndArbitraryOutbound)
 
-			// Enable/disable various external storage endpoints.
-			cliflagcfg.BoolFlag(f, &serverCfg.ExternalIODirConfig.DisableHTTP, cliflags.ExternalIODisableHTTP)
-			cliflagcfg.BoolFlag(f, &serverCfg.ExternalIODirConfig.DisableOutbound, cliflags.ExternalIODisabled)
-			cliflagcfg.BoolFlag(f, &serverCfg.ExternalIODirConfig.DisableImplicitCredentials, cliflags.ExternalIODisableImplicitCredentials)
-			cliflagcfg.BoolFlag(f, &serverCfg.ExternalIODirConfig.EnableNonAdminImplicitAndArbitraryOutbound, cliflags.ExternalIOEnableNonAdminImplicitAndArbitraryOutbound)
-
-			// Certificate principal map.
-			cliflagcfg.StringSliceFlag(f, &startCtx.serverCertPrincipalMap, cliflags.CertPrincipalMap)
-
-			// Cluster name verification.
-			cliflagcfg.VarFlag(f, clusterNameSetter{&baseCfg.ClusterName}, cliflags.ClusterName)
-			cliflagcfg.BoolFlag(f, &baseCfg.DisableClusterNameVerification, cliflags.DisableClusterNameVerification)
-			if cmd == startSingleNodeCmd {
-				// Even though all server flags are supported for
-				// 'start-single-node', we intend that command to be used by
-				// beginners / developers running on a single machine. To
-				// enhance the UX, we hide the flags since they are not directly
-				// relevant when running a single node.
-				_ = f.MarkHidden(cliflags.ClusterName.Name)
-				_ = f.MarkHidden(cliflags.DisableClusterNameVerification.Name)
-				_ = f.MarkHidden(cliflags.MaxOffset.Name)
-				_ = f.MarkHidden(cliflags.LocalityAdvertiseAddr.Name)
-			}
-
-			// Engine flags.
-			cliflagcfg.VarFlag(f, &startCtx.cacheSizeValue, cliflags.Cache)
-			cliflagcfg.VarFlag(f, &startCtx.sqlSizeValue, cliflags.SQLMem)
-			cliflagcfg.VarFlag(f, &startCtx.goMemLimitValue, cliflags.GoMemLimit)
-			cliflagcfg.VarFlag(f, &startCtx.tsdbSizeValue, cliflags.TSDBMem)
-			// N.B. diskTempStorageSizeValue.Resolve() will be called after the
-			// stores flag has been parsed and the storage device that a
-			// percentage refers to becomes known.
-			cliflagcfg.VarFlag(f, &startCtx.diskTempStorageSizeValue, cliflags.SQLTempStorage)
-			cliflagcfg.StringFlag(f, &startCtx.tempDir, cliflags.TempDir)
-			cliflagcfg.StringFlag(f, &startCtx.externalIODir, cliflags.ExternalIODir)
+		// Cluster name verification.
+		cliflagcfg.VarFlag(f, clusterNameSetter{&baseCfg.ClusterName}, cliflags.ClusterName)
+		cliflagcfg.BoolFlag(f, &baseCfg.DisableClusterNameVerification, cliflags.DisableClusterNameVerification)
+		if cmd == startSingleNodeCmd {
+			// Even though all server flags are supported for
+			// 'start-single-node', we intend that command to be used by
+			// beginners / developers running on a single machine. To
+			// enhance the UX, we hide the flags since they are not directly
+			// relevant when running a single node.
+			_ = f.MarkHidden(cliflags.ClusterName.Name)
+			_ = f.MarkHidden(cliflags.DisableClusterNameVerification.Name)
+			_ = f.MarkHidden(cliflags.MaxOffset.Name)
+			_ = f.MarkHidden(cliflags.LocalityAdvertiseAddr.Name)
 		}
+
+		// Engine flags.
+		cliflagcfg.VarFlag(f, &startCtx.cacheSizeValue, cliflags.Cache)
+		cliflagcfg.VarFlag(f, &startCtx.sqlSizeValue, cliflags.SQLMem)
+		cliflagcfg.VarFlag(f, &startCtx.goMemLimitValue, cliflags.GoMemLimit)
+		cliflagcfg.VarFlag(f, &startCtx.tsdbSizeValue, cliflags.TSDBMem)
+		// N.B. diskTempStorageSizeValue.Resolve() will be called after the
+		// stores flag has been parsed and the storage device that a
+		// percentage refers to becomes known.
+		cliflagcfg.VarFlag(f, &startCtx.diskTempStorageSizeValue, cliflags.SQLTempStorage)
+		cliflagcfg.StringFlag(f, &startCtx.tempDir, cliflags.TempDir)
+		cliflagcfg.StringFlag(f, &startCtx.externalIODir, cliflags.ExternalIODir)
 
 		if backgroundFlagDefined {
 			cliflagcfg.BoolFlag(f, &startBackground, cliflags.Background)
@@ -553,46 +531,6 @@ func init() {
 		})
 	}
 
-	for _, cmd := range certCmds {
-		f := cmd.Flags()
-		// All certs commands need the certificate directory.
-		cliflagcfg.StringFlag(f, &certCtx.certsDir, cliflags.CertsDir)
-
-		// All certs command want to map CNs to SQL principals.
-		cliflagcfg.StringSliceFlag(f, &certCtx.certPrincipalMap, cliflags.CertPrincipalMap)
-
-		if cmd == listCertsCmd {
-			// The 'list' subcommand does not write to files and thus does
-			// not need the arguments below.
-			continue
-		}
-
-		cliflagcfg.StringFlag(f, &certCtx.caKey, cliflags.CAKey)
-		cliflagcfg.IntFlag(f, &certCtx.keySize, cliflags.KeySize)
-		cliflagcfg.BoolFlag(f, &certCtx.overwriteFiles, cliflags.OverwriteFiles)
-
-		if strings.HasSuffix(cmd.Name(), "-ca") {
-			// CA-only commands.
-
-			// CA certificates have a longer expiration time.
-			cliflagcfg.DurationFlag(f, &certCtx.caCertificateLifetime, cliflags.CertificateLifetime)
-			// The CA key can be re-used if it exists.
-			cliflagcfg.BoolFlag(f, &certCtx.allowCAKeyReuse, cliflags.AllowCAKeyReuse)
-		} else {
-			// Non-CA commands.
-
-			cliflagcfg.DurationFlag(f, &certCtx.certificateLifetime, cliflags.CertificateLifetime)
-		}
-
-		if cmd == createClientCertCmd {
-			cliflagcfg.VarFlag(f, &tenantIDSetter{tenantIDs: &certCtx.tenantScope}, cliflags.TenantScope)
-
-			// PKCS8 key format is only available for the client cert command.
-			cliflagcfg.BoolFlag(f, &certCtx.generatePKCS8Key, cliflags.GeneratePKCS8Key)
-			cliflagcfg.BoolFlag(f, &certCtx.disableUsernameValidation, cliflags.DisableUsernameValidation)
-		}
-	}
-
 	clientCmds := []*cobra.Command{
 		debugJobTraceFromClusterCmd,
 		debugGossipValuesCmd,
@@ -608,7 +546,6 @@ func init() {
 		sqlShellCmd,
 		/* StartCmds are covered above */
 	}
-	clientCmds = append(clientCmds, authCmds...)
 	clientCmds = append(clientCmds, nodeCmds...)
 	clientCmds = append(clientCmds, nodeLocalCmds...)
 	clientCmds = append(clientCmds, importCmds...)
@@ -617,14 +554,7 @@ func init() {
 	clientCmds = append(clientCmds, debugResetQuorumCmd)
 	clientCmds = append(clientCmds, recoverCommands...)
 	for _, cmd := range clientCmds {
-		clientflags.AddBaseFlags(cmd, &cliCtx.clientOpts, &baseCfg.Insecure, &baseCfg.SSLCertsDir)
-
-		// Certificate principal map.
-		// TODO(knz): I think cert principal map is not needed for SQL clients. It might
-		// not even be needed for RPC clients either any more.
-		// This needs to be checked (and the flag removed if needed).
-		f := cmd.PersistentFlags()
-		cliflagcfg.StringSliceFlag(f, &cliCtx.certPrincipalMap, cliflags.CertPrincipalMap)
+		clientflags.AddBaseFlags(cmd, &cliCtx.clientOpts, &baseCfg.Insecure, &cliCtx.configFile)
 	}
 
 	// convert-url is not really a client command. It just recognizes (some)
@@ -632,13 +562,6 @@ func init() {
 	{
 		f := convertURLCmd.PersistentFlags()
 		cliflagcfg.StringFlag(f, &convertCtx.url, cliflags.URL)
-	}
-
-	// Auth commands.
-	{
-		f := loginCmd.Flags()
-		cliflagcfg.DurationFlag(f, &authCtx.validityPeriod, cliflags.AuthTokenValidityPeriod)
-		cliflagcfg.BoolFlag(f, &authCtx.onlyCookie, cliflags.OnlyCookie)
 	}
 
 	timeoutCmds := []*cobra.Command{
@@ -722,7 +645,6 @@ func init() {
 		lsNodesCmd,
 		statusNodeCmd,
 	}
-	sqlCmds = append(sqlCmds, authCmds...)
 	sqlCmds = append(sqlCmds, demoCmd.Commands()...)
 	sqlCmds = append(sqlCmds, stmtDiagCmds...)
 	sqlCmds = append(sqlCmds, nodeLocalCmds...)
@@ -767,7 +689,6 @@ func init() {
 		},
 		demoCmd.Commands()...)
 	tableOutputCommands = append(tableOutputCommands, nodeCmds...)
-	tableOutputCommands = append(tableOutputCommands, authCmds...)
 
 	// By default, these commands print their output as pretty-formatted
 	// tables on terminals, and TSV when redirected to a file. The user
@@ -794,9 +715,6 @@ func init() {
 		cliflagcfg.VarFlag(f, &demoCtx.Localities, cliflags.DemoNodeLocality)
 		cliflagcfg.VarFlag(f, &demoCtx.demoNodeSQLMemSizeValue, cliflags.DemoNodeSQLMemSize)
 		cliflagcfg.VarFlag(f, &demoCtx.demoNodeCacheSizeValue, cliflags.DemoNodeCacheSize)
-		// NB: Insecure for `cockroach demo` is deprecated. See #53404.
-		cliflagcfg.BoolFlag(f, &demoCtx.Insecure, cliflags.ClientInsecure)
-
 		cliflagcfg.BoolFlag(f, &demoCtx.DefaultEnableRangefeeds, cliflags.DemoEnableRangefeeds)
 
 		cliflagcfg.BoolFlag(f, &demoCtx.Multitenant, cliflags.DemoMultitenant)
@@ -927,12 +845,22 @@ func init() {
 // extraServerFlagInit configures the server.Config based on the command-line flags.
 // It is only called when the command being ran is one of the start commands.
 func extraServerFlagInit(cmd *cobra.Command) error {
-	if err := security.SetCertPrincipalMap(startCtx.serverCertPrincipalMap); err != nil {
-		return err
-	}
 	serverCfg.User = username.NodeUserName()
 	serverCfg.Insecure = startCtx.serverInsecure
-	serverCfg.SSLCertsDir = startCtx.serverSSLCertsDir
+	if !serverCfg.Insecure {
+		if startCtx.serverConfigFile == "" {
+			return errors.Newf("a secure node needs --%s, or --%s",
+				cliflags.ServerConfigFile.Name, cliflags.ServerInsecure.Name)
+		}
+		c, err := certconfig.Load(startCtx.serverConfigFile)
+		if err != nil {
+			return err
+		}
+		if err := c.CheckNode(); err != nil {
+			return errors.Wrapf(err, "config file %s", startCtx.serverConfigFile)
+		}
+		serverCfg.Certs = c
+	}
 
 	fs := cliflagcfg.FlagSetForCmd(cmd)
 
@@ -1121,15 +1049,17 @@ func extraStoreFlagInit(cmd *cobra.Command) error {
 }
 
 func extraClientFlagInit() error {
-	// A command can be either a 'cert' command or an actual client command.
-	// TODO(knz): Clean this up to not use a global variable for the
-	// principal map.
-	principalMap := certCtx.certPrincipalMap
-	if principalMap == nil {
-		principalMap = cliCtx.certPrincipalMap
-	}
-	if err := security.SetCertPrincipalMap(principalMap); err != nil {
-		return err
+	if cliCtx.configFile != "" {
+		c, err := certconfig.Load(cliCtx.configFile)
+		if err != nil {
+			return err
+		}
+		baseCfg.Certs = c
+		if cliCtx.clientOpts.User == "" {
+			if cliCtx.clientOpts.User, err = defaultClientUser(c); err != nil {
+				return err
+			}
+		}
 	}
 	serverCfg.Addr = net.JoinHostPort(cliCtx.clientOpts.ServerHost, cliCtx.clientOpts.ServerPort)
 	serverCfg.AdvertiseAddr = serverCfg.Addr
@@ -1147,4 +1077,36 @@ func extraClientFlagInit() error {
 		sqlConnCtx.Echo = true
 	}
 	return nil
+}
+
+// defaultClientUser returns the SQL user that a client command connects as
+// when no user is given: the role of the first client rule that matches the
+// config's client cert, or root.
+func defaultClientUser(c certconfig.Config) (string, error) {
+	if c.ClientCert == "" || c.Rules == "" {
+		return username.RootUser, nil
+	}
+	certPEM, err := os.ReadFile(c.ClientCert)
+	if err != nil {
+		return "", err
+	}
+	certs, err := security.PEMContentsToX509(certPEM)
+	if err != nil {
+		return "", errors.Wrapf(err, "parsing %s", c.ClientCert)
+	}
+	if len(certs) == 0 {
+		return "", errors.Newf("no certificate in %s", c.ClientCert)
+	}
+	rulesText, err := os.ReadFile(c.Rules)
+	if err != nil {
+		return "", err
+	}
+	rules, err := security.ParseRules(rulesText)
+	if err != nil {
+		return "", errors.Wrapf(err, "parsing %s", c.Rules)
+	}
+	if roles := rules.ClientRoles(certs[0]); len(roles) > 0 {
+		return roles[0].Normalized(), nil
+	}
+	return username.RootUser, nil
 }
