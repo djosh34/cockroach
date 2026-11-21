@@ -65,6 +65,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/server/settingswatcher"
 	"github.com/cockroachdb/cockroach/pkg/server/status"
 	"github.com/cockroachdb/cockroach/pkg/server/systemconfigwatcher"
+	"github.com/cockroachdb/cockroach/pkg/server/upstreamcheck"
 	"github.com/cockroachdb/cockroach/pkg/settings"
 	"github.com/cockroachdb/cockroach/pkg/settings/cluster"
 	"github.com/cockroachdb/cockroach/pkg/spanconfig"
@@ -1572,6 +1573,17 @@ func (s *SQLServer) preStart(
 	ieMon := sql.MakeInternalExecutorMemMonitor(sql.MemoryMetrics{}, s.execCfg.Settings)
 	ieMon.StartNoReserved(ctx, s.pgServer.SQLServer.GetBytesMonitor())
 	s.stopper.AddCloser(stop.CloserFn(func() { ieMon.Stop(ctx) }))
+
+	// Data from upstream CockroachDB can hold jobs, schedules and catalog
+	// objects of features that patchroaddb cut. Refuse to start on them
+	// before any job is adopted and before the upgrades and background
+	// tasks below read the catalog.
+	if err := startup.RunIdempotentWithRetry(ctx, stopper.ShouldQuiesce(),
+		"check for cut features", func(ctx context.Context) error {
+			return upstreamcheck.Check(ctx, s.internalDB)
+		}); err != nil {
+		return err
+	}
 
 	if err := s.jobRegistry.Start(ctx, stopper); err != nil {
 		return err

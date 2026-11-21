@@ -1028,7 +1028,7 @@ const (
 	oldJobsTypeFilter = ` WHERE crdb_internal.job_payload_type(payload) = $3`
 	jobsTypeFilter    = ` WHERE job_type = $3`
 	jobsQuery         = jobsQSelect + `, last_run::timestamptz, COALESCE(num_runs, 0), ` + jobs.NextRunClause +
-		` as next_run` + jobsQFrom + ", " + jobsBackoffArgs
+		` as next_run, job_type` + jobsQFrom + ", " + jobsBackoffArgs
 )
 
 func getCRDBInternalJobsTableTypeFilter(ctx context.Context, version clusterversion.Handle) string {
@@ -1150,12 +1150,12 @@ func makeJobsTableRows(
 		}
 		var id, status, created, payloadBytes, progressBytes, sessionIDBytes,
 			instanceID tree.Datum
-		lastRun, nextRun, numRuns := tree.DNull, tree.DNull, tree.DNull
+		lastRun, nextRun, numRuns, storedType := tree.DNull, tree.DNull, tree.DNull, tree.DNull
 		if ok {
 			r := it.Cur()
 			id, status, created, payloadBytes, progressBytes, sessionIDBytes, instanceID =
 				r[0], r[1], r[2], r[3], r[4], r[5], r[6]
-			lastRun, numRuns, nextRun = r[7], r[8], r[9]
+			lastRun, numRuns, nextRun, storedType = r[7], r[8], r[9], r[10]
 		} else if !ok {
 			if len(sessionJobs) == 0 {
 				return matched, nil
@@ -1200,10 +1200,15 @@ func makeJobsTableRows(
 			}
 		}
 
-		// TODO(jayant): we can select the job_type as a column
-		// rather than decoding the payload. This would allow us
-		// to create a virtual index on it.
-		jobType = tree.NewDString(payload.Type().String())
+		// The stored job_type names the type even for jobs of cut types,
+		// which only upstream data holds. A job of this session is not
+		// stored yet; its payload has the type.
+		jobType = storedType
+		if jobType == tree.DNull {
+			if typ, err := payload.CheckType(); err == nil {
+				jobType = tree.NewDString(typ.String())
+			}
+		}
 		description = tree.NewDString(payload.Description)
 		statement = tree.NewDString(strings.Join(payload.Statement, "; "))
 		user = tree.NewDString(sqlUsername.Normalized())

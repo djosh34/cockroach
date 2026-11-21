@@ -23,7 +23,10 @@ CockroachDB v23.2.15 it:
 
 On-disk formats are CockroachDB 23.2's. Environment variables (`COCKROACH_*`),
 the default data directory (`cockroach-data`), and SQL names such as
-`crdb_internal` keep their CockroachDB names.
+`crdb_internal` keep their CockroachDB names. A stopped CockroachDB v23.2
+cluster can move to patchroaddb in place;
+[docs/migration.md](docs/migration.md) has the steps and what does not
+carry over.
 
 ## Install
 
