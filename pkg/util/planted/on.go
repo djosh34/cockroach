@@ -12,10 +12,13 @@
 
 package planted
 
-import "os"
+import "github.com/cockroachdb/cockroach/pkg/util/envutil"
 
 // Env names the planted bug that is on.
 const Env = "PATCHROADDB_PLANTED"
 
+// on is the bug that Env names, read once.
+var on, _ = envutil.ExternalEnvString(Env, 0)
+
 // On reports whether the planted bug is the one PATCHROADDB_PLANTED names.
-func On(bug string) bool { return os.Getenv(Env) == bug }
+func On(bug string) bool { return bug == on }

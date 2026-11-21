@@ -20,8 +20,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
 )
 
 // procs is the env of the nightly chaos run (build/ci/chaos.sh): real
@@ -37,7 +38,7 @@ type procs struct {
 	s3       string // the versitygw container
 	user     string
 
-	mu       sync.Mutex
+	mu       syncutil.Mutex
 	nodes    []*proc
 	restored *proc
 	failures []string

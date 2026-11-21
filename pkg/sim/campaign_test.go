@@ -22,6 +22,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cockroachdb/cockroach/pkg/testutils/skip"
+	"github.com/cockroachdb/cockroach/pkg/util/envutil"
+	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/jellevandenhooff/gosim/metatesting"
 )
 
@@ -41,8 +44,10 @@ type seedOutcome struct {
 // runSeed runs TestSeed with the seed in a gosim run, ended after wall of
 // real time. With out set, a failing run's log, error and artifacts go to
 // out/seed-<seed>/, with how to replay it.
-func runSeed(t *testing.T, bin string, seed int64, planted string, wall time.Duration, out string) seedOutcome {
-	start := time.Now()
+func runSeed(
+	t *testing.T, bin string, seed int64, planted string, wall time.Duration, out string,
+) seedOutcome {
+	start := timeutil.Now()
 	// Every run gets the same variables, even an empty one: their number
 	// changes the run.
 	res, err := metatesting.ForTestBinary(t, bin).RunQuiet(&metatesting.RunConfig{
@@ -51,7 +56,7 @@ func runSeed(t *testing.T, bin string, seed int64, planted string, wall time.Dur
 		ExtraEnv: []string{"PATCHROADDB_PLANTED=" + planted},
 		WallKill: wall,
 	})
-	o := seedOutcome{wall: time.Since(start)}
+	o := seedOutcome{wall: timeutil.Since(start)}
 	switch {
 	case err != nil:
 		o.failed, o.reason = true, fmt.Sprintf("the test binary failed: %v", err)
@@ -84,7 +89,7 @@ func runSeed(t *testing.T, bin string, seed int64, planted string, wall time.Dur
 		if planted != "" {
 			replay += " " + planted
 		}
-		write("replay.txt", []byte(fmt.Sprintf("commit %s\n%s\n", os.Getenv("GITHUB_SHA"), replay)))
+		write("replay.txt", []byte(fmt.Sprintf("commit %s\n%s\n", simEnv("GITHUB_SHA"), replay)))
 		if res != nil {
 			// Every simulated machine's output, the nodes' logs included,
 			// one JSON object a line.
@@ -125,8 +130,14 @@ func readableLog(jsonl []byte) []byte {
 	return b.Bytes()
 }
 
+// simEnv returns the environment variable name, or "".
+func simEnv(name string) string {
+	v, _ := envutil.ExternalEnvString(name, 0)
+	return v
+}
+
 func envInt(t *testing.T, name string, def int64) int64 {
-	v := os.Getenv(name)
+	v := simEnv(name)
 	if v == "" {
 		return def
 	}
@@ -154,14 +165,14 @@ type summary struct {
 // Every hundredth seed runs twice and must give the same run. Failing
 // seeds go to SIM_OUT with their logs; the test fails if any seed failed.
 func TestCampaign(t *testing.T) {
-	bin := os.Getenv("SIM_BINARY")
+	bin := simEnv("SIM_BINARY")
 	if bin == "" {
-		t.Skip("SIM_BINARY is not set; build/sim-build.sh builds the binary, sim.yml runs campaigns")
+		skip.IgnoreLint(t, "SIM_BINARY is not set; build/sim-build.sh builds the binary, sim.yml runs campaigns")
 	}
 	first, count := envInt(t, "SIM_FIRST", 1), envInt(t, "SIM_COUNT", 1)
 	wall := time.Duration(envInt(t, "SIM_WALL_MINUTES", 20)) * time.Minute
-	out := os.Getenv("SIM_OUT")
-	planted := os.Getenv("PATCHROADDB_PLANTED")
+	out := simEnv("SIM_OUT")
+	planted := simEnv("PATCHROADDB_PLANTED")
 	s := summary{First: first, Count: count, Failed: make(map[int64]string)}
 	writeSummary := func() {
 		if out == "" {
@@ -203,14 +214,14 @@ func TestCampaign(t *testing.T) {
 // TestReplay runs SIM_SEED twice and checks that both runs are the same
 // (build/sim-replay.sh). The first run's log goes to SIM_OUT.
 func TestReplay(t *testing.T) {
-	bin := os.Getenv("SIM_BINARY")
-	if bin == "" || os.Getenv("SIM_SEED") == "" {
-		t.Skip("SIM_BINARY and SIM_SEED are not set; build/sim-replay.sh replays a seed")
+	bin := simEnv("SIM_BINARY")
+	if bin == "" || simEnv("SIM_SEED") == "" {
+		skip.IgnoreLint(t, "SIM_BINARY and SIM_SEED are not set; build/sim-replay.sh replays a seed")
 	}
 	seed := envInt(t, "SIM_SEED", 0)
 	wall := time.Duration(envInt(t, "SIM_WALL_MINUTES", 20)) * time.Minute
-	planted := os.Getenv("PATCHROADDB_PLANTED")
-	out := os.Getenv("SIM_OUT")
+	planted := simEnv("PATCHROADDB_PLANTED")
+	out := simEnv("SIM_OUT")
 	res, err := metatesting.ForTestBinary(t, bin).RunQuiet(&metatesting.RunConfig{
 		Test: "TestSeed", Seed: seed, ExtraEnv: []string{"PATCHROADDB_PLANTED=" + planted}, WallKill: wall,
 	})
@@ -237,14 +248,14 @@ func TestReplay(t *testing.T) {
 // bug counts as caught when a seed fails with it and the same seed passes
 // without it.
 func TestPlanted(t *testing.T) {
-	bin := os.Getenv("SIM_BINARY")
-	bug := os.Getenv("PATCHROADDB_PLANTED")
+	bin := simEnv("SIM_BINARY")
+	bug := simEnv("PATCHROADDB_PLANTED")
 	if bin == "" || bug == "" {
-		t.Skip("SIM_BINARY and PATCHROADDB_PLANTED are not set; sim.yml checks the planted bugs")
+		skip.IgnoreLint(t, "SIM_BINARY and PATCHROADDB_PLANTED are not set; sim.yml checks the planted bugs")
 	}
 	first, count := envInt(t, "SIM_FIRST", 1), envInt(t, "SIM_COUNT", 20)
 	wall := time.Duration(envInt(t, "SIM_WALL_MINUTES", 20)) * time.Minute
-	out := os.Getenv("SIM_OUT")
+	out := simEnv("SIM_OUT")
 	for seed := first; seed < first+count; seed++ {
 		o := runSeed(t, bin, seed, bug, wall, out)
 		if !o.failed {

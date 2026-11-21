@@ -20,11 +20,12 @@ import (
 	"os"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/cli"
 	"github.com/cockroachdb/cockroach/pkg/sim/fakes3"
+	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
+	"github.com/cockroachdb/errors"
 	"github.com/jellevandenhooff/gosim"
 )
 
@@ -66,7 +67,7 @@ type cluster struct {
 	nodes []*node
 	s3    *fakes3.Server
 
-	mu sync.Mutex
+	mu syncutil.Mutex
 	// failures are the nodes that stopped without the harness crashing
 	// them: a crash of patchroaddb.
 	failures []string
@@ -149,7 +150,8 @@ func startCluster(ctx context.Context, n int, s3 *fakes3.Server) (*cluster, erro
 	}
 
 	// patchroaddb init, from a machine of its own: the CLI exits when it is
-	// done. It retries until the first node answers.
+	// done. Until the first node serves SQL, it runs again every few
+	// seconds; once the cluster is up, a further init would only fail.
 	initM := gosim.NewMachine(gosim.MachineConfig{
 		Label: "init",
 		Addr:  netip.MustParseAddr(initAddr),
@@ -157,7 +159,17 @@ func startCluster(ctx context.Context, n int, s3 *fakes3.Server) (*cluster, erro
 			runCLI("init", "--insecure", fmt.Sprintf("--host=%s:%d", nodeAddr(0), sqlPort))
 		},
 	})
-	initM.Wait()
+	for attempt := 1; ; attempt++ {
+		initM.Wait()
+		err := waitSQL(ctx, nodeAddr(0), 10*time.Second)
+		if err == nil {
+			break
+		}
+		if attempt == 10 {
+			return c, errors.Wrap(err, "the cluster did not start after 10 runs of init")
+		}
+		initM.Restart()
+	}
 
 	for _, nd := range c.nodes {
 		if err := waitSQL(ctx, nd.addr, 2*time.Minute); err != nil {

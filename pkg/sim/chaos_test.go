@@ -15,7 +15,6 @@ package sim
 import (
 	"context"
 	"math/rand/v2"
-	"os"
 	"os/exec"
 	"os/user"
 	"strings"
@@ -25,6 +24,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/cockroachdb/cockroach/pkg/backup/backuptest"
+	"github.com/cockroachdb/cockroach/pkg/testutils/skip"
+	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 )
 
 // TestChaos is the nightly real-process chaos run (build/ci/chaos.sh): the
@@ -33,22 +34,22 @@ import (
 // and S3 outages. It covers what the simulator does not model: the real
 // binary, kernel, disk and network. CHAOS_SEED picks the scenario.
 func TestChaos(t *testing.T) {
-	bin := os.Getenv("CHAOS_BIN")
+	bin := simEnv("CHAOS_BIN")
 	if bin == "" {
-		t.Skip("CHAOS_BIN is not set; build/ci/chaos.sh runs this test")
+		skip.IgnoreLint(t, "CHAOS_BIN is not set; build/ci/chaos.sh runs this test")
 	}
 	u, err := user.Current()
 	if err != nil {
 		t.Fatal(err)
 	}
-	seed := uint64(envInt(t, "CHAOS_SEED", time.Now().UnixNano()))
+	seed := uint64(envInt(t, "CHAOS_SEED", timeutil.Now().UnixNano()))
 	t.Logf("CHAOS_SEED=%d", seed)
 	rng := rand.New(rand.NewPCG(seed, 0))
 	p := &procs{
 		bin:      bin,
-		dir:      os.Getenv("CHAOS_DIR"),
-		endpoint: os.Getenv("CHAOS_S3"),
-		s3:       os.Getenv("CHAOS_S3_CONTAINER"),
+		dir:      simEnv("CHAOS_DIR"),
+		endpoint: simEnv("CHAOS_S3"),
+		s3:       simEnv("CHAOS_S3_CONTAINER"),
 		user:     u.Username,
 	}
 	defer p.stop()

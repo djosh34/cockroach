@@ -31,13 +31,15 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
+	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 )
 
 // Server is an in-memory S3 server. Its zero value is not usable; use New.
 type Server struct {
-	mu      sync.Mutex
+	mu      syncutil.Mutex
 	buckets map[string]*bucket
 	uploads map[string]*upload
 	nextID  int
@@ -319,7 +321,7 @@ func parseRange(h string, n int) (start, end int, ok bool) {
 
 func newObject(data []byte) object {
 	sum := md5.Sum(data)
-	return object{data: data, etag: `"` + hex.EncodeToString(sum[:]) + `"`, modified: time.Now()}
+	return object{data: data, etag: `"` + hex.EncodeToString(sum[:]) + `"`, modified: timeutil.Now()}
 }
 
 type initiateResult struct {
@@ -428,7 +430,9 @@ type listResult struct {
 
 // listObjects lists the keys with the prefix in byte order, in pages. The
 // continuation token is the last key of the previous page.
-func (s *Server) listObjects(w http.ResponseWriter, bucketName string, b *bucket, q map[string][]string) {
+func (s *Server) listObjects(
+	w http.ResponseWriter, bucketName string, b *bucket, q map[string][]string,
+) {
 	get := func(k string) string {
 		if v := q[k]; len(v) > 0 {
 			return v[0]

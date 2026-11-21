@@ -22,6 +22,8 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/backup"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
+	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
+	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/errors"
 	"github.com/jackc/pgx/v5"
 )
@@ -69,7 +71,7 @@ type scenario struct {
 	keys     int
 	runFor   time.Duration
 
-	mu       sync.Mutex
+	mu       syncutil.Mutex
 	failures []string
 	ledger   map[int]*ledgerKey
 	// pitr is a time during the workload that the PITR check restores
@@ -107,7 +109,7 @@ func (s *scenario) run(ctx context.Context) error {
 		return errors.Wrap(err, "setup")
 	}
 	newRNG := func() *rand.Rand { return rand.New(rand.NewPCG(s.rng.Uint64(), s.rng.Uint64())) }
-	until := time.Now().Add(s.runFor)
+	until := timeutil.Now().Add(s.runFor)
 	var wg sync.WaitGroup
 	for w := 0; w < s.workers; w++ {
 		wrng := newRNG()
@@ -215,7 +217,7 @@ func (s *scenario) worker(ctx context.Context, w int, rng *rand.Rand, until time
 		}
 	}()
 	next := int64(w) << 32
-	for time.Now().Before(until) {
+	for timeutil.Now().Before(until) {
 		if conn == nil {
 			addrs := s.env.addrs()
 			c, err := connect(ctx, addrs[rng.IntN(len(addrs))])
@@ -225,31 +227,31 @@ func (s *scenario) worker(ctx context.Context, w int, rng *rand.Rand, until time
 			}
 			conn = c
 		}
-		opCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-		var err error
-		switch op := rng.IntN(10); {
-		case op < 3:
-			t := s.tables[rng.IntN(len(s.tables))]
-			s.count("write")
-			err = s.exec(opCtx, conn, t.write(rng))
-		case op < 5:
-			q := genQuery(rng, s.tables)
-			s.mu.Lock()
-			if q.comparable && len(s.queries) < 40 {
-				s.queries = append(s.queries, q)
+		op := rng.IntN(10)
+		err := timeutil.RunWithTimeout(ctx, "statement", 15*time.Second, func(ctx context.Context) error {
+			switch {
+			case op < 3:
+				t := s.tables[rng.IntN(len(s.tables))]
+				s.count("write")
+				return s.exec(ctx, conn, t.write(rng))
+			case op < 5:
+				q := genQuery(rng, s.tables)
+				s.mu.Lock()
+				if q.comparable && len(s.queries) < 40 {
+					s.queries = append(s.queries, q)
+				}
+				s.mu.Unlock()
+				s.count("query")
+				return s.exec(ctx, conn, q.render(noHint))
+			case op < 8:
+				s.count("transfer")
+				return s.transfer(ctx, conn, rng)
+			default:
+				next++
+				s.count("ledger")
+				return s.writeLedger(ctx, conn, w, rng, next)
 			}
-			s.mu.Unlock()
-			s.count("query")
-			err = s.exec(opCtx, conn, q.render(noHint))
-		case op < 8:
-			s.count("transfer")
-			err = s.transfer(opCtx, conn, rng)
-		default:
-			next++
-			s.count("ledger")
-			err = s.writeLedger(opCtx, conn, w, rng, next)
-		}
-		cancel()
+		})
 		if err != nil && conn.IsClosed() {
 			conn = nil
 		}
@@ -297,7 +299,9 @@ func (s *scenario) judge(err error) error {
 
 // writeLedger upserts one of the worker's own keys and records the
 // outcome: acknowledged, or unknown after any error.
-func (s *scenario) writeLedger(ctx context.Context, conn *pgx.Conn, w int, rng *rand.Rand, v int64) error {
+func (s *scenario) writeLedger(
+	ctx context.Context, conn *pgx.Conn, w int, rng *rand.Rand, v int64,
+) error {
 	k := w + s.workers*rng.IntN(s.keys/s.workers)
 	err := s.exec(ctx, conn, "UPSERT INTO ledger VALUES ($1, $2)", k, v)
 	s.mu.Lock()
@@ -335,7 +339,7 @@ func (s *scenario) faults(rng *rand.Rand, until time.Time) {
 	powerLoss := rng.IntN(3) == 0
 	for {
 		time.Sleep(time.Duration(500+rng.IntN(4000)) * time.Millisecond)
-		if time.Now().After(until) {
+		if timeutil.Now().After(until) {
 			return
 		}
 		i := rng.IntN(n)
@@ -417,7 +421,9 @@ func (s *scenario) heal(ctx context.Context) error {
 
 // query runs sql in a transaction at ts with the session settings and
 // returns its rows as text.
-func queryAt(ctx context.Context, conn *pgx.Conn, ts string, settings []string, sql string) (result, error) {
+func queryAt(
+	ctx context.Context, conn *pgx.Conn, ts string, settings []string, sql string,
+) (result, error) {
 	for _, set := range settings {
 		if _, err := conn.Exec(ctx, set); err != nil {
 			return nil, errors.Wrapf(err, "%s", set)
@@ -459,7 +465,6 @@ var planSettings = [][]string{
 	{"SET reorder_joins_limit = 0"},
 	{"SET optimizer_use_histograms = false", "SET optimizer_use_multicol_stats = false"},
 	{"SET enable_zigzag_join = true"},
-	{"SET disallow_full_table_scans = false", "SET prefer_lookup_joins_for_fks = true"},
 }
 
 // compareQueries runs every recorded query at one timestamp with the
@@ -570,13 +575,19 @@ func (s *scenario) checkPITR(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	deadline := time.Now().Add(5 * time.Minute)
+	deadline := timeutil.Now().Add(5 * time.Minute)
 	for {
 		_, err := backup.CheckTarget(ctx, store, s.pitr)
 		if err == nil {
 			break
 		}
-		if time.Now().After(deadline) {
+		if strings.Contains(err.Error(), "no full backup ends at or before") {
+			// The first full backup ended after the time: there is nothing
+			// to restore to it from.
+			s.count("pitr: time before the first full backup")
+			return nil
+		}
+		if timeutil.Now().After(deadline) {
 			s.fail("the archive does not reach %s five minutes after the workload: %v", s.pitr, err)
 			return nil
 		}

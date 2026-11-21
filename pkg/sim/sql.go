@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -59,7 +60,7 @@ func connect(ctx context.Context, addr string) (*pgx.Conn, error) {
 
 // waitSQL waits until SELECT 1 works on the node at addr.
 func waitSQL(ctx context.Context, addr string, limit time.Duration) error {
-	deadline := time.Now().Add(limit)
+	deadline := timeutil.Now().Add(limit)
 	for {
 		conn, err := connect(ctx, addr)
 		if err == nil {
@@ -69,7 +70,7 @@ func waitSQL(ctx context.Context, addr string, limit time.Duration) error {
 				return nil
 			}
 		}
-		if time.Now().After(deadline) {
+		if timeutil.Now().After(deadline) {
 			return fmt.Errorf("%s: SQL did not work within %s: %v", addr, limit, err)
 		}
 		time.Sleep(time.Second)
