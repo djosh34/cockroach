@@ -1180,6 +1180,7 @@ Available Commands:
   nodelocal         upload and delete nodelocal files
   userfile          upload, list and delete user scoped files
   import            import a db or table from a local PGDUMP or MYSQLDUMP file
+  backup            inspect, check, expire and restore backups
   demo              open a demo sql shell
   convert-url       convert a SQL connection string for use with various client drivers
   gen               generate auxiliary files
