@@ -63,12 +63,11 @@ import (
 // clientconnurl.ClientOptions. It produces its output in
 // copts.ExplicitURL.
 //
-// sslStrict, when set to true, requires that the SSL file paths in
-// a URL clearly map to a certificate directory and restricts the
-// set of supported SSL modes to just "disable" and "require".
+// sslStrict, when set to true, restricts the set of supported SSL modes
+// to just "disable" and "verify-full".
 //
-// This is set for all non-SQL client commands, which only support
-// the insecure boolean and certs-dir with maximum SSL validation.
+// This is set for all non-SQL client commands, which take their
+// certificates from --config.
 //
 // warnFn, if provided, is used to warn the user when the value
 // specified by --url contains a database name or a user/password pair.
@@ -97,12 +96,11 @@ type urlParser struct {
 	// user/database details and the command does not support that.
 	warnFn func(string, ...interface{})
 
-	// strictTLS, when set to true, requires that the SSL file paths in
-	// a URL clearly map to a certificate directory and restricts the
-	// set of supported SSL modes to just "disable" and "require".
+	// strictTLS, when set to true, restricts the set of supported SSL
+	// modes to just "disable" and "verify-full".
 	//
-	// This is set for all non-SQL client commands, which only support
-	// the insecure boolean and certs-dir with maximum SSL validation.
+	// This is set for all non-SQL client commands, which take their
+	// certificates from --config.
 	strictTLS bool
 }
 

@@ -1027,7 +1027,7 @@ For example, postgresql://myuser@localhost:26257/mydb.
 
 </PRE>
 If left empty, the discrete connection flags are used: host, port,
-user, database, insecure, certs-dir.`,
+user, database, insecure, config.`,
 	}
 
 	User = FlagInfo{

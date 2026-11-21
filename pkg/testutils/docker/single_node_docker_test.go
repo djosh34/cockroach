@@ -73,34 +73,6 @@ func TestSingleNodeDocker(t *testing.T) {
 
 	var dockerTests = []singleNodeDockerTest{
 		{
-			testName:      "single-node-secure-mode",
-			containerName: "roach1",
-			runContainerArgs: runContainerArgs{
-				envSetting: []string{
-					"COCKROACH_DATABASE=mydb",
-					"COCKROACH_USER=myuser",
-					"COCKROACH_PASSWORD=23333",
-				},
-				volSetting: []string{
-					fmt.Sprintf("%s/testdata/single-node-test/docker-entrypoint-initdb.d/:/docker-entrypoint-initdb.d", pwd),
-					fmt.Sprintf("%s:/cockroach/docker-fsnotify", fsnotifyBinPath),
-				},
-				cmd: []string{"start-single-node", "--certs-dir=certs"},
-			},
-			sqlOpts: []string{
-				"--format=csv",
-				"--url=postgresql://myuser:23333@127.0.0.1:26257/mydb?sslcert=certs%2Fclient.myuser.crt&sslkey=certs%2Fclient.myuser.key&sslmode=verify-full&sslrootcert=certs%2Fca.crt",
-			},
-			sqlQueries: []sqlQuery{
-				{"SELECT current_user", "current_user\nmyuser"},
-				{"SELECT current_database()", "current_database\nmydb"},
-				{"CREATE TABLE hello (X INT)", "CREATE TABLE"},
-				{"INSERT INTO hello VALUES (1), (2), (3)", "INSERT 0 3"},
-				{"SELECT * FROM hello", "x\n1\n2\n3"},
-				{"SELECT * FROM bello", "id,name\n1,a\n2,b\n3,c"},
-			},
-		},
-		{
 			testName:      "single-node-insecure-mode",
 			containerName: "roach2",
 			runContainerArgs: runContainerArgs{

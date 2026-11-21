@@ -520,13 +520,16 @@ func TestHalfOnlineLossOfQuorumRecovery(t *testing.T) {
 	// having assertions on generated data helps to identify which stage of pipeline broke
 	// if test fails.
 	planFile := dir + "/recovery-plan.json"
+	// The commands present the node cert from the test certs.
+	configFile, err := writeTestCerts(t.TempDir())
+	require.NoError(t, err)
 	out, err := c.RunWithCaptureArgs(
 		[]string{
 			"debug",
 			"recover",
 			"make-plan",
 			"--confirm=y",
-			"--certs-dir=test_certs",
+			"--config=" + configFile,
 			"--host=" + tc.Server(0).AdvRPCAddr(),
 			"--plan=" + planFile,
 		})
@@ -545,7 +548,7 @@ func TestHalfOnlineLossOfQuorumRecovery(t *testing.T) {
 	out, err = c.RunWithCaptureArgs(
 		[]string{
 			"debug", "recover", "apply-plan",
-			"--certs-dir=test_certs",
+			"--config=" + configFile,
 			"--host=" + tc.Server(0).AdvRPCAddr(),
 			"--confirm=y", planFile,
 		})
@@ -560,7 +563,7 @@ func TestHalfOnlineLossOfQuorumRecovery(t *testing.T) {
 	out, err = c.RunWithCaptureArgs(
 		[]string{
 			"debug", "recover", "verify",
-			"--certs-dir=test_certs",
+			"--config=" + configFile,
 			"--host=" + tc.Server(0).AdvRPCAddr(),
 			planFile,
 		})
@@ -609,7 +612,7 @@ func TestHalfOnlineLossOfQuorumRecovery(t *testing.T) {
 	out, err = c.RunWithCaptureArgs(
 		[]string{
 			"debug", "recover", "verify",
-			"--certs-dir=test_certs",
+			"--config=" + configFile,
 			"--host=" + tc.Server(0).AdvRPCAddr(),
 			planFile,
 		})
