@@ -60,9 +60,10 @@ import (
 //
 // Objects that were being dropped at the target time are left out, since
 // they were not visible then, and so are CREATE TABLE AS tables and
-// materialized views that were being created; references to them go. A table that was taken offline by an IMPORT
-// INTO comes back online with the data it had before the import; a table
-// that the import itself created is left out. Schema changes that were
+// materialized views that were being created; references to them go. A
+// table that was taken offline by an IMPORT INTO comes back online with the
+// data it had before the import; a table that the import itself created is
+// left out. Schema changes that were
 // running at the target time, including tables being created, get new jobs
 // and carry on; a table being created comes back without rows, which its
 // job writes.

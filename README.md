@@ -168,12 +168,13 @@ credentials of their environment:
   or the decimal that `info` and `cluster_logical_timestamp()` show) or the
   last restorable time.
 
-A restore needs a new, empty cluster, started like any other; it may have
-its own backup section. If a restore fails after it has started writing,
-that cluster takes no other restore; start a new one. Its nodes need S3 credentials for the source
-repository. The restore takes the last full backup at or before the target
-and every segment after it up to the target, and stops at the first missing
-or broken segment; a target after the last restorable time is refused. Like
+A restore needs a new, empty cluster, started like any other, in which no
+table was ever created; it may have its own backup section. If a restore
+fails after it has started writing, that cluster takes no other restore;
+start a new one. Its nodes need S3 credentials for the source repository.
+The restore takes the last full backup at or before the target and every
+segment after it up to the target, and stops at the first missing or broken
+segment; a target after the last restorable time is refused. Like
 CockroachDB's full cluster restore, it brings back all databases, schemas,
 tables, types, functions and views with their data and IDs, and the users,
 roles, grants, cluster settings, zone configurations, comments and table
@@ -182,7 +183,8 @@ marked `exclude_data_from_backup` come back empty. Jobs and schedules are
 not restored, and nothing about backups is; tables with row-level TTL get
 new TTL schedules, and schema changes that were running at the target time
 get new jobs. A CREATE TABLE AS or materialized view that was still being
-created is left out. Restored tables keep no history from before the restore.
+created is left out. Restored tables keep no history from before the
+restore.
 
 ## Build from source
 
