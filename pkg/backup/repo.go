@@ -164,7 +164,9 @@ func getJSON(ctx context.Context, s *Store, name string, v interface{}) error {
 
 // fullBackups returns the complete full backups, oldest first, and the
 // folders of full backups that have no manifest.
-func fullBackups(ctx context.Context, s *Store) (complete []Manifest, incomplete []string, _ error) {
+func fullBackups(
+	ctx context.Context, s *Store,
+) (complete []Manifest, incomplete []string, _ error) {
 	names, err := s.List(ctx, fullDir)
 	if err != nil {
 		return nil, nil, err
@@ -208,8 +210,8 @@ func segmentNumbers(ctx context.Context, s *Store) ([]int64, error) {
 		return nil, err
 	}
 	var nums []int64
-	for _, n := range names {
-		n, ok := strings.CutSuffix(n, segmentExt)
+	for _, name := range names {
+		n, ok := strings.CutSuffix(name, segmentExt)
 		if !ok {
 			continue
 		}
@@ -278,11 +280,7 @@ func writeSegment(
 // checking its checksum, unless headerOnly is set. The gzip CRC of the
 // whole object is checked too.
 func readSegment(
-	ctx context.Context,
-	s *Store,
-	n int64,
-	headerOnly bool,
-	file func(f FileInfo, sst []byte) error,
+	ctx context.Context, s *Store, n int64, headerOnly bool, file func(f FileInfo, sst []byte) error,
 ) (SegmentHeader, error) {
 	var h SegmentHeader
 	name := segmentName(n)

@@ -54,7 +54,9 @@ const autoBackupCheckInterval = 5 * time.Minute
 
 // StartAutoBackup makes sure, now and every autoBackupCheckInterval, that
 // the AUTO BACKUP job exists. Only nodes with a backup section call it.
-func StartAutoBackup(ctx context.Context, stopper *stop.Stopper, execCfg *sql.ExecutorConfig) error {
+func StartAutoBackup(
+	ctx context.Context, stopper *stop.Stopper, execCfg *sql.ExecutorConfig,
+) error {
 	return stopper.RunAsyncTask(ctx, "auto-backup-creator", func(ctx context.Context) {
 		ctx, cancel := stopper.WithCancelOnQuiesce(ctx)
 		defer cancel()
@@ -128,7 +130,9 @@ func (r *autoBackupResumer) Resume(ctx context.Context, execCtx interface{}) err
 }
 
 // OnFailOrCancel releases the protected timestamp.
-func (r *autoBackupResumer) OnFailOrCancel(ctx context.Context, execCtx interface{}, _ error) error {
+func (r *autoBackupResumer) OnFailOrCancel(
+	ctx context.Context, execCtx interface{}, _ error,
+) error {
 	execCfg := execCtx.(sql.JobExecContext).ExecCfg()
 	p, ok := r.job.Progress().Details.(*jobspb.Progress_AutoBackup)
 	if !ok || p.AutoBackup.ProtectedTimestampRecord == nil {
@@ -193,13 +197,17 @@ func (a *archiver) retry(ctx context.Context, what string, f func() error) error
 
 // warn logs a failure and shows it as the job's status.
 func (a *archiver) warn(ctx context.Context, format string, args ...interface{}) {
-	log.Ops.Warningf(ctx, "AUTO BACKUP: "+format, args...)
-	a.status(ctx, format, args...)
+	msg := fmt.Sprintf(format, args...)
+	log.Ops.Warningf(ctx, "AUTO BACKUP: %s", msg)
+	a.setStatus(ctx, msg)
 }
 
 // status sets the job's status.
 func (a *archiver) status(ctx context.Context, format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
+	a.setStatus(ctx, fmt.Sprintf(format, args...))
+}
+
+func (a *archiver) setStatus(ctx context.Context, msg string) {
 	if err := a.job.NoTxn().RunningStatus(ctx, func(context.Context, jobspb.Details) (jobs.RunningStatus, error) {
 		return jobs.RunningStatus(msg), nil
 	}); err != nil && ctx.Err() == nil {

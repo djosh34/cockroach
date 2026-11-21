@@ -13,8 +13,8 @@ package backup
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"io"
-	"math/rand"
 	"strings"
 	"testing"
 

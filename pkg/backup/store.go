@@ -38,7 +38,8 @@ const partSize = 8 << 20
 // DeleteObject. The contract tests check each of them against a real S3
 // server.
 type Store struct {
-	client   *s3.Client
+	client *s3.Client
+	//lint:ignore SA1019 the uploader of feature/s3/manager still works; its replacement transfermanager is new
 	uploader *manager.Uploader
 	bucket   string
 	prefix   string
@@ -108,6 +109,7 @@ func (s *Store) key(name string) string {
 // before. A large object is sent in parts; if that fails, the parts are
 // aborted.
 func (s *Store) Put(ctx context.Context, name string, r io.Reader) error {
+	//lint:ignore SA1019 the uploader of feature/s3/manager still works; its replacement transfermanager is new
 	_, err := s.uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(s.key(name)),

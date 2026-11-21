@@ -267,7 +267,9 @@ func tableSpan(id uint32) roachpb.Span {
 
 // readCatalog reads the namespace and the descriptors at target and
 // decides what to restore.
-func readCatalog(ctx context.Context, eng storage.Engine, target hlc.Timestamp) (*sourceCatalog, error) {
+func readCatalog(
+	ctx context.Context, eng storage.Engine, target hlc.Timestamp,
+) (*sourceCatalog, error) {
 	src := &sourceCatalog{
 		target:    target,
 		restored:  map[descpb.ID]catalog.MutableDescriptor{},
@@ -566,7 +568,9 @@ func systemTableIDs(ctx context.Context, txn descs.Txn) (map[string]descpb.ID, e
 
 // keepRow returns which rows of system table name the restore keeps, or
 // nil for all.
-func (src *sourceCatalog) keepRow(name catconstants.SystemTableName) (func(roachpb.KeyValue) bool, error) {
+func (src *sourceCatalog) keepRow(
+	name catconstants.SystemTableName,
+) (func(roachpb.KeyValue) bool, error) {
 	// firstColumn decodes the first primary key column, an INT, of a key.
 	firstColumn := func(kv roachpb.KeyValue, skip int) (int64, bool) {
 		rest, _, _, err := codec.DecodeIndexPrefix(kv.Key)

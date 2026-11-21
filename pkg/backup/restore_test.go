@@ -28,6 +28,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
+	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/errors"
 	"github.com/stretchr/testify/require"
 )
@@ -47,7 +48,9 @@ func backupSection(t *testing.T) *certconfig.Backup {
 	}
 }
 
-func startServer(t *testing.T, b *certconfig.Backup) (serverutils.TestServerInterface, *sqlutils.SQLRunner) {
+func startServer(
+	t *testing.T, b *certconfig.Backup,
+) (serverutils.TestServerInterface, *sqlutils.SQLRunner) {
 	certs := certconfig.Embedded()
 	certs.Backup = b
 	s, db, _ := serverutils.StartServer(t, base.TestServerArgs{
@@ -286,7 +289,7 @@ func TestRestoreToPointsInTime(t *testing.T) {
 		dst, _ := startServer(t, nil)
 		defer dst.Stopper().Stop(ctx)
 		sys := sqlutils.MakeSQLRunner(dst.ApplicationLayer().SQLConn(t, serverutils.DBName("system")))
-		future := hlc.Timestamp{WallTime: time.Now().Add(time.Hour).UnixNano()}
+		future := hlc.Timestamp{WallTime: timeutil.Now().Add(time.Hour).UnixNano()}
 		sys.ExpectErr(t, "is after the last restorable time",
 			`SELECT crdb_internal.restore_cluster($1, $2, $3, $4, $5)`,
 			b.Bucket, b.Prefix, b.Endpoint, b.Region, future.AsOfSystemTime())

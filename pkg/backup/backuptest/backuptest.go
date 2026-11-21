@@ -19,13 +19,13 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"os"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/cockroachdb/cockroach/pkg/testutils/skip"
+	"github.com/cockroachdb/cockroach/pkg/util/envutil"
 )
 
 // EndpointEnv names the S3 server that the tests use.
@@ -36,7 +36,7 @@ const Region = "us-east-1"
 
 // Endpoint returns the S3 server's URL, or skips the test if none is set.
 func Endpoint(t testing.TB) string {
-	endpoint := os.Getenv(EndpointEnv)
+	endpoint, _ := envutil.ExternalEnvString(EndpointEnv, 1)
 	if endpoint == "" {
 		skip.IgnoreLintf(t, "%s is not set; the s3 job of CI runs this test against versitygw", EndpointEnv)
 	}
