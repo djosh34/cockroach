@@ -81,10 +81,15 @@ var nodeConfig = backupConfig("http://" + s3Addr + ":9000")
 // s3Env gives a machine the S3 credentials of the fake server, which
 // checks none, and keeps the AWS SDK from looking elsewhere for them.
 func s3Env() {
-	os.Setenv("AWS_ACCESS_KEY_ID", s3Key)
-	os.Setenv("AWS_SECRET_ACCESS_KEY", s3Secret)
-	os.Setenv("AWS_REGION", s3Region)
-	os.Setenv("AWS_EC2_METADATA_DISABLED", "true")
+	for k, v := range map[string]string{
+		"AWS_ACCESS_KEY_ID":         s3Key,
+		"AWS_SECRET_ACCESS_KEY":     s3Secret,
+		"AWS_REGION":                s3Region,
+		"AWS_EC2_METADATA_DISABLED": "true",
+	} {
+		// Setenv fails only on an invalid name.
+		_ = os.Setenv(k, v)
+	}
 }
 
 // runCLI runs patchroaddb with the arguments, on the machine that calls
@@ -185,50 +190,66 @@ func startCluster(ctx context.Context, n int, s3 *fakes3.Server) (*cluster, erro
 func (c *cluster) watch(nd *node) {
 	for {
 		nd.m.Wait()
-		c.mu.Lock()
-		state := nd.state
-		if state == up && nd.syncFaults {
-			nd.state, state = crashedInSync, crashedInSync
-		}
-		if state == up {
-			c.failures = append(c.failures, fmt.Sprintf("n%d stopped on its own", nd.idx+1))
-		}
-		c.mu.Unlock()
-		switch state {
+		switch c.stopped(nd) {
 		case up:
 			return
 		case crashedInSync:
 			time.Sleep(time.Second)
 			nd.m.RestartWithPartialDisk()
-			c.mu.Lock()
-			nd.state = up
-			c.mu.Unlock()
+			c.setState(nd, up)
 		case crashed:
 			// The harness restarts it; Wait blocks until the next stop.
-			for {
+			for c.state(nd) == crashed {
 				time.Sleep(100 * time.Millisecond)
-				c.mu.Lock()
-				state = nd.state
-				c.mu.Unlock()
-				if state != crashed {
-					break
-				}
 			}
 		}
 	}
+}
+
+// stopped records that the node's machine stopped, and returns why: up for
+// a stop the harness did not cause, which is a failure.
+func (c *cluster) stopped(nd *node) nodeState {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if nd.state == up && nd.syncFaults {
+		nd.state = crashedInSync
+	}
+	if nd.state == up {
+		c.failures = append(c.failures, fmt.Sprintf("n%d stopped on its own", nd.idx+1))
+	}
+	return nd.state
+}
+
+func (c *cluster) state(nd *node) nodeState {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return nd.state
+}
+
+func (c *cluster) setState(nd *node, s nodeState) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	nd.state = s
+}
+
+// markCrashed moves an up node to crashed and reports whether it was up.
+func (c *cluster) markCrashed(nd *node) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if nd.state != up {
+		return false
+	}
+	nd.state = crashed
+	return true
 }
 
 // crash stops the node abruptly: writes it has not synced are lost. It
 // reports false, and does nothing, if the node is down already.
 func (c *cluster) crash(i int) bool {
 	nd := c.nodes[i]
-	c.mu.Lock()
-	if nd.state != up {
-		c.mu.Unlock()
+	if !c.markCrashed(nd) {
 		return false
 	}
-	nd.state = crashed
-	c.mu.Unlock()
 	nd.m.Crash()
 	return true
 }
@@ -242,17 +263,17 @@ func (c *cluster) restart(i int, partial bool) {
 	} else {
 		nd.m.Restart()
 	}
-	c.mu.Lock()
-	nd.state = up
-	c.mu.Unlock()
+	c.setState(nd, up)
 }
 
 // syncFaults turns on or off crashes of the node in fsync.
 func (c *cluster) syncFaults(i int, on bool) bool {
 	nd := c.nodes[i]
-	c.mu.Lock()
-	nd.syncFaults = on
-	c.mu.Unlock()
+	func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		nd.syncFaults = on
+	}()
 	nd.m.SetSometimesCrashOnSync(on)
 	return true
 }

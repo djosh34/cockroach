@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
+	"github.com/cockroachdb/errors"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -76,7 +77,7 @@ func waitSQL(ctx context.Context, addr string, limit time.Duration) error {
 			}
 		}
 		if timeutil.Now().After(deadline) {
-			return fmt.Errorf("%s: SQL did not work within %s: %v", addr, limit, err)
+			return errors.Wrapf(err, "%s: SQL did not work within %s", addr, limit)
 		}
 		time.Sleep(time.Second)
 	}

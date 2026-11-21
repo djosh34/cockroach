@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
+	"github.com/cockroachdb/errors"
 )
 
 // procs is the env of the nightly chaos run (build/ci/chaos.sh): real
@@ -61,7 +62,7 @@ const chaosHost = "10.9.0.254"
 func (p *procs) root(args ...string) error {
 	out, err := exec.Command("sudo", args...).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("sudo %s: %v: %s", strings.Join(args, " "), err, out)
+		return errors.Wrapf(err, "sudo %s: %s", strings.Join(args, " "), out)
 	}
 	return nil
 }
@@ -90,20 +91,20 @@ func (p *procs) start(n *proc) error {
 	}
 	cmd.Stdout, cmd.Stderr = f, f
 	if err := cmd.Start(); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
-	p.mu.Lock()
-	n.killed = false
-	p.mu.Unlock()
-	go func() {
-		err := cmd.Wait()
-		f.Close()
+	func() {
 		p.mu.Lock()
 		defer p.mu.Unlock()
-		if !n.killed {
-			p.failures = append(p.failures, fmt.Sprintf("%s stopped on its own: %v", n.ns, err))
-			n.killed = true
+		n.killed = false
+	}()
+	go func() {
+		err := cmd.Wait()
+		_ = f.Close()
+		// A process that ends while not killed failed.
+		if p.markKilled(n) {
+			p.fail("%s stopped on its own: %v", n.ns, err)
 		}
 	}()
 	return nil
@@ -122,30 +123,39 @@ func (p *procs) s3Endpoint() string { return p.endpoint }
 func (p *procs) crash(i int) bool { return p.kill(p.nodes[i]) }
 
 func (p *procs) kill(n *proc) bool {
-	p.mu.Lock()
-	if n.killed {
-		p.mu.Unlock()
+	if !p.markKilled(n) {
 		return false
 	}
-	n.killed = true
-	p.mu.Unlock()
 	pid, err := os.ReadFile(filepath.Join(p.nodeDir(n), "pid"))
 	if err == nil {
 		err = p.root("kill", "-KILL", strings.TrimSpace(string(pid)))
 	}
 	if err != nil {
-		p.mu.Lock()
-		p.failures = append(p.failures, fmt.Sprintf("killing %s: %v", n.ns, err))
-		p.mu.Unlock()
+		p.fail("killing %s: %v", n.ns, err)
 	}
 	return true
 }
 
+// markKilled marks a running process killed and reports whether it ran.
+func (p *procs) markKilled(n *proc) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if n.killed {
+		return false
+	}
+	n.killed = true
+	return true
+}
+
+func (p *procs) fail(format string, args ...interface{}) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.failures = append(p.failures, fmt.Sprintf(format, args...))
+}
+
 func (p *procs) restart(i int, _ bool) {
 	if err := p.start(p.nodes[i]); err != nil {
-		p.mu.Lock()
-		p.failures = append(p.failures, fmt.Sprintf("restarting %s: %v", p.nodes[i].ns, err))
-		p.mu.Unlock()
+		p.fail("restarting %s: %v", p.nodes[i].ns, err)
 	}
 }
 

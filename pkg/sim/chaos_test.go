@@ -62,7 +62,7 @@ func TestChaos(t *testing.T) {
 	for _, n := range p.nodes {
 		n.args = []string{"start", "--insecure", "--listen-addr=" + n.addr + ":26257", "--http-addr=" + n.addr + ":8080",
 			"--join=" + strings.Join(join, ","), "--cache=128MiB", "--max-sql-memory=128MiB"}
-		if err := p.start(n); err != nil {
+		if err = p.start(n); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -71,11 +71,11 @@ func TestChaos(t *testing.T) {
 		t.Fatalf("init: %v: %s", err, out)
 	}
 	ctx := context.Background()
-	if _, err := backuptest.Client(t).CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(s3Bucket)}); err != nil {
+	if _, err = backuptest.Client(t).CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(s3Bucket)}); err != nil {
 		t.Fatal(err)
 	}
 	for _, addr := range p.addrs() {
-		if err := waitSQL(ctx, addr, 2*time.Minute); err != nil {
+		if err = waitSQL(ctx, addr, 2*time.Minute); err != nil {
 			t.Fatal(err)
 		}
 	}

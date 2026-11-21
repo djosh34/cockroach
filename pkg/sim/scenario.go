@@ -114,10 +114,10 @@ func (s *scenario) run(ctx context.Context) error {
 	for w := 0; w < s.workers; w++ {
 		wrng := newRNG()
 		wg.Add(1)
-		go func() {
+		go func(w int) {
 			defer wg.Done()
 			s.worker(ctx, w, wrng, until)
-		}()
+		}(w)
 	}
 	frng := newRNG()
 	wg.Add(1)
@@ -168,7 +168,7 @@ func (s *scenario) setup(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close(ctx)
+	defer func() { _ = conn.Close(ctx) }()
 	store, err := backup.OpenStore(ctx, backup.Repository{Bucket: s3Bucket, Endpoint: s.env.s3Endpoint(), Region: s3Region})
 	if err != nil {
 		return err
@@ -236,11 +236,7 @@ func (s *scenario) worker(ctx context.Context, w int, rng *rand.Rand, until time
 				return s.exec(ctx, conn, t.write(rng))
 			case op < 5:
 				q := genQuery(rng, s.tables)
-				s.mu.Lock()
-				if q.comparable && len(s.queries) < 40 {
-					s.queries = append(s.queries, q)
-				}
-				s.mu.Unlock()
+				s.keepQuery(q)
 				s.count("query")
 				return s.exec(ctx, conn, q.render(noHint))
 			case op < 8:
@@ -255,6 +251,16 @@ func (s *scenario) worker(ctx context.Context, w int, rng *rand.Rand, until time
 		if err != nil && conn.IsClosed() {
 			conn = nil
 		}
+	}
+}
+
+// keepQuery keeps a comparable query, up to 40, for the check to compare
+// its plans.
+func (s *scenario) keepQuery(q query) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if q.comparable && len(s.queries) < 40 {
+		s.queries = append(s.queries, q)
 	}
 }
 
@@ -275,16 +281,16 @@ func (s *scenario) transfer(ctx context.Context, conn *pgx.Conn, rng *rand.Rand)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var ba, bb int64
-	if err := tx.QueryRow(ctx, "SELECT balance FROM accounts WHERE id = $1", a).Scan(&ba); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT balance FROM accounts WHERE id = $1", a).Scan(&ba); err != nil {
 		return s.judge(err)
 	}
-	if err := tx.QueryRow(ctx, "SELECT balance FROM accounts WHERE id = $1", b).Scan(&bb); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT balance FROM accounts WHERE id = $1", b).Scan(&bb); err != nil {
 		return s.judge(err)
 	}
-	if _, err := tx.Exec(ctx, "UPDATE accounts SET balance = $1 WHERE id = $2", ba-amount, a); err != nil {
+	if _, err = tx.Exec(ctx, "UPDATE accounts SET balance = $1 WHERE id = $2", ba-amount, a); err != nil {
 		return s.judge(err)
 	}
-	if _, err := tx.Exec(ctx, "UPDATE accounts SET balance = $1 WHERE id = $2", bb+amount, b); err != nil {
+	if _, err = tx.Exec(ctx, "UPDATE accounts SET balance = $1 WHERE id = $2", bb+amount, b); err != nil {
 		return s.judge(err)
 	}
 	return s.judge(tx.Commit(ctx))
@@ -304,31 +310,43 @@ func (s *scenario) writeLedger(
 ) error {
 	k := w + s.workers*rng.IntN(s.keys/s.workers)
 	err := s.exec(ctx, conn, "UPSERT INTO ledger VALUES ($1, $2)", k, v)
+	needPITR := s.recordLedger(k, v, err == nil)
+	if err == nil && needPITR && rng.IntN(20) == 0 {
+		// A time after this acknowledged write, for the PITR check.
+		var ts string
+		if conn.QueryRow(ctx, "SELECT cluster_logical_timestamp()::STRING").Scan(&ts) == nil {
+			if t, perr := hlc.ParseHLC(ts); perr == nil {
+				s.setPITR(t)
+			}
+		}
+	}
+	return err
+}
+
+// recordLedger records a write of v to the ledger key k, acknowledged or of
+// unknown outcome. It reports whether the PITR check still needs a time.
+func (s *scenario) recordLedger(k int, v int64, acked bool) bool {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	lk := s.ledger[k]
 	if lk == nil {
 		lk = &ledgerKey{}
 		s.ledger[k] = lk
 	}
-	if err == nil {
+	if acked {
 		lk.acked, lk.hasAcked, lk.ambiguous = v, true, nil
 	} else {
 		lk.ambiguous = append(lk.ambiguous, v)
 	}
-	recordPITR := err == nil && s.pitr.IsEmpty() && rng.IntN(20) == 0
-	s.mu.Unlock()
-	if recordPITR {
-		// A time after this acknowledged write, for the PITR check.
-		var ts string
-		if conn.QueryRow(ctx, "SELECT cluster_logical_timestamp()::STRING").Scan(&ts) == nil {
-			if t, err := hlc.ParseHLC(ts); err == nil {
-				s.mu.Lock()
-				s.pitr = t
-				s.mu.Unlock()
-			}
-		}
+	return s.pitr.IsEmpty()
+}
+
+func (s *scenario) setPITR(t hlc.Timestamp) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pitr.IsEmpty() {
+		s.pitr = t
 	}
-	return err
 }
 
 // faults injects faults until the end of the run: crashes and restarts,
@@ -478,7 +496,7 @@ func (s *scenario) compareQueries(ctx context.Context, conn *pgx.Conn) error {
 	for _, q := range s.queries {
 		base, err := queryAt(ctx, conn, ts, nil, q.render(noHint))
 		if err != nil {
-			s.judge(err)
+			_ = s.judge(err)
 			continue
 		}
 		for i := 0; i < 2; i++ {
@@ -498,7 +516,7 @@ func (s *scenario) compareQueries(ctx context.Context, conn *pgx.Conn) error {
 			sql := q.render(hint)
 			other, err := queryAt(ctx, conn, ts, settings, sql)
 			if err != nil {
-				s.judge(err)
+				_ = s.judge(err)
 				continue
 			}
 			s.count("query: compared")
@@ -518,7 +536,7 @@ func (s *scenario) check(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close(ctx)
+	defer func() { _ = conn.Close(ctx) }()
 
 	// Every acknowledged write survived.
 	rows, err := conn.Query(ctx, "SELECT k, v FROM ledger")
@@ -578,18 +596,18 @@ func (s *scenario) checkPITR(ctx context.Context) error {
 	}
 	deadline := timeutil.Now().Add(5 * time.Minute)
 	for {
-		_, err := backup.CheckTarget(ctx, store, s.pitr)
-		if err == nil {
+		_, cerr := backup.CheckTarget(ctx, store, s.pitr)
+		if cerr == nil {
 			break
 		}
-		if strings.Contains(err.Error(), "no full backup ends at or before") {
+		if strings.Contains(cerr.Error(), "no full backup ends at or before") {
 			// The first full backup ended after the time: there is nothing
 			// to restore to it from.
 			s.count("pitr: time before the first full backup")
 			return nil
 		}
 		if timeutil.Now().After(deadline) {
-			s.fail("the archive does not reach %s five minutes after the workload: %v", s.pitr, err)
+			s.fail("the archive does not reach %s five minutes after the workload: %v", s.pitr, cerr)
 			return nil
 		}
 		time.Sleep(time.Second)
@@ -603,12 +621,12 @@ func (s *scenario) checkPITR(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer src.Close(ctx)
+	defer func() { _ = src.Close(ctx) }()
 	want := make(map[string]result)
 	for _, t := range tables {
-		r, err := queryAt(ctx, src, s.pitr.AsOfSystemTime(), nil, "SELECT * FROM "+t+" ORDER BY 1")
-		if err != nil {
-			return errors.Wrapf(err, "reading %s at %s", t, s.pitr)
+		r, qerr := queryAt(ctx, src, s.pitr.AsOfSystemTime(), nil, "SELECT * FROM "+t+" ORDER BY 1")
+		if qerr != nil {
+			return errors.Wrapf(qerr, "reading %s at %s", t, s.pitr)
 		}
 		want[t] = r
 	}
@@ -623,11 +641,11 @@ func (s *scenario) checkPITR(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer sys.Close(ctx)
-	if _, err := sys.Exec(ctx, "SET statement_timeout = '5m'"); err != nil {
+	defer func() { _ = sys.Close(ctx) }()
+	if _, err = sys.Exec(ctx, "SET statement_timeout = '5m'"); err != nil {
 		return err
 	}
-	if _, err := sys.Exec(ctx, "SELECT crdb_internal.restore_cluster($1, $2, $3, $4, $5)",
+	if _, err = sys.Exec(ctx, "SELECT crdb_internal.restore_cluster($1, $2, $3, $4, $5)",
 		s3Bucket, "cluster", s.env.s3Endpoint(), s3Region, s.pitr.AsOfSystemTime()); err != nil {
 		s.fail("restoring to %s: %v", s.pitr, err)
 		return nil
@@ -636,11 +654,11 @@ func (s *scenario) checkPITR(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer dst.Close(ctx)
+	defer func() { _ = dst.Close(ctx) }()
 	for _, t := range tables {
-		got, err := queryAt(ctx, dst, "'-1us'", nil, "SELECT * FROM "+t+" ORDER BY 1")
-		if err != nil {
-			s.fail("reading %s after the restore to %s: %v", t, s.pitr, err)
+		got, qerr := queryAt(ctx, dst, "'-1us'", nil, "SELECT * FROM "+t+" ORDER BY 1")
+		if qerr != nil {
+			s.fail("reading %s after the restore to %s: %v", t, s.pitr, qerr)
 			continue
 		}
 		if !sameResult(want[t], got, true) {
