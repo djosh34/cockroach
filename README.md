@@ -89,8 +89,9 @@ differing lines and sets `security.identity.rules.mismatched_nodes`.
 
 The admin commands (`init`, `node`, `debug zip` and others) take the same
 `--config`: they use the node cert for RPCs and the client cert for SQL.
-`patchroaddb sql --config <file>` connects with the client cert, as the
-role its first client rule names; a URL with `sslcert`, `sslkey` and
+`patchroaddb sql --config <file>` connects with the client cert. Without
+`--user` it connects as the role of the first client rule that matches that
+cert, and otherwise as root. A URL with `sslcert`, `sslkey` and
 `sslrootcert` works too.
 
 `patchroaddb --help` lists the commands. The

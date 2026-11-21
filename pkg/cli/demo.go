@@ -107,6 +107,9 @@ func incrementTelemetryCounters(cmd *cobra.Command) {
 func checkDemoConfiguration(
 	cmd *cobra.Command, gen workload.Generator,
 ) (workload.Generator, error) {
+	if !demoCtx.insecure {
+		return nil, errors.New("a demo cluster is always insecure: patchroaddb creates no certificates")
+	}
 	if gen == nil && !demoCtx.UseEmptyDatabase {
 		// Use a default dataset unless prevented by --no-example-database.
 		gen = defaultGenerator

@@ -72,7 +72,7 @@ type certSet struct {
 	// client is the optional client cert with its key.
 	client *tls.Certificate
 	// rules are the identity rules, empty if not configured.
-	rules *Rules
+	rules *certconfig.Rules
 	// files holds the raw contents of every cert file, for ListCertificates.
 	files []CertFile
 }
@@ -102,7 +102,7 @@ func (cm *CertificateManager) Metrics() Metrics {
 }
 
 // Rules returns the current identity rules.
-func (cm *CertificateManager) Rules() *Rules {
+func (cm *CertificateManager) Rules() *certconfig.Rules {
 	return cm.cur.Load().rules
 }
 
@@ -299,7 +299,7 @@ func hasExtKeyUsage(c *x509.Certificate, u x509.ExtKeyUsage) bool {
 }
 
 func loadCertSet(cfg certconfig.Config) (*certSet, error) {
-	s := &certSet{rules: &Rules{}}
+	s := &certSet{rules: &certconfig.Rules{}}
 	var err error
 	if cfg.NodeCA != "" {
 		var b []byte
@@ -343,7 +343,7 @@ func loadCertSet(cfg certconfig.Config) (*certSet, error) {
 		if err != nil {
 			return nil, err
 		}
-		if s.rules, err = ParseRules(b); err != nil {
+		if s.rules, err = certconfig.ParseRules(b); err != nil {
 			return nil, errors.Wrapf(err, "parsing %s", cfg.Rules)
 		}
 	}
@@ -406,10 +406,10 @@ func (cm *CertificateManager) VerifyNode(certs []*x509.Certificate, usage x509.E
 	}
 	if !hasExtKeyUsage(certs[0], x509.ExtKeyUsageServerAuth) || !hasExtKeyUsage(certs[0], x509.ExtKeyUsageClientAuth) {
 		return errors.Errorf("certificate %s needs both server and client extended key usage to be a node",
-			DescribeCert(certs[0]))
+			certconfig.DescribeCert(certs[0]))
 	}
 	if !s.rules.MatchesNode(certs[0]) {
-		return errors.Errorf("certificate %s matches no node rule", DescribeCert(certs[0]))
+		return errors.Errorf("certificate %s matches no node rule", certconfig.DescribeCert(certs[0]))
 	}
 	return nil
 }
@@ -426,27 +426,9 @@ func (cm *CertificateManager) ClientRoles(
 	}
 	roles := s.rules.ClientRoles(certs[0])
 	if len(roles) == 0 {
-		return nil, errors.Errorf("certificate %s matches no client rule", DescribeCert(certs[0]))
+		return nil, errors.Errorf("certificate %s matches no client rule", certconfig.DescribeCert(certs[0]))
 	}
 	return roles, nil
-}
-
-// HTTPUser returns the user an HTTP client authenticates as. A node
-// certificate is root. A client certificate is the role of the first client
-// rule it matches.
-func (cm *CertificateManager) HTTPUser(certs []*x509.Certificate) (username.SQLUsername, error) {
-	if len(certs) == 0 {
-		return username.SQLUsername{}, errors.New("no client certificate")
-	}
-	nodeErr := cm.VerifyNode(certs, x509.ExtKeyUsageClientAuth)
-	if nodeErr == nil {
-		return username.RootUserName(), nil
-	}
-	roles, err := cm.ClientRoles(certs)
-	if err != nil {
-		return username.SQLUsername{}, errors.CombineErrors(err, nodeErr)
-	}
-	return roles[0], nil
 }
 
 func (cm *CertificateManager) baseTLSConfig() *tls.Config {
@@ -464,7 +446,7 @@ func (cm *CertificateManager) nodeCertOrError() (*tls.Certificate, error) {
 	if n := cm.cur.Load().node; n != nil {
 		return n, nil
 	}
-	return nil, errors.New("the config file names no node cert")
+	return nil, errors.Mark(errors.New("the config file names no node cert"), ErrCertManagement)
 }
 
 // serverTLSConfig returns a server config that presents the node cert and
@@ -527,7 +509,7 @@ func (cm *CertificateManager) SQLServerTLSConfig() (*tls.Config, error) {
 
 // HTTPServerTLSConfig is the config of the HTTP port. The client cert is
 // optional here: /health and /_status/vars need none. The HTTP auth layer
-// checks it with HTTPUser.
+// checks it (see authserver's UserFromRequest).
 func (cm *CertificateManager) HTTPServerTLSConfig() (*tls.Config, error) {
 	return cm.serverTLSConfig(
 		func(s *certSet) *x509.CertPool {

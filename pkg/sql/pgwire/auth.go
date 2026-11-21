@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cockroachdb/cockroach/pkg/security"
+	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/pgwire/pgcode"
@@ -92,7 +92,7 @@ func (c *conn) handleAuthentication(
 		ac.SetAuthMethod(authMethodLoopback)
 	default:
 		ac.SetAuthMethod(authMethodCert)
-		expiration, err := c.checkClientCert(execCfg, authOpt.connType, ac)
+		expiration, err := c.checkClientCert(ctx, execCfg, authOpt.connType, ac)
 		if err != nil {
 			ac.LogAuthFailed(ctx, eventpb.AuthFailReason_CREDENTIALS_INVALID, err)
 			return c.sendError(ctx, pgerror.WithCandidateCode(err, pgcode.InvalidAuthorizationSpecification))
@@ -178,7 +178,7 @@ func (c *conn) handleAuthentication(
 // user through the client rules. It returns the certificate's expiration
 // time in Unix seconds.
 func (c *conn) checkClientCert(
-	execCfg *sql.ExecutorConfig, connType ConnType, ac AuthConn,
+	ctx context.Context, execCfg *sql.ExecutorConfig, connType ConnType, ac AuthConn,
 ) (int64, error) {
 	if connType != ConnHostSSL {
 		return 0, errors.New("a secure cluster admits SQL clients only over TLS with a client certificate")
@@ -199,6 +199,7 @@ func (c *conn) checkClientCert(
 		certs[0].Subject.CommonName, username.PurposeValidation); err == nil {
 		ac.SetSystemIdentity(identity)
 	}
+	ac.LogAuthInfof(ctx, redact.Sprintf("client certificate %s", certconfig.DescribeCert(certs[0])))
 	roles, err := cm.ClientRoles(certs)
 	if err != nil {
 		return 0, err
@@ -209,7 +210,7 @@ func (c *conn) checkClientCert(
 		}
 	}
 	return 0, errors.Newf("no client rule maps certificate %s to user %s",
-		redact.Safe(security.DescribeCert(certs[0])), c.sessionArgs.User)
+		redact.Safe(certconfig.DescribeCert(certs[0])), c.sessionArgs.User)
 }
 
 func (c *conn) authOKMessage() error {

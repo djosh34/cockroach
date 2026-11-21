@@ -1375,13 +1375,7 @@ func setupAndInitializeLoggingAndProfiling(
 				"- Intruders can consume all your server's resources and cause unavailability.",
 			log.SafeManaged(addr))
 		log.Ops.Shoutf(ctx, severity.INFO,
-			"To start a secure server without mandating TLS for clients,\n"+
-				"consider --accept-sql-without-tls instead. For other options, see:\n\n"+
-				"- %s\n"+
-				"- %s",
-			redact.Safe(build.MakeIssueURL(53404)),
-			redact.Safe(docs.URL("secure-a-cluster.html")),
-		)
+			"To start a secure server, pass --config with your certificates and rules instead.")
 	}
 
 	maybeWarnMemorySizes(ctx)

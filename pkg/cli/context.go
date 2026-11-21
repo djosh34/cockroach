@@ -538,6 +538,9 @@ func setConvContextDefaults() {
 var demoCtx = struct {
 	democluster.Context
 	pidFile string
+	// insecure is the --insecure flag. A demo cluster is always insecure,
+	// so the flag may only be true.
+	insecure bool
 
 	demoNodeCacheSizeValue  bytesOrPercentageValue
 	demoNodeSQLMemSizeValue bytesOrPercentageValue
@@ -552,6 +555,7 @@ var demoCtx = struct {
 // test that exercises command-line parsing.
 func setDemoContextDefaults() {
 	demoCtx.NumNodes = 1
+	demoCtx.insecure = true
 	demoCtx.SQLPoolMemorySize = 256 << 20 // 256MiB, chosen to fit 9 nodes on 4GB machine.
 	demoCtx.CacheSize = 64 << 20          // 64MiB, chosen to fit 9 nodes on 4GB machine.
 	demoCtx.UseEmptyDatabase = false

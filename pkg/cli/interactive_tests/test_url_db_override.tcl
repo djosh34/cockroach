@@ -9,6 +9,7 @@ start_server $argv
 
 system "$argv sql -e 'create database test; create user test'"
 set certs_dir "/certs"
+set config [write_config $certs_dir]
 
 start_test "Check that the SSL settings come from flags is URL does not set them already."
 # Use default, sslmode is secure
@@ -37,11 +38,11 @@ start_test "Check that the insecure flag overrides the sslmode if URL is already
 # Use default, sslmode is secure
 set ::env(COCKROACH_INSECURE) "false"
 
-spawn $argv sql --url "postgresql://test@localhost:26257?sslmode=verify-full" --certs-dir=$certs_dir -e "select 1"
+spawn $argv sql --url "postgresql://test@localhost:26257?sslmode=verify-full" --config=$config -e "select 1"
 eexpect "server refused TLS connection"
 eexpect eof
 
-spawn $argv sql --url "postgresql://test@localhost:26257?sslmode=verify-full" --certs-dir=$certs_dir --insecure -e "select 1"
+spawn $argv sql --url "postgresql://test@localhost:26257?sslmode=verify-full" --config=$config --insecure -e "select 1"
 eexpect "1 row"
 eexpect eof
 

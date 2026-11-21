@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cockroachdb/cockroach/pkg/build"
 	"github.com/cockroachdb/cockroach/pkg/docs"
 	"github.com/kr/text"
 )
@@ -732,9 +731,7 @@ is likely to cause the entire host server to become compromised.
 <PRE>
 
 </PRE>
-To simply accept non-TLS connections for SQL clients while keeping
-the cluster secure, consider using --accept-sql-without-tls instead.
-Also see: ` + build.MakeIssueURL(53404) + `
+A secure node takes --config instead.
 `,
 	}
 
@@ -1031,10 +1028,13 @@ user, database, insecure, config.`,
 	}
 
 	User = FlagInfo{
-		Name:        "user",
-		Shorthand:   "u",
-		EnvVar:      "COCKROACH_USER",
-		Description: `Database user name.`,
+		Name:      "user",
+		Shorthand: "u",
+		EnvVar:    "COCKROACH_USER",
+		Description: `
+Database user name. Without it, a command with --config connects as the role
+of the first client rule that matches the config's client cert, and
+otherwise as root.`,
 	}
 
 	From = FlagInfo{

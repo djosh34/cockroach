@@ -8,15 +8,17 @@
 // ANY KIND, either express or implied. See the License for the specific language
 // governing permissions and limitations under the License.
 
-package security_test
+package certconfig_test
 
 import (
 	"crypto/x509"
 	"encoding/pem"
 	"net/url"
+	"os"
+	"path/filepath"
 	"testing"
 
-	"github.com/cockroachdb/cockroach/pkg/security"
+	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/security/securitytest"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/util/leaktest"
@@ -52,7 +54,7 @@ func TestParseRulesErrors(t *testing.T) {
 		{`client cn="a"b role=b`, `text after quoted value`},
 	} {
 		t.Run(tc.line, func(t *testing.T) {
-			_, err := security.ParseRules([]byte("# comment\n\n" + tc.line + "\n"))
+			_, err := certconfig.ParseRules([]byte("# comment\n\n" + tc.line + "\n"))
 			require.Error(t, err)
 			require.Regexp(t, tc.err, err)
 			require.Regexp(t, "rules line 3", err)
@@ -69,7 +71,7 @@ func TestRulesMatch(t *testing.T) {
 	}
 	app := securitytest.SPIFFEID("app")
 
-	rules, err := security.ParseRules([]byte(`
+	rules, err := certconfig.ParseRules([]byte(`
 node cn=n1
 node spiffe=` + securitytest.SPIFFEID("node") + `
 client cn=alice role=alice
@@ -110,7 +112,7 @@ client cn=alice role=reader
 	require.Empty(t, roles(twoURIs))
 
 	// Lines round-trips through ParseRules.
-	again, err := security.ParseRules([]byte(joinLines(rules.Lines())))
+	again, err := certconfig.ParseRules([]byte(joinLines(rules.Lines())))
 	require.NoError(t, err)
 	require.Equal(t, rules.Lines(), again.Lines())
 	require.Contains(t, rules.Lines(), `client cn="Jane Doe" role=jane`)
@@ -119,7 +121,7 @@ client cn=alice role=reader
 func TestRulesAcceptTestUsers(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	for _, u := range securitytest.TestUsers {
-		rules, err := security.ParseRules([]byte("client cn=" + u + " role=" + u))
+		rules, err := certconfig.ParseRules([]byte("client cn=" + u + " role=" + u))
 		require.NoError(t, err)
 		require.Equal(t, []string{"client cn=" + u + " role=" + username.MakeSQLUsernameFromPreNormalizedString(u).Normalized()}, rules.Lines())
 	}
@@ -131,4 +133,33 @@ func joinLines(lines []string) string {
 		s += l + "\n"
 	}
 	return s
+}
+
+func TestDefaultClientUser(t *testing.T) {
+	defer leaktest.AfterTest(t)()
+	g := securitytest.NewGenerator(8, func(err error) { t.Fatal(err) })
+	ca := g.RootCA("ca")
+	dir := t.TempDir()
+	write := func(name string, b []byte) string {
+		path := filepath.Join(dir, name)
+		require.NoError(t, os.WriteFile(path, b, 0600))
+		return path
+	}
+	c := certconfig.Config{
+		ClientCert: write("client.crt", ca.ClientCert(securitytest.Identity{CN: "tool"}).CertPEM),
+		Rules:      write("rules", []byte("client cn=other role=other\nclient cn=tool role=app\nclient cn=tool role=reader\n")),
+	}
+	user, err := certconfig.DefaultClientUser(c)
+	require.NoError(t, err)
+	require.Equal(t, "app", user, "the first matching rule")
+
+	write("rules", []byte("client cn=other role=other\n"))
+	user, err = certconfig.DefaultClientUser(c)
+	require.NoError(t, err)
+	require.Equal(t, "root", user, "no matching rule")
+
+	c.ClientCert = ""
+	user, err = certconfig.DefaultClientUser(c)
+	require.NoError(t, err)
+	require.Equal(t, "root", user, "no client cert")
 }

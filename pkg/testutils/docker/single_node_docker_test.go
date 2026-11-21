@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cockroachdb/cockroach/pkg/security/securitytest"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/errors"
@@ -71,7 +72,59 @@ func TestSingleNodeDocker(t *testing.T) {
 
 	fsnotifyBinPath := filepath.Join(pwd, "docker-fsnotify/docker-fsnotify-bin")
 
+	// The secure container gets the seeded test certs. Its config's client
+	// cert is root's, which the entrypoint uses to set up the database.
+	certsDir := t.TempDir()
+	for name, file := range map[string]string{
+		"ca.crt": "ca.crt", "node.crt": "node.crt", "node.key": "node.key", "rules": "rules",
+		"client.crt": "client.root.crt", "client.key": "client.root.key",
+		"client.testuser.crt": "client.testuser.crt", "client.testuser.key": "client.testuser.key",
+	} {
+		b, err := securitytest.File(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(certsDir, name), b, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(certsDir, "config.yaml"), []byte(
+		"cert: node.crt\nkey: node.key\nnode-ca: ca.crt\nclient-ca: ca.crt\nrules: rules\n"+
+			"client-cert: client.crt\nclient-key: client.key\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
 	var dockerTests = []singleNodeDockerTest{
+		{
+			testName:      "single-node-secure-mode",
+			containerName: "roach1",
+			runContainerArgs: runContainerArgs{
+				envSetting: []string{
+					"COCKROACH_DATABASE=mydb",
+					"COCKROACH_USER=testuser",
+					// The container user is not the files' owner.
+					"COCKROACH_SKIP_KEY_PERMISSION_CHECK=true",
+				},
+				volSetting: []string{
+					fmt.Sprintf("%s/testdata/single-node-test/docker-entrypoint-initdb.d/:/docker-entrypoint-initdb.d", pwd),
+					fmt.Sprintf("%s:/cockroach/docker-fsnotify", fsnotifyBinPath),
+					fmt.Sprintf("%s:/certs", certsDir),
+				},
+				cmd: []string{"start-single-node", "--config=/certs/config.yaml"},
+			},
+			sqlOpts: []string{
+				"--format=csv",
+				"--url=postgresql://testuser@127.0.0.1:26257/mydb?sslcert=%2Fcerts%2Fclient.testuser.crt&sslkey=%2Fcerts%2Fclient.testuser.key&sslmode=verify-full&sslrootcert=%2Fcerts%2Fca.crt",
+			},
+			sqlQueries: []sqlQuery{
+				{"SELECT current_user", "current_user\ntestuser"},
+				{"SELECT current_database()", "current_database\nmydb"},
+				{"CREATE TABLE hello (X INT)", "CREATE TABLE"},
+				{"INSERT INTO hello VALUES (1), (2), (3)", "INSERT 0 3"},
+				{"SELECT * FROM hello", "x\n1\n2\n3"},
+				{"SELECT * FROM bello", "id,name\n1,a\n2,b\n3,c"},
+			},
+		},
 		{
 			testName:      "single-node-insecure-mode",
 			containerName: "roach2",

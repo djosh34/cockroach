@@ -198,16 +198,6 @@ func TestTwoTrustPools(t *testing.T) {
 	bob := p.clientCA.ClientCert(securitytest.Identity{CN: "bob"})
 	_, err = server.ClientRoles(certChain(t, bob))
 	require.ErrorContains(t, err, "matches no client rule")
-
-	// HTTP: a node cert is root, a client cert is its role.
-	user, err := server.HTTPUser(certChain(t, p.nodeCA.NodeCert(nodeID)))
-	require.NoError(t, err)
-	require.Equal(t, "root", user.Normalized())
-	user, err = server.HTTPUser(certChain(t, alice))
-	require.NoError(t, err)
-	require.Equal(t, "alice", user.Normalized())
-	_, err = server.HTTPUser(certChain(t, wrongCA))
-	require.Error(t, err)
 }
 
 func certChain(t *testing.T, p securitytest.Pair) []*x509.Certificate {

@@ -22,8 +22,8 @@ type RoleAuthzMux interface {
 }
 
 // NewV2Mux returns a handler for the v2 API that authenticates each
-// request by its client certificate, like NewMux. An authenticated request
-// gets root if allowAnonymous is set, as in insecure mode.
+// request by its client certificate, like NewMux. If allowAnonymous is set,
+// as in insecure mode, every request runs as root without a check.
 func NewV2Mux(s Server, inner http.Handler, allowAnonymous bool) http.Handler {
 	return &authenticationV2Mux{
 		server:         s.(*authenticationServer),

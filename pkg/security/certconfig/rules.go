@@ -8,13 +8,15 @@
 // ANY KIND, either express or implied. See the License for the specific language
 // governing permissions and limitations under the License.
 
-package security
+package certconfig
 
 import (
 	"bufio"
 	"bytes"
 	"crypto/x509"
+	"encoding/pem"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -246,4 +248,37 @@ func DescribeCert(cert *x509.Certificate) string {
 		id = "none"
 	}
 	return fmt.Sprintf("cn=%q spiffe=%s", cert.Subject.CommonName, id)
+}
+
+// DefaultClientUser returns the SQL user that a client command connects as
+// when none is given: the role of the first client rule that matches the
+// config's client cert, or root.
+func DefaultClientUser(c Config) (string, error) {
+	if c.ClientCert == "" || c.Rules == "" {
+		return username.RootUser, nil
+	}
+	certPEM, err := os.ReadFile(c.ClientCert)
+	if err != nil {
+		return "", err
+	}
+	block, _ := pem.Decode(certPEM)
+	if block == nil || block.Type != "CERTIFICATE" {
+		return "", errors.Newf("no certificate in %s", c.ClientCert)
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return "", errors.Wrapf(err, "parsing %s", c.ClientCert)
+	}
+	rulesText, err := os.ReadFile(c.Rules)
+	if err != nil {
+		return "", err
+	}
+	rules, err := ParseRules(rulesText)
+	if err != nil {
+		return "", errors.Wrapf(err, "parsing %s", c.Rules)
+	}
+	if roles := rules.ClientRoles(cert); len(roles) > 0 {
+		return roles[0].Normalized(), nil
+	}
+	return username.RootUser, nil
 }

@@ -14,7 +14,6 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -25,7 +24,6 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/cli/cliflagcfg"
 	"github.com/cockroachdb/cockroach/pkg/cli/cliflags"
 	"github.com/cockroachdb/cockroach/pkg/configprofiles"
-	"github.com/cockroachdb/cockroach/pkg/security"
 	"github.com/cockroachdb/cockroach/pkg/security/certconfig"
 	"github.com/cockroachdb/cockroach/pkg/security/username"
 	"github.com/cockroachdb/cockroach/pkg/server/telemetry"
@@ -677,6 +675,9 @@ func init() {
 		cliflagcfg.VarFlag(f, &demoCtx.Localities, cliflags.DemoNodeLocality)
 		cliflagcfg.VarFlag(f, &demoCtx.demoNodeSQLMemSizeValue, cliflags.DemoNodeSQLMemSize)
 		cliflagcfg.VarFlag(f, &demoCtx.demoNodeCacheSizeValue, cliflags.DemoNodeCacheSize)
+		// A demo cluster is always insecure; --insecure stays accepted.
+		cliflagcfg.BoolFlag(f, &demoCtx.insecure, cliflags.ClientInsecure)
+
 		cliflagcfg.BoolFlag(f, &demoCtx.DefaultEnableRangefeeds, cliflags.DemoEnableRangefeeds)
 
 		cliflagcfg.BoolFlag(f, &demoCtx.Multitenant, cliflags.DemoMultitenant)
@@ -1014,7 +1015,7 @@ func extraClientFlagInit() error {
 		}
 		baseCfg.Certs = c
 		if cliCtx.clientOpts.User == "" {
-			if cliCtx.clientOpts.User, err = defaultClientUser(c); err != nil {
+			if cliCtx.clientOpts.User, err = certconfig.DefaultClientUser(c); err != nil {
 				return err
 			}
 		}
@@ -1035,36 +1036,4 @@ func extraClientFlagInit() error {
 		sqlConnCtx.Echo = true
 	}
 	return nil
-}
-
-// defaultClientUser returns the SQL user that a client command connects as
-// when no user is given: the role of the first client rule that matches the
-// config's client cert, or root.
-func defaultClientUser(c certconfig.Config) (string, error) {
-	if c.ClientCert == "" || c.Rules == "" {
-		return username.RootUser, nil
-	}
-	certPEM, err := os.ReadFile(c.ClientCert)
-	if err != nil {
-		return "", err
-	}
-	certs, err := security.PEMContentsToX509(certPEM)
-	if err != nil {
-		return "", errors.Wrapf(err, "parsing %s", c.ClientCert)
-	}
-	if len(certs) == 0 {
-		return "", errors.Newf("no certificate in %s", c.ClientCert)
-	}
-	rulesText, err := os.ReadFile(c.Rules)
-	if err != nil {
-		return "", err
-	}
-	rules, err := security.ParseRules(rulesText)
-	if err != nil {
-		return "", errors.Wrapf(err, "parsing %s", c.Rules)
-	}
-	if roles := rules.ClientRoles(certs[0]); len(roles) > 0 {
-		return roles[0].Normalized(), nil
-	}
-	return username.RootUser, nil
 }

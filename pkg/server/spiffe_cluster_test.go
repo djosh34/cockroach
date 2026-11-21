@@ -132,8 +132,10 @@ func TestSPIFFEIdentityCluster(t *testing.T) {
 	require.ErrorContains(t, err, "no client rule maps certificate")
 
 	// The right client identity signed by the node CA is refused by SQL.
+	// The server names only the client CA in its certificate request, so
+	// the client does not even offer this cert.
 	_, err = connect(1, nodeCA.ClientCert(securitytest.Identity{CN: "root"}), "root")
-	require.Error(t, err)
+	require.ErrorContains(t, err, "certificate required")
 
 	// The right node identity signed by the client CA is refused on the
 	// RPC port.

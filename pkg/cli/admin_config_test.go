@@ -52,7 +52,10 @@ func TestAdminCommandsWithConfig(t *testing.T) {
 	write("client-ca.crt", clientCA.CertPEM)
 	write("client.crt", client.CertPEM)
 	write("client.key", client.KeyPEM)
-	write("rules", []byte("node spiffe="+securitytest.SPIFFEID("node")+"\nclient cn=admin-tool role=root\n"))
+	// The client cert maps to admintool first, so commands connect as
+	// admintool unless --user names root.
+	write("rules", []byte("node spiffe="+securitytest.SPIFFEID("node")+"\n"+
+		"client cn=admin-tool role=admintool\nclient cn=admin-tool role=root\n"))
 	configFile := write("config.yaml", []byte("cert: node.crt\nkey: node.key\n"+
 		"node-ca: node-ca.crt\nclient-ca: client-ca.crt\nrules: rules\n"+
 		"client-cert: client.crt\nclient-key: client.key\n"))
@@ -78,7 +81,6 @@ func TestAdminCommandsWithConfig(t *testing.T) {
 		return out, runErr
 	}
 	run := func(args ...string) (string, error) {
-		TestingReset()
 		addr := tc.Server(0).AdvRPCAddr()
 		isSQL, err := isSQLCommand(args)
 		require.NoError(t, err)
@@ -87,6 +89,9 @@ func TestAdminCommandsWithConfig(t *testing.T) {
 		}
 		return runArgs(append(args, "--host="+addr, "--config="+configFile)...)
 	}
+
+	_, err = run("sql", "--user=root", "-e", "CREATE USER admintool; GRANT admin TO admintool")
+	require.NoError(t, err)
 
 	// The cluster is up already, so init reaches the node and is refused.
 	_, err = run("init")
@@ -100,11 +105,11 @@ func TestAdminCommandsWithConfig(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, strings.Split(strings.TrimSpace(out), "\n"), 4, "a header and 3 nodes")
 
-	// sql --config connects with the config's client cert, as the role its
-	// rule maps it to.
+	// sql --config connects with the config's client cert, as the role of
+	// the first rule that matches it.
 	out, err = run("sql", "-e", "SELECT current_user")
 	require.NoError(t, err)
-	require.Equal(t, "current_user\nroot\n", out)
+	require.Equal(t, "current_user\nadmintool\n", out)
 
 	// A URL with the cert files works too, without --config.
 	u := "postgresql://root@" + tc.Server(0).AdvSQLAddr() + "/defaultdb?sslmode=verify-full" +

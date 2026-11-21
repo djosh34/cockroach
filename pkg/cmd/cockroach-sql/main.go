@@ -163,6 +163,11 @@ func runSQL(cmd *cobra.Command, args []string) (resErr error) {
 			return err
 		}
 		copts.Certs = c
+		if f := fs.Lookup(cliflags.User.Name); f == nil || !f.Changed {
+			if copts.User, err = certconfig.DefaultClientUser(c); err != nil {
+				return err
+			}
+		}
 	}
 
 	// Translate the connection arguments to a connection URL.

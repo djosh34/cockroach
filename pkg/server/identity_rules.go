@@ -46,8 +46,8 @@ type identityRulesGossip struct {
 
 	mu struct {
 		syncutil.Mutex
-		// warned holds, per node, the rules it was last warned about, so
-		// that each difference is logged once.
+		// warned holds, per node, the two rule sets it was last warned
+		// about, so that each difference is logged once.
 		warned map[roachpb.NodeID]string
 	}
 }
@@ -132,10 +132,11 @@ func (r *identityRulesGossip) compare(ctx context.Context) {
 			return nil
 		}
 		mismatched++
-		if warned, ok := r.mu.warned[nodeID]; ok && warned == theirText {
+		pair := theirText + "\x00" + ourText
+		if warned, ok := r.mu.warned[nodeID]; ok && warned == pair {
 			return nil
 		}
-		r.mu.warned[nodeID] = theirText
+		r.mu.warned[nodeID] = pair
 		var theirs []string
 		if theirText != "" {
 			theirs = strings.Split(theirText, "\n")

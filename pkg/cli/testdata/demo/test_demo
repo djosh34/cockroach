@@ -93,3 +93,18 @@ demo
 ----
 ERROR: setting or updating a password is not supported in insecure mode
 SQLSTATE: 28P01
+
+exec
+demo
+--insecure
+--execute=SELECT 1
+----
+?column?
+1
+
+exec
+demo
+--insecure=false
+--execute=SELECT 1
+----
+ERROR: a demo cluster is always insecure: patchroaddb creates no certificates
