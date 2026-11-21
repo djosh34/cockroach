@@ -16,6 +16,7 @@ import (
 
 	"github.com/cockroachdb/cockroach/pkg/jobs"
 	"github.com/cockroachdb/cockroach/pkg/jobs/jobspb"
+	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
 	"github.com/cockroachdb/errors"
 )
@@ -27,6 +28,12 @@ func (p *planner) RestoreCluster(
 ) (int64, error) {
 	if bucket == "" {
 		return 0, errors.New("the bucket is required")
+	}
+	// The restore replaces defaultdb and postgres, and waits until no
+	// session uses their old versions. This statement waits for the restore,
+	// so it must not use them itself.
+	if db := p.SessionData().Database; db != catconstants.SystemDatabaseName {
+		return 0, errors.Newf("run the restore from the system database, not %q", db)
 	}
 	details := jobspb.ClusterRestoreDetails{
 		Bucket: bucket, Prefix: prefix, Endpoint: endpoint, Region: region,

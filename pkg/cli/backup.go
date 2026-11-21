@@ -116,7 +116,7 @@ func runBackupRestore(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 		fmt.Fprintf(os.Stderr, "restoring to %s\n", backup.FormatTime(to))
-		conn, err := makeSQLClient(ctx, "patchroaddb backup restore", useDefaultDb)
+		conn, err := makeSQLClient(ctx, "patchroaddb backup restore", useSystemDb)
 		if err != nil {
 			return err
 		}

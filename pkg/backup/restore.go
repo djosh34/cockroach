@@ -28,13 +28,13 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/catalogkeys"
-	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descbuilder"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descpb"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/descs"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/nstree"
 	"github.com/cockroachdb/cockroach/pkg/sql/catalog/tabledesc"
 	"github.com/cockroachdb/cockroach/pkg/sql/schemachanger/scbackup"
+	"github.com/cockroachdb/cockroach/pkg/sql/sem/catconstants"
 	"github.com/cockroachdb/cockroach/pkg/storage"
 	"github.com/cockroachdb/cockroach/pkg/util/encoding"
 	"github.com/cockroachdb/cockroach/pkg/util/hlc"
@@ -373,12 +373,17 @@ func ingestTables(
 	return adder.Flush(ctx)
 }
 
-func orderedByID(m map[descpb.ID]catalog.MutableDescriptor) []catalog.MutableDescriptor {
+func orderedIDs(m map[descpb.ID]catalog.MutableDescriptor) descpb.IDs {
 	var ids descpb.IDs
 	for id := range m {
 		ids = append(ids, id)
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
+}
+
+func orderedByID(m map[descpb.ID]catalog.MutableDescriptor) []catalog.MutableDescriptor {
+	ids := orderedIDs(m)
 	out := make([]catalog.MutableDescriptor, len(ids))
 	for i, id := range ids {
 		out[i] = m[id]
@@ -466,29 +471,48 @@ func publish(
 			}
 		}
 
-		// The descriptors go through the collection, which validates them
-		// at the end.
+		// The descriptors are written as they are, then read back and
+		// written again through the collection, which bumps their versions
+		// and validates them. A pre-loaded ID that comes back gets a version
+		// above its old one, so that leases on the old one end.
+		b = kvTxn.NewBatch()
+		for _, desc := range orderedByID(src.restored) {
+			if v, ok := oldVersions[desc.GetID()]; ok && desc.GetVersion() < v {
+				setVersion(desc, v)
+			}
+			b.Put(catalogkeys.MakeDescMetadataKey(codec, desc.GetID()), desc.DescriptorProto())
+		}
+		if err := kvTxn.Run(ctx, b); err != nil {
+			return err
+		}
+		// Forget the catalog read before the writes above.
+		col.ReleaseAll(ctx)
 		mut := nstree.MutableCatalog{}
-		for _, desc := range src.restored {
-			if v, ok := oldVersions[desc.GetID()]; ok && desc.GetVersion() <= v {
-				setVersion(desc, v+1)
+		var tables []*tabledesc.Mutable
+		for _, id := range orderedIDs(src.restored) {
+			desc, err := col.MutableByID(kvTxn).Desc(ctx, id)
+			if err != nil {
+				return err
 			}
 			mut.UpsertDescriptor(desc)
+			if tbl, ok := desc.(*tabledesc.Mutable); ok {
+				tables = append(tables, tbl)
+			}
 		}
 		if _, err := scbackup.CreateDeclarativeSchemaChangeJobs(ctx, execCfg.JobRegistry, txn, mut.Catalog); err != nil {
 			return err
 		}
-		if err := legacySchemaChangeJobs(ctx, execCfg, txn, src); err != nil {
+		if err := legacySchemaChangeJobs(ctx, execCfg, txn, tables); err != nil {
 			return err
 		}
-		if err := ttlSchedules(ctx, execCfg, txn, src); err != nil {
+		if err := ttlSchedules(ctx, execCfg, txn, tables); err != nil {
 			return err
 		}
 		b = kvTxn.NewBatch()
-		for _, desc := range orderedByID(src.restored) {
-			if err := col.WriteDescToBatch(ctx, false, desc, b); err != nil {
-				return err
-			}
+		if err := mut.ForEachDescriptor(func(desc catalog.Descriptor) error {
+			return col.WriteDescToBatch(ctx, false, desc.(catalog.MutableDescriptor), b)
+		}); err != nil {
+			return err
 		}
 		for _, name := range cacheTables {
 			tbl, err := col.MutableByID(kvTxn).Table(ctx, targetIDs[string(name)])
@@ -652,13 +676,12 @@ func copyRows(
 // legacySchemaChangeJobs makes a job for each mutation of a restored table
 // that the legacy schema changer was running at the target time.
 func legacySchemaChangeJobs(
-	ctx context.Context, execCfg *sql.ExecutorConfig, txn descs.Txn, src *sourceCatalog,
+	ctx context.Context, execCfg *sql.ExecutorConfig, txn descs.Txn, tables []*tabledesc.Mutable,
 ) error {
 	sd := sql.NewInternalSessionData(ctx, execCfg.Settings, "restore")
 	var records []*jobs.Record
-	for _, desc := range orderedByID(src.restored) {
-		tbl, ok := desc.(*tabledesc.Mutable)
-		if !ok || len(tbl.MutationJobs) == 0 {
+	for _, tbl := range tables {
+		if len(tbl.MutationJobs) == 0 {
 			continue
 		}
 		tbl.MutationJobs = nil
@@ -694,11 +717,10 @@ func legacySchemaChangeJobs(
 // ttlSchedules makes a new row-level TTL schedule for each restored table
 // that has a TTL, since schedules are not restored.
 func ttlSchedules(
-	ctx context.Context, execCfg *sql.ExecutorConfig, txn descs.Txn, src *sourceCatalog,
+	ctx context.Context, execCfg *sql.ExecutorConfig, txn descs.Txn, tables []*tabledesc.Mutable,
 ) error {
-	for _, desc := range orderedByID(src.restored) {
-		tbl, ok := desc.(*tabledesc.Mutable)
-		if !ok || !tbl.HasRowLevelTTL() {
+	for _, tbl := range tables {
+		if !tbl.HasRowLevelTTL() {
 			continue
 		}
 		sj, err := sql.CreateRowLevelTTLScheduledJob(ctx, execCfg.JobsKnobs(), jobs.ScheduledJobTxn(txn),
