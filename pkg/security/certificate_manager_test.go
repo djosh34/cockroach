@@ -279,6 +279,12 @@ func TestLoadChecks(t *testing.T) {
 	_, err = security.NewCertificateManager(cfg, security.ClusterTLSSettings(cluster.MakeTestingClusterSettings()))
 	require.NoError(t, err)
 
+	// Nor does a CRLF bundle cut off right at the start of its second root.
+	writeFile(t, cfg.NodeCA, append(append([]byte(nil), p.nodeRoot.CertPEM...), "-----BEGIN\r\n"...))
+	_, err = security.NewCertificateManager(cfg, security.ClusterTLSSettings(cluster.MakeTestingClusterSettings()))
+	require.ErrorContains(t, err, "PEM blocks are not complete")
+	writeFile(t, cfg.NodeCA, p.nodeRoot.CertPEM)
+
 	// A CA bundle whose second root is cut off does not load.
 	writeFile(t, cfg.NodeCA, append(append([]byte(nil), p.nodeRoot.CertPEM...), p.clientCA.CertPEM[:100]...))
 	_, err = security.NewCertificateManager(cfg, security.ClusterTLSSettings(cluster.MakeTestingClusterSettings()))
